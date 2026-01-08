@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем requirements
+COPY requirements.txt .
+
+# Устанавливаем Python зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем код
+COPY voice_clone_service.py .
+COPY stt_service.py .
+COPY llm_service.py .
+COPY orchestrator.py .
+
+# Создаем необходимые папки
+RUN mkdir -p /app/temp /app/calls_log /app/models
+
+# Порт
+EXPOSE 8000
+
+# Запуск
+CMD ["python", "orchestrator.py"]

@@ -1,0 +1,30 @@
+# Core TTS и Voice Cloning
+TTS==0.22.0  # Coqui TTS с XTTS v2
+pydub==0.25.1
+soundfile==0.12.1
+
+# Speech-to-Text
+openai-whisper==20231117
+faster-whisper==1.0.3
+
+# Web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+websockets==12.0
+
+# Telephony
+twilio==8.11.1
+pydub==0.25.1
+
+# AI Integration
+google-generativeai==0.3.2
+requests==2.31.0
+aiohttp==3.9.1
+
+# Utils
+python-dotenv==1.0.0
+pydantic==2.5.3
+numpy==1.24.3
+torch==2.1.2
+torchaudio==2.1.2

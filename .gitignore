@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment (НЕ КОММИТИМ API КЛЮЧИ!)
+.env
+.env.local
+.env.production
+
+# Temporary files
+temp/
+*.tmp
+*.log
+
+# Call logs (логи звонков - приватные данные)
+calls_log/
+
+# Audio files (образцы голоса и аудио - большие и приватные!)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+
+# Voice samples directory (НЕ КОММИТИМ образцы голоса!)
+Лидия/
+voice_samples/
+
+# Models (НЕ КОММИТИМ большие модели AI!)
+models/
+*.bin
+*.onnx
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+*.h5
+*.pkl
+*.model
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+test_*.wav
+test_*.mp3
+test_*.txt
+
+# Docker volumes
+docker_data/
+
+# Logs
+*.log
+logs/
+
+# Claude Code
+.claude/
