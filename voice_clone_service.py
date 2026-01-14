@@ -2,9 +2,8 @@
 """
 Сервис клонирования голоса на базе XTTS v2 (coqui-tts fork 2026)
 """
-import os
-import torch
-from coqui_tts.api import TTS   # ← ИЗМЕНЁННЫЙ ИМПОРТ !!!!!
+import torch  # noqa: F401 - используется TTS под капотом
+from TTS.api import TTS
 from pathlib import Path
 import soundfile as sf
 import numpy as np
@@ -23,7 +22,8 @@ class VoiceCloneService:
     ):
         self.voice_samples_dir = Path(voice_samples_dir)
         self.model_name = model_name
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Принудительно CPU, т.к. P104-100 не поддерживается новым PyTorch
+        self.device = "cpu"
 
         logger.info(f"🎤 Инициализация на {self.device}")
         logger.info(f"📁 Образцы: {self.voice_samples_dir}")
@@ -94,7 +94,7 @@ class VoiceCloneService:
 
 if __name__ == "__main__":
     service = VoiceCloneService()
-    test_text = "Здравствуйте, это тест обновлённого голоса Лидии в 2026 году."
+    test_text = "Привет , Лидочка, это я. Узнаешь мой голос??? По-моему очень похоже..."
     output = "test_lidia_2026.wav"
     service.synthesize_to_file(test_text, output)
     print(f"✅ Готово. Файл: {output}")
