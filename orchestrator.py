@@ -59,6 +59,15 @@ class TTSRequest(BaseModel):
     language: str = "ru"
 
 
+class OpenAISpeechRequest(BaseModel):
+    """OpenAI-compatible TTS request for OpenWebUI integration"""
+    model: str = "lidia-voice"
+    input: str
+    voice: str = "lidia"
+    response_format: str = "wav"
+    speed: float = 1.0
+
+
 @app.on_event("startup")
 async def startup_event():
     """Инициализация всех сервисов при старте"""
@@ -279,12 +288,75 @@ async def reset_conversation():
     raise HTTPException(status_code=503, detail="LLM service not initialized")
 
 
+# ============== OpenAI-Compatible Endpoints for OpenWebUI ==============
+
+@app.get("/v1/models")
+async def list_models():
+    """OpenAI-compatible models list for OpenWebUI TTS integration"""
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "lidia-voice",
+                "object": "model",
+                "created": 1700000000,
+                "owned_by": "ai-secretary",
+                "permission": [],
+                "root": "lidia-voice",
+                "parent": None
+            }
+        ]
+    }
+
+
+@app.get("/v1/voices")
+async def list_voices():
+    """List available voices"""
+    return {
+        "voices": [
+            {"voice_id": "lidia", "name": "Лидия", "language": "ru"}
+        ]
+    }
+
+
+@app.post("/v1/audio/speech")
+async def openai_speech(request: OpenAISpeechRequest):
+    """
+    OpenAI-compatible TTS endpoint for OpenWebUI integration
+    POST /v1/audio/speech
+    """
+    if not voice_service:
+        raise HTTPException(status_code=503, detail="Voice service not initialized")
+
+    try:
+        output_file = TEMP_DIR / f"speech_{datetime.now().timestamp()}.wav"
+
+        voice_service.synthesize_to_file(
+            text=request.input,
+            output_path=str(output_file),
+            language="ru"
+        )
+
+        return FileResponse(
+            path=output_file,
+            media_type="audio/wav",
+            filename="speech.wav"
+        )
+
+    except Exception as e:
+        logger.error(f"❌ OpenAI TTS Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
-    logger.info("🎯 Запуск Orchestrator на порту 8000")
+    from dotenv import load_dotenv
+    load_dotenv()
+    port = int(os.getenv("ORCHESTRATOR_PORT", 8002))
+    logger.info(f"🎯 Запуск Orchestrator на порту {port}")
     uvicorn.run(
         "orchestrator:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=False,
         log_level="info"
     )
