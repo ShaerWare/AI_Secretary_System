@@ -17,7 +17,7 @@ class LLMService:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-2.5-pro-latest",
+        model_name: str = "gemini-2.5-flash",
         system_prompt: Optional[str] = None
     ):
         """
@@ -131,6 +131,125 @@ class LLMService:
     def get_conversation_history(self) -> List[Dict[str, str]]:
         """Возвращает историю диалога"""
         return self.conversation_history
+
+    def generate_response_stream(
+        self,
+        user_message: str,
+        use_history: bool = True
+    ):
+        """
+        Генерирует ответ в потоковом режиме (streaming)
+
+        Args:
+            user_message: Сообщение от пользователя
+            use_history: Использовать историю диалога
+
+        Yields:
+            Части ответа по мере генерации
+        """
+        logger.info(f"💬 Streaming запрос к LLM: '{user_message[:50]}...'")
+
+        try:
+            if use_history:
+                chat = self.model.start_chat(history=[
+                    {"role": msg["role"], "parts": [msg["content"]]}
+                    for msg in self.conversation_history
+                ])
+                response = chat.send_message(user_message, stream=True)
+            else:
+                response = self.model.generate_content(user_message, stream=True)
+
+            full_response = ""
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    yield chunk.text
+
+            # Добавляем в историю после завершения
+            if use_history:
+                self.conversation_history.append({
+                    "role": "user",
+                    "content": user_message
+                })
+                self.conversation_history.append({
+                    "role": "model",
+                    "content": full_response
+                })
+
+            logger.info(f"✅ Streaming ответ завершён: '{full_response[:50]}...'")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка streaming генерации: {e}")
+            yield "Извините, возникла техническая проблема."
+
+    def _convert_messages_to_gemini(self, messages: List[Dict[str, str]]):
+        """Конвертирует OpenAI формат сообщений в Gemini формат"""
+        gemini_history = []
+        last_user_message = ""
+
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+
+            if role == "system":
+                continue
+            elif role == "user":
+                last_user_message = content
+                gemini_history.append({"role": "user", "parts": [content]})
+            elif role == "assistant":
+                gemini_history.append({"role": "model", "parts": [content]})
+
+        # Убираем последнее сообщение пользователя из истории
+        if gemini_history and gemini_history[-1]["role"] == "user":
+            gemini_history = gemini_history[:-1]
+
+        return gemini_history, last_user_message
+
+    def generate_response_from_messages(
+        self,
+        messages: List[Dict[str, str]],
+        stream: bool = False
+    ):
+        """
+        Генерирует ответ на основе списка сообщений OpenAI формата
+
+        Args:
+            messages: Список сообщений [{"role": "user/assistant", "content": "..."}]
+            stream: Использовать потоковую генерацию
+
+        Returns/Yields:
+            Ответ строка (если stream=False) или generator (если stream=True)
+        """
+        if stream:
+            return self._generate_response_stream(messages)
+        else:
+            return self._generate_response_sync(messages)
+
+    def _generate_response_sync(self, messages: List[Dict[str, str]]) -> str:
+        """Синхронная генерация ответа"""
+        gemini_history, last_user_message = self._convert_messages_to_gemini(messages)
+
+        try:
+            chat = self.model.start_chat(history=gemini_history)
+            response = chat.send_message(last_user_message)
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"❌ Ошибка генерации: {e}")
+            return "Извините, возникла техническая проблема."
+
+    def _generate_response_stream(self, messages: List[Dict[str, str]]):
+        """Потоковая генерация ответа (generator)"""
+        gemini_history, last_user_message = self._convert_messages_to_gemini(messages)
+
+        try:
+            chat = self.model.start_chat(history=gemini_history)
+            response = chat.send_message(last_user_message, stream=True)
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            logger.error(f"❌ Ошибка streaming генерации: {e}")
+            yield "Извините, возникла техническая проблема."
 
 
 if __name__ == "__main__":

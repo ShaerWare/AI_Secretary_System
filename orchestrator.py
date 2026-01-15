@@ -3,18 +3,18 @@
 Главный оркестратор - координирует все сервисы
 STT (Whisper) -> LLM (Gemini) -> TTS (XTTS v2)
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
 from pathlib import Path
-import tempfile
 import os
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
-import asyncio
 from datetime import datetime
+import json
+import time
 
 # Импорты наших сервисов
 from voice_clone_service import VoiceCloneService
@@ -68,6 +68,20 @@ class OpenAISpeechRequest(BaseModel):
     speed: float = 1.0
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatCompletionRequest(BaseModel):
+    """OpenAI-compatible chat completion request"""
+    model: str = "lidia-gemini"
+    messages: List[ChatMessage]
+    stream: bool = False
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+
 @app.on_event("startup")
 async def startup_event():
     """Инициализация всех сервисов при старте"""
@@ -80,13 +94,15 @@ async def startup_event():
         logger.info("📦 Загрузка Voice Clone Service...")
         voice_service = VoiceCloneService()
 
-        logger.info("📦 Загрузка STT Service...")
-        stt_service = STTService(model_size="base", use_faster_whisper=True)
-
         logger.info("📦 Загрузка LLM Service...")
         llm_service = LLMService()
 
-        logger.info("✅ Все сервисы загружены успешно")
+        # STT отключён временно - для текстового чата не нужен
+        # Модель faster-whisper зависает при загрузке
+        logger.info("⏭️ STT отключён (для текстового чата не нужен)")
+        stt_service = None
+
+        logger.info("✅ Основные сервисы загружены успешно")
 
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации: {e}")
@@ -292,10 +308,19 @@ async def reset_conversation():
 
 @app.get("/v1/models")
 async def list_models():
-    """OpenAI-compatible models list for OpenWebUI TTS integration"""
+    """OpenAI-compatible models list for OpenWebUI"""
     return {
         "object": "list",
         "data": [
+            {
+                "id": "lidia-gemini",
+                "object": "model",
+                "created": 1700000000,
+                "owned_by": "ai-secretary",
+                "permission": [],
+                "root": "lidia-gemini",
+                "parent": None
+            },
             {
                 "id": "lidia-voice",
                 "object": "model",
@@ -346,6 +371,104 @@ async def openai_speech(request: OpenAISpeechRequest):
     except Exception as e:
         logger.error(f"❌ OpenAI TTS Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: ChatCompletionRequest):
+    """
+    OpenAI-compatible chat completions endpoint for OpenWebUI
+    Supports both streaming and non-streaming responses
+    """
+    if not llm_service:
+        raise HTTPException(status_code=503, detail="LLM service not initialized")
+
+    logger.info(f"💬 Chat completions request: stream={request.stream}, messages={len(request.messages)}")
+
+    # Конвертируем Pydantic модели в dict
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    if request.stream:
+        # Streaming response (SSE)
+        async def generate_stream():
+            created = int(time.time())
+            chunk_id = f"chatcmpl-{created}"
+
+            try:
+                for text_chunk in llm_service.generate_response_from_messages(messages, stream=True):
+                    chunk_data = {
+                        "id": chunk_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": request.model,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": text_chunk},
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+
+                # Final chunk
+                final_chunk = {
+                    "id": chunk_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": request.model,
+                    "choices": [{
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "stop"
+                    }]
+                }
+                yield f"data: {json.dumps(final_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                logger.error(f"❌ Streaming error: {e}")
+                error_chunk = {
+                    "error": {"message": str(e), "type": "server_error"}
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            }
+        )
+    else:
+        # Non-streaming response
+        try:
+            response_text = llm_service.generate_response_from_messages(messages, stream=False)
+
+            # Consume generator if it returns one
+            if hasattr(response_text, '__iter__') and not isinstance(response_text, str):
+                response_text = "".join(response_text)
+
+            return {
+                "id": f"chatcmpl-{int(time.time())}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": request.model,
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0
+                }
+            }
+        except Exception as e:
+            logger.error(f"❌ Chat completions error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
