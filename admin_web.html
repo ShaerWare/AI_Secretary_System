@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Secretary Admin</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --error: #f87171;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--bg-card);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--accent), #ff9a9e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-online { background: var(--success); color: #000; }
+        .status-offline { background: var(--error); color: #fff; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--bg-card);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        .service-list { list-style: none; }
+
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--bg-card);
+        }
+
+        .service-item:last-child { border-bottom: none; }
+
+        .service-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-dot.online { background: var(--success); }
+        .status-dot.offline { background: var(--error); }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+        }
+
+        .preset-btn {
+            padding: 12px;
+            border: 2px solid var(--bg-card);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.1);
+        }
+
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .input-group input,
+        .input-group select,
+        .input-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--bg-card);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .input-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover { background: #1a4a7a; }
+
+        .btn-danger {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--bg-card);
+        }
+
+        .stat-row:last-child { border-bottom: none; }
+
+        .stat-label { color: var(--text-secondary); }
+        .stat-value { font-weight: 500; }
+
+        .gpu-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .gpu-name {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .gpu-bar {
+            height: 8px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .gpu-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--warning));
+            transition: width 0.3s;
+        }
+
+        .gpu-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--error); }
+
+        .log-output {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn:hover { color: var(--accent); }
+        .refresh-btn.spinning { animation: spin 1s linear infinite; }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--bg-card);
+            padding-bottom: 10px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--text-primary); }
+        .tab.active {
+            background: var(--bg-card);
+            color: var(--accent);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            header { flex-direction: column; gap: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎙️ AI Secretary Admin</h1>
+            <div>
+                <span id="status-badge" class="status-badge status-offline">Проверка...</span>
+                <button class="refresh-btn" onclick="refreshAll()" title="Обновить">🔄</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('dashboard')">📊 Dashboard</button>
+            <button class="tab" onclick="showTab('tts')">🎤 TTS</button>
+            <button class="tab" onclick="showTab('llm')">🤖 LLM</button>
+            <button class="tab" onclick="showTab('test')">🧪 Тест</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="grid">
+                <!-- Services Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Сервисы</span>
+                        <span class="card-icon">⚡</span>
+                    </div>
+                    <ul class="service-list" id="services-list">
+                        <li class="service-item">
+                            <span>Voice Clone (XTTS v2)</span>
+                            <div class="service-status">
+                                <span class="status-dot" id="svc-voice"></span>
+                            </div>
+                        </li>
+                        <li class="service-item">
+                            <span>LLM (Gemini)</span>
+                            <div class="service-status">
+                                <span class="status-dot" id="svc-llm"></span>
+                            </div>
+                        </li>
+                        <li class="service-item">
+                            <span>STT (Whisper)</span>
+                            <div class="service-status">
+                                <span class="status-dot" id="svc-stt"></span>
+                            </div>
+                        </li>
+                        <li class="service-item">
+                            <span>Streaming TTS</span>
+                            <div class="service-status">
+                                <span class="status-dot" id="svc-streaming"></span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- GPU Info -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">GPU</span>
+                        <span class="card-icon">🖥️</span>
+                    </div>
+                    <div id="gpu-list"></div>
+                </div>
+
+                <!-- TTS Config -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">TTS Configuration</span>
+                        <span class="card-icon">🎤</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Device</span>
+                        <span class="stat-value" id="tts-device">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Preset</span>
+                        <span class="stat-value" id="tts-preset">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Voice Samples</span>
+                        <span class="stat-value" id="tts-samples">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Cache Size</span>
+                        <span class="stat-value" id="tts-cache">-</span>
+                    </div>
+                </div>
+
+                <!-- LLM Config -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">LLM Configuration</span>
+                        <span class="card-icon">🤖</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Model</span>
+                        <span class="stat-value" id="llm-model">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">History Length</span>
+                        <span class="stat-value" id="llm-history">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TTS Tab -->
+        <div id="tab-tts" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Пресеты интонаций</span>
+                    </div>
+                    <div class="preset-grid" id="presets-grid"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Streaming TTS Cache</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Элементов в кэше</span>
+                        <span class="stat-value" id="cache-size">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Активных сессий</span>
+                        <span class="stat-value" id="active-sessions">0</span>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-danger" onclick="clearTTSCache()">🗑️ Очистить кэш</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LLM Tab -->
+        <div id="tab-llm" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Модель</span>
+                    </div>
+                    <div class="input-group">
+                        <label>Текущая модель</label>
+                        <select id="llm-model-select" onchange="changeModel()">
+                            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Системный промпт</span>
+                    </div>
+                    <div class="input-group">
+                        <textarea id="system-prompt" rows="6"></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="savePrompt()">💾 Сохранить</button>
+                        <button class="btn btn-secondary" onclick="loadPrompt()">🔄 Загрузить текущий</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">История диалога</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Сообщений</span>
+                        <span class="stat-value" id="history-count">0</span>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-danger" onclick="clearHistory()">🗑️ Очистить историю</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Tab -->
+        <div id="tab-test" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">🎤 Тест TTS</span>
+                    </div>
+                    <div class="input-group">
+                        <label>Текст для синтеза</label>
+                        <input type="text" id="tts-test-text" value="Здравствуйте! Чем могу помочь?" />
+                    </div>
+                    <div class="input-group">
+                        <label>Пресет</label>
+                        <select id="tts-test-preset">
+                            <option value="natural">natural</option>
+                            <option value="warm">warm</option>
+                            <option value="calm">calm</option>
+                            <option value="energetic">energetic</option>
+                            <option value="neutral">neutral</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="testTTS()" id="tts-test-btn">🎙️ Синтезировать</button>
+                    <div id="tts-test-result" style="margin-top: 15px;"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">🤖 Тест LLM</span>
+                    </div>
+                    <div class="input-group">
+                        <label>Вопрос</label>
+                        <input type="text" id="llm-test-text" value="Здравствуйте, какой у вас график работы?" />
+                    </div>
+                    <button class="btn btn-primary" onclick="testLLM()" id="llm-test-btn">💬 Отправить</button>
+                    <div id="llm-test-result" style="margin-top: 15px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API_BASE = '';
+
+        // Toast notifications
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // Fetch status
+        async function fetchStatus() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/status`);
+                const data = await resp.json();
+
+                // Update status badge
+                const badge = document.getElementById('status-badge');
+                badge.textContent = 'Online';
+                badge.className = 'status-badge status-online';
+
+                // Update services
+                const services = data.services || {};
+                document.getElementById('svc-voice').className = `status-dot ${services.voice_clone ? 'online' : 'offline'}`;
+                document.getElementById('svc-llm').className = `status-dot ${services.llm ? 'online' : 'offline'}`;
+                document.getElementById('svc-stt').className = `status-dot ${services.stt ? 'online' : 'offline'}`;
+                document.getElementById('svc-streaming').className = `status-dot ${services.streaming_tts ? 'online' : 'offline'}`;
+
+                // Update GPU
+                const gpuList = document.getElementById('gpu-list');
+                gpuList.innerHTML = '';
+                (data.gpu || []).forEach(gpu => {
+                    const percent = (gpu.used_gb / gpu.total_gb * 100).toFixed(0);
+                    gpuList.innerHTML += `
+                        <div class="gpu-card">
+                            <div class="gpu-name">${gpu.name}</div>
+                            <div class="gpu-bar">
+                                <div class="gpu-bar-fill" style="width: ${percent}%"></div>
+                            </div>
+                            <div class="gpu-stats">
+                                <span>${gpu.used_gb.toFixed(1)} GB used</span>
+                                <span>${gpu.total_gb.toFixed(1)} GB total</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                // Update TTS config
+                const ttsConfig = data.tts_config || {};
+                document.getElementById('tts-device').textContent = ttsConfig.device || '-';
+                document.getElementById('tts-preset').textContent = ttsConfig.default_preset || '-';
+                document.getElementById('tts-samples').textContent = ttsConfig.samples_count || '-';
+
+                // Update streaming stats
+                const streamingStats = data.streaming_tts_stats || {};
+                document.getElementById('tts-cache').textContent = streamingStats.cache_size || '0';
+                document.getElementById('cache-size').textContent = streamingStats.cache_size || '0';
+                document.getElementById('active-sessions').textContent = streamingStats.active_sessions || '0';
+
+                // Update LLM config
+                const llmConfig = data.llm_config || {};
+                document.getElementById('llm-model').textContent = llmConfig.model_name || '-';
+                document.getElementById('llm-history').textContent = llmConfig.history_length || '0';
+                document.getElementById('history-count').textContent = llmConfig.history_length || '0';
+                document.getElementById('llm-model-select').value = llmConfig.model_name || 'gemini-2.5-flash';
+
+            } catch (e) {
+                const badge = document.getElementById('status-badge');
+                badge.textContent = 'Offline';
+                badge.className = 'status-badge status-offline';
+            }
+        }
+
+        // Fetch presets
+        async function fetchPresets() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/tts/presets`);
+                const data = await resp.json();
+
+                const grid = document.getElementById('presets-grid');
+                grid.innerHTML = '';
+
+                for (const [name, preset] of Object.entries(data.presets || {})) {
+                    const isActive = name === data.current;
+                    grid.innerHTML += `
+                        <button class="preset-btn ${isActive ? 'active' : ''}"
+                                onclick="setPreset('${name}')"
+                                title="temp: ${preset.temperature}, speed: ${preset.speed}">
+                            ${preset.display_name}
+                        </button>
+                    `;
+                }
+            } catch (e) {
+                console.error('Error fetching presets:', e);
+            }
+        }
+
+        // Set preset
+        async function setPreset(name) {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/tts/preset`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({preset: name})
+                });
+                const data = await resp.json();
+                showToast(`Пресет изменён на: ${data.display_name}`);
+                fetchPresets();
+                fetchStatus();
+            } catch (e) {
+                showToast('Ошибка изменения пресета', 'error');
+            }
+        }
+
+        // Clear TTS cache
+        async function clearTTSCache() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/tts/cache`, {method: 'DELETE'});
+                const data = await resp.json();
+                showToast(`Кэш очищен: ${data.cleared_items} элементов`);
+                fetchStatus();
+            } catch (e) {
+                showToast('Ошибка очистки кэша', 'error');
+            }
+        }
+
+        // Load prompt
+        async function loadPrompt() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/llm/prompt`);
+                const data = await resp.json();
+                document.getElementById('system-prompt').value = data.prompt || '';
+            } catch (e) {
+                showToast('Ошибка загрузки промпта', 'error');
+            }
+        }
+
+        // Save prompt
+        async function savePrompt() {
+            const prompt = document.getElementById('system-prompt').value;
+            try {
+                const resp = await fetch(`${API_BASE}/admin/llm/prompt`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({prompt})
+                });
+                const data = await resp.json();
+                showToast('Промпт сохранён');
+            } catch (e) {
+                showToast('Ошибка сохранения промпта', 'error');
+            }
+        }
+
+        // Change model
+        async function changeModel() {
+            const model = document.getElementById('llm-model-select').value;
+            try {
+                const resp = await fetch(`${API_BASE}/admin/llm/model`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({model})
+                });
+                const data = await resp.json();
+                showToast(`Модель изменена на: ${model}`);
+                fetchStatus();
+            } catch (e) {
+                showToast('Ошибка смены модели', 'error');
+            }
+        }
+
+        // Clear history
+        async function clearHistory() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/llm/history`, {method: 'DELETE'});
+                const data = await resp.json();
+                showToast(`История очищена: ${data.cleared_messages} сообщений`);
+                fetchStatus();
+            } catch (e) {
+                showToast('Ошибка очистки истории', 'error');
+            }
+        }
+
+        // Test TTS
+        async function testTTS() {
+            const text = document.getElementById('tts-test-text').value;
+            const preset = document.getElementById('tts-test-preset').value;
+            const btn = document.getElementById('tts-test-btn');
+            const result = document.getElementById('tts-test-result');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Синтезирую...';
+            result.innerHTML = '<div class="log-output">Синтез...</div>';
+
+            try {
+                const resp = await fetch(`${API_BASE}/admin/tts/test`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text, preset})
+                });
+                const data = await resp.json();
+                result.innerHTML = `
+                    <div class="log-output">
+✅ Готово!
+Файл: ${data.file}
+Длительность: ${data.duration_sec} сек
+Время синтеза: ${data.synthesis_time_sec} сек
+RTF: ${data.rtf}x
+                    </div>
+                `;
+            } catch (e) {
+                result.innerHTML = `<div class="log-output" style="color: var(--error)">❌ Ошибка: ${e.message}</div>`;
+            }
+
+            btn.disabled = false;
+            btn.textContent = '🎙️ Синтезировать';
+        }
+
+        // Test LLM
+        async function testLLM() {
+            const text = document.getElementById('llm-test-text').value;
+            const btn = document.getElementById('llm-test-btn');
+            const result = document.getElementById('llm-test-result');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Генерирую...';
+            result.innerHTML = '<div class="log-output">Ожидание ответа...</div>';
+
+            try {
+                const resp = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text})
+                });
+                const data = await resp.json();
+                result.innerHTML = `
+                    <div class="log-output" style="color: var(--success)">
+🤖 Лидия:
+${data.response}
+                    </div>
+                `;
+            } catch (e) {
+                result.innerHTML = `<div class="log-output" style="color: var(--error)">❌ Ошибка: ${e.message}</div>`;
+            }
+
+            btn.disabled = false;
+            btn.textContent = '💬 Отправить';
+        }
+
+        // Refresh all
+        function refreshAll() {
+            const btn = document.querySelector('.refresh-btn');
+            btn.classList.add('spinning');
+            fetchStatus();
+            fetchPresets();
+            loadPrompt();
+            setTimeout(() => btn.classList.remove('spinning'), 1000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshAll();
+            setInterval(fetchStatus, 5000);
+        });
+    </script>
+</body>
+</html>

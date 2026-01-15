@@ -132,6 +132,44 @@ class LLMService:
         """Возвращает историю диалога"""
         return self.conversation_history
 
+    def set_system_prompt(self, new_prompt: str) -> None:
+        """
+        Изменяет системный промпт и переинициализирует модель
+
+        Args:
+            new_prompt: Новый системный промпт
+        """
+        logger.info(f"📝 Изменение системного промпта...")
+        self.system_prompt = new_prompt
+        self.model = genai.GenerativeModel(
+            model_name=self.model_name,
+            system_instruction=self.system_prompt
+        )
+        logger.info("✅ Системный промпт обновлён")
+
+    def set_model(self, new_model_name: str) -> None:
+        """
+        Изменяет модель LLM
+
+        Args:
+            new_model_name: Имя новой модели (напр. gemini-2.5-pro, gemini-2.5-flash)
+        """
+        logger.info(f"🔄 Смена модели на: {new_model_name}")
+        self.model_name = new_model_name
+        self.model = genai.GenerativeModel(
+            model_name=self.model_name,
+            system_instruction=self.system_prompt
+        )
+        logger.info(f"✅ Модель изменена на: {new_model_name}")
+
+    def get_config(self) -> Dict:
+        """Возвращает текущую конфигурацию LLM"""
+        return {
+            "model_name": self.model_name,
+            "system_prompt": self.system_prompt,
+            "history_length": len(self.conversation_history),
+        }
+
     def generate_response_stream(
         self,
         user_message: str,

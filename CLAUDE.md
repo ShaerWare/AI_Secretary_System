@@ -13,6 +13,9 @@ AI Secretary "Лидия" - a virtual secretary system with voice cloning using 
 | Voice Clone Service | **Working** | RTF 0.95x on GPU |
 | LLM Service | **Working** | Gemini 2.5 Flash |
 | OpenWebUI Integration | **Working** | Chat + TTS |
+| Streaming TTS | **Working** | Parallel synthesis during LLM streaming |
+| Admin CLI | **Working** | `./lidia-admin` |
+| Admin Web UI | **Working** | http://localhost:8002/admin |
 | GPU (RTX 3060) | **Active** | 10 GB / 12 GB used |
 | GPU (P104-100) | Not supported | CC 6.1 < 7.0 required |
 | Speaker Latents Cache | **Enabled** | `./cache/` |
