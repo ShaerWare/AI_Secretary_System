@@ -28,6 +28,7 @@ import soundfile as sf
 from voice_clone_service import VoiceCloneService
 from stt_service import STTService
 from llm_service import LLMService
+from piper_tts_service import PiperTTSService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -273,9 +274,17 @@ app.add_middleware(
 )
 
 # Глобальные сервисы
-voice_service: Optional[VoiceCloneService] = None
+voice_service: Optional[VoiceCloneService] = None  # XTTS (Лидия)
+piper_service: Optional[PiperTTSService] = None    # Piper (Dmitri, Irina)
 stt_service: Optional[STTService] = None
 llm_service: Optional[LLMService] = None
+
+# Конфигурация текущего голоса
+# engine: "xtts" (Лидия) или "piper" (Dmitri/Irina)
+current_voice_config = {
+    "engine": "xtts",
+    "voice": "lidia",  # lidia / dmitri / irina
+}
 
 # Папка для временных файлов
 TEMP_DIR = Path("./temp")
@@ -322,14 +331,22 @@ class ChatCompletionRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Инициализация всех сервисов при старте"""
-    global voice_service, stt_service, llm_service, streaming_tts_manager
+    global voice_service, piper_service, stt_service, llm_service, streaming_tts_manager
 
     logger.info("🚀 Запуск AI Secretary Orchestrator")
 
     try:
-        # Инициализация сервисов
-        logger.info("📦 Загрузка Voice Clone Service...")
+        # Инициализация XTTS (Лидия)
+        logger.info("📦 Загрузка Voice Clone Service (XTTS)...")
         voice_service = VoiceCloneService()
+
+        # Инициализация Piper TTS (Dmitri, Irina)
+        logger.info("📦 Загрузка Piper TTS Service...")
+        try:
+            piper_service = PiperTTSService()
+        except Exception as e:
+            logger.warning(f"⚠️ Piper TTS недоступен: {e}")
+            piper_service = None
 
         logger.info("📦 Загрузка LLM Service...")
         llm_service = LLMService()
@@ -392,20 +409,38 @@ async def health_check():
     return result
 
 
+def synthesize_with_current_voice(text: str, output_path: str, language: str = "ru"):
+    """
+    Синтезирует речь с текущим выбранным голосом.
+    Учитывает current_voice_config.
+    """
+    engine = current_voice_config["engine"]
+    voice = current_voice_config["voice"]
+
+    if engine == "piper" and piper_service:
+        logger.info(f"🎙️ Piper синтез ({voice}): '{text[:40]}...'")
+        piper_service.synthesize_to_file(text, output_path, voice=voice)
+    elif voice_service:
+        logger.info(f"🎙️ XTTS синтез (Лидия): '{text[:40]}...'")
+        voice_service.synthesize_to_file(text, output_path, language=language)
+    else:
+        raise RuntimeError("No TTS service available")
+
+
 @app.post("/tts")
 async def text_to_speech(request: TTSRequest):
     """
-    Синтез речи с клонированным голосом Лидии
+    Синтез речи с текущим выбранным голосом
     """
-    if not voice_service:
-        raise HTTPException(status_code=503, detail="Voice service not initialized")
+    if not voice_service and not piper_service:
+        raise HTTPException(status_code=503, detail="No TTS service initialized")
 
     try:
         # Генерируем уникальное имя файла
         output_file = TEMP_DIR / f"tts_{datetime.now().timestamp()}.wav"
 
-        # Синтезируем
-        voice_service.synthesize_to_file(
+        # Синтезируем с текущим голосом
+        synthesize_with_current_voice(
             text=request.text,
             output_path=str(output_file),
             language=request.language
@@ -603,16 +638,16 @@ async def openai_speech(request: OpenAISpeechRequest):
     Оптимизация: сначала проверяет кэш streaming TTS manager.
     Если аудио уже было предсинтезировано во время streaming LLM - возвращает мгновенно.
     """
-    if not voice_service:
-        raise HTTPException(status_code=503, detail="Voice service not initialized")
+    if not voice_service and not piper_service:
+        raise HTTPException(status_code=503, detail="No TTS service initialized")
 
     try:
         output_file = TEMP_DIR / f"speech_{datetime.now().timestamp()}.wav"
         start_time = time.time()
 
-        # Проверяем кэш streaming TTS
+        # Проверяем кэш streaming TTS (только для XTTS)
         cached_audio = None
-        if streaming_tts_manager is not None:
+        if current_voice_config["engine"] == "xtts" and streaming_tts_manager is not None:
             cached_audio = streaming_tts_manager.get_cached_audio(request.input)
 
         if cached_audio is not None:
@@ -622,9 +657,8 @@ async def openai_speech(request: OpenAISpeechRequest):
             elapsed = time.time() - start_time
             logger.info(f"⚡ TTS из кэша за {elapsed:.3f}s (vs ~5-10s обычный синтез)")
         else:
-            # Cache MISS - синтезируем как обычно
-            logger.info(f"🎙️ Синтез TTS (cache miss): '{request.input[:50]}...'")
-            voice_service.synthesize_to_file(
+            # Cache MISS - синтезируем с текущим голосом
+            synthesize_with_current_voice(
                 text=request.input,
                 output_path=str(output_file),
                 language="ru"
@@ -825,6 +859,7 @@ async def admin_status():
             "llm": llm_service is not None,
             "stt": stt_service is not None,
             "streaming_tts": streaming_tts_manager is not None,
+            "piper_tts": piper_service is not None,
         },
         "gpu": None,
         "streaming_tts_stats": None,
@@ -1051,6 +1086,130 @@ async def admin_get_llm_history():
             "count": len(llm_service.conversation_history),
         }
     raise HTTPException(status_code=503, detail="LLM service not initialized")
+
+
+# ============== Voice Selection API ==============
+
+class AdminVoiceRequest(BaseModel):
+    voice: str  # lidia / dmitri / irina
+
+
+@app.get("/admin/voices")
+async def admin_get_voices():
+    """Получить список всех доступных голосов"""
+    voices = []
+
+    # XTTS голос (Лидия)
+    if voice_service:
+        voices.append({
+            "id": "lidia",
+            "name": "Лидия",
+            "engine": "xtts",
+            "description": "Клонированный голос (XTTS v2)",
+            "available": True,
+            "samples_count": len(voice_service.voice_samples),
+        })
+
+    # Piper голоса
+    if piper_service:
+        piper_voices = piper_service.get_available_voices()
+        for voice_id, info in piper_voices.items():
+            voices.append({
+                "id": voice_id,
+                "name": info["name"],
+                "engine": "piper",
+                "description": info["description"],
+                "available": info["available"],
+            })
+
+    return {
+        "voices": voices,
+        "current": current_voice_config,
+    }
+
+
+@app.get("/admin/voice")
+async def admin_get_current_voice():
+    """Получить текущий выбранный голос"""
+    return current_voice_config
+
+
+@app.post("/admin/voice")
+async def admin_set_voice(request: AdminVoiceRequest):
+    """Установить активный голос"""
+    global current_voice_config
+
+    voice_id = request.voice.lower()
+
+    # Проверяем доступность голоса
+    if voice_id == "lidia":
+        if not voice_service:
+            raise HTTPException(status_code=503, detail="XTTS service not available")
+        current_voice_config = {"engine": "xtts", "voice": "lidia"}
+        logger.info(f"🎤 Голос изменён на: Лидия (XTTS)")
+
+    elif voice_id in ["dmitri", "irina"]:
+        if not piper_service:
+            raise HTTPException(status_code=503, detail="Piper TTS service not available")
+        piper_voices = piper_service.get_available_voices()
+        if voice_id not in piper_voices or not piper_voices[voice_id]["available"]:
+            raise HTTPException(status_code=400, detail=f"Voice model not found: {voice_id}")
+        current_voice_config = {"engine": "piper", "voice": voice_id}
+        logger.info(f"🎤 Голос изменён на: {piper_voices[voice_id]['name']} (Piper)")
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown voice: {voice_id}. Available: lidia, dmitri, irina"
+        )
+
+    return {"status": "ok", **current_voice_config}
+
+
+@app.post("/admin/voice/test")
+async def admin_test_voice(request: AdminVoiceRequest):
+    """Тестовый синтез выбранным голосом"""
+    voice_id = request.voice.lower()
+    test_text = "Здравствуйте! Это тестовое сообщение для проверки голоса."
+
+    output_path = TEMP_DIR / f"voice_test_{voice_id}_{int(time.time())}.wav"
+
+    try:
+        if voice_id == "lidia":
+            if not voice_service:
+                raise HTTPException(status_code=503, detail="XTTS not available")
+            voice_service.synthesize_to_file(test_text, str(output_path), preset="natural")
+
+        elif voice_id in ["dmitri", "irina"]:
+            if not piper_service:
+                raise HTTPException(status_code=503, detail="Piper not available")
+            piper_service.synthesize_to_file(test_text, str(output_path), voice=voice_id)
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown voice: {voice_id}")
+
+        return FileResponse(
+            output_path,
+            media_type="audio/wav",
+            filename=f"test_{voice_id}.wav"
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка тестового синтеза: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_current_tts_service():
+    """Возвращает текущий TTS сервис и параметры на основе конфигурации"""
+    engine = current_voice_config["engine"]
+    voice = current_voice_config["voice"]
+
+    if engine == "xtts":
+        return voice_service, {"preset": "natural"}
+    elif engine == "piper":
+        return piper_service, {"voice": voice}
+    else:
+        return voice_service, {"preset": "natural"}
 
 
 if __name__ == "__main__":

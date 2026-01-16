@@ -391,6 +391,12 @@
                                 <span class="status-dot" id="svc-streaming"></span>
                             </div>
                         </li>
+                        <li class="service-item">
+                            <span>Piper TTS</span>
+                            <div class="service-status">
+                                <span class="status-dot" id="svc-piper"></span>
+                            </div>
+                        </li>
                     </ul>
                 </div>
 
@@ -448,11 +454,29 @@
         <!-- TTS Tab -->
         <div id="tab-tts" class="tab-content">
             <div class="grid">
+                <!-- Voice Selection Card -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title">Пресеты интонаций</span>
+                        <span class="card-title">Выбор голоса</span>
+                        <span class="card-icon">🎤</span>
+                    </div>
+                    <div class="preset-grid" id="voices-grid"></div>
+                    <div style="margin-top: 15px;">
+                        <span class="stat-label">Текущий голос: </span>
+                        <span class="stat-value" id="current-voice-name">-</span>
+                        <span class="stat-label" style="margin-left: 10px;">Engine: </span>
+                        <span class="stat-value" id="current-voice-engine">-</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Пресеты интонаций (XTTS)</span>
                     </div>
                     <div class="preset-grid" id="presets-grid"></div>
+                    <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary);">
+                        * Пресеты работают только для голоса Лидия (XTTS)
+                    </p>
                 </div>
 
                 <div class="card">
@@ -597,6 +621,7 @@
                 document.getElementById('svc-llm').className = `status-dot ${services.llm ? 'online' : 'offline'}`;
                 document.getElementById('svc-stt').className = `status-dot ${services.stt ? 'online' : 'offline'}`;
                 document.getElementById('svc-streaming').className = `status-dot ${services.streaming_tts ? 'online' : 'offline'}`;
+                document.getElementById('svc-piper').className = `status-dot ${services.piper_tts ? 'online' : 'offline'}`;
 
                 // Update GPU
                 const gpuList = document.getElementById('gpu-list');
@@ -640,6 +665,77 @@
                 const badge = document.getElementById('status-badge');
                 badge.textContent = 'Offline';
                 badge.className = 'status-badge status-offline';
+            }
+        }
+
+        // Fetch voices
+        async function fetchVoices() {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/voices`);
+                const data = await resp.json();
+
+                const grid = document.getElementById('voices-grid');
+                grid.innerHTML = '';
+
+                const currentVoice = data.current?.voice || 'lidia';
+                const currentEngine = data.current?.engine || 'xtts';
+
+                document.getElementById('current-voice-name').textContent = currentVoice;
+                document.getElementById('current-voice-engine').textContent = currentEngine.toUpperCase();
+
+                for (const voice of (data.voices || [])) {
+                    const isActive = voice.id === currentVoice;
+                    const engineLabel = voice.engine === 'xtts' ? '🎭' : '🔊';
+                    grid.innerHTML += `
+                        <button class="preset-btn ${isActive ? 'active' : ''} ${!voice.available ? 'disabled' : ''}"
+                                onclick="setVoice('${voice.id}')"
+                                title="${voice.description}"
+                                ${!voice.available ? 'disabled' : ''}>
+                            ${engineLabel} ${voice.name}
+                        </button>
+                    `;
+                }
+            } catch (e) {
+                console.error('Error fetching voices:', e);
+            }
+        }
+
+        // Set voice
+        async function setVoice(voiceId) {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/voice`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({voice: voiceId})
+                });
+                const data = await resp.json();
+                showToast(`Голос изменён на: ${voiceId}`);
+                fetchVoices();
+                fetchStatus();
+            } catch (e) {
+                showToast('Ошибка изменения голоса', 'error');
+            }
+        }
+
+        // Test voice
+        async function testVoice(voiceId) {
+            try {
+                const resp = await fetch(`${API_BASE}/admin/voice/test`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({voice: voiceId})
+                });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    audio.play();
+                    showToast(`Воспроизведение: ${voiceId}`);
+                } else {
+                    showToast('Ошибка синтеза', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка теста голоса', 'error');
             }
         }
 
@@ -823,6 +919,7 @@ ${data.response}
             const btn = document.querySelector('.refresh-btn');
             btn.classList.add('spinning');
             fetchStatus();
+            fetchVoices();
             fetchPresets();
             loadPrompt();
             setTimeout(() => btn.classList.remove('spinning'), 1000);
