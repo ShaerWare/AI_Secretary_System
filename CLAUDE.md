@@ -97,7 +97,7 @@ Five voices available, switchable via admin panel or API:
 **Voice switching:**
 - Admin: http://localhost:8002/admin → TTS tab
 - API: `POST /admin/voice {"voice": "gulya"}` or `{"voice": "lidia"}`
-- Code: `current_voice_config` dict in `orchestrator.py:305`
+- Code: `current_voice_config` dict in `orchestrator.py:306`
 
 ### Secretary Personas
 Two personas available, controlled by `SECRETARY_PERSONA` env var (default: `gulya`):
@@ -109,7 +109,7 @@ Two personas available, controlled by `SECRETARY_PERSONA` env var (default: `gul
 
 **Persona switching:**
 - Env: `SECRETARY_PERSONA=gulya` or `SECRETARY_PERSONA=lidia`
-- Code: `SECRETARY_PERSONAS` dict in `vllm_llm_service.py:18`
+- Code: `SECRETARY_PERSONAS` dict in `vllm_llm_service.py:20`
 - Runtime: `llm_service.set_persona("lidia")`
 
 ### LLM Backend Selection
@@ -124,7 +124,7 @@ Both backends share the same interface and FAQ system.
 **LoRA adapter path:** `/home/shaerware/qwen-finetune/qwen2.5-7b-lydia-lora/final`
 
 ### FAQ System (`typical_responses.json`)
-Bypasses LLM for common questions. Checked in `llm_service.py:79` and `vllm_llm_service.py:118`.
+Bypasses LLM for common questions. Checked in `llm_service.py:79` and `vllm_llm_service.py:188`.
 
 ```json
 {
@@ -238,7 +238,7 @@ CUDA_VISIBLE_DEVICES=1       # GPU index for RTX 3060
 4. Add synthesis case in `synthesize_with_current_voice()`
 
 **Adding a new secretary persona:**
-1. Add entry to `SECRETARY_PERSONAS` dict in `vllm_llm_service.py:18`
+1. Add entry to `SECRETARY_PERSONAS` dict in `vllm_llm_service.py:20`
 2. Include: name, full_name, company, boss, prompt
 3. Persona available via `SECRETARY_PERSONA` env var or `llm_service.set_persona()`
 
@@ -252,9 +252,10 @@ CUDA_VISIBLE_DEVICES=1       # GPU index for RTX 3060
 2. Call `llm_service.reload_faq()` or restart orchestrator
 
 **Changing default TTS for all endpoints:**
-1. Modify `current_voice_config` dict in `orchestrator.py:305`
+1. Modify `current_voice_config` dict in `orchestrator.py:306`
 2. Or use API: `POST /admin/voice {"voice": "gulya"}`
 
 **Modifying system prompt:**
-- vLLM: Edit persona in `SECRETARY_PERSONAS` dict (`vllm_llm_service.py:18`)
+- vLLM: Edit persona in `SECRETARY_PERSONAS` dict (`vllm_llm_service.py:20`)
 - Gemini: `llm_service.py:128` (`_default_system_prompt` method)
+- vLLM: `vllm_llm_service.py:228` (`_default_system_prompt` method)
