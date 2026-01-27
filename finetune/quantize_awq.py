@@ -1,6 +1,7 @@
-from llmcompressor.modifiers.quantization import QuantizationModifier
 from llmcompressor import oneshot
+from llmcompressor.modifiers.quantization import QuantizationModifier
 from transformers import AutoTokenizer
+
 
 model_path = "adapters/qwen2.5-7b-lydia-merged"
 quant_path = "adapters/qwen2.5-7b-lydia-w4a16"

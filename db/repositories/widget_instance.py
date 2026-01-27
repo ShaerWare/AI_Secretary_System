@@ -2,17 +2,17 @@
 Widget instance repository for managing website widget instances.
 """
 
-import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import WidgetInstance
 from db.repositories.base import BaseRepository
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ DEFAULT_WIDGET_CONFIG = {
 def slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
     return text[:50]
 
 
@@ -71,14 +71,9 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         instance = await self.session.get(WidgetInstance, instance_id)
         return instance.to_dict() if instance else None
 
-    async def create_instance(
-        self,
-        name: str,
-        description: str = None,
-        **kwargs
-    ) -> dict:
+    async def create_instance(self, name: str, description: str = None, **kwargs) -> dict:
         """Create new widget instance."""
-        instance_id = kwargs.pop('id', None) or self._generate_id(name)
+        instance_id = kwargs.pop("id", None) or self._generate_id(name)
 
         # Check if ID exists
         existing = await self.session.get(WidgetInstance, instance_id)
@@ -90,33 +85,33 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             id=instance_id,
             name=name,
             description=description,
-            enabled=kwargs.get('enabled', True),
+            enabled=kwargs.get("enabled", True),
             # Appearance
-            title=kwargs.get('title', DEFAULT_WIDGET_CONFIG['title']),
-            greeting=kwargs.get('greeting', DEFAULT_WIDGET_CONFIG['greeting']),
-            placeholder=kwargs.get('placeholder', DEFAULT_WIDGET_CONFIG['placeholder']),
-            primary_color=kwargs.get('primary_color', DEFAULT_WIDGET_CONFIG['primary_color']),
-            position=kwargs.get('position', DEFAULT_WIDGET_CONFIG['position']),
+            title=kwargs.get("title", DEFAULT_WIDGET_CONFIG["title"]),
+            greeting=kwargs.get("greeting", DEFAULT_WIDGET_CONFIG["greeting"]),
+            placeholder=kwargs.get("placeholder", DEFAULT_WIDGET_CONFIG["placeholder"]),
+            primary_color=kwargs.get("primary_color", DEFAULT_WIDGET_CONFIG["primary_color"]),
+            position=kwargs.get("position", DEFAULT_WIDGET_CONFIG["position"]),
             # Access
-            tunnel_url=kwargs.get('tunnel_url', ''),
+            tunnel_url=kwargs.get("tunnel_url", ""),
             # AI
-            llm_backend=kwargs.get('llm_backend', DEFAULT_WIDGET_CONFIG['llm_backend']),
-            llm_persona=kwargs.get('llm_persona', DEFAULT_WIDGET_CONFIG['llm_persona']),
-            system_prompt=kwargs.get('system_prompt'),
+            llm_backend=kwargs.get("llm_backend", DEFAULT_WIDGET_CONFIG["llm_backend"]),
+            llm_persona=kwargs.get("llm_persona", DEFAULT_WIDGET_CONFIG["llm_persona"]),
+            system_prompt=kwargs.get("system_prompt"),
             # TTS
-            tts_engine=kwargs.get('tts_engine', DEFAULT_WIDGET_CONFIG['tts_engine']),
-            tts_voice=kwargs.get('tts_voice', DEFAULT_WIDGET_CONFIG['tts_voice']),
-            tts_preset=kwargs.get('tts_preset'),
+            tts_engine=kwargs.get("tts_engine", DEFAULT_WIDGET_CONFIG["tts_engine"]),
+            tts_voice=kwargs.get("tts_voice", DEFAULT_WIDGET_CONFIG["tts_voice"]),
+            tts_preset=kwargs.get("tts_preset"),
             # Timestamps
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
         )
 
         # Set JSON fields
-        if 'allowed_domains' in kwargs:
-            instance.set_allowed_domains(kwargs['allowed_domains'])
-        if 'llm_params' in kwargs:
-            instance.set_llm_params(kwargs['llm_params'])
+        if "allowed_domains" in kwargs:
+            instance.set_allowed_domains(kwargs["allowed_domains"])
+        if "llm_params" in kwargs:
+            instance.set_llm_params(kwargs["llm_params"])
 
         self.session.add(instance)
         await self.session.commit()
@@ -125,11 +120,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         logger.info(f"Created widget instance: {instance_id}")
         return instance.to_dict()
 
-    async def update_instance(
-        self,
-        instance_id: str,
-        **kwargs
-    ) -> Optional[dict]:
+    async def update_instance(self, instance_id: str, **kwargs) -> Optional[dict]:
         """Update widget instance."""
         instance = await self.session.get(WidgetInstance, instance_id)
         if not instance:
@@ -137,21 +128,31 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
 
         # Update simple fields
         simple_fields = [
-            'name', 'description', 'enabled',
-            'title', 'greeting', 'placeholder', 'primary_color', 'position',
-            'tunnel_url',
-            'llm_backend', 'llm_persona', 'system_prompt',
-            'tts_engine', 'tts_voice', 'tts_preset'
+            "name",
+            "description",
+            "enabled",
+            "title",
+            "greeting",
+            "placeholder",
+            "primary_color",
+            "position",
+            "tunnel_url",
+            "llm_backend",
+            "llm_persona",
+            "system_prompt",
+            "tts_engine",
+            "tts_voice",
+            "tts_preset",
         ]
         for field in simple_fields:
             if field in kwargs:
                 setattr(instance, field, kwargs[field])
 
         # Update JSON fields
-        if 'allowed_domains' in kwargs:
-            instance.set_allowed_domains(kwargs['allowed_domains'])
-        if 'llm_params' in kwargs:
-            instance.set_llm_params(kwargs['llm_params'])
+        if "allowed_domains" in kwargs:
+            instance.set_allowed_domains(kwargs["allowed_domains"])
+        if "llm_params" in kwargs:
+            instance.set_llm_params(kwargs["llm_params"])
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
@@ -206,28 +207,28 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             # Update existing
             return await self.update_instance(
                 instance_id,
-                name=config.get('name', 'Default Widget'),
-                enabled=config.get('enabled', False),
-                title=config.get('title', DEFAULT_WIDGET_CONFIG['title']),
-                greeting=config.get('greeting', DEFAULT_WIDGET_CONFIG['greeting']),
-                placeholder=config.get('placeholder', DEFAULT_WIDGET_CONFIG['placeholder']),
-                primary_color=config.get('primary_color', DEFAULT_WIDGET_CONFIG['primary_color']),
-                position=config.get('position', DEFAULT_WIDGET_CONFIG['position']),
-                allowed_domains=config.get('allowed_domains', []),
-                tunnel_url=config.get('tunnel_url', ''),
+                name=config.get("name", "Default Widget"),
+                enabled=config.get("enabled", False),
+                title=config.get("title", DEFAULT_WIDGET_CONFIG["title"]),
+                greeting=config.get("greeting", DEFAULT_WIDGET_CONFIG["greeting"]),
+                placeholder=config.get("placeholder", DEFAULT_WIDGET_CONFIG["placeholder"]),
+                primary_color=config.get("primary_color", DEFAULT_WIDGET_CONFIG["primary_color"]),
+                position=config.get("position", DEFAULT_WIDGET_CONFIG["position"]),
+                allowed_domains=config.get("allowed_domains", []),
+                tunnel_url=config.get("tunnel_url", ""),
             )
         else:
             # Create new
             return await self.create_instance(
                 id=instance_id,
-                name=config.get('name', 'Default Widget'),
-                description='Default website widget (migrated from legacy config)',
-                enabled=config.get('enabled', False),
-                title=config.get('title', DEFAULT_WIDGET_CONFIG['title']),
-                greeting=config.get('greeting', DEFAULT_WIDGET_CONFIG['greeting']),
-                placeholder=config.get('placeholder', DEFAULT_WIDGET_CONFIG['placeholder']),
-                primary_color=config.get('primary_color', DEFAULT_WIDGET_CONFIG['primary_color']),
-                position=config.get('position', DEFAULT_WIDGET_CONFIG['position']),
-                allowed_domains=config.get('allowed_domains', []),
-                tunnel_url=config.get('tunnel_url', ''),
+                name=config.get("name", "Default Widget"),
+                description="Default website widget (migrated from legacy config)",
+                enabled=config.get("enabled", False),
+                title=config.get("title", DEFAULT_WIDGET_CONFIG["title"]),
+                greeting=config.get("greeting", DEFAULT_WIDGET_CONFIG["greeting"]),
+                placeholder=config.get("placeholder", DEFAULT_WIDGET_CONFIG["placeholder"]),
+                primary_color=config.get("primary_color", DEFAULT_WIDGET_CONFIG["primary_color"]),
+                position=config.get("position", DEFAULT_WIDGET_CONFIG["position"]),
+                allowed_domains=config.get("allowed_domains", []),
+                tunnel_url=config.get("tunnel_url", ""),
             )

@@ -21,17 +21,15 @@ import asyncio
 import json
 import logging
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
-import sys
+
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # File paths
@@ -67,7 +65,7 @@ def load_json_file(path: Path) -> dict | list | None:
     if not path.exists():
         return None
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         logger.error(f"Error loading {path}: {e}")
@@ -89,7 +87,7 @@ async def migrate_bot_instance(bot_repo):
 
     # Import from legacy config
     instance = await bot_repo.import_from_legacy_config(data, instance_id="default")
-    logger.info(f"Created default bot instance from telegram_config.json")
+    logger.info("Created default bot instance from telegram_config.json")
     return instance
 
 
@@ -108,21 +106,22 @@ async def migrate_widget_instance(widget_repo):
 
     # Import from legacy config
     instance = await widget_repo.import_from_legacy_config(data, instance_id="default")
-    logger.info(f"Created default widget instance from widget_config.json")
+    logger.info("Created default widget instance from widget_config.json")
     return instance
 
 
 async def add_bot_id_column_if_missing():
     """Add bot_id column to telegram_sessions table if it doesn't exist."""
-    from db.database import engine
     from sqlalchemy import text
+
+    from db.database import engine
 
     async with engine.begin() as conn:
         # Check if column exists
         result = await conn.execute(text("PRAGMA table_info(telegram_sessions)"))
         columns = [row[1] for row in result.fetchall()]
 
-        if 'bot_id' not in columns:
+        if "bot_id" not in columns:
             logger.info("Adding bot_id column to telegram_sessions table...")
             # SQLite doesn't support adding PRIMARY KEY columns easily
             # So we need to:
@@ -132,7 +131,8 @@ async def add_bot_id_column_if_missing():
             # 4. Rename new table
 
             # Create new table
-            await conn.execute(text("""
+            await conn.execute(
+                text("""
                 CREATE TABLE telegram_sessions_new (
                     bot_id VARCHAR(50) NOT NULL DEFAULT 'default',
                     user_id INTEGER NOT NULL,
@@ -144,20 +144,25 @@ async def add_bot_id_column_if_missing():
                     updated DATETIME,
                     PRIMARY KEY (bot_id, user_id)
                 )
-            """))
+            """)
+            )
 
             # Copy data with default bot_id
-            await conn.execute(text("""
+            await conn.execute(
+                text("""
                 INSERT INTO telegram_sessions_new (bot_id, user_id, chat_session_id, username, first_name, last_name, created, updated)
                 SELECT 'default', user_id, chat_session_id, username, first_name, last_name, created, updated
                 FROM telegram_sessions
-            """))
+            """)
+            )
 
             # Drop old table
             await conn.execute(text("DROP TABLE telegram_sessions"))
 
             # Rename new table
-            await conn.execute(text("ALTER TABLE telegram_sessions_new RENAME TO telegram_sessions"))
+            await conn.execute(
+                text("ALTER TABLE telegram_sessions_new RENAME TO telegram_sessions")
+            )
 
             logger.info("Added bot_id column and migrated existing sessions to 'default'")
             return True
@@ -195,7 +200,7 @@ async def verify_migration(bot_repo, widget_repo, telegram_repo):
 
     # Check telegram sessions by bot
     session_counts = await telegram_repo.get_session_count_by_bot()
-    logger.info(f"   Telegram sessions by bot:")
+    logger.info("   Telegram sessions by bot:")
     for bot_id, count in session_counts.items():
         logger.info(f"      - {bot_id}: {count} sessions")
 
@@ -213,7 +218,8 @@ async def main():
 
     # Step 2: Initialize/update database
     logger.info("Step 2: Initializing database")
-    from db.database import init_db, AsyncSessionLocal
+    from db.database import AsyncSessionLocal, init_db
+
     await init_db()
     logger.info("   Database tables created/verified\n")
 

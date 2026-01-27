@@ -10,15 +10,17 @@ CLI Админка для AI Secretary System
     ./admin.py llm prompt          # Показать промпт
     ./admin.py llm model           # Текущая модель
 """
-import click
-import requests
+
 import sys
 import time
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
+
+import click
+import requests
 from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 
 console = Console()
 
@@ -84,19 +86,20 @@ def cli():
 
 # ============== STATUS ==============
 
+
 @cli.command()
-@click.option('--watch', '-w', is_flag=True, help='Мониторинг в реальном времени')
+@click.option("--watch", "-w", is_flag=True, help="Мониторинг в реальном времени")
 def status(watch):
     """Показать статус системы"""
+
     def show_status():
         data = api_get("/admin/status")
 
         # Заголовок
         console.print()
-        console.print(Panel.fit(
-            "[bold cyan]AI Secretary System[/bold cyan]",
-            subtitle="Status Dashboard"
-        ))
+        console.print(
+            Panel.fit("[bold cyan]AI Secretary System[/bold cyan]", subtitle="Status Dashboard")
+        )
 
         # Таблица сервисов
         table = Table(title="Сервисы", box=box.ROUNDED)
@@ -123,7 +126,7 @@ def status(watch):
 
             for gpu in gpu_info:
                 mem_str = f"{gpu['used_gb']:.1f} / {gpu['total_gb']:.1f} GB"
-                gpu_table.add_row(str(gpu['id']), gpu['name'], mem_str)
+                gpu_table.add_row(str(gpu["id"]), gpu["name"], mem_str)
 
             console.print(gpu_table)
 
@@ -135,7 +138,9 @@ def status(watch):
             tts_table.add_column("Значение")
 
             tts_table.add_row("Device", tts_config.get("device", "N/A"))
-            tts_table.add_row("Default Preset", f"[yellow]{tts_config.get('default_preset', 'N/A')}[/yellow]")
+            tts_table.add_row(
+                "Default Preset", f"[yellow]{tts_config.get('default_preset', 'N/A')}[/yellow]"
+            )
             tts_table.add_row("Voice Samples", str(tts_config.get("samples_count", 0)))
 
             console.print(tts_table)
@@ -160,7 +165,9 @@ def status(watch):
         # Streaming TTS статистика
         streaming_stats = data.get("streaming_tts_stats")
         if streaming_stats:
-            console.print(f"\n[dim]Streaming TTS Cache: {streaming_stats.get('cache_size', 0)} items[/dim]")
+            console.print(
+                f"\n[dim]Streaming TTS Cache: {streaming_stats.get('cache_size', 0)} items[/dim]"
+            )
 
     if watch:
         console.print("[dim]Нажмите Ctrl+C для выхода[/dim]")
@@ -176,6 +183,7 @@ def status(watch):
 
 
 # ============== TTS ==============
+
 
 @cli.group()
 def tts():
@@ -204,7 +212,7 @@ def tts_presets():
             preset.get("display_name", ""),
             str(preset.get("temperature", "")),
             str(preset.get("speed", "")),
-            marker
+            marker,
         )
 
     console.print(table)
@@ -216,9 +224,13 @@ def tts_set_preset(name):
     """Установить пресет TTS"""
     data = api_post("/admin/tts/preset", {"preset": name})
 
-    console.print(f"[green]✓[/green] Пресет изменён на: [yellow]{data['preset']}[/yellow] ({data.get('display_name', '')})")
+    console.print(
+        f"[green]✓[/green] Пресет изменён на: [yellow]{data['preset']}[/yellow] ({data.get('display_name', '')})"
+    )
     settings = data.get("settings", {})
-    console.print(f"  temperature: {settings.get('temperature', 'N/A')}, speed: {settings.get('speed', 'N/A')}")
+    console.print(
+        f"  temperature: {settings.get('temperature', 'N/A')}, speed: {settings.get('speed', 'N/A')}"
+    )
 
 
 @tts.command("test")
@@ -231,7 +243,7 @@ def tts_test(text, preset):
     with console.status("[bold green]Синтез...[/bold green]"):
         data = api_post("/admin/tts/test", {"text": text, "preset": preset})
 
-    console.print(f"[green]✓[/green] Готово!")
+    console.print("[green]✓[/green] Готово!")
     console.print(f"  Файл: [cyan]{data.get('file', 'N/A')}[/cyan]")
     console.print(f"  Длительность: {data.get('duration_sec', 0):.2f} сек")
     console.print(f"  Время синтеза: {data.get('synthesis_time_sec', 0):.2f} сек")
@@ -253,6 +265,7 @@ def tts_cache(clear):
 
 # ============== LLM ==============
 
+
 @cli.group()
 def llm():
     """Управление LLM (языковой моделью)"""
@@ -265,15 +278,17 @@ def llm_prompt(new_prompt):
     """Показать/изменить системный промпт"""
     if new_prompt:
         data = api_post("/admin/llm/prompt", {"prompt": new_prompt})
-        console.print(f"[green]✓[/green] Промпт обновлён")
+        console.print("[green]✓[/green] Промпт обновлён")
         console.print(f"[dim]{data.get('prompt', '')}[/dim]")
     else:
         data = api_get("/admin/llm/prompt")
-        console.print(Panel(
-            data.get("prompt", "N/A"),
-            title="System Prompt",
-            subtitle=f"Model: {data.get('model', 'N/A')}"
-        ))
+        console.print(
+            Panel(
+                data.get("prompt", "N/A"),
+                title="System Prompt",
+                subtitle=f"Model: {data.get('model', 'N/A')}",
+            )
+        )
 
 
 @llm.command("model")
@@ -282,11 +297,13 @@ def llm_model(new_model):
     """Показать/изменить модель LLM"""
     if new_model:
         data = api_post("/admin/llm/model", {"model": new_model})
-        console.print(f"[green]✓[/green] Модель изменена на: [yellow]{data.get('model', '')}[/yellow]")
+        console.print(
+            f"[green]✓[/green] Модель изменена на: [yellow]{data.get('model', '')}[/yellow]"
+        )
     else:
         data = api_get("/admin/llm/model")
         console.print(f"Текущая модель: [yellow]{data.get('model', 'N/A')}[/yellow]")
-        console.print(f"[dim]Доступные: gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash[/dim]")
+        console.print("[dim]Доступные: gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash[/dim]")
 
 
 @llm.command("history")
@@ -295,7 +312,9 @@ def llm_history(clear):
     """Показать/очистить историю диалога"""
     if clear:
         data = api_delete("/admin/llm/history")
-        console.print(f"[green]✓[/green] История очищена: {data.get('cleared_messages', 0)} сообщений")
+        console.print(
+            f"[green]✓[/green] История очищена: {data.get('cleared_messages', 0)} сообщений"
+        )
     else:
         data = api_get("/admin/llm/history")
         count = data.get("count", 0)
@@ -308,9 +327,13 @@ def llm_history(clear):
                 role = msg.get("role", "")
                 content = msg.get("content", "")
                 if role == "user":
-                    console.print(f"[blue]User:[/blue] {content[:100]}{'...' if len(content) > 100 else ''}")
+                    console.print(
+                        f"[blue]User:[/blue] {content[:100]}{'...' if len(content) > 100 else ''}"
+                    )
                 else:
-                    console.print(f"[green]Assistant:[/green] {content[:100]}{'...' if len(content) > 100 else ''}")
+                    console.print(
+                        f"[green]Assistant:[/green] {content[:100]}{'...' if len(content) > 100 else ''}"
+                    )
 
 
 @llm.command("test")
@@ -321,22 +344,14 @@ def llm_test(question):
 
     with console.status("[bold green]Генерация ответа...[/bold green]"):
         try:
-            resp = requests.post(
-                f"{ORCHESTRATOR_URL}/chat",
-                json={"text": question},
-                timeout=30
-            )
+            resp = requests.post(f"{ORCHESTRATOR_URL}/chat", json={"text": question}, timeout=30)
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
             console.print(f"[red]Ошибка: {e}[/red]")
             return
 
-    console.print(Panel(
-        data.get("response", "N/A"),
-        title="Ответ Лидии",
-        border_style="green"
-    ))
+    console.print(Panel(data.get("response", "N/A"), title="Ответ Лидии", border_style="green"))
 
 
 # ============== MAIN ==============

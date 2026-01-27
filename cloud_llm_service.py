@@ -12,18 +12,19 @@ Supports:
 - Custom OpenAI-compatible endpoints
 """
 
-import os
-import logging
 import json
-from typing import List, Dict, Optional, Generator, Union
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Dict, Generator, List, Optional, Union
 
 import httpx
+
 
 # Gemini SDK (optional)
 try:
     import google.generativeai as genai
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -91,14 +92,14 @@ class BaseLLMProvider(ABC):
 
     def __init__(self, config: dict):
         self.config = config
-        self.api_key = config.get('api_key', '')
-        self.model_name = config.get('model_name', '')
-        self.base_url = config.get('base_url', '')
-        self.provider_id = config.get('id', 'unknown')
-        self.provider_type = config.get('provider_type', 'custom')
+        self.api_key = config.get("api_key", "")
+        self.model_name = config.get("model_name", "")
+        self.base_url = config.get("base_url", "")
+        self.provider_id = config.get("id", "unknown")
+        self.provider_type = config.get("provider_type", "custom")
 
         # Runtime parameters
-        self.runtime_params = config.get('config', {}) or {}
+        self.runtime_params = config.get("config", {}) or {}
         if not self.runtime_params:
             self.runtime_params = {
                 "temperature": 0.7,
@@ -108,29 +109,21 @@ class BaseLLMProvider(ABC):
 
     @abstractmethod
     def generate_response(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> str:
         """Generate a response synchronously."""
         pass
 
     @abstractmethod
     def generate_response_stream(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> Generator[str, None, None]:
         """Generate a response with streaming."""
         pass
 
     @abstractmethod
     def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False
     ) -> Union[str, Generator[str, None, None]]:
         """Generate response from OpenAI-format messages."""
         pass
@@ -170,7 +163,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         # Set default base URL if not provided
         if not self.base_url:
-            default_url = PROVIDER_TYPES.get(self.provider_type, {}).get('default_base_url', '')
+            default_url = PROVIDER_TYPES.get(self.provider_type, {}).get("default_base_url", "")
             if default_url:
                 self.base_url = default_url
             else:
@@ -187,9 +180,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def is_available(self) -> bool:
         try:
             response = self.client.get(
-                f"{self.base_url}/models",
-                headers=self._get_headers(),
-                timeout=10.0
+                f"{self.base_url}/models", headers=self._get_headers(), timeout=10.0
             )
             # 200 = success, 401/403 = auth issue but API reachable
             return response.status_code in [200, 401, 403]
@@ -198,10 +189,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             return False
 
     def generate_response(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> str:
         messages = []
         if system_prompt:
@@ -213,10 +201,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return self._generate_non_stream(messages)
 
     def generate_response_stream(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> Generator[str, None, None]:
         messages = []
         if system_prompt:
@@ -228,9 +213,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         yield from self._generate_stream(messages)
 
     def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False
     ) -> Union[str, Generator[str, None, None]]:
         if stream:
             return self._generate_stream(messages)
@@ -247,14 +230,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "max_tokens": self.runtime_params.get("max_tokens", 512),
                     "top_p": self.runtime_params.get("top_p", 0.9),
-                    "stream": False
-                }
+                    "stream": False,
+                },
             )
             response.raise_for_status()
             result = response.json()
             return result["choices"][0]["message"]["content"].strip()
         except httpx.HTTPStatusError as e:
-            logger.error(f"[{self.provider_id}] HTTP error: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"[{self.provider_id}] HTTP error: {e.response.status_code} - {e.response.text}"
+            )
             return f"Error: API returned {e.response.status_code}"
         except Exception as e:
             logger.error(f"[{self.provider_id}] Error: {e}")
@@ -272,8 +257,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "max_tokens": self.runtime_params.get("max_tokens", 512),
                     "top_p": self.runtime_params.get("top_p", 0.9),
-                    "stream": True
-                }
+                    "stream": True,
+                },
             ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
@@ -304,7 +289,9 @@ class GeminiProvider(BaseLLMProvider):
         super().__init__(config)
 
         if not GEMINI_AVAILABLE:
-            raise ImportError("google-generativeai package not installed. Install with: pip install google-generativeai")
+            raise ImportError(
+                "google-generativeai package not installed. Install with: pip install google-generativeai"
+            )
 
         if not self.api_key:
             raise ValueError("API key required for Gemini provider")
@@ -324,17 +311,14 @@ class GeminiProvider(BaseLLMProvider):
             return False
 
     def generate_response(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> str:
         try:
             # Rebuild model with system instruction if provided
             if system_prompt:
                 model = genai.GenerativeModel(
                     model_name=self.model_name or "gemini-2.0-flash",
-                    system_instruction=system_prompt
+                    system_instruction=system_prompt,
                 )
             else:
                 model = self.model
@@ -356,16 +340,13 @@ class GeminiProvider(BaseLLMProvider):
             return "Извините, произошла техническая ошибка."
 
     def generate_response_stream(
-        self,
-        user_message: str,
-        system_prompt: str = None,
-        history: List[Dict] = None
+        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
     ) -> Generator[str, None, None]:
         try:
             if system_prompt:
                 model = genai.GenerativeModel(
                     model_name=self.model_name or "gemini-2.0-flash",
-                    system_instruction=system_prompt
+                    system_instruction=system_prompt,
                 )
             else:
                 model = self.model
@@ -389,9 +370,7 @@ class GeminiProvider(BaseLLMProvider):
             yield "Извините, произошла техническая ошибка."
 
     def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False
     ) -> Union[str, Generator[str, None, None]]:
         # Extract system prompt and convert to Gemini format
         system_prompt = None
@@ -443,16 +422,16 @@ class CloudLLMService:
             provider_config: Dict with id, provider_type, api_key, base_url, model_name, config
         """
         self.config = provider_config
-        self.provider_type = provider_config.get('provider_type', 'custom')
-        self.provider_id = provider_config.get('id', 'unknown')
+        self.provider_type = provider_config.get("provider_type", "custom")
+        self.provider_id = provider_config.get("id", "unknown")
 
         # Get provider class and instantiate
         provider_class = self.PROVIDER_CLASSES.get(self.provider_type, OpenAICompatibleProvider)
         self.provider: BaseLLMProvider = provider_class(provider_config)
 
         # For compatibility with existing code
-        self.model_name = provider_config.get('model_name', '')
-        self.api_url = provider_config.get('base_url', '')
+        self.model_name = provider_config.get("model_name", "")
+        self.api_url = provider_config.get("base_url", "")
 
         # FAQ (загружается через reload_faq из БД)
         self.faq: Dict[str, str] = {}
@@ -461,7 +440,7 @@ class CloudLLMService:
         self.conversation_history: List[Dict[str, str]] = []
 
         # System prompt (for secretary persona)
-        self.system_prompt = provider_config.get('system_prompt', '')
+        self.system_prompt = provider_config.get("system_prompt", "")
 
         logger.info(f"CloudLLMService initialized: {self.provider_id} ({self.provider_type})")
 
@@ -485,8 +464,15 @@ class CloudLLMService:
         replacements = {
             "{current_time}": now.strftime("%H:%M"),
             "{current_date}": now.strftime("%d.%m.%Y"),
-            "{day_of_week}": ["понедельник", "вторник", "среда", "четверг",
-                             "пятница", "суббота", "воскресенье"][now.weekday()],
+            "{day_of_week}": [
+                "понедельник",
+                "вторник",
+                "среда",
+                "четверг",
+                "пятница",
+                "суббота",
+                "воскресенье",
+            ][now.weekday()],
         }
         for placeholder, value in replacements.items():
             response = response.replace(placeholder, value)
@@ -529,9 +515,7 @@ class CloudLLMService:
         return response
 
     def generate_response_stream(
-        self,
-        user_message: str,
-        use_history: bool = True
+        self, user_message: str, use_history: bool = True
     ) -> Generator[str, None, None]:
         """Generate streaming response (compatible with LLMService/VLLMLLMService)."""
         # Check FAQ first
@@ -546,7 +530,9 @@ class CloudLLMService:
         history = self.conversation_history if use_history else []
         full_response = ""
 
-        for chunk in self.provider.generate_response_stream(user_message, self.system_prompt, history):
+        for chunk in self.provider.generate_response_stream(
+            user_message, self.system_prompt, history
+        ):
             full_response += chunk
             yield chunk
 
@@ -555,9 +541,7 @@ class CloudLLMService:
             self.conversation_history.append({"role": "assistant", "content": full_response})
 
     def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False
     ) -> Union[str, Generator[str, None, None]]:
         """Generate response from OpenAI-format messages (compatible with orchestrator)."""
         # Check FAQ for single-message requests
@@ -566,8 +550,10 @@ class CloudLLMService:
             faq_response = self._check_faq(user_messages[0]["content"])
             if faq_response:
                 if stream:
+
                     def gen():
                         yield faq_response
+
                     return gen()
                 return faq_response
 

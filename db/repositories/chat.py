@@ -2,22 +2,22 @@
 Chat repository for managing chat sessions and messages.
 """
 
-import time
 import hashlib
+import time
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import ChatSession, ChatMessage
-from db.repositories.base import BaseRepository
+from db.models import ChatMessage, ChatSession
 from db.redis_client import (
     cache_session,
     get_cached_session,
     invalidate_session_cache,
 )
+from db.repositories.base import BaseRepository
 
 
 class ChatRepository(BaseRepository[ChatSession]):
@@ -129,9 +129,7 @@ class ChatRepository(BaseRepository[ChatSession]):
 
     async def delete_session(self, session_id: str) -> bool:
         """Delete session and all its messages."""
-        result = await self.session.execute(
-            delete(ChatSession).where(ChatSession.id == session_id)
-        )
+        result = await self.session.execute(delete(ChatSession).where(ChatSession.id == session_id))
         await self.session.commit()
         await invalidate_session_cache(session_id)
         return result.rowcount > 0
@@ -277,7 +275,6 @@ class ChatRepository(BaseRepository[ChatSession]):
     async def get_message_count(self) -> int:
         """Get total number of messages across all sessions."""
         from sqlalchemy import func
-        result = await self.session.execute(
-            select(func.count()).select_from(ChatMessage)
-        )
+
+        result = await self.session.execute(select(func.count()).select_from(ChatMessage))
         return result.scalar() or 0

@@ -3,16 +3,17 @@
 TTS Finetune Manager - управление обучением Qwen3-TTS.
 Загрузка образцов, транскрибация Whisper, подготовка датасета, обучение.
 """
-import os
+
 import json
 import logging
+import os
 import subprocess
-import shutil
 import threading
-from pathlib import Path
-from dataclasses import dataclass, asdict, field
-from typing import Optional, List, Dict, Any
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VoiceSample:
     """Образец голоса"""
+
     filename: str
     path: str
     duration_sec: float = 0
@@ -32,6 +34,7 @@ class VoiceSample:
 @dataclass
 class TTSDatasetConfig:
     """Конфигурация датасета TTS"""
+
     voice_name: str = "custom_voice"
     whisper_model: str = "medium"  # tiny, base, small, medium, large
     language: str = "ru"
@@ -42,6 +45,7 @@ class TTSDatasetConfig:
 @dataclass
 class TTSTrainingConfig:
     """Конфигурация обучения TTS"""
+
     base_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     batch_size: int = 2
     gradient_accumulation_steps: int = 4
@@ -53,6 +57,7 @@ class TTSTrainingConfig:
 @dataclass
 class TTSProcessingStatus:
     """Статус обработки"""
+
     is_running: bool = False
     stage: str = ""  # "uploading", "transcribing", "preparing", "training"
     current: int = 0
@@ -64,6 +69,7 @@ class TTSProcessingStatus:
 @dataclass
 class TTSTrainingStatus:
     """Статус обучения"""
+
     is_running: bool = False
     current_step: int = 0
     total_steps: int = 0
@@ -107,14 +113,11 @@ class TTSFinetuneManager:
         if self.config_file.exists():
             with open(self.config_file) as f:
                 return json.load(f)
-        return {
-            "dataset": asdict(TTSDatasetConfig()),
-            "training": asdict(TTSTrainingConfig())
-        }
+        return {"dataset": asdict(TTSDatasetConfig()), "training": asdict(TTSTrainingConfig())}
 
     def _save_config(self):
         """Сохраняет конфигурацию"""
-        with open(self.config_file, 'w') as f:
+        with open(self.config_file, "w") as f:
             json.dump(self._config, f, indent=2, ensure_ascii=False)
 
     def _load_samples(self) -> List[VoiceSample]:
@@ -127,7 +130,7 @@ class TTSFinetuneManager:
 
     def _save_samples(self):
         """Сохраняет метаданные образцов"""
-        with open(self.samples_file, 'w') as f:
+        with open(self.samples_file, "w") as f:
             json.dump([asdict(s) for s in self._samples], f, indent=2, ensure_ascii=False)
 
     # === Public API ===
@@ -160,7 +163,7 @@ class TTSFinetuneManager:
         """Добавляет образец голоса"""
         # Save file
         filepath = self.samples_dir / filename
-        with open(filepath, 'wb') as f:
+        with open(filepath, "wb") as f:
             f.write(content)
 
         # Get duration
@@ -169,10 +172,7 @@ class TTSFinetuneManager:
 
         # Create sample entry
         sample = VoiceSample(
-            filename=filename,
-            path=str(filepath),
-            duration_sec=duration,
-            size_kb=size_kb
+            filename=filename, path=str(filepath), duration_sec=duration, size_kb=size_kb
         )
 
         # Update or add
@@ -247,6 +247,7 @@ class TTSFinetuneManager:
 
                 # Import whisper
                 import whisper
+
                 model_name = self._config["dataset"].get("whisper_model", "medium")
                 language = self._config["dataset"].get("language", "ru")
 
@@ -257,11 +258,7 @@ class TTSFinetuneManager:
                     self._processing_status.current = i + 1
                     self._processing_status.message = f"Транскрибация {sample.filename}..."
 
-                    result = model.transcribe(
-                        sample.path,
-                        language=language,
-                        task="transcribe"
-                    )
+                    result = model.transcribe(sample.path, language=language, task="transcribe")
 
                     sample.transcript = result["text"].strip()
                     self._save_samples()
@@ -304,12 +301,12 @@ class TTSFinetuneManager:
                 self._processing_status.current = 1
 
                 raw_jsonl_path = self.finetuning_dir / f"train_raw_{voice_name}.jsonl"
-                with open(raw_jsonl_path, 'w') as f:
+                with open(raw_jsonl_path, "w") as f:
                     for sample in samples_with_transcript:
                         entry = {
                             "audio": sample.path,
                             "text": sample.transcript,
-                            "ref_audio": sample.path
+                            "ref_audio": sample.path,
                         }
                         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -322,17 +319,18 @@ class TTSFinetuneManager:
                 cmd = [
                     str(self.venv_python),
                     str(self.finetuning_dir / "prepare_data.py"),
-                    "--device", "cuda:1",
-                    "--tokenizer_model_path", "Qwen/Qwen3-TTS-Tokenizer-12Hz",
-                    "--input_jsonl", str(raw_jsonl_path),
-                    "--output_jsonl", str(output_jsonl)
+                    "--device",
+                    "cuda:1",
+                    "--tokenizer_model_path",
+                    "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+                    "--input_jsonl",
+                    str(raw_jsonl_path),
+                    "--output_jsonl",
+                    str(output_jsonl),
                 ]
 
                 result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd=str(self.finetuning_dir)
+                    cmd, capture_output=True, text=True, cwd=str(self.finetuning_dir)
                 )
 
                 if result.returncode != 0:
@@ -374,21 +372,27 @@ class TTSFinetuneManager:
         cmd = [
             str(self.venv_python),
             str(self.finetuning_dir / "sft_12hz.py"),
-            "--init_model_path", training_config.get("base_model", "Qwen/Qwen3-TTS-12Hz-1.7B-Base"),
-            "--output_model_path", training_config.get("output_dir", f"output_{voice_name}"),
-            "--train_jsonl", str(train_jsonl),
-            "--batch_size", str(training_config.get("batch_size", 2)),
-            "--lr", str(training_config.get("learning_rate", 2e-5)),
-            "--num_epochs", str(training_config.get("num_epochs", 3)),
-            "--speaker_name", voice_name
+            "--init_model_path",
+            training_config.get("base_model", "Qwen/Qwen3-TTS-12Hz-1.7B-Base"),
+            "--output_model_path",
+            training_config.get("output_dir", f"output_{voice_name}"),
+            "--train_jsonl",
+            str(train_jsonl),
+            "--batch_size",
+            str(training_config.get("batch_size", 2)),
+            "--lr",
+            str(training_config.get("learning_rate", 2e-5)),
+            "--num_epochs",
+            str(training_config.get("num_epochs", 3)),
+            "--speaker_name",
+            voice_name,
         ]
 
         env = os.environ.copy()
         env["CUDA_VISIBLE_DEVICES"] = "1"  # Use RTX 3060
 
         self._training_status = TTSTrainingStatus(
-            is_running=True,
-            total_epochs=training_config.get("num_epochs", 3)
+            is_running=True, total_epochs=training_config.get("num_epochs", 3)
         )
         self._training_log = []
 
@@ -402,10 +406,10 @@ class TTSFinetuneManager:
                     text=True,
                     cwd=str(self.finetuning_dir),
                     env=env,
-                    bufsize=1
+                    bufsize=1,
                 )
 
-                for line in iter(self._training_process.stdout.readline, ''):
+                for line in iter(self._training_process.stdout.readline, ""):
                     line = line.strip()
                     if line:
                         self._training_log.append(line)
@@ -459,6 +463,7 @@ class TTSFinetuneManager:
         """Получает длительность аудио в секундах"""
         try:
             import soundfile as sf
+
             with sf.SoundFile(str(filepath)) as f:
                 return len(f) / f.samplerate
         except Exception:
@@ -475,12 +480,14 @@ class TTSFinetuneManager:
                 checkpoints = list(d.glob("checkpoint-epoch-*"))
                 if checkpoints:
                     latest = max(checkpoints, key=lambda p: int(p.name.split("-")[-1]))
-                    models.append({
-                        "name": d.name,
-                        "path": str(latest),
-                        "epochs": len(checkpoints),
-                        "modified": datetime.fromtimestamp(latest.stat().st_mtime).isoformat()
-                    })
+                    models.append(
+                        {
+                            "name": d.name,
+                            "path": str(latest),
+                            "epochs": len(checkpoints),
+                            "modified": datetime.fromtimestamp(latest.stat().st_mtime).isoformat(),
+                        }
+                    )
 
         return models
 

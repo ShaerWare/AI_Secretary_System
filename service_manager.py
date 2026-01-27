@@ -3,18 +3,19 @@
 Service Manager - управление процессами и сервисами AI Secretary System.
 Поддерживает запуск/остановку vLLM и других внешних сервисов.
 """
-import subprocess
-import signal
-import psutil
+
 import asyncio
-import os
+import json
 import logging
-from pathlib import Path
-from typing import Dict, Optional, List, AsyncGenerator
+import os
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
-import json
-import time
+from pathlib import Path
+from typing import AsyncGenerator, Dict, List, Optional
+
+import psutil
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ServiceConfig:
     """Конфигурация сервиса"""
+
     name: str
     display_name: str
     start_script: Optional[str] = None
@@ -120,8 +122,8 @@ class ServiceManager:
 
     def _find_process_by_port(self, port: int) -> Optional[psutil.Process]:
         """Находит процесс, слушающий указанный порт"""
-        for conn in psutil.net_connections(kind='inet'):
-            if conn.laddr.port == port and conn.status == 'LISTEN':
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.laddr.port == port and conn.status == "LISTEN":
                 try:
                     return psutil.Process(conn.pid)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -185,6 +187,7 @@ class ServiceManager:
             return True  # Нет health check = считаем OK если процесс работает
 
         import httpx
+
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 url = f"http://localhost:{config.port}{config.health_endpoint}"
@@ -203,39 +206,33 @@ class ServiceManager:
         if config.internal:
             return {
                 "status": "error",
-                "message": f"Сервис {config.display_name} управляется orchestrator, перезапустите orchestrator"
+                "message": f"Сервис {config.display_name} управляется orchestrator, перезапустите orchestrator",
             }
 
         # Проверяем, не запущен ли уже
         is_running, pid, _ = self._is_service_running(service_name)
         if is_running:
-            return {
-                "status": "ok",
-                "message": f"{config.display_name} уже запущен",
-                "pid": pid
-            }
+            return {"status": "ok", "message": f"{config.display_name} уже запущен", "pid": pid}
 
         if not config.start_script:
-            return {
-                "status": "error",
-                "message": f"Нет скрипта запуска для {config.display_name}"
-            }
+            return {"status": "error", "message": f"Нет скрипта запуска для {config.display_name}"}
 
         script_path = self.base_dir / config.start_script
         if not script_path.exists():
-            return {
-                "status": "error",
-                "message": f"Скрипт не найден: {script_path}"
-            }
+            return {"status": "error", "message": f"Скрипт не найден: {script_path}"}
 
         try:
             # Запускаем процесс
-            log_file = self.logs_dir / f"{service_name}.log" if not config.log_file else self.base_dir / config.log_file
+            log_file = (
+                self.logs_dir / f"{service_name}.log"
+                if not config.log_file
+                else self.base_dir / config.log_file
+            )
 
-            with open(log_file, 'a') as log:
-                log.write(f"\n{'='*60}\n")
+            with open(log_file, "a") as log:
+                log.write(f"\n{'=' * 60}\n")
                 log.write(f"Starting {config.display_name} at {datetime.now().isoformat()}\n")
-                log.write(f"{'='*60}\n")
+                log.write(f"{'=' * 60}\n")
 
             env = os.environ.copy()
 
@@ -247,7 +244,7 @@ class ServiceManager:
 
             proc = subprocess.Popen(
                 ["bash", str(script_path)],
-                stdout=open(log_file, 'a'),
+                stdout=open(log_file, "a"),
                 stderr=subprocess.STDOUT,
                 cwd=str(self.base_dir),
                 env=env,
@@ -264,7 +261,7 @@ class ServiceManager:
                 # Процесс завершился
                 return {
                     "status": "error",
-                    "message": f"{config.display_name} завершился сразу после запуска. Проверьте логи."
+                    "message": f"{config.display_name} завершился сразу после запуска. Проверьте логи.",
                 }
 
             # Сохраняем PID
@@ -274,20 +271,13 @@ class ServiceManager:
 
             logger.info(f"✅ {config.display_name} запущен (PID: {proc.pid})")
 
-            return {
-                "status": "ok",
-                "message": f"{config.display_name} запущен",
-                "pid": proc.pid
-            }
+            return {"status": "ok", "message": f"{config.display_name} запущен", "pid": proc.pid}
 
         except Exception as e:
             error_msg = str(e)
             self.last_errors[service_name] = error_msg
             logger.error(f"❌ Ошибка запуска {config.display_name}: {error_msg}")
-            return {
-                "status": "error",
-                "message": f"Ошибка запуска: {error_msg}"
-            }
+            return {"status": "error", "message": f"Ошибка запуска: {error_msg}"}
 
     async def stop_service(self, service_name: str) -> dict:
         """Останавливает сервис"""
@@ -296,15 +286,12 @@ class ServiceManager:
         if config.internal:
             return {
                 "status": "error",
-                "message": f"Сервис {config.display_name} управляется orchestrator"
+                "message": f"Сервис {config.display_name} управляется orchestrator",
             }
 
         is_running, pid, _ = self._is_service_running(service_name)
         if not is_running:
-            return {
-                "status": "ok",
-                "message": f"{config.display_name} уже остановлен"
-            }
+            return {"status": "ok", "message": f"{config.display_name} уже остановлен"}
 
         try:
             # Пытаемся остановить gracefully через SIGTERM
@@ -342,26 +329,22 @@ class ServiceManager:
 
             logger.info(f"🛑 {config.display_name} остановлен")
 
-            return {
-                "status": "ok",
-                "message": f"{config.display_name} остановлен"
-            }
+            return {"status": "ok", "message": f"{config.display_name} остановлен"}
 
         except Exception as e:
             error_msg = str(e)
             self.last_errors[service_name] = error_msg
             logger.error(f"❌ Ошибка остановки {config.display_name}: {error_msg}")
-            return {
-                "status": "error",
-                "message": f"Ошибка остановки: {error_msg}"
-            }
+            return {"status": "error", "message": f"Ошибка остановки: {error_msg}"}
 
     async def restart_service(self, service_name: str) -> dict:
         """Перезапускает сервис"""
-        config = self._get_config(service_name)
+        self._get_config(service_name)  # Validate service exists
 
         stop_result = await self.stop_service(service_name)
-        if stop_result["status"] == "error" and "управляется orchestrator" not in stop_result.get("message", ""):
+        if stop_result["status"] == "error" and "управляется orchestrator" not in stop_result.get(
+            "message", ""
+        ):
             return stop_result
 
         # Даем время на освобождение порта
@@ -400,17 +383,10 @@ class ServiceManager:
         services = {}
         for name in SERVICE_CONFIGS:
             services[name] = self.get_service_status(name)
-        return {
-            "services": services,
-            "timestamp": datetime.now().isoformat()
-        }
+        return {"services": services, "timestamp": datetime.now().isoformat()}
 
     def read_log(
-        self,
-        service_name: str,
-        lines: int = 100,
-        offset: int = 0,
-        search: Optional[str] = None
+        self, service_name: str, lines: int = 100, offset: int = 0, search: Optional[str] = None
     ) -> dict:
         """
         Читает логи сервиса.
@@ -442,16 +418,16 @@ class ServiceManager:
                 "lines": [],
                 "total_lines": 0,
                 "file": str(log_path),
-                "error": "Лог файл не найден"
+                "error": "Лог файл не найден",
             }
 
         try:
-            with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(log_path, encoding="utf-8", errors="replace") as f:
                 all_lines = f.readlines()
 
             # Фильтруем по поиску если указан
             if search:
-                all_lines = [l for l in all_lines if search.lower() in l.lower()]
+                all_lines = [line for line in all_lines if search.lower() in line.lower()]
 
             total = len(all_lines)
 
@@ -466,7 +442,7 @@ class ServiceManager:
             result_lines = all_lines[start_idx:end_idx]
 
             return {
-                "lines": [l.rstrip('\n') for l in result_lines],
+                "lines": [line.rstrip("\n") for line in result_lines],
                 "total_lines": total,
                 "file": str(log_path),
                 "start_line": start_idx + 1,
@@ -474,17 +450,10 @@ class ServiceManager:
             }
 
         except Exception as e:
-            return {
-                "lines": [],
-                "total_lines": 0,
-                "file": str(log_path),
-                "error": str(e)
-            }
+            return {"lines": [], "total_lines": 0, "file": str(log_path), "error": str(e)}
 
     async def stream_log(
-        self,
-        service_name: str,
-        interval: float = 1.0
+        self, service_name: str, interval: float = 1.0
     ) -> AsyncGenerator[str, None]:
         """
         Async generator для SSE streaming логов.
@@ -513,7 +482,7 @@ class ServiceManager:
 
                 if current_size > last_position:
                     # Есть новые данные
-                    with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+                    with open(log_path, encoding="utf-8", errors="replace") as f:
                         f.seek(last_position)
                         new_content = f.read()
                         last_position = f.tell()
@@ -521,10 +490,9 @@ class ServiceManager:
                     # Отправляем новые строки
                     for line in new_content.splitlines():
                         if line.strip():
-                            yield json.dumps({
-                                "line": line,
-                                "timestamp": datetime.now().isoformat()
-                            })
+                            yield json.dumps(
+                                {"line": line, "timestamp": datetime.now().isoformat()}
+                            )
 
                 elif current_size < last_position:
                     # Файл был перезаписан (rotate)
@@ -548,25 +516,33 @@ class ServiceManager:
                 log_path = self.base_dir / config.log_file
                 if log_path.exists():
                     stat = log_path.stat()
-                    logs.append({
-                        "name": name,
-                        "file": config.log_file,
-                        "display_name": config.display_name,
-                        "size_kb": round(stat.st_size / 1024, 2),
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    })
+                    logs.append(
+                        {
+                            "name": name,
+                            "file": config.log_file,
+                            "display_name": config.display_name,
+                            "size_kb": round(stat.st_size / 1024, 2),
+                            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        }
+                    )
 
         # Дополнительные логи в папке logs
         for log_file in self.logs_dir.glob("*.log"):
-            if not any(log_file.name == Path(c.log_file).name for c in SERVICE_CONFIGS.values() if c.log_file):
+            if not any(
+                log_file.name == Path(c.log_file).name
+                for c in SERVICE_CONFIGS.values()
+                if c.log_file
+            ):
                 stat = log_file.stat()
-                logs.append({
-                    "name": log_file.stem,
-                    "file": str(log_file.relative_to(self.base_dir)),
-                    "display_name": log_file.stem,
-                    "size_kb": round(stat.st_size / 1024, 2),
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-                })
+                logs.append(
+                    {
+                        "name": log_file.stem,
+                        "file": str(log_file.relative_to(self.base_dir)),
+                        "display_name": log_file.stem,
+                        "size_kb": round(stat.st_size / 1024, 2),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    }
+                )
 
         return sorted(logs, key=lambda x: x["modified"], reverse=True)
 
@@ -593,7 +569,9 @@ if __name__ == "__main__":
         status = manager.get_all_status()
         for name, info in status["services"].items():
             running = "✅" if info["is_running"] else "❌"
-            print(f"{running} {info['display_name']}: PID={info['pid']}, Memory={info['memory_mb']}MB")
+            print(
+                f"{running} {info['display_name']}: PID={info['pid']}, Memory={info['memory_mb']}MB"
+            )
 
         print("\n=== Available Logs ===")
         for log in manager.get_available_logs():

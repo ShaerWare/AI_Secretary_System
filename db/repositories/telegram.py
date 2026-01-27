@@ -4,13 +4,14 @@ Telegram repository for managing Telegram user sessions (per bot instance).
 
 import logging
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
-from sqlalchemy import select, delete, and_
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import TelegramSession
 from db.repositories.base import BaseRepository
+
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
         bot_id = bot_id or self.bot_id
         result = await self.session.execute(
             delete(TelegramSession).where(
-                and_(
-                    TelegramSession.bot_id == bot_id,
-                    TelegramSession.user_id == user_id
-                )
+                and_(TelegramSession.bot_id == bot_id, TelegramSession.user_id == user_id)
             )
         )
         await self.session.commit()
@@ -174,6 +172,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
         """Get total number of Telegram sessions (optionally for specific bot)."""
         if bot_id:
             from sqlalchemy import func
+
             result = await self.session.execute(
                 select(func.count())
                 .select_from(TelegramSession)
@@ -185,8 +184,8 @@ class TelegramRepository(BaseRepository[TelegramSession]):
     async def get_session_count_by_bot(self) -> Dict[str, int]:
         """Get session counts grouped by bot_id."""
         from sqlalchemy import func
+
         result = await self.session.execute(
-            select(TelegramSession.bot_id, func.count())
-            .group_by(TelegramSession.bot_id)
+            select(TelegramSession.bot_id, func.count()).group_by(TelegramSession.bot_id)
         )
         return {row[0]: row[1] for row in result.all()}

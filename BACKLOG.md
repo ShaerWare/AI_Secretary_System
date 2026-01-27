@@ -2,7 +2,7 @@
 
 Roadmap и план работ для AI Secretary System. Этот файл используется для отслеживания прогресса и планирования разработки.
 
-**Последнее обновление:** 2026-01-27 (v6 — Cloud LLM Providers)
+**Последнее обновление:** 2026-01-27 (v7 — Code Quality & Linting)
 **Контекст:** Офлайн-first система + телефония через SIM7600G-H Waveshare
 
 ---
@@ -786,27 +786,49 @@ npm install -D @playwright/test  # или cypress
 
 ---
 
-### 5.2 Code Quality & Linting
-**Статус:** `planned`
+### 5.2 Code Quality & Linting ✅
+**Статус:** `done`
 **Приоритет:** P2
 **Сложность:** 3/10
-**Оценка:** 0.5-1 неделя
+**Завершено:** 2026-01-27
 **Влияние:** ★★★☆☆
 
-**Задачи:**
-- [ ] Настроить ruff (Python linter + formatter)
-- [ ] Настроить mypy для type checking
-- [ ] Настроить eslint + prettier для Vue
-- [ ] Pre-commit hooks для автоматической проверки
-- [ ] Исправить существующие lint ошибки
-- [ ] Добавить type hints в критичные модули
+**Выполнено:**
+- [x] Настроен ruff (Python linter + formatter)
+- [x] Настроен mypy для type checking
+- [x] Настроены eslint + prettier для Vue
+- [x] Pre-commit hooks для автоматической проверки
+- [x] Исправлены критические lint ошибки (1300+ → 0)
+- [x] Форматирование всех Python файлов (46 файлов)
 
-**Конфиг файлы:**
+**Созданные файлы:**
 ```
-pyproject.toml    # ruff, mypy config
-.pre-commit-config.yaml
-admin/.eslintrc.js
-admin/.prettierrc
+pyproject.toml           # ruff, mypy, pytest, coverage config
+.pre-commit-config.yaml  # pre-commit hooks
+admin/.eslintrc.cjs      # eslint config
+admin/.prettierrc        # prettier config
+.venv/                   # venv для lint tools
+```
+
+**Использование:**
+```bash
+# Активировать venv
+source .venv/bin/activate
+
+# Проверка линтером
+ruff check .
+
+# Автоисправление
+ruff check . --fix
+
+# Форматирование
+ruff format .
+
+# Pre-commit проверка
+pre-commit run --all-files
+
+# Vue linting
+cd admin && npm run lint
 ```
 
 ---
@@ -1001,6 +1023,28 @@ pip install zipfile36  # или стандартный zipfile
 ---
 
 ## Changelog
+
+### 2026-01-27 (update 11) — Code Quality & Linting
+- **Code Quality Tools** — настроены инструменты для качества кода
+  - ruff — Python linter + formatter (>1300 ошибок исправлено)
+  - mypy — статическая проверка типов
+  - eslint + prettier — для Vue/TypeScript
+  - pre-commit hooks — автоматическая проверка при коммите
+- **Новые файлы:**
+  ```
+  pyproject.toml           # ruff, mypy, pytest, coverage
+  .pre-commit-config.yaml  # pre-commit hooks
+  admin/.eslintrc.cjs      # eslint config
+  admin/.prettierrc        # prettier config
+  ```
+- **Использование:**
+  ```bash
+  source .venv/bin/activate
+  ruff check .              # Проверка
+  ruff check . --fix        # Автоисправление
+  ruff format .             # Форматирование
+  pre-commit run --all-files # Все проверки
+  ```
 
 ### 2026-01-27 (update 10) — Docker Compose Deployment
 - **Docker Compose для production deployment** — one-command запуск всей системы

@@ -3,13 +3,15 @@
 System Monitor - полный мониторинг аппаратного обеспечения.
 GPU, CPU, RAM, диски, Docker контейнеры, сеть.
 """
-import os
-import subprocess
+
 import json
 import logging
-from dataclasses import dataclass, asdict
-from typing import List, Optional, Dict, Any
+import os
+import subprocess
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GpuInfo:
     """Информация о GPU"""
+
     index: int
     name: str
     driver_version: str = ""
@@ -37,6 +40,7 @@ class GpuInfo:
 @dataclass
 class CpuInfo:
     """Информация о CPU"""
+
     model: str = ""
     cores_physical: int = 0
     cores_logical: int = 0
@@ -53,6 +57,7 @@ class CpuInfo:
 @dataclass
 class MemoryInfo:
     """Информация о памяти"""
+
     total_gb: float = 0
     used_gb: float = 0
     free_gb: float = 0
@@ -66,6 +71,7 @@ class MemoryInfo:
 @dataclass
 class DiskInfo:
     """Информация о диске"""
+
     device: str = ""
     mountpoint: str = ""
     fstype: str = ""
@@ -78,6 +84,7 @@ class DiskInfo:
 @dataclass
 class DockerContainer:
     """Информация о Docker контейнере"""
+
     id: str = ""
     name: str = ""
     image: str = ""
@@ -95,6 +102,7 @@ class DockerContainer:
 @dataclass
 class NetworkInfo:
     """Информация о сети"""
+
     interface: str = ""
     ip_address: str = ""
     mac_address: str = ""
@@ -108,6 +116,7 @@ class NetworkInfo:
 @dataclass
 class ProcessInfo:
     """Информация о процессе"""
+
     pid: int = 0
     name: str = ""
     cpu_percent: float = 0
@@ -127,6 +136,7 @@ class SystemMonitor:
 
         try:
             import psutil
+
             self._psutil = psutil
             self._psutil_available = True
         except ImportError:
@@ -134,6 +144,7 @@ class SystemMonitor:
 
         try:
             import torch
+
             self._torch = torch
             self._torch_available = torch.cuda.is_available()
         except ImportError:
@@ -141,7 +152,7 @@ class SystemMonitor:
 
         # Проверяем Docker
         try:
-            result = subprocess.run(['docker', 'info'], capture_output=True, timeout=5)
+            result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
             self._docker_available = result.returncode == 0
         except Exception:
             self._docker_available = False
@@ -153,16 +164,21 @@ class SystemMonitor:
         try:
             # Используем nvidia-smi для полной информации
             result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu,power.draw,power.limit,fan.speed,pcie.link.gen.current,pcie.link.width.current',
-                 '--format=csv,noheader,nounits'],
-                capture_output=True, text=True, timeout=10
+                [
+                    "nvidia-smi",
+                    "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu,power.draw,power.limit,fan.speed,pcie.link.gen.current,pcie.link.width.current",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
 
             if result.returncode == 0:
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if not line.strip():
                         continue
-                    parts = [p.strip() for p in line.split(',')]
+                    parts = [p.strip() for p in line.split(",")]
                     if len(parts) >= 13:
                         try:
                             gpu = GpuInfo(
@@ -172,17 +188,30 @@ class SystemMonitor:
                                 memory_total_mb=int(float(parts[3])),
                                 memory_used_mb=int(float(parts[4])),
                                 memory_free_mb=int(float(parts[5])),
-                                utilization_percent=int(float(parts[6])) if parts[6] != '[Not Supported]' else 0,
-                                temperature_c=int(float(parts[7])) if parts[7] != '[Not Supported]' else 0,
-                                power_draw_w=float(parts[8]) if parts[8] != '[Not Supported]' else 0,
-                                power_limit_w=float(parts[9]) if parts[9] != '[Not Supported]' else 0,
-                                fan_speed_percent=int(float(parts[10])) if parts[10] != '[Not Supported]' else 0,
-                                pcie_gen=int(parts[11]) if parts[11] != '[Not Supported]' else 0,
-                                pcie_width=int(parts[12]) if parts[12] != '[Not Supported]' else 0,
+                                utilization_percent=int(float(parts[6]))
+                                if parts[6] != "[Not Supported]"
+                                else 0,
+                                temperature_c=int(float(parts[7]))
+                                if parts[7] != "[Not Supported]"
+                                else 0,
+                                power_draw_w=float(parts[8])
+                                if parts[8] != "[Not Supported]"
+                                else 0,
+                                power_limit_w=float(parts[9])
+                                if parts[9] != "[Not Supported]"
+                                else 0,
+                                fan_speed_percent=int(float(parts[10]))
+                                if parts[10] != "[Not Supported]"
+                                else 0,
+                                pcie_gen=int(parts[11]) if parts[11] != "[Not Supported]" else 0,
+                                pcie_width=int(parts[12]) if parts[12] != "[Not Supported]" else 0,
                             )
 
                             # Добавляем compute capability через torch
-                            if self._torch_available and gpu.index < self._torch.cuda.device_count():
+                            if (
+                                self._torch_available
+                                and gpu.index < self._torch.cuda.device_count()
+                            ):
                                 props = self._torch.cuda.get_device_properties(gpu.index)
                                 gpu.compute_capability = f"{props.major}.{props.minor}"
 
@@ -203,14 +232,16 @@ class SystemMonitor:
                 props = self._torch.cuda.get_device_properties(i)
                 total = props.total_memory // (1024 * 1024)
                 allocated = self._torch.cuda.memory_allocated(i) // (1024 * 1024)
-                gpus.append(GpuInfo(
-                    index=i,
-                    name=props.name,
-                    memory_total_mb=total,
-                    memory_used_mb=allocated,
-                    memory_free_mb=total - allocated,
-                    compute_capability=f"{props.major}.{props.minor}"
-                ))
+                gpus.append(
+                    GpuInfo(
+                        index=i,
+                        name=props.name,
+                        memory_total_mb=total,
+                        memory_used_mb=allocated,
+                        memory_free_mb=total - allocated,
+                        compute_capability=f"{props.major}.{props.minor}",
+                    )
+                )
 
         return gpus
 
@@ -224,10 +255,10 @@ class SystemMonitor:
         try:
             # Модель CPU
             try:
-                with open('/proc/cpuinfo', 'r') as f:
+                with open("/proc/cpuinfo") as f:
                     for line in f:
-                        if 'model name' in line:
-                            info.model = line.split(':')[1].strip()
+                        if "model name" in line:
+                            info.model = line.split(":")[1].strip()
                             break
             except Exception:
                 info.model = "Unknown"
@@ -255,10 +286,10 @@ class SystemMonitor:
             # Температура CPU
             try:
                 temps = self._psutil.sensors_temperatures()
-                if 'coretemp' in temps:
-                    info.temperature_c = max(t.current for t in temps['coretemp'])
-                elif 'k10temp' in temps:  # AMD
-                    info.temperature_c = max(t.current for t in temps['k10temp'])
+                if "coretemp" in temps:
+                    info.temperature_c = max(t.current for t in temps["coretemp"])
+                elif "k10temp" in temps:  # AMD
+                    info.temperature_c = max(t.current for t in temps["k10temp"])
                 elif temps:
                     # Берём первый доступный сенсор
                     first_sensor = list(temps.values())[0]
@@ -307,22 +338,24 @@ class SystemMonitor:
         try:
             for partition in self._psutil.disk_partitions():
                 # Пропускаем виртуальные ФС
-                if partition.fstype in ['squashfs', 'tmpfs', 'devtmpfs']:
+                if partition.fstype in ["squashfs", "tmpfs", "devtmpfs"]:
                     continue
-                if '/snap/' in partition.mountpoint:
+                if "/snap/" in partition.mountpoint:
                     continue
 
                 try:
                     usage = self._psutil.disk_usage(partition.mountpoint)
-                    disks.append(DiskInfo(
-                        device=partition.device,
-                        mountpoint=partition.mountpoint,
-                        fstype=partition.fstype,
-                        total_gb=round(usage.total / (1024**3), 2),
-                        used_gb=round(usage.used / (1024**3), 2),
-                        free_gb=round(usage.free / (1024**3), 2),
-                        percent_used=usage.percent
-                    ))
+                    disks.append(
+                        DiskInfo(
+                            device=partition.device,
+                            mountpoint=partition.mountpoint,
+                            fstype=partition.fstype,
+                            total_gb=round(usage.total / (1024**3), 2),
+                            used_gb=round(usage.used / (1024**3), 2),
+                            free_gb=round(usage.free / (1024**3), 2),
+                            percent_used=usage.percent,
+                        )
+                    )
                 except PermissionError:
                     pass
 
@@ -341,24 +374,26 @@ class SystemMonitor:
         try:
             # Получаем список контейнеров
             result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{json .}}'],
-                capture_output=True, text=True, timeout=10
+                ["docker", "ps", "-a", "--format", "{{json .}}"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
 
             if result.returncode == 0:
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if not line.strip():
                         continue
                     try:
                         data = json.loads(line)
                         container = DockerContainer(
-                            id=data.get('ID', '')[:12],
-                            name=data.get('Names', ''),
-                            image=data.get('Image', ''),
-                            status=data.get('Status', ''),
-                            state=data.get('State', ''),
-                            ports=data.get('Ports', ''),
-                            created=data.get('CreatedAt', ''),
+                            id=data.get("ID", "")[:12],
+                            name=data.get("Names", ""),
+                            image=data.get("Image", ""),
+                            status=data.get("Status", ""),
+                            state=data.get("State", ""),
+                            ports=data.get("Ports", ""),
+                            created=data.get("CreatedAt", ""),
                         )
                         containers.append(container)
                     except json.JSONDecodeError:
@@ -366,22 +401,24 @@ class SystemMonitor:
 
             # Получаем статистику для запущенных контейнеров
             result = subprocess.run(
-                ['docker', 'stats', '--no-stream', '--format', '{{json .}}'],
-                capture_output=True, text=True, timeout=30
+                ["docker", "stats", "--no-stream", "--format", "{{json .}}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
 
             if result.returncode == 0:
                 stats_map = {}
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if not line.strip():
                         continue
                     try:
                         data = json.loads(line)
-                        name = data.get('Name', '')
+                        name = data.get("Name", "")
                         stats_map[name] = {
-                            'cpu': self._parse_percent(data.get('CPUPerc', '0%')),
-                            'mem_usage': data.get('MemUsage', ''),
-                            'mem_perc': self._parse_percent(data.get('MemPerc', '0%')),
+                            "cpu": self._parse_percent(data.get("CPUPerc", "0%")),
+                            "mem_usage": data.get("MemUsage", ""),
+                            "mem_perc": self._parse_percent(data.get("MemPerc", "0%")),
                         }
                     except json.JSONDecodeError:
                         pass
@@ -390,12 +427,12 @@ class SystemMonitor:
                 for c in containers:
                     if c.name in stats_map:
                         stats = stats_map[c.name]
-                        c.cpu_percent = stats['cpu']
-                        c.memory_percent = stats['mem_perc']
+                        c.cpu_percent = stats["cpu"]
+                        c.memory_percent = stats["mem_perc"]
                         # Парсим использование памяти
-                        mem_usage = stats['mem_usage']
-                        if '/' in mem_usage:
-                            used, limit = mem_usage.split('/')
+                        mem_usage = stats["mem_usage"]
+                        if "/" in mem_usage:
+                            used, limit = mem_usage.split("/")
                             c.memory_mb = self._parse_memory(used.strip())
                             c.memory_limit_mb = self._parse_memory(limit.strip())
 
@@ -421,15 +458,15 @@ class SystemMonitor:
 
             for iface, addr_list in addrs.items():
                 # Пропускаем loopback и виртуальные
-                if iface.startswith(('lo', 'docker', 'br-', 'veth')):
+                if iface.startswith(("lo", "docker", "br-", "veth")):
                     continue
 
                 info = NetworkInfo(interface=iface)
 
                 for addr in addr_list:
-                    if addr.family.name == 'AF_INET':
+                    if addr.family.name == "AF_INET":
                         info.ip_address = addr.address
-                    elif addr.family.name == 'AF_PACKET':
+                    elif addr.family.name == "AF_PACKET":
                         info.mac_address = addr.address
 
                 if iface in stats:
@@ -458,29 +495,35 @@ class SystemMonitor:
 
         try:
             procs = []
-            for proc in self._psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'memory_info', 'status', 'cmdline']):
+            for proc in self._psutil.process_iter(
+                ["pid", "name", "cpu_percent", "memory_percent", "memory_info", "status", "cmdline"]
+            ):
                 try:
                     pinfo = proc.info
-                    if pinfo['cpu_percent'] or pinfo['memory_percent']:
+                    if pinfo["cpu_percent"] or pinfo["memory_percent"]:
                         procs.append(pinfo)
                 except (self._psutil.NoSuchProcess, self._psutil.AccessDenied):
                     pass
 
             # Сортируем по CPU + Memory
-            procs.sort(key=lambda x: (x['cpu_percent'] or 0) + (x['memory_percent'] or 0), reverse=True)
+            procs.sort(
+                key=lambda x: (x["cpu_percent"] or 0) + (x["memory_percent"] or 0), reverse=True
+            )
 
             for p in procs[:limit]:
-                mem_mb = p['memory_info'].rss / (1024**2) if p['memory_info'] else 0
-                cmdline = ' '.join(p['cmdline'][:5]) if p['cmdline'] else p['name']
-                processes.append(ProcessInfo(
-                    pid=p['pid'],
-                    name=p['name'],
-                    cpu_percent=round(p['cpu_percent'] or 0, 1),
-                    memory_percent=round(p['memory_percent'] or 0, 1),
-                    memory_mb=round(mem_mb, 1),
-                    status=p['status'],
-                    cmdline=cmdline[:100]
-                ))
+                mem_mb = p["memory_info"].rss / (1024**2) if p["memory_info"] else 0
+                cmdline = " ".join(p["cmdline"][:5]) if p["cmdline"] else p["name"]
+                processes.append(
+                    ProcessInfo(
+                        pid=p["pid"],
+                        name=p["name"],
+                        cpu_percent=round(p["cpu_percent"] or 0, 1),
+                        memory_percent=round(p["memory_percent"] or 0, 1),
+                        memory_mb=round(mem_mb, 1),
+                        status=p["status"],
+                        cmdline=cmdline[:100],
+                    )
+                )
 
         except Exception as e:
             logger.error(f"Ошибка получения process info: {e}")
@@ -490,27 +533,28 @@ class SystemMonitor:
     def get_system_info(self) -> Dict[str, Any]:
         """Получает общую информацию о системе"""
         info = {
-            'hostname': '',
-            'os': '',
-            'kernel': '',
-            'uptime': '',
-            'boot_time': '',
+            "hostname": "",
+            "os": "",
+            "kernel": "",
+            "uptime": "",
+            "boot_time": "",
         }
 
         try:
             import platform
-            info['hostname'] = platform.node()
-            info['os'] = f"{platform.system()} {platform.release()}"
-            info['kernel'] = platform.release()
+
+            info["hostname"] = platform.node()
+            info["os"] = f"{platform.system()} {platform.release()}"
+            info["kernel"] = platform.release()
 
             if self._psutil_available:
                 boot = self._psutil.boot_time()
-                info['boot_time'] = datetime.fromtimestamp(boot).isoformat()
+                info["boot_time"] = datetime.fromtimestamp(boot).isoformat()
                 uptime_sec = (datetime.now() - datetime.fromtimestamp(boot)).total_seconds()
                 days = int(uptime_sec // 86400)
                 hours = int((uptime_sec % 86400) // 3600)
                 minutes = int((uptime_sec % 3600) // 60)
-                info['uptime'] = f"{days}d {hours}h {minutes}m"
+                info["uptime"] = f"{days}d {hours}h {minutes}m"
 
         except Exception as e:
             logger.error(f"Ошибка получения system info: {e}")
@@ -520,21 +564,21 @@ class SystemMonitor:
     def get_full_status(self) -> Dict[str, Any]:
         """Получает полную информацию о системе"""
         return {
-            'system': self.get_system_info(),
-            'gpus': [asdict(g) for g in self.get_gpu_info()],
-            'cpu': asdict(self.get_cpu_info()),
-            'memory': asdict(self.get_memory_info()),
-            'disks': [asdict(d) for d in self.get_disk_info()],
-            'docker': [asdict(c) for c in self.get_docker_containers()],
-            'network': [asdict(n) for n in self.get_network_info()],
-            'processes': [asdict(p) for p in self.get_top_processes()],
-            'timestamp': datetime.now().isoformat(),
+            "system": self.get_system_info(),
+            "gpus": [asdict(g) for g in self.get_gpu_info()],
+            "cpu": asdict(self.get_cpu_info()),
+            "memory": asdict(self.get_memory_info()),
+            "disks": [asdict(d) for d in self.get_disk_info()],
+            "docker": [asdict(c) for c in self.get_docker_containers()],
+            "network": [asdict(n) for n in self.get_network_info()],
+            "processes": [asdict(p) for p in self.get_top_processes()],
+            "timestamp": datetime.now().isoformat(),
         }
 
     def _parse_percent(self, s: str) -> float:
         """Парсит процент из строки типа '12.5%'"""
         try:
-            return float(s.rstrip('%'))
+            return float(s.rstrip("%"))
         except (ValueError, AttributeError):
             return 0.0
 
@@ -542,12 +586,12 @@ class SystemMonitor:
         """Парсит память из строки типа '1.5GiB' или '512MiB'"""
         try:
             s = s.upper()
-            if 'GIB' in s or 'GB' in s:
-                return float(s.replace('GIB', '').replace('GB', '').strip()) * 1024
-            elif 'MIB' in s or 'MB' in s:
-                return float(s.replace('MIB', '').replace('MB', '').strip())
-            elif 'KIB' in s or 'KB' in s:
-                return float(s.replace('KIB', '').replace('KB', '').strip()) / 1024
+            if "GIB" in s or "GB" in s:
+                return float(s.replace("GIB", "").replace("GB", "").strip()) * 1024
+            elif "MIB" in s or "MB" in s:
+                return float(s.replace("MIB", "").replace("MB", "").strip())
+            elif "KIB" in s or "KB" in s:
+                return float(s.replace("KIB", "").replace("KB", "").strip()) / 1024
             return float(s)
         except (ValueError, AttributeError):
             return 0.0

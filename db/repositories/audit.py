@@ -4,9 +4,9 @@ Audit repository for system audit trail.
 
 import json
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import List
 
-from sqlalchemy import select, delete, and_
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import AuditLog
@@ -87,9 +87,7 @@ class AuditRepository(BaseRepository[AuditLog]):
     async def cleanup_old_logs(self, days: int = 90) -> int:
         """Delete logs older than specified days. Returns count of deleted logs."""
         cutoff = datetime.utcnow() - timedelta(days=days)
-        result = await self.session.execute(
-            delete(AuditLog).where(AuditLog.timestamp < cutoff)
-        )
+        result = await self.session.execute(delete(AuditLog).where(AuditLog.timestamp < cutoff))
         await self.session.commit()
         return result.rowcount
 
@@ -101,24 +99,20 @@ class AuditRepository(BaseRepository[AuditLog]):
 
         # Count by action
         result = await self.session.execute(
-            select(AuditLog.action, func.count())
-            .group_by(AuditLog.action)
+            select(AuditLog.action, func.count()).group_by(AuditLog.action)
         )
         by_action = dict(result.all())
 
         # Count by resource
         result = await self.session.execute(
-            select(AuditLog.resource, func.count())
-            .group_by(AuditLog.resource)
+            select(AuditLog.resource, func.count()).group_by(AuditLog.resource)
         )
         by_resource = dict(result.all())
 
         # Count last 24 hours
         from_date = datetime.utcnow() - timedelta(hours=24)
         result = await self.session.execute(
-            select(func.count())
-            .select_from(AuditLog)
-            .where(AuditLog.timestamp >= from_date)
+            select(func.count()).select_from(AuditLog).where(AuditLog.timestamp >= from_date)
         )
         last_24h = result.scalar() or 0
 

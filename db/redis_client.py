@@ -10,11 +10,11 @@ Features:
 Note: Redis is optional. If not available, operations gracefully fail.
 """
 
-import os
 import json
 import logging
-from typing import Optional, Any
-from datetime import timedelta
+import os
+from typing import Any, Optional
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ REDIS_AVAILABLE = False
 # Try to import redis
 try:
     import redis.asyncio as redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
@@ -94,8 +95,10 @@ async def get_redis_status() -> dict:
 
 # ============== Cache Helpers ==============
 
+
 class CacheKey:
     """Cache key prefixes"""
+
     SESSION = "session"
     CHAT_SESSION = "chat:session"
     FAQ = "faq:cache"
@@ -163,6 +166,7 @@ async def cache_delete_pattern(pattern: str) -> int:
 
 # ============== Rate Limiting ==============
 
+
 async def check_rate_limit(
     key: str,
     max_requests: int = 60,
@@ -194,6 +198,7 @@ async def get_rate_limit_key(ip: str, endpoint: str) -> str:
 
 # ============== Session Management ==============
 
+
 async def cache_session(session_id: str, data: dict, ttl_seconds: int = 300) -> bool:
     """Cache chat session data."""
     key = f"{CacheKey.CHAT_SESSION}:{session_id}"
@@ -214,6 +219,7 @@ async def invalidate_session_cache(session_id: str) -> bool:
 
 # ============== FAQ Cache ==============
 
+
 async def cache_faq(data: dict, ttl_seconds: int = 600) -> bool:
     """Cache FAQ data."""
     return await cache_set(CacheKey.FAQ, data, ttl_seconds)
@@ -231,6 +237,7 @@ async def invalidate_faq_cache() -> bool:
 
 # ============== Metrics ==============
 
+
 async def set_metric(name: str, value: Any, ttl_seconds: int = 10) -> bool:
     """Set a realtime metric."""
     key = f"{CacheKey.METRICS}:{name}"
@@ -244,6 +251,7 @@ async def get_metric(name: str) -> Optional[Any]:
 
 
 # ============== Config Cache ==============
+
 
 async def cache_config(config_key: str, data: dict, ttl_seconds: int = 300) -> bool:
     """Cache system config."""

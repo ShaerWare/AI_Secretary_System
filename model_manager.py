@@ -3,17 +3,16 @@
 Model Manager - управление локальными моделями.
 Поиск, загрузка, удаление моделей с HuggingFace и локального хранилища.
 """
-import os
-import json
+
 import logging
+import re
 import shutil
 import threading
-import subprocess
-from pathlib import Path
-from dataclasses import dataclass, asdict, field
-from typing import Optional, List, Dict, Any, Callable
+from dataclasses import asdict, dataclass
 from datetime import datetime
-import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelInfo:
     """Информация о модели"""
+
     name: str
     path: str
     size_gb: float
@@ -36,6 +36,7 @@ class ModelInfo:
 @dataclass
 class DownloadProgress:
     """Прогресс загрузки"""
+
     is_active: bool = False
     repo_id: str = ""
     filename: str = ""
@@ -50,6 +51,7 @@ class DownloadProgress:
 @dataclass
 class ScanProgress:
     """Прогресс сканирования"""
+
     is_active: bool = False
     current_path: str = ""
     files_scanned: int = 0
@@ -62,36 +64,62 @@ class ModelManager:
 
     # Известные расширения моделей
     MODEL_EXTENSIONS = {
-        '.safetensors': 'safetensors',
-        '.bin': 'bin',
-        '.gguf': 'gguf',
-        '.ggml': 'ggml',
-        '.onnx': 'onnx',
-        '.pt': 'pytorch',
-        '.pth': 'pytorch',
+        ".safetensors": "safetensors",
+        ".bin": "bin",
+        ".gguf": "gguf",
+        ".ggml": "ggml",
+        ".onnx": "onnx",
+        ".pt": "pytorch",
+        ".pth": "pytorch",
     }
 
     # Паттерны для определения типа модели
     TYPE_PATTERNS = {
-        'llm': ['llama', 'qwen', 'mistral', 'phi', 'gemma', 'gpt', 'falcon', 'mpt', 'opt', 'bloom', 'codellama', 'deepseek', 'yi-'],
-        'tts': ['tts', 'xtts', 'bark', 'tortoise', 'coqui', 'piper', 'vits', 'tacotron', 'fastspeech', 'qwen3-tts', 'openvoice'],
-        'stt': ['whisper', 'vosk', 'wav2vec', 'hubert', 'conformer', 'speech'],
-        'embedding': ['embed', 'bge', 'e5-', 'sentence', 'instructor', 'nomic'],
+        "llm": [
+            "llama",
+            "qwen",
+            "mistral",
+            "phi",
+            "gemma",
+            "gpt",
+            "falcon",
+            "mpt",
+            "opt",
+            "bloom",
+            "codellama",
+            "deepseek",
+            "yi-",
+        ],
+        "tts": [
+            "tts",
+            "xtts",
+            "bark",
+            "tortoise",
+            "coqui",
+            "piper",
+            "vits",
+            "tacotron",
+            "fastspeech",
+            "qwen3-tts",
+            "openvoice",
+        ],
+        "stt": ["whisper", "vosk", "wav2vec", "hubert", "conformer", "speech"],
+        "embedding": ["embed", "bge", "e5-", "sentence", "instructor", "nomic"],
     }
 
     # Директории для поиска
     SEARCH_PATHS = [
-        Path.home() / '.cache' / 'huggingface' / 'hub',
-        Path.home() / '.cache' / 'torch' / 'hub',
-        Path.home() / '.ollama' / 'models',
-        Path.home() / 'models',
-        Path('/opt/models'),
-        Path('/var/lib/models'),
+        Path.home() / ".cache" / "huggingface" / "hub",
+        Path.home() / ".cache" / "torch" / "hub",
+        Path.home() / ".ollama" / "models",
+        Path.home() / "models",
+        Path("/opt/models"),
+        Path("/var/lib/models"),
     ]
 
     def __init__(self, project_dir: Optional[str] = None):
         self.project_dir = Path(project_dir) if project_dir else Path(__file__).parent
-        self.cache_dir = Path.home() / '.cache' / 'huggingface' / 'hub'
+        self.cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
 
         # State
         self._download_progress = DownloadProgress()
@@ -124,12 +152,12 @@ class ModelManager:
             for pattern in patterns:
                 if pattern in combined:
                     return model_type
-        return 'unknown'
+        return "unknown"
 
     def _extract_repo_id(self, path: str) -> Optional[str]:
         """Извлекает repo_id из пути кэша HuggingFace"""
         # Паттерн: models--owner--name
-        match = re.search(r'models--([^/\\]+)--([^/\\]+)', path)
+        match = re.search(r"models--([^/\\]+)--([^/\\]+)", path)
         if match:
             return f"{match.group(1)}/{match.group(2)}"
         return None
@@ -138,12 +166,12 @@ class ModelManager:
         """Получает размер директории в GB"""
         total = 0
         try:
-            for f in path.rglob('*'):
+            for f in path.rglob("*"):
                 if f.is_file():
                     total += f.stat().st_size
         except (PermissionError, OSError):
             pass
-        return total / (1024 ** 3)
+        return total / (1024**3)
 
     def _scan_huggingface_cache(self) -> List[ModelInfo]:
         """Сканирует кэш HuggingFace"""
@@ -152,43 +180,49 @@ class ModelManager:
             return models
 
         for model_dir in self.cache_dir.iterdir():
-            if not model_dir.is_dir() or not model_dir.name.startswith('models--'):
+            if not model_dir.is_dir() or not model_dir.name.startswith("models--"):
                 continue
 
             try:
                 self._scan_progress.current_path = str(model_dir)
 
                 repo_id = self._extract_repo_id(str(model_dir))
-                name = repo_id.split('/')[-1] if repo_id else model_dir.name
+                name = repo_id.split("/")[-1] if repo_id else model_dir.name
 
                 # Найти snapshot директорию
-                snapshots_dir = model_dir / 'snapshots'
+                snapshots_dir = model_dir / "snapshots"
                 if snapshots_dir.exists():
                     # Берём последний snapshot
-                    snapshots = sorted(snapshots_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
+                    snapshots = sorted(
+                        snapshots_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True
+                    )
                     if snapshots:
                         snapshot = snapshots[0]
                         size_gb = self._get_dir_size(snapshot)
 
                         # Определяем формат по файлам
                         formats = set()
-                        for f in snapshot.rglob('*'):
+                        for f in snapshot.rglob("*"):
                             if f.suffix in self.MODEL_EXTENSIONS:
                                 formats.add(self.MODEL_EXTENSIONS[f.suffix])
 
-                        model_format = ', '.join(formats) if formats else 'unknown'
+                        model_format = ", ".join(formats) if formats else "unknown"
 
-                        models.append(ModelInfo(
-                            name=name,
-                            path=str(model_dir),
-                            size_gb=round(size_gb, 2),
-                            type=self._detect_model_type(name, str(model_dir)),
-                            format=model_format,
-                            source='huggingface',
-                            modified=datetime.fromtimestamp(model_dir.stat().st_mtime).isoformat(),
-                            is_cached=True,
-                            repo_id=repo_id
-                        ))
+                        models.append(
+                            ModelInfo(
+                                name=name,
+                                path=str(model_dir),
+                                size_gb=round(size_gb, 2),
+                                type=self._detect_model_type(name, str(model_dir)),
+                                format=model_format,
+                                source="huggingface",
+                                modified=datetime.fromtimestamp(
+                                    model_dir.stat().st_mtime
+                                ).isoformat(),
+                                is_cached=True,
+                                repo_id=repo_id,
+                            )
+                        )
                         self._scan_progress.models_found += 1
 
             except (PermissionError, OSError) as e:
@@ -200,14 +234,14 @@ class ModelManager:
 
         return models
 
-    def _scan_directory(self, path: Path, source: str = 'local') -> List[ModelInfo]:
+    def _scan_directory(self, path: Path, source: str = "local") -> List[ModelInfo]:
         """Сканирует директорию на наличие моделей"""
         models = []
         if not path.exists():
             return models
 
         try:
-            for item in path.rglob('*'):
+            for item in path.rglob("*"):
                 if self._cancel_scan:
                     break
 
@@ -216,20 +250,22 @@ class ModelManager:
 
                 if item.is_file() and item.suffix in self.MODEL_EXTENSIONS:
                     try:
-                        size_gb = item.stat().st_size / (1024 ** 3)
+                        size_gb = item.stat().st_size / (1024**3)
                         if size_gb < 0.01:  # Пропускаем очень маленькие файлы
                             continue
 
-                        models.append(ModelInfo(
-                            name=item.stem,
-                            path=str(item),
-                            size_gb=round(size_gb, 2),
-                            type=self._detect_model_type(item.stem, str(item)),
-                            format=self.MODEL_EXTENSIONS[item.suffix],
-                            source=source,
-                            modified=datetime.fromtimestamp(item.stat().st_mtime).isoformat(),
-                            is_cached=False
-                        ))
+                        models.append(
+                            ModelInfo(
+                                name=item.stem,
+                                path=str(item),
+                                size_gb=round(size_gb, 2),
+                                type=self._detect_model_type(item.stem, str(item)),
+                                format=self.MODEL_EXTENSIONS[item.suffix],
+                                source=source,
+                                modified=datetime.fromtimestamp(item.stat().st_mtime).isoformat(),
+                                is_cached=False,
+                            )
+                        )
                         self._scan_progress.models_found += 1
                     except (PermissionError, OSError):
                         pass
@@ -263,26 +299,30 @@ class ModelManager:
                         break
                     if search_path.exists() and str(search_path) != str(self.cache_dir):
                         logger.info(f"Scanning {search_path}...")
-                        source = 'ollama' if '.ollama' in str(search_path) else 'local'
+                        source = "ollama" if ".ollama" in str(search_path) else "local"
                         self._models_cache.extend(self._scan_directory(search_path, source))
 
                 # 3. Сканируем директорию проекта
                 if self._cancel_scan:
                     return
                 logger.info(f"Scanning project dir {self.project_dir}...")
-                self._models_cache.extend(self._scan_directory(self.project_dir / 'models', 'project'))
-                self._models_cache.extend(self._scan_directory(self.project_dir / 'finetune', 'project'))
+                self._models_cache.extend(
+                    self._scan_directory(self.project_dir / "models", "project")
+                )
+                self._models_cache.extend(
+                    self._scan_directory(self.project_dir / "finetune", "project")
+                )
 
                 # 4. Опционально сканируем home директорию
                 if include_system and not self._cancel_scan:
                     logger.info("Scanning home directory...")
                     home = Path.home()
-                    for subdir in ['Downloads', 'Documents', 'Desktop']:
+                    for subdir in ["Downloads", "Documents", "Desktop"]:
                         if self._cancel_scan:
                             break
                         subpath = home / subdir
                         if subpath.exists():
-                            self._models_cache.extend(self._scan_directory(subpath, 'local'))
+                            self._models_cache.extend(self._scan_directory(subpath, "local"))
 
                 # Удаляем дубликаты по пути
                 seen_paths = set()
@@ -320,34 +360,28 @@ class ModelManager:
         def _download():
             try:
                 self._download_progress = DownloadProgress(
-                    is_active=True,
-                    repo_id=repo_id,
-                    filename="Initializing..."
+                    is_active=True, repo_id=repo_id, filename="Initializing..."
                 )
                 self._cancel_download = False
 
                 # Используем huggingface-cli для загрузки с прогрессом
-                from huggingface_hub import snapshot_download, hf_hub_download
-                from huggingface_hub.utils import tqdm as hf_tqdm
+                from huggingface_hub import snapshot_download
 
                 # Кастомный callback для прогресса
                 def progress_callback(progress):
-                    if hasattr(progress, 'n') and hasattr(progress, 'total'):
+                    if hasattr(progress, "n") and hasattr(progress, "total"):
                         self._download_progress.downloaded_bytes = progress.n
                         self._download_progress.total_bytes = progress.total or 0
-                        if hasattr(progress, 'rate') and progress.rate:
+                        if hasattr(progress, "rate") and progress.rate:
                             self._download_progress.speed_mbps = progress.rate / (1024 * 1024)
-                        if hasattr(progress, 'desc'):
+                        if hasattr(progress, "desc"):
                             self._download_progress.filename = progress.desc or repo_id
 
                 logger.info(f"Downloading {repo_id}...")
 
                 # Загружаем весь репозиторий
                 local_dir = snapshot_download(
-                    repo_id,
-                    revision=revision,
-                    resume_download=True,
-                    local_dir_use_symlinks=False
+                    repo_id, revision=revision, resume_download=True, local_dir_use_symlinks=False
                 )
 
                 self._download_progress.completed = True
@@ -386,30 +420,29 @@ class ModelManager:
             # Проверяем, что это безопасный путь
             safe_prefixes = [
                 str(self.cache_dir),
-                str(Path.home() / '.ollama'),
-                str(self.project_dir / 'models'),
-                str(self.project_dir / 'finetune'),
+                str(Path.home() / ".ollama"),
+                str(self.project_dir / "models"),
+                str(self.project_dir / "finetune"),
             ]
 
             is_safe = any(str(target).startswith(prefix) for prefix in safe_prefixes)
             if not is_safe:
-                return {"status": "error", "message": "Cannot delete models outside safe directories"}
+                return {
+                    "status": "error",
+                    "message": "Cannot delete models outside safe directories",
+                }
 
             if target.is_dir():
                 size = self._get_dir_size(target)
                 shutil.rmtree(target)
             else:
-                size = target.stat().st_size / (1024 ** 3)
+                size = target.stat().st_size / (1024**3)
                 target.unlink()
 
             # Обновляем кэш
             self._models_cache = [m for m in self._models_cache if m.path != path]
 
-            return {
-                "status": "ok",
-                "message": f"Deleted {path}",
-                "freed_gb": round(size, 2)
-            }
+            return {"status": "ok", "message": f"Deleted {path}", "freed_gb": round(size, 2)}
 
         except Exception as e:
             logger.error(f"Delete error: {e}")
@@ -419,26 +452,26 @@ class ModelManager:
         """Поиск моделей на HuggingFace"""
         try:
             from huggingface_hub import HfApi
+
             api = HfApi()
 
-            models = api.list_models(
-                search=query,
-                limit=limit,
-                sort="downloads",
-                direction=-1
-            )
+            models = api.list_models(search=query, limit=limit, sort="downloads", direction=-1)
 
             results = []
             for model in models:
-                results.append({
-                    "repo_id": model.id,
-                    "author": model.author,
-                    "downloads": model.downloads,
-                    "likes": model.likes,
-                    "tags": model.tags[:5] if model.tags else [],
-                    "pipeline_tag": model.pipeline_tag,
-                    "last_modified": model.last_modified.isoformat() if model.last_modified else None
-                })
+                results.append(
+                    {
+                        "repo_id": model.id,
+                        "author": model.author,
+                        "downloads": model.downloads,
+                        "likes": model.likes,
+                        "tags": model.tags[:5] if model.tags else [],
+                        "pipeline_tag": model.pipeline_tag,
+                        "last_modified": model.last_modified.isoformat()
+                        if model.last_modified
+                        else None,
+                    }
+                )
 
             return results
 
@@ -449,13 +482,9 @@ class ModelManager:
     def get_model_details(self, repo_id: str) -> Optional[Dict[str, Any]]:
         """Получает детали модели с HuggingFace"""
         try:
-            from huggingface_hub import HfApi, model_info
+            from huggingface_hub import model_info
 
             info = model_info(repo_id)
-
-            # Получаем список файлов
-            api = HfApi()
-            files = api.list_repo_files(repo_id)
 
             # Считаем размер
             total_size = 0
@@ -463,13 +492,12 @@ class ModelManager:
             for sibling in info.siblings or []:
                 if sibling.rfilename:
                     ext = Path(sibling.rfilename).suffix
-                    if ext in self.MODEL_EXTENSIONS or sibling.rfilename.endswith('.json'):
+                    if ext in self.MODEL_EXTENSIONS or sibling.rfilename.endswith(".json"):
                         size = sibling.size or 0
                         total_size += size
-                        model_files.append({
-                            "name": sibling.rfilename,
-                            "size_mb": round(size / (1024 * 1024), 2)
-                        })
+                        model_files.append(
+                            {"name": sibling.rfilename, "size_mb": round(size / (1024 * 1024), 2)}
+                        )
 
             return {
                 "repo_id": repo_id,
@@ -479,9 +507,9 @@ class ModelManager:
                 "tags": info.tags,
                 "pipeline_tag": info.pipeline_tag,
                 "library_name": info.library_name,
-                "total_size_gb": round(total_size / (1024 ** 3), 2),
+                "total_size_gb": round(total_size / (1024**3), 2),
                 "files": model_files[:20],  # Первые 20 файлов
-                "card_data": info.card_data.__dict__ if info.card_data else None
+                "card_data": info.card_data.__dict__ if info.card_data else None,
             }
 
         except Exception as e:

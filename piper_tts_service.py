@@ -3,14 +3,17 @@
 Сервис TTS на базе Piper (ONNX модели)
 Поддерживает модели: dmitri, irina
 """
+
+import logging
+import shutil
 import subprocess
 import tempfile
-import logging
 from pathlib import Path
 from typing import Optional, Tuple
+
 import numpy as np
 import soundfile as sf
-import shutil
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,20 +30,20 @@ class PiperTTSService:
         "dmitri": {
             "model": "ru_RU-dmitri-medium.onnx",
             "name": "Дмитрий",
-            "description": "Мужской голос, средний"
+            "description": "Мужской голос, средний",
         },
         "irina": {
             "model": "ru_RU-irina-medium.onnx",
             "name": "Ирина",
-            "description": "Женский голос, средний"
-        }
+            "description": "Женский голос, средний",
+        },
     }
 
     def __init__(
         self,
         models_dir: str = "./models",
         piper_path: Optional[str] = None,
-        default_voice: str = "dmitri"
+        default_voice: str = "dmitri",
     ):
         self.models_dir = Path(models_dir)
         self.default_voice = default_voice
@@ -53,7 +56,7 @@ class PiperTTSService:
         # Проверяем наличие моделей
         self._check_models()
 
-        logger.info(f"🎤 PiperTTSService инициализирован")
+        logger.info("🎤 PiperTTSService инициализирован")
         logger.info(f"   Piper: {self.piper_path}")
         logger.info(f"   Модели: {self.models_dir}")
         logger.info(f"   Голос по умолчанию: {default_voice}")
@@ -97,18 +100,11 @@ class PiperTTSService:
         available = {}
         for voice_id, info in self.VOICES.items():
             model_path = self.models_dir / info["model"]
-            available[voice_id] = {
-                **info,
-                "available": model_path.exists(),
-                "engine": "piper"
-            }
+            available[voice_id] = {**info, "available": model_path.exists(), "engine": "piper"}
         return available
 
     def synthesize(
-        self,
-        text: str,
-        voice: Optional[str] = None,
-        speed: float = 1.0
+        self, text: str, voice: Optional[str] = None, speed: float = 1.0
     ) -> Tuple[np.ndarray, int]:
         """
         Синтезирует речь из текста.
@@ -139,8 +135,10 @@ class PiperTTSService:
             # Запускаем piper
             cmd = [
                 self.piper_path,
-                "--model", str(model_path),
-                "--output_file", output_path,
+                "--model",
+                str(model_path),
+                "--output_file",
+                output_path,
             ]
 
             # Добавляем скорость если не 1.0
@@ -148,12 +146,9 @@ class PiperTTSService:
                 cmd.extend(["--length_scale", str(1.0 / speed)])
 
             proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            stdout, stderr = proc.communicate(input=text.encode('utf-8'), timeout=30)
+            stdout, stderr = proc.communicate(input=text.encode("utf-8"), timeout=30)
 
             if proc.returncode != 0:
                 logger.error(f"❌ Piper error: {stderr.decode()}")
@@ -161,7 +156,7 @@ class PiperTTSService:
 
             # Читаем результат
             wav, sr = sf.read(output_path)
-            logger.info(f"✅ Синтезировано: {len(wav)/sr:.2f} сек")
+            logger.info(f"✅ Синтезировано: {len(wav) / sr:.2f} сек")
 
             return wav.astype(np.float32), sr
 
@@ -170,11 +165,7 @@ class PiperTTSService:
             Path(output_path).unlink(missing_ok=True)
 
     def synthesize_to_file(
-        self,
-        text: str,
-        output_path: str,
-        voice: Optional[str] = None,
-        speed: float = 1.0
+        self, text: str, output_path: str, voice: Optional[str] = None, speed: float = 1.0
     ) -> str:
         """Синтезирует и сохраняет в файл"""
         wav, sr = self.synthesize(text, voice, speed)
@@ -198,9 +189,7 @@ if __name__ == "__main__":
             try:
                 output = f"test_piper_{voice}.wav"
                 service.synthesize_to_file(
-                    "Здравствуйте! Это тестовое сообщение голосового синтеза.",
-                    output,
-                    voice=voice
+                    "Здравствуйте! Это тестовое сообщение голосового синтеза.", output, voice=voice
                 )
                 print(f"  ✅ {voice}: {output}")
             except Exception as e:

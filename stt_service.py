@@ -5,15 +5,18 @@
 Whisper - высокое качество, batch processing
 Vosk - realtime streaming, низкие ресурсы, офлайн
 """
-import torch
-import logging
-from pathlib import Path
-from typing import Optional, Union, Generator, Callable
-import numpy as np
+
 import json
-import wave
+import logging
 import tempfile
+import wave
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Callable, Generator, Optional, Union
+
+import numpy as np
+import torch
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +25,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Base STT Interface
 # ============================================================================
+
 
 class BaseSTTService(ABC):
     """Базовый интерфейс для STT сервисов"""
@@ -32,7 +36,9 @@ class BaseSTTService(ABC):
         pass
 
     @abstractmethod
-    def transcribe_audio_data(self, audio_data: np.ndarray, sample_rate: int = 16000, language: str = "ru") -> dict:
+    def transcribe_audio_data(
+        self, audio_data: np.ndarray, sample_rate: int = 16000, language: str = "ru"
+    ) -> dict:
         """Распознать речь из numpy array"""
         pass
 
@@ -40,6 +46,7 @@ class BaseSTTService(ABC):
 # ============================================================================
 # Vosk STT Service (Realtime, Offline, Low Resource)
 # ============================================================================
+
 
 class VoskSTTService(BaseSTTService):
     """
@@ -68,7 +75,7 @@ class VoskSTTService(BaseSTTService):
         "en": {
             "large": "vosk-model-en-us-0.22",
             "small": "vosk-model-small-en-us-0.15",
-        }
+        },
     }
 
     def __init__(
@@ -76,7 +83,7 @@ class VoskSTTService(BaseSTTService):
         model_path: Optional[Union[str, Path]] = None,
         language: str = "ru",
         model_size: str = "small",
-        sample_rate: int = 16000
+        sample_rate: int = 16000,
     ):
         """
         Инициализация Vosk STT
@@ -88,7 +95,8 @@ class VoskSTTService(BaseSTTService):
             sample_rate: Частота дискретизации (16000 для телефонии)
         """
         try:
-            from vosk import Model, KaldiRecognizer, SetLogLevel
+            from vosk import KaldiRecognizer, Model, SetLogLevel
+
             SetLogLevel(-1)  # Отключить логи Vosk
         except ImportError:
             raise ImportError("Vosk не установлен. Установите: pip install vosk")
@@ -160,7 +168,9 @@ class VoskSTTService(BaseSTTService):
             if wf.getsampwidth() != 2:
                 raise ValueError("Требуется 16-bit аудио")
             if wf.getframerate() != self.sample_rate:
-                logger.warning(f"Sample rate {wf.getframerate()} != {self.sample_rate}, может снизить качество")
+                logger.warning(
+                    f"Sample rate {wf.getframerate()} != {self.sample_rate}, может снизить качество"
+                )
 
             results = []
             while True:
@@ -187,17 +197,16 @@ class VoskSTTService(BaseSTTService):
             "text": full_text,
             "language": self.language,
             "words": all_words,
-            "segments": [{"text": r.get("text", ""), "words": r.get("result", [])} for r in results]
+            "segments": [
+                {"text": r.get("text", ""), "words": r.get("result", [])} for r in results
+            ],
         }
 
         logger.info(f"✅ Распознано: '{full_text[:100]}...' ({len(all_words)} слов)")
         return result
 
     def transcribe_audio_data(
-        self,
-        audio_data: np.ndarray,
-        sample_rate: int = 16000,
-        language: str = "ru"
+        self, audio_data: np.ndarray, sample_rate: int = 16000, language: str = "ru"
     ) -> dict:
         """Распознать речь из numpy array"""
         import soundfile as sf
@@ -206,7 +215,7 @@ class VoskSTTService(BaseSTTService):
             # Конвертируем в int16 если нужно
             if audio_data.dtype != np.int16:
                 audio_data = (audio_data * 32767).astype(np.int16)
-            sf.write(tmp.name, audio_data, sample_rate, subtype='PCM_16')
+            sf.write(tmp.name, audio_data, sample_rate, subtype="PCM_16")
             result = self.transcribe(tmp.name, language)
 
         Path(tmp.name).unlink()
@@ -216,7 +225,7 @@ class VoskSTTService(BaseSTTService):
         self,
         audio_chunks: Generator[bytes, None, None],
         on_partial: Optional[Callable[[str], None]] = None,
-        on_final: Optional[Callable[[dict], None]] = None
+        on_final: Optional[Callable[[dict], None]] = None,
     ) -> Generator[dict, None, None]:
         """
         Streaming распознавание (для телефонии)
@@ -253,9 +262,7 @@ class VoskSTTService(BaseSTTService):
             yield {"type": "final", **final}
 
     def recognize_microphone(
-        self,
-        duration: float = 5.0,
-        on_partial: Optional[Callable[[str], None]] = None
+        self, duration: float = 5.0, on_partial: Optional[Callable[[str], None]] = None
     ) -> dict:
         """
         Распознать речь с микрофона
@@ -295,9 +302,9 @@ class VoskSTTService(BaseSTTService):
         with sd.InputStream(
             samplerate=self.sample_rate,
             channels=1,
-            dtype='float32',
+            dtype="float32",
             blocksize=4000,
-            callback=audio_callback
+            callback=audio_callback,
         ):
             sd.sleep(int(duration * 1000))
 
@@ -308,11 +315,7 @@ class VoskSTTService(BaseSTTService):
 
         full_text = " ".join(r.get("text", "") for r in results).strip()
 
-        return {
-            "text": full_text,
-            "language": self.language,
-            "segments": results
-        }
+        return {"text": full_text, "language": self.language, "segments": results}
 
 
 # ============================================================================
@@ -335,10 +338,7 @@ class WhisperSTTService(BaseSTTService):
     """
 
     def __init__(
-        self,
-        model_size: str = "medium",
-        use_faster_whisper: bool = True,
-        device: str = "auto"
+        self, model_size: str = "medium", use_faster_whisper: bool = True, device: str = "auto"
     ):
         """
         Инициализация сервиса распознавания речи
@@ -362,15 +362,17 @@ class WhisperSTTService(BaseSTTService):
         try:
             if use_faster_whisper:
                 from faster_whisper import WhisperModel
+
                 # Faster Whisper - оптимизированная версия
                 self.model = WhisperModel(
                     model_size,
                     device=self.device,
-                    compute_type="float16" if self.device == "cuda" else "int8"
+                    compute_type="float16" if self.device == "cuda" else "int8",
                 )
                 logger.info("✅ Faster Whisper загружена")
             else:
                 import whisper
+
                 # Оригинальный Whisper
                 self.model = whisper.load_model(model_size, device=self.device)
                 logger.info("✅ OpenAI Whisper загружена")
@@ -379,11 +381,7 @@ class WhisperSTTService(BaseSTTService):
             logger.error(f"❌ Ошибка загрузки модели: {e}")
             raise
 
-    def transcribe(
-        self,
-        audio_path: Union[str, Path],
-        language: str = "ru"
-    ) -> dict:
+    def transcribe(self, audio_path: Union[str, Path], language: str = "ru") -> dict:
         """
         Распознает речь из аудио файла
 
@@ -402,37 +400,29 @@ class WhisperSTTService(BaseSTTService):
                     str(audio_path),
                     language=language,
                     vad_filter=True,  # Voice Activity Detection
-                    vad_parameters=dict(min_silence_duration_ms=500)
+                    vad_parameters=dict(min_silence_duration_ms=500),
                 )
 
                 # Собираем текст из сегментов
                 text_segments = []
                 for segment in segments:
-                    text_segments.append({
-                        "start": segment.start,
-                        "end": segment.end,
-                        "text": segment.text.strip()
-                    })
+                    text_segments.append(
+                        {"start": segment.start, "end": segment.end, "text": segment.text.strip()}
+                    )
 
                 full_text = " ".join([s["text"] for s in text_segments])
 
-                result = {
-                    "text": full_text,
-                    "language": info.language,
-                    "segments": text_segments
-                }
+                result = {"text": full_text, "language": info.language, "segments": text_segments}
 
             else:
                 result_whisper = self.model.transcribe(
-                    str(audio_path),
-                    language=language,
-                    fp16=(self.device == "cuda")
+                    str(audio_path), language=language, fp16=(self.device == "cuda")
                 )
 
                 result = {
                     "text": result_whisper["text"].strip(),
                     "language": result_whisper["language"],
-                    "segments": result_whisper.get("segments", [])
+                    "segments": result_whisper.get("segments", []),
                 }
 
             logger.info(f"✅ Распознано: '{result['text'][:100]}...'")
@@ -443,10 +433,7 @@ class WhisperSTTService(BaseSTTService):
             raise
 
     def transcribe_audio_data(
-        self,
-        audio_data: np.ndarray,
-        sample_rate: int = 16000,
-        language: str = "ru"
+        self, audio_data: np.ndarray, sample_rate: int = 16000, language: str = "ru"
     ) -> dict:
         """
         Распознает речь из numpy array
@@ -460,6 +447,7 @@ class WhisperSTTService(BaseSTTService):
             dict с распознанным текстом
         """
         import tempfile
+
         import soundfile as sf
 
         # Сохраняем во временный файл
@@ -479,6 +467,7 @@ STTService = WhisperSTTService
 # Unified STT Manager (автовыбор движка)
 # ============================================================================
 
+
 class UnifiedSTTService:
     """
     Унифицированный STT сервис с автовыбором движка
@@ -491,7 +480,7 @@ class UnifiedSTTService:
         vosk_model_path: Optional[Union[str, Path]] = None,
         whisper_model_size: str = "base",
         prefer_vosk: bool = True,
-        language: str = "ru"
+        language: str = "ru",
     ):
         """
         Args:
@@ -507,10 +496,7 @@ class UnifiedSTTService:
 
         # Пробуем инициализировать Vosk
         try:
-            self.vosk_service = VoskSTTService(
-                model_path=vosk_model_path,
-                language=language
-            )
+            self.vosk_service = VoskSTTService(model_path=vosk_model_path, language=language)
             logger.info("✅ Vosk STT доступен")
         except Exception as e:
             logger.warning(f"⚠️ Vosk STT недоступен: {e}")
@@ -524,8 +510,7 @@ class UnifiedSTTService:
         if not self._whisper_initialized:
             try:
                 self.whisper_service = WhisperSTTService(
-                    model_size=self._whisper_model_size,
-                    use_faster_whisper=True
+                    model_size=self._whisper_model_size, use_faster_whisper=True
                 )
                 logger.info("✅ Whisper STT доступен")
             except Exception as e:
@@ -533,10 +518,7 @@ class UnifiedSTTService:
             self._whisper_initialized = True
 
     def transcribe(
-        self,
-        audio_path: Union[str, Path],
-        language: str = "ru",
-        use_whisper: bool = False
+        self, audio_path: Union[str, Path], language: str = "ru", use_whisper: bool = False
     ) -> dict:
         """
         Распознать речь из файла
@@ -562,7 +544,7 @@ class UnifiedSTTService:
     def transcribe_realtime(
         self,
         audio_chunks: Generator[bytes, None, None],
-        on_partial: Optional[Callable[[str], None]] = None
+        on_partial: Optional[Callable[[str], None]] = None,
     ) -> Generator[dict, None, None]:
         """Realtime распознавание (только Vosk)"""
         if not self.vosk_service:
@@ -582,8 +564,6 @@ class UnifiedSTTService:
 
 
 if __name__ == "__main__":
-    import sys
-
     print("=" * 60)
     print("STT Service Test")
     print("=" * 60)
@@ -597,9 +577,12 @@ if __name__ == "__main__":
 
         # Тест с микрофона (если есть sounddevice)
         try:
-            import sounddevice as sd
+            import sounddevice  # noqa: F401 - check if available
+
             print("\n🎙️ Говорите 3 секунды...")
-            result = vosk.recognize_microphone(duration=3.0, on_partial=lambda t: print(f"   ... {t}"))
+            result = vosk.recognize_microphone(
+                duration=3.0, on_partial=lambda t: print(f"   ... {t}")
+            )
             print(f"   📝 Результат: {result['text']}")
         except ImportError:
             print("   ⚠️ sounddevice не установлен, пропуск теста микрофона")

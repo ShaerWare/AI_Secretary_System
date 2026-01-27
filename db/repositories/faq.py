@@ -4,14 +4,14 @@ FAQ repository for managing FAQ entries with caching.
 
 import json
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
-from sqlalchemy import select, delete, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import FAQEntry
-from db.repositories.base import BaseRepository
 from db.redis_client import cache_faq, get_cached_faq, invalidate_faq_cache
+from db.repositories.base import BaseRepository
 
 
 class FAQRepository(BaseRepository[FAQEntry]):
@@ -41,10 +41,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
             return cached
 
         # Fetch from database
-        result = await self.session.execute(
-            select(FAQEntry)
-            .where(FAQEntry.enabled == True)
-        )
+        result = await self.session.execute(select(FAQEntry).where(FAQEntry.enabled == True))
         entries = result.scalars().all()
 
         faq_dict = {e.question: e.answer for e in entries}
@@ -62,9 +59,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
         normalized = question.lower().strip()
 
         result = await self.session.execute(
-            select(FAQEntry)
-            .where(FAQEntry.question == normalized)
-            .where(FAQEntry.enabled == True)
+            select(FAQEntry).where(FAQEntry.question == normalized).where(FAQEntry.enabled == True)
         )
         entry = result.scalar_one_or_none()
 
@@ -140,9 +135,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
 
     async def delete_entry(self, entry_id: int) -> bool:
         """Delete FAQ entry by ID."""
-        result = await self.session.execute(
-            delete(FAQEntry).where(FAQEntry.id == entry_id)
-        )
+        result = await self.session.execute(delete(FAQEntry).where(FAQEntry.id == entry_id))
         await self.session.commit()
         await invalidate_faq_cache()
         return result.rowcount > 0
@@ -185,10 +178,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
         pattern = f"%{query.lower()}%"
         result = await self.session.execute(
             select(FAQEntry)
-            .where(
-                (FAQEntry.question.ilike(pattern)) |
-                (FAQEntry.answer.ilike(pattern))
-            )
+            .where((FAQEntry.question.ilike(pattern)) | (FAQEntry.answer.ilike(pattern)))
             .order_by(FAQEntry.hit_count.desc())
         )
         entries = result.scalars().all()

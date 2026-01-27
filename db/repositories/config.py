@@ -5,18 +5,19 @@ Config repository for system configuration key-value store.
 import json
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import SystemConfig
-from db.repositories.base import BaseRepository
 from db.redis_client import (
     cache_config,
     get_cached_config,
     invalidate_config_cache,
 )
+from db.repositories.base import BaseRepository
+
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +118,7 @@ class ConfigRepository(BaseRepository[SystemConfig]):
 
     async def delete_config(self, key: str) -> bool:
         """Delete configuration by key."""
-        result = await self.session.execute(
-            delete(SystemConfig).where(SystemConfig.key == key)
-        )
+        result = await self.session.execute(delete(SystemConfig).where(SystemConfig.key == key))
         await self.session.commit()
         await invalidate_config_cache(key)
         return result.rowcount > 0

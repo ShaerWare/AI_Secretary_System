@@ -3,16 +3,16 @@
 Сервис телефонной интеграции через Twilio
 Принимает входящие звонки и обрабатывает их через оркестратор
 """
-from fastapi import FastAPI, Request, Form, Response
-from twilio.twiml.voice_response import VoiceResponse, Gather
-from twilio.rest import Client
-import os
+
 import logging
-from dotenv import load_dotenv
-from typing import Optional
+import os
+
 import requests
-from pydub import AudioSegment
-import io
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response
+from twilio.rest import Client
+from twilio.twiml.voice_response import Gather, VoiceResponse
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +45,8 @@ async def root():
         "endpoints": {
             "incoming_call": "/incoming_call (POST)",
             "handle_speech": "/handle_speech (POST)",
-            "status": "/status (GET)"
-        }
+            "status": "/status (GET)",
+        },
     }
 
 
@@ -56,7 +56,7 @@ async def status():
     return {
         "twilio_configured": twilio_client is not None,
         "orchestrator_url": ORCHESTRATOR_URL,
-        "phone_number": TWILIO_PHONE_NUMBER if TWILIO_PHONE_NUMBER else "not_configured"
+        "phone_number": TWILIO_PHONE_NUMBER if TWILIO_PHONE_NUMBER else "not_configured",
     }
 
 
@@ -79,7 +79,7 @@ async def incoming_call(request: Request):
     response.say(
         "Здравствуйте! Это виртуальный секретарь. Пожалуйста, говорите после сигнала.",
         language="ru-RU",
-        voice="alice"  # Голос Яндекса для русского языка
+        voice="alice",  # Голос Яндекса для русского языка
     )
 
     # Записываем речь абонента
@@ -89,7 +89,7 @@ async def incoming_call(request: Request):
         max_length=30,  # Максимум 30 секунд
         play_beep=True,
         transcribe=False,  # Мы сами распознаем через Whisper
-        recording_status_callback="/recording_status"
+        recording_status_callback="/recording_status",
     )
 
     return Response(content=str(response), media_type="application/xml")
@@ -110,7 +110,9 @@ async def handle_speech(request: Request):
 
     try:
         # Скачиваем аудио запись от Twilio
-        audio_response = requests.get(recording_url + ".wav", auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN))
+        audio_response = requests.get(
+            recording_url + ".wav", auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        )
 
         if audio_response.status_code != 200:
             logger.error(f"❌ Не удалось скачать запись: {audio_response.status_code}")
@@ -121,7 +123,7 @@ async def handle_speech(request: Request):
         orchestrator_response = requests.post(
             f"{ORCHESTRATOR_URL}/process_call",
             files=files,
-            timeout=60  # Даем 60 секунд на обработку
+            timeout=60,  # Даем 60 секунд на обработку
         )
 
         if orchestrator_response.status_code != 200:
@@ -129,7 +131,7 @@ async def handle_speech(request: Request):
             return _error_response()
 
         # Получаем аудио ответ
-        response_audio = orchestrator_response.content
+        _response_audio = orchestrator_response.content
         response_text = orchestrator_response.headers.get("X-Response-Text", "")
 
         logger.info(f"✅ Ответ от секретаря: {response_text}")
@@ -139,17 +141,13 @@ async def handle_speech(request: Request):
         # Для упрощения возвращаем текстовый ответ через say()
 
         twiml_response = VoiceResponse()
-        twiml_response.say(
-            response_text,
-            language="ru-RU",
-            voice="alice"
-        )
+        twiml_response.say(response_text, language="ru-RU", voice="alice")
 
         # Спрашиваем, нужно ли что-то еще
         twiml_response.say(
             "Могу ли я еще чем-то помочь? Нажмите 1 чтобы продолжить или повесьте трубку.",
             language="ru-RU",
-            voice="alice"
+            voice="alice",
         )
 
         gather = Gather(num_digits=1, action="/continue_or_end", method="POST", timeout=5)
@@ -178,11 +176,7 @@ async def continue_or_end(request: Request):
         # Продолжаем диалог
         response.say("Пожалуйста, говорите после сигнала.", language="ru-RU", voice="alice")
         response.record(
-            action="/handle_speech",
-            method="POST",
-            max_length=30,
-            play_beep=True,
-            transcribe=False
+            action="/handle_speech", method="POST", max_length=30, play_beep=True, transcribe=False
         )
     else:
         # Завершаем
@@ -210,7 +204,7 @@ def _error_response() -> Response:
     response.say(
         "Извините, произошла техническая ошибка. Пожалуйста, перезвоните позже.",
         language="ru-RU",
-        voice="alice"
+        voice="alice",
     )
     response.hangup()
     return Response(content=str(response), media_type="application/xml")
@@ -218,11 +212,6 @@ def _error_response() -> Response:
 
 if __name__ == "__main__":
     import uvicorn
+
     logger.info("📞 Запуск Phone Service на порту 8001")
-    uvicorn.run(
-        "phone_service:app",
-        host="0.0.0.0",
-        port=8001,
-        reload=False,
-        log_level="info"
-    )
+    uvicorn.run("phone_service:app", host="0.0.0.0", port=8001, reload=False, log_level="info")

@@ -24,17 +24,15 @@ import asyncio
 import json
 import logging
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
-import sys
+
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # File paths
@@ -73,7 +71,7 @@ def load_json_file(path: Path) -> dict | list | None:
     if not path.exists():
         return None
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         logger.error(f"Error loading {path}: {e}")
@@ -91,15 +89,20 @@ async def migrate_chat_sessions(chat_repo):
     for session_id, session_data in data.items():
         try:
             # Create session
-            from db.models import ChatSession, ChatMessage
             from datetime import datetime
+
+            from db.models import ChatMessage, ChatSession
 
             session = ChatSession(
                 id=session_data.get("id", session_id),
                 title=session_data.get("title", "Новый чат"),
                 system_prompt=session_data.get("system_prompt"),
-                created=datetime.fromisoformat(session_data["created"]) if session_data.get("created") else datetime.utcnow(),
-                updated=datetime.fromisoformat(session_data["updated"]) if session_data.get("updated") else datetime.utcnow(),
+                created=datetime.fromisoformat(session_data["created"])
+                if session_data.get("created")
+                else datetime.utcnow(),
+                updated=datetime.fromisoformat(session_data["updated"])
+                if session_data.get("updated")
+                else datetime.utcnow(),
             )
             chat_repo.session.add(session)
 
@@ -111,7 +114,9 @@ async def migrate_chat_sessions(chat_repo):
                     role=msg_data.get("role"),
                     content=msg_data.get("content", ""),
                     edited=msg_data.get("edited", False),
-                    created=datetime.fromisoformat(msg_data["timestamp"]) if msg_data.get("timestamp") else datetime.utcnow(),
+                    created=datetime.fromisoformat(msg_data["timestamp"])
+                    if msg_data.get("timestamp")
+                    else datetime.utcnow(),
                 )
                 chat_repo.session.add(message)
 
@@ -156,7 +161,7 @@ async def migrate_telegram_config(config_repo):
         return False
 
     await config_repo.set_config("telegram", data)
-    logger.info(f"✅ Migrated telegram config")
+    logger.info("✅ Migrated telegram config")
     return True
 
 
@@ -182,7 +187,7 @@ async def migrate_widget_config(config_repo):
         return False
 
     await config_repo.set_config("widget", data)
-    logger.info(f"✅ Migrated widget config")
+    logger.info("✅ Migrated widget config")
     return True
 
 
@@ -227,7 +232,8 @@ async def main():
 
     # Step 2: Initialize database
     logger.info("🗄️ Step 2: Initializing database")
-    from db.database import init_db, AsyncSessionLocal
+    from db.database import AsyncSessionLocal, init_db
+
     await init_db()
     logger.info("")
 
@@ -237,9 +243,9 @@ async def main():
     async with AsyncSessionLocal() as session:
         from db.repositories import (
             ChatRepository,
+            ConfigRepository,
             FAQRepository,
             PresetRepository,
-            ConfigRepository,
             TelegramRepository,
         )
 
@@ -264,7 +270,9 @@ async def main():
     logger.info("\n✅ Migration complete!")
     logger.info(f"   Database: {DATA_DIR / 'secretary.db'}")
     logger.info(f"   Backups: {BACKUP_DIR}")
-    logger.info("\n⚠️ Note: JSON files are kept for reference. You can delete them after verifying the migration.")
+    logger.info(
+        "\n⚠️ Note: JSON files are kept for reference. You can delete them after verifying the migration."
+    )
 
 
 if __name__ == "__main__":

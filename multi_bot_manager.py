@@ -9,12 +9,12 @@ Each bot runs independently with its own configuration loaded from the database.
 import asyncio
 import logging
 import os
-import signal
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
+
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +116,10 @@ class MultiBotManager:
             try:
                 # Start subprocess
                 with open(log_file, "a") as log_fd:
-                    log_fd.write(f"\n{'='*60}\n")
+                    log_fd.write(f"\n{'=' * 60}\n")
                     log_fd.write(f"Starting bot instance: {instance_id}\n")
                     log_fd.write(f"Time: {datetime.utcnow().isoformat()}\n")
-                    log_fd.write(f"{'='*60}\n\n")
+                    log_fd.write(f"{'=' * 60}\n\n")
 
                     process = subprocess.Popen(
                         [sys.executable, str(self._bot_script)],
@@ -293,7 +293,7 @@ class MultiBotManager:
 
         try:
             # Read last N lines
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 all_lines = f.readlines()
                 return "".join(all_lines[-lines:])
         except Exception as e:

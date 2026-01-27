@@ -3,7 +3,11 @@ Alembic environment configuration for async SQLAlchemy.
 """
 
 import asyncio
+
+# Import your models
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -11,13 +15,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import your models
-import sys
-from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db.models import Base
 from db.database import DATABASE_URL
+from db.models import Base
+
 
 # Alembic Config object
 config = context.config

@@ -14,38 +14,40 @@ Tables:
 - cloud_llm_providers: Cloud LLM provider configurations (Gemini, Kimi, OpenAI, etc.)
 """
 
-from datetime import datetime
-from typing import Optional, List
 import json
+from datetime import datetime
+from typing import List, Optional
 
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
-    JSON,
+    Integer,
+    String,
+    Text,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     """Base class for all models"""
+
     pass
 
 
 class ChatSession(Base):
     """Chat session with optional system prompt"""
+
     __tablename__ = "chat_sessions"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), default="Новый чат")
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     messages: Mapped[List["ChatMessage"]] = relationship(
@@ -83,6 +85,7 @@ class ChatSession(Base):
 
 class ChatMessage(Base):
     """Individual message in a chat session"""
+
     __tablename__ = "chat_messages"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -99,9 +102,7 @@ class ChatMessage(Base):
     # Relationships
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
 
-    __table_args__ = (
-        Index("ix_chat_messages_session_created", "session_id", "created"),
-    )
+    __table_args__ = (Index("ix_chat_messages_session_created", "session_id", "created"),)
 
     def to_dict(self) -> dict:
         return {
@@ -115,6 +116,7 @@ class ChatMessage(Base):
 
 class FAQEntry(Base):
     """FAQ question-answer pair with fuzzy matching support"""
+
     __tablename__ = "faq_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -124,7 +126,9 @@ class FAQEntry(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     hit_count: Mapped[int] = mapped_column(Integer, default=0)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -146,6 +150,7 @@ class FAQEntry(Base):
 
 class TTSPreset(Base):
     """Custom TTS voice preset with parameters"""
+
     __tablename__ = "tts_presets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -153,7 +158,9 @@ class TTSPreset(Base):
     params: Mapped[str] = mapped_column(Text)  # JSON object with TTS parameters
     builtin: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -171,11 +178,14 @@ class TTSPreset(Base):
 
 class SystemConfig(Base):
     """Key-value system configuration store"""
+
     __tablename__ = "system_config"
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text)  # JSON value
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def get_value(self) -> any:
         """Parse JSON value"""
@@ -191,6 +201,7 @@ class SystemConfig(Base):
 
 class TelegramSession(Base):
     """Telegram user session mapping (per bot instance)"""
+
     __tablename__ = "telegram_sessions"
 
     # Composite primary key: bot_id + user_id
@@ -204,11 +215,11 @@ class TelegramSession(Base):
     first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        Index("ix_telegram_sessions_bot_user", "bot_id", "user_id"),
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    __table_args__ = (Index("ix_telegram_sessions_bot_user", "bot_id", "user_id"),)
 
     def to_dict(self) -> dict:
         return {
@@ -225,20 +236,21 @@ class TelegramSession(Base):
 
 class AuditLog(Base):
     """System audit trail for compliance"""
+
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    action: Mapped[str] = mapped_column(String(50), index=True)  # create, update, delete, login, etc.
+    action: Mapped[str] = mapped_column(
+        String(50), index=True
+    )  # create, update, delete, login, etc.
     resource: Mapped[str] = mapped_column(String(100))  # chat, faq, tts, config, etc.
     resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     user_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
 
-    __table_args__ = (
-        Index("ix_audit_log_timestamp_action", "timestamp", "action"),
-    )
+    __table_args__ = (Index("ix_audit_log_timestamp_action", "timestamp", "action"),)
 
     def to_dict(self) -> dict:
         return {
@@ -255,6 +267,7 @@ class AuditLog(Base):
 
 class BotInstance(Base):
     """Telegram bot instance with individual configuration"""
+
     __tablename__ = "bot_instances"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)  # slug like "sales-bot"
@@ -276,7 +289,9 @@ class BotInstance(Base):
     llm_backend: Mapped[str] = mapped_column(String(20), default="vllm")  # vllm or gemini
     llm_persona: Mapped[str] = mapped_column(String(50), default="gulya")
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    llm_params: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: temperature, etc.
+    llm_params: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON: temperature, etc.
 
     # TTS configuration
     tts_engine: Mapped[str] = mapped_column(String(20), default="xtts")  # xtts, piper, openvoice
@@ -285,7 +300,9 @@ class BotInstance(Base):
 
     # Timestamps
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def get_allowed_users(self) -> List[int]:
         if not self.allowed_users:
@@ -327,7 +344,9 @@ class BotInstance(Base):
             "description": self.description,
             "enabled": self.enabled,
             # Telegram
-            "bot_token_masked": "***" + self.bot_token[-4:] if self.bot_token and len(self.bot_token) > 4 else "",
+            "bot_token_masked": "***" + self.bot_token[-4:]
+            if self.bot_token and len(self.bot_token) > 4
+            else "",
             "api_url": self.api_url,
             "allowed_users": self.get_allowed_users(),
             "admin_users": self.get_admin_users(),
@@ -355,6 +374,7 @@ class BotInstance(Base):
 
 class WidgetInstance(Base):
     """Website widget instance with individual configuration"""
+
     __tablename__ = "widget_instances"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)  # slug like "support-widget"
@@ -386,7 +406,9 @@ class WidgetInstance(Base):
 
     # Timestamps
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def get_allowed_domains(self) -> List[str]:
         if not self.allowed_domains:
@@ -442,28 +464,41 @@ class WidgetInstance(Base):
 
 class CloudLLMProvider(Base):
     """Cloud LLM provider configuration (Gemini, Kimi, OpenAI, Claude, custom)"""
+
     __tablename__ = "cloud_llm_providers"
 
-    id: Mapped[str] = mapped_column(String(50), primary_key=True)  # slug: "gemini-default", "kimi-prod"
+    id: Mapped[str] = mapped_column(
+        String(50), primary_key=True
+    )  # slug: "gemini-default", "kimi-prod"
     name: Mapped[str] = mapped_column(String(100), index=True)  # Display: "Gemini Pro", "Kimi K2"
-    provider_type: Mapped[str] = mapped_column(String(50), index=True)  # gemini, kimi, openai, claude, custom
+    provider_type: Mapped[str] = mapped_column(
+        String(50), index=True
+    )  # gemini, kimi, openai, claude, custom
 
     # Credentials
     api_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # e.g., https://api.moonshot.ai/v1
-    model_name: Mapped[str] = mapped_column(String(100), default="")  # e.g., kimi-k2, gemini-2.0-flash
+    base_url: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # e.g., https://api.moonshot.ai/v1
+    model_name: Mapped[str] = mapped_column(
+        String(100), default=""
+    )  # e.g., kimi-k2, gemini-2.0-flash
 
     # Status
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Extended configuration (JSON)
-    config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: temperature, max_tokens, etc.
+    config: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON: temperature, max_tokens, etc.
 
     # Metadata
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def get_config(self) -> dict:
         """Get extended config as dict"""
@@ -484,7 +519,9 @@ class CloudLLMProvider(Base):
             "id": self.id,
             "name": self.name,
             "provider_type": self.provider_type,
-            "api_key_masked": "***" + self.api_key[-4:] if self.api_key and len(self.api_key) > 4 else "",
+            "api_key_masked": "***" + self.api_key[-4:]
+            if self.api_key and len(self.api_key) > 4
+            else "",
             "base_url": self.base_url,
             "model_name": self.model_name,
             "enabled": self.enabled,

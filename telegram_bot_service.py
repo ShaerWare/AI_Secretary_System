@@ -14,23 +14,22 @@ import os
 import signal
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Set
-from datetime import datetime
+from typing import Dict, Optional
 
 import aiohttp
-from telegram import Update, Bot
+from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
+    ContextTypes,
     MessageHandler,
     filters,
-    ContextTypes,
 )
-from telegram.constants import ChatAction, ParseMode
+
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ DEFAULT_CONFIG = {
     "bot_token": "",
     "api_url": "http://localhost:8002",
     "allowed_users": [],  # Empty = all users allowed
-    "admin_users": [],    # Users who can manage the bot
+    "admin_users": [],  # Users who can manage the bot
     "welcome_message": "Здравствуйте! Я AI-ассистент компании Шаервэй. Чем могу помочь?",
     "unauthorized_message": "Извините, у вас нет доступа к этому боту.",
     "error_message": "Произошла ошибка. Попробуйте позже.",
@@ -85,9 +84,15 @@ class TelegramBotService:
                         "api_url": api_url,
                         "allowed_users": instance.get("allowed_users", []),
                         "admin_users": instance.get("admin_users", []),
-                        "welcome_message": instance.get("welcome_message", DEFAULT_CONFIG["welcome_message"]),
-                        "unauthorized_message": instance.get("unauthorized_message", DEFAULT_CONFIG["unauthorized_message"]),
-                        "error_message": instance.get("error_message", DEFAULT_CONFIG["error_message"]),
+                        "welcome_message": instance.get(
+                            "welcome_message", DEFAULT_CONFIG["welcome_message"]
+                        ),
+                        "unauthorized_message": instance.get(
+                            "unauthorized_message", DEFAULT_CONFIG["unauthorized_message"]
+                        ),
+                        "error_message": instance.get(
+                            "error_message", DEFAULT_CONFIG["error_message"]
+                        ),
                         "typing_enabled": instance.get("typing_enabled", True),
                         "max_message_length": DEFAULT_CONFIG["max_message_length"],
                         # AI config for potential future use
@@ -114,7 +119,7 @@ class TelegramBotService:
         """Load configuration from legacy file (fallback for 'default' instance)."""
         if self.instance_id == "default" and CONFIG_FILE.exists():
             try:
-                config = json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
+                config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
                 return {**DEFAULT_CONFIG, **config}
             except Exception as e:
                 logger.error(f"Error loading config from file: {e}")
@@ -138,8 +143,7 @@ class TelegramBotService:
         """Save configuration to file (only for default instance)."""
         if self.instance_id == "default":
             CONFIG_FILE.write_text(
-                json.dumps(config, indent=2, ensure_ascii=False),
-                encoding='utf-8'
+                json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         self.config = config
 
@@ -147,7 +151,7 @@ class TelegramBotService:
         """Load user sessions from file (legacy, only for default instance)."""
         if self.instance_id == "default" and SESSIONS_FILE.exists():
             try:
-                data = json.loads(SESSIONS_FILE.read_text(encoding='utf-8'))
+                data = json.loads(SESSIONS_FILE.read_text(encoding="utf-8"))
                 # Convert string keys back to int
                 return {int(k): v for k, v in data.items()}
             except Exception as e:
@@ -158,8 +162,7 @@ class TelegramBotService:
         """Save user sessions to file (legacy, only for default instance)."""
         if self.instance_id == "default":
             SESSIONS_FILE.write_text(
-                json.dumps(self.sessions, indent=2, ensure_ascii=False),
-                encoding='utf-8'
+                json.dumps(self.sessions, indent=2, ensure_ascii=False), encoding="utf-8"
             )
 
     async def reload_config(self):
@@ -219,7 +222,7 @@ class TelegramBotService:
                 json={
                     "title": title,
                     "system_prompt": self.config.get("system_prompt"),
-                }
+                },
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -237,12 +240,14 @@ class TelegramBotService:
                                 "username": username,
                                 "first_name": first_name,
                                 "last_name": user_info.get("last_name", ""),
-                            }
+                            },
                         )
                     except Exception as e:
                         logger.warning(f"Failed to register telegram session: {e}")
 
-                    logger.info(f"Created new session {session_id} for user {user_id} in bot {self.instance_id}")
+                    logger.info(
+                        f"Created new session {session_id} for user {user_id} in bot {self.instance_id}"
+                    )
                     return session_id
                 else:
                     error_text = await resp.text()
@@ -263,7 +268,7 @@ class TelegramBotService:
             async with session.post(
                 f"{api_url}/admin/chat/sessions/{session_id}/stream",
                 json={"content": message},
-                timeout=aiohttp.ClientTimeout(total=120)
+                timeout=aiohttp.ClientTimeout(total=120),
             ) as resp:
                 if resp.status != 200:
                     # Session might be invalid, try to recreate
@@ -276,7 +281,7 @@ class TelegramBotService:
                 # Parse SSE response
                 full_response = ""
                 async for line in resp.content:
-                    line = line.decode('utf-8').strip()
+                    line = line.decode("utf-8").strip()
                     if line.startswith("data: "):
                         try:
                             data = json.loads(line[6:])
@@ -291,7 +296,7 @@ class TelegramBotService:
 
                 return full_response or "Не удалось получить ответ."
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Request timeout")
             return self.config.get("error_message", DEFAULT_CONFIG["error_message"])
         except Exception as e:
@@ -355,8 +360,8 @@ class TelegramBotService:
 
 🟢 Бот активен
 👥 Активных сессий: {len(self.sessions)}
-🔒 Режим доступа: {'Whitelist' if self.config.get('allowed_users') else 'Открытый'}
-📍 API: {self.config.get('api_url')}"""
+🔒 Режим доступа: {"Whitelist" if self.config.get("allowed_users") else "Открытый"}
+📍 API: {self.config.get("api_url")}"""
 
         await update.message.reply_text(status)
 
@@ -373,13 +378,14 @@ class TelegramBotService:
             logger.warning(f"Unauthorized message from {user_id}")
             return
 
-        logger.info(f"[{self.instance_id}] Message from {user_id} ({user.username}): {message_text[:50]}...")
+        logger.info(
+            f"[{self.instance_id}] Message from {user_id} ({user.username}): {message_text[:50]}..."
+        )
 
         # Show typing indicator
         if self.config.get("typing_enabled", True):
             await context.bot.send_chat_action(
-                chat_id=update.effective_chat.id,
-                action=ChatAction.TYPING
+                chat_id=update.effective_chat.id, action=ChatAction.TYPING
             )
 
         # Prepare user info for session creation
@@ -440,10 +446,9 @@ class TelegramBotService:
             self.app.add_handler(CommandHandler("help", self.handle_help))
             self.app.add_handler(CommandHandler("new", self.handle_new))
             self.app.add_handler(CommandHandler("status", self.handle_status))
-            self.app.add_handler(MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                self.handle_message
-            ))
+            self.app.add_handler(
+                MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
+            )
 
             # Start polling
             self.running = True
@@ -487,7 +492,7 @@ class TelegramBotService:
             "has_token": bool(self.config.get("bot_token")),
             "active_sessions": len(self.sessions),
             "allowed_users_count": len(self.config.get("allowed_users", [])),
-            "admin_users_count": len(self.config.get("admin_users", []))
+            "admin_users_count": len(self.config.get("admin_users", [])),
         }
 
 

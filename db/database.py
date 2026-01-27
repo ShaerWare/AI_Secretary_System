@@ -3,19 +3,19 @@ SQLite database connection and session management.
 Uses async SQLAlchemy with aiosqlite driver.
 """
 
-import os
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
-from contextlib import asynccontextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
     AsyncSession,
     async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.pool import StaticPool
+
 
 logger = logging.getLogger(__name__)
 

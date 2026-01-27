@@ -2,17 +2,17 @@
 Bot instance repository for managing Telegram bot instances.
 """
 
-import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import BotInstance
 from db.repositories.base import BaseRepository
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,8 @@ DEFAULT_BOT_CONFIG = {
 def slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
     return text[:50]
 
 
@@ -50,9 +50,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
 
     async def get_by_name(self, name: str) -> Optional[BotInstance]:
         """Get bot instance by name."""
-        result = await self.session.execute(
-            select(BotInstance).where(BotInstance.name == name)
-        )
+        result = await self.session.execute(select(BotInstance).where(BotInstance.name == name))
         return result.scalar_one_or_none()
 
     async def list_instances(self, enabled_only: bool = False) -> List[dict]:
@@ -76,14 +74,10 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         return instance.to_dict(include_token=True) if instance else None
 
     async def create_instance(
-        self,
-        name: str,
-        description: str = None,
-        bot_token: str = None,
-        **kwargs
+        self, name: str, description: str = None, bot_token: str = None, **kwargs
     ) -> dict:
         """Create new bot instance."""
-        instance_id = kwargs.pop('id', None) or self._generate_id(name)
+        instance_id = kwargs.pop("id", None) or self._generate_id(name)
 
         # Check if ID exists
         existing = await self.session.get(BotInstance, instance_id)
@@ -95,33 +89,35 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             id=instance_id,
             name=name,
             description=description,
-            enabled=kwargs.get('enabled', True),
+            enabled=kwargs.get("enabled", True),
             # Telegram
             bot_token=bot_token,
-            welcome_message=kwargs.get('welcome_message', DEFAULT_BOT_CONFIG['welcome_message']),
-            unauthorized_message=kwargs.get('unauthorized_message', DEFAULT_BOT_CONFIG['unauthorized_message']),
-            error_message=kwargs.get('error_message', DEFAULT_BOT_CONFIG['error_message']),
-            typing_enabled=kwargs.get('typing_enabled', DEFAULT_BOT_CONFIG['typing_enabled']),
+            welcome_message=kwargs.get("welcome_message", DEFAULT_BOT_CONFIG["welcome_message"]),
+            unauthorized_message=kwargs.get(
+                "unauthorized_message", DEFAULT_BOT_CONFIG["unauthorized_message"]
+            ),
+            error_message=kwargs.get("error_message", DEFAULT_BOT_CONFIG["error_message"]),
+            typing_enabled=kwargs.get("typing_enabled", DEFAULT_BOT_CONFIG["typing_enabled"]),
             # AI
-            llm_backend=kwargs.get('llm_backend', DEFAULT_BOT_CONFIG['llm_backend']),
-            llm_persona=kwargs.get('llm_persona', DEFAULT_BOT_CONFIG['llm_persona']),
-            system_prompt=kwargs.get('system_prompt'),
+            llm_backend=kwargs.get("llm_backend", DEFAULT_BOT_CONFIG["llm_backend"]),
+            llm_persona=kwargs.get("llm_persona", DEFAULT_BOT_CONFIG["llm_persona"]),
+            system_prompt=kwargs.get("system_prompt"),
             # TTS
-            tts_engine=kwargs.get('tts_engine', DEFAULT_BOT_CONFIG['tts_engine']),
-            tts_voice=kwargs.get('tts_voice', DEFAULT_BOT_CONFIG['tts_voice']),
-            tts_preset=kwargs.get('tts_preset'),
+            tts_engine=kwargs.get("tts_engine", DEFAULT_BOT_CONFIG["tts_engine"]),
+            tts_voice=kwargs.get("tts_voice", DEFAULT_BOT_CONFIG["tts_voice"]),
+            tts_preset=kwargs.get("tts_preset"),
             # Timestamps
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
         )
 
         # Set JSON fields
-        if 'allowed_users' in kwargs:
-            instance.set_allowed_users(kwargs['allowed_users'])
-        if 'admin_users' in kwargs:
-            instance.set_admin_users(kwargs['admin_users'])
-        if 'llm_params' in kwargs:
-            instance.set_llm_params(kwargs['llm_params'])
+        if "allowed_users" in kwargs:
+            instance.set_allowed_users(kwargs["allowed_users"])
+        if "admin_users" in kwargs:
+            instance.set_admin_users(kwargs["admin_users"])
+        if "llm_params" in kwargs:
+            instance.set_llm_params(kwargs["llm_params"])
 
         self.session.add(instance)
         await self.session.commit()
@@ -130,11 +126,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         logger.info(f"Created bot instance: {instance_id}")
         return instance.to_dict()
 
-    async def update_instance(
-        self,
-        instance_id: str,
-        **kwargs
-    ) -> Optional[dict]:
+    async def update_instance(self, instance_id: str, **kwargs) -> Optional[dict]:
         """Update bot instance."""
         instance = await self.session.get(BotInstance, instance_id)
         if not instance:
@@ -142,22 +134,33 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
 
         # Update simple fields
         simple_fields = [
-            'name', 'description', 'enabled', 'bot_token', 'api_url',
-            'welcome_message', 'unauthorized_message', 'error_message', 'typing_enabled',
-            'llm_backend', 'llm_persona', 'system_prompt',
-            'tts_engine', 'tts_voice', 'tts_preset'
+            "name",
+            "description",
+            "enabled",
+            "bot_token",
+            "api_url",
+            "welcome_message",
+            "unauthorized_message",
+            "error_message",
+            "typing_enabled",
+            "llm_backend",
+            "llm_persona",
+            "system_prompt",
+            "tts_engine",
+            "tts_voice",
+            "tts_preset",
         ]
         for field in simple_fields:
             if field in kwargs:
                 setattr(instance, field, kwargs[field])
 
         # Update JSON fields
-        if 'allowed_users' in kwargs:
-            instance.set_allowed_users(kwargs['allowed_users'])
-        if 'admin_users' in kwargs:
-            instance.set_admin_users(kwargs['admin_users'])
-        if 'llm_params' in kwargs:
-            instance.set_llm_params(kwargs['llm_params'])
+        if "allowed_users" in kwargs:
+            instance.set_allowed_users(kwargs["allowed_users"])
+        if "admin_users" in kwargs:
+            instance.set_admin_users(kwargs["admin_users"])
+        if "llm_params" in kwargs:
+            instance.set_llm_params(kwargs["llm_params"])
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
@@ -212,28 +215,36 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             # Update existing
             return await self.update_instance(
                 instance_id,
-                name=config.get('name', 'Default Bot'),
-                enabled=config.get('enabled', False),
-                bot_token=config.get('bot_token', ''),
-                allowed_users=config.get('allowed_users', []),
-                admin_users=config.get('admin_users', []),
-                welcome_message=config.get('welcome_message', DEFAULT_BOT_CONFIG['welcome_message']),
-                unauthorized_message=config.get('unauthorized_message', DEFAULT_BOT_CONFIG['unauthorized_message']),
-                error_message=config.get('error_message', DEFAULT_BOT_CONFIG['error_message']),
-                typing_enabled=config.get('typing_enabled', True),
+                name=config.get("name", "Default Bot"),
+                enabled=config.get("enabled", False),
+                bot_token=config.get("bot_token", ""),
+                allowed_users=config.get("allowed_users", []),
+                admin_users=config.get("admin_users", []),
+                welcome_message=config.get(
+                    "welcome_message", DEFAULT_BOT_CONFIG["welcome_message"]
+                ),
+                unauthorized_message=config.get(
+                    "unauthorized_message", DEFAULT_BOT_CONFIG["unauthorized_message"]
+                ),
+                error_message=config.get("error_message", DEFAULT_BOT_CONFIG["error_message"]),
+                typing_enabled=config.get("typing_enabled", True),
             )
         else:
             # Create new
             return await self.create_instance(
                 id=instance_id,
-                name=config.get('name', 'Default Bot'),
-                description='Default Telegram bot (migrated from legacy config)',
-                enabled=config.get('enabled', False),
-                bot_token=config.get('bot_token', ''),
-                allowed_users=config.get('allowed_users', []),
-                admin_users=config.get('admin_users', []),
-                welcome_message=config.get('welcome_message', DEFAULT_BOT_CONFIG['welcome_message']),
-                unauthorized_message=config.get('unauthorized_message', DEFAULT_BOT_CONFIG['unauthorized_message']),
-                error_message=config.get('error_message', DEFAULT_BOT_CONFIG['error_message']),
-                typing_enabled=config.get('typing_enabled', True),
+                name=config.get("name", "Default Bot"),
+                description="Default Telegram bot (migrated from legacy config)",
+                enabled=config.get("enabled", False),
+                bot_token=config.get("bot_token", ""),
+                allowed_users=config.get("allowed_users", []),
+                admin_users=config.get("admin_users", []),
+                welcome_message=config.get(
+                    "welcome_message", DEFAULT_BOT_CONFIG["welcome_message"]
+                ),
+                unauthorized_message=config.get(
+                    "unauthorized_message", DEFAULT_BOT_CONFIG["unauthorized_message"]
+                ),
+                error_message=config.get("error_message", DEFAULT_BOT_CONFIG["error_message"]),
+                typing_enabled=config.get("typing_enabled", True),
             )

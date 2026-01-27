@@ -3,68 +3,77 @@
 Главный оркестратор - координирует все сервисы
 STT (Whisper) -> LLM (Gemini) -> TTS (XTTS v2)
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
-from fastapi.responses import FileResponse, StreamingResponse, Response, RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import logging
-from pathlib import Path
-import os
-from typing import Optional, List, Dict
-from pydantic import BaseModel
-from datetime import datetime
-import json
-import time
-import threading
-import hashlib
-import re
-import numpy as np
-from collections import OrderedDict
+
 import asyncio
+import hashlib
+import json
+import logging
+import os
+import re
+import threading
+import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import numpy as np
 import soundfile as sf
+import uvicorn
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from pydantic import BaseModel
 
-# Импорты наших сервисов
-from voice_clone_service import VoiceCloneService, INTONATION_PRESETS
-from stt_service import STTService, VoskSTTService, UnifiedSTTService
-from llm_service import LLMService
-from piper_tts_service import PiperTTSService
-from service_manager import get_service_manager, ServiceManager
-from finetune_manager import get_finetune_manager, FinetuneManager, TrainingConfig, DatasetStats
-from system_monitor import get_system_monitor
-from tts_finetune_manager import get_tts_finetune_manager
-from model_manager import get_model_manager
 from auth_manager import (
-    LoginRequest, LoginResponse, User,
-    authenticate_user, create_access_token, get_current_user,
-    get_optional_user, require_admin, get_auth_status, AUTH_ENABLED
-)
-
-# Database integration
-from db.integration import (
-    init_database,
-    shutdown_database,
-    get_database_status,
-    async_chat_manager,
-    async_faq_manager,
-    async_preset_manager,
-    async_config_manager,
-    async_telegram_manager,
-    async_audit_logger,
-    async_bot_instance_manager,
-    async_widget_instance_manager,
-    async_cloud_provider_manager,
+    LoginRequest,
+    LoginResponse,
+    User,
+    authenticate_user,
+    create_access_token,
+    get_auth_status,
+    get_current_user,
 )
 
 # Cloud LLM service for multi-provider support
-from cloud_llm_service import CloudLLMService, PROVIDER_TYPES
+from cloud_llm_service import PROVIDER_TYPES, CloudLLMService
+
+# Database integration
+from db.integration import (
+    async_audit_logger,
+    async_bot_instance_manager,
+    async_chat_manager,
+    async_cloud_provider_manager,
+    async_config_manager,
+    async_faq_manager,
+    async_preset_manager,
+    async_telegram_manager,
+    async_widget_instance_manager,
+    get_database_status,
+    init_database,
+    shutdown_database,
+)
+from finetune_manager import get_finetune_manager
+from llm_service import LLMService
+from model_manager import get_model_manager
 
 # Multi-bot manager
 from multi_bot_manager import multi_bot_manager
+from piper_tts_service import PiperTTSService
+from service_manager import get_service_manager
+from stt_service import STTService, UnifiedSTTService, VoskSTTService
+from system_monitor import get_system_monitor
+from tts_finetune_manager import get_tts_finetune_manager
+
+# Импорты наших сервисов
+from voice_clone_service import INTONATION_PRESETS, VoiceCloneService
+
 
 # vLLM импорт (опциональный - локальная Llama через vLLM)
 try:
     from vllm_llm_service import VLLMLLMService
+
     VLLM_AVAILABLE = True
 except ImportError:
     VLLM_AVAILABLE = False
@@ -73,6 +82,7 @@ except ImportError:
 # OpenVoice импорт (опциональный - для GPU P104-100)
 try:
     from openvoice_service import OpenVoiceService
+
     OPENVOICE_AVAILABLE = True
 except ImportError:
     OPENVOICE_AVAILABLE = False
@@ -113,7 +123,7 @@ class StreamingTTSManager:
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tts_")
 
         # Регулярка для разбиения на предложения
-        self._sentence_pattern = re.compile(r'([^.!?]*[.!?]+)')
+        self._sentence_pattern = re.compile(r"([^.!?]*[.!?]+)")
 
         logger.info("🎙️ StreamingTTSManager инициализирован")
 
@@ -173,10 +183,7 @@ class StreamingTTSManager:
                     sentence = sentence.strip()
                     if len(sentence) > 3:  # Игнорируем слишком короткие
                         future = self._executor.submit(
-                            self._synthesize_segment,
-                            sentence,
-                            voice_service,
-                            session_id
+                            self._synthesize_segment, sentence, voice_service, session_id
                         )
                         session["pending_futures"].append((sentence, future))
                         logger.info(f"🔄 Запущен синтез: '{sentence[:40]}...'")
@@ -193,7 +200,7 @@ class StreamingTTSManager:
                 text=text,
                 preset="natural",
                 preprocess_text=True,
-                split_sentences=False  # Уже разбили
+                split_sentences=False,  # Уже разбили
             )
             logger.info(f"✅ Синтезирован сегмент: '{text[:30]}...'")
             return (text, wav, sr)
@@ -215,10 +222,7 @@ class StreamingTTSManager:
             remaining = session["text_buffer"].strip()
             if remaining and len(remaining) > 3:
                 future = self._executor.submit(
-                    self._synthesize_segment,
-                    remaining,
-                    voice_service,
-                    session_id
+                    self._synthesize_segment, remaining, voice_service, session_id
                 )
                 session["pending_futures"].append((remaining, future))
                 logger.info(f"🔄 Запущен синтез остатка: '{remaining[:40]}...'")
@@ -238,8 +242,10 @@ class StreamingTTSManager:
                 self._cache_full_audio(full_text, session["segments"])
 
             elapsed = time.time() - session["start_time"]
-            logger.info(f"✅ Сессия {session_id} завершена за {elapsed:.2f}s, "
-                       f"сегментов: {len(session['segments'])}")
+            logger.info(
+                f"✅ Сессия {session_id} завершена за {elapsed:.2f}s, "
+                f"сегментов: {len(session['segments'])}"
+            )
 
             # Удаляем сессию
             del self._active_sessions[session_id]
@@ -276,7 +282,9 @@ class StreamingTTSManager:
                     "timestamp": time.time(),
                     "segments_count": len(segments),
                 }
-                logger.info(f"💾 Закэшировано аудио: {text_hash} ({len(full_audio)/sample_rate:.2f}s)")
+                logger.info(
+                    f"💾 Закэшировано аудио: {text_hash} ({len(full_audio) / sample_rate:.2f}s)"
+                )
 
             self._clean_old_cache()
 
@@ -327,7 +335,7 @@ app.add_middleware(
 # Глобальные сервисы
 voice_service: Optional[VoiceCloneService] = None  # XTTS (Лидия) - GPU CC >= 7.0
 gulya_voice_service: Optional[VoiceCloneService] = None  # XTTS (Гуля) - GPU CC >= 7.0
-piper_service: Optional[PiperTTSService] = None    # Piper (Dmitri, Irina) - CPU
+piper_service: Optional[PiperTTSService] = None  # Piper (Dmitri, Irina) - CPU
 openvoice_service: Optional["OpenVoiceService"] = None  # OpenVoice v2 (Лидия) - GPU CC 6.1+
 stt_service: Optional[STTService] = None
 llm_service: Optional[LLMService] = None
@@ -361,6 +369,7 @@ class TTSRequest(BaseModel):
 
 class OpenAISpeechRequest(BaseModel):
     """OpenAI-compatible TTS request for OpenWebUI integration"""
+
     model: str = "lidia-voice"
     input: str
     voice: str = "lidia"
@@ -375,6 +384,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     """OpenAI-compatible chat completion request"""
+
     model: str = "gulya-secretary-qwen"  # Format: {persona}-secretary-{backend}
     messages: List[ChatMessage]
     stream: bool = False
@@ -385,7 +395,14 @@ class ChatCompletionRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Инициализация всех сервисов при старте"""
-    global voice_service, gulya_voice_service, piper_service, openvoice_service, stt_service, llm_service, streaming_tts_manager
+    global \
+        voice_service, \
+        gulya_voice_service, \
+        piper_service, \
+        openvoice_service, \
+        stt_service, \
+        llm_service, \
+        streaming_tts_manager
 
     logger.info("🚀 Запуск AI Secretary Orchestrator")
 
@@ -418,7 +435,9 @@ async def startup_event():
         logger.info("📦 Загрузка Voice Clone Service (XTTS - Гуля)...")
         try:
             gulya_voice_service = VoiceCloneService(voice_samples_dir="./Гуля")
-            logger.info(f"✅ XTTS (Гуля) загружен: {len(gulya_voice_service.voice_samples)} образцов")
+            logger.info(
+                f"✅ XTTS (Гуля) загружен: {len(gulya_voice_service.voice_samples)} образцов"
+            )
         except Exception as e:
             logger.warning(f"⚠️ XTTS (Гуля) недоступен: {e}")
             gulya_voice_service = None
@@ -529,7 +548,7 @@ async def root():
             "tts": "/tts (POST)",
             "stt": "/stt (POST)",
             "chat": "/chat (POST)",
-        }
+        },
     }
 
 
@@ -539,9 +558,9 @@ async def health_check():
     # Определяем тип LLM сервиса
     llm_backend_type = "unknown"
     if llm_service:
-        if hasattr(llm_service, 'api_url'):  # vLLM
+        if hasattr(llm_service, "api_url"):  # vLLM
             llm_backend_type = f"vllm ({llm_service.model_name})"
-        elif hasattr(llm_service, 'model_name'):  # Gemini
+        elif hasattr(llm_service, "model_name"):  # Gemini
             llm_backend_type = f"gemini ({llm_service.model_name})"
 
     services_status = {
@@ -557,7 +576,12 @@ async def health_check():
     }
 
     # Для health check достаточно любой TTS + llm
-    any_tts = services_status["voice_clone_xtts_gulya"] or services_status["voice_clone_xtts_lidia"] or services_status["voice_clone_openvoice"] or services_status["piper_tts"]
+    any_tts = (
+        services_status["voice_clone_xtts_gulya"]
+        or services_status["voice_clone_xtts_lidia"]
+        or services_status["voice_clone_openvoice"]
+        or services_status["piper_tts"]
+    )
     core_ok = any_tts and services_status["llm"]
 
     # Get database status
@@ -567,7 +591,7 @@ async def health_check():
         "status": "healthy" if core_ok else "degraded",
         "services": services_status,
         "database": db_status.get("database", {}),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     # Добавляем статистику streaming TTS если доступен
@@ -636,17 +660,11 @@ async def text_to_speech(request: TTSRequest):
 
         # Синтезируем с текущим голосом
         synthesize_with_current_voice(
-            text=request.text,
-            output_path=str(output_file),
-            language=request.language
+            text=request.text, output_path=str(output_file), language=request.language
         )
 
         # Возвращаем файл
-        return FileResponse(
-            path=output_file,
-            media_type="audio/wav",
-            filename="response.wav"
-        )
+        return FileResponse(path=output_file, media_type="audio/wav", filename="response.wav")
 
     except Exception as e:
         logger.error(f"❌ TTS Error: {e}")
@@ -678,7 +696,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
         return {
             "text": result["text"],
             "language": result["language"],
-            "segments_count": len(result.get("segments", []))
+            "segments_count": len(result.get("segments", [])),
         }
 
     except Exception as e:
@@ -697,10 +715,7 @@ async def chat(request: ConversationRequest):
     try:
         response = llm_service.generate_response(request.text)
 
-        return {
-            "response": response,
-            "session_id": request.session_id
-        }
+        return {"response": response, "session_id": request.session_id}
 
     except Exception as e:
         logger.error(f"❌ LLM Error: {e}")
@@ -750,9 +765,7 @@ async def process_call(audio: UploadFile = File(...)):
         logger.info(f"🎙️  TTS для {call_id}")
         output_audio = CALLS_LOG_DIR / f"{call_id}_output.wav"
         voice_service.synthesize_to_file(
-            text=llm_response,
-            output_path=str(output_audio),
-            language="ru"
+            text=llm_response, output_path=str(output_audio), language="ru"
         )
 
         logger.info(f"✅ Звонок {call_id} обработан")
@@ -765,8 +778,8 @@ async def process_call(audio: UploadFile = File(...)):
             headers={
                 "X-Call-ID": call_id,
                 "X-Recognized-Text": recognized_text,
-                "X-Response-Text": llm_response
-            }
+                "X-Response-Text": llm_response,
+            },
         )
 
     except Exception as e:
@@ -785,14 +798,15 @@ async def reset_conversation():
 
 # ============== OpenAI-Compatible Endpoints for OpenWebUI ==============
 
+
 @app.get("/v1/models")
 @app.get("/v1/models/")
 async def list_models():
     """OpenAI-compatible models list for OpenWebUI"""
     # Определяем backend и суффикс для имени модели
-    if llm_service and hasattr(llm_service, 'api_url'):
+    if llm_service and hasattr(llm_service, "api_url"):
         # vLLM backend - проверяем модель
-        model_name = getattr(llm_service, 'model_name', 'unknown')
+        model_name = getattr(llm_service, "model_name", "unknown")
         if model_name == "lydia" or "qwen" in model_name.lower():
             backend_suffix = "qwen"
             backend_desc = "Qwen2.5-7B + LoRA"
@@ -817,7 +831,7 @@ async def list_models():
                 "permission": [],
                 "root": f"gulya-secretary-{backend_suffix}",
                 "parent": None,
-                "description": f"Гуля - цифровой секретарь ({backend_desc})"
+                "description": f"Гуля - цифровой секретарь ({backend_desc})",
             },
             {
                 "id": f"lidia-secretary-{backend_suffix}",
@@ -827,9 +841,9 @@ async def list_models():
                 "permission": [],
                 "root": f"lidia-secretary-{backend_suffix}",
                 "parent": None,
-                "description": f"Лидия - цифровой секретарь ({backend_desc})"
-            }
-        ]
+                "description": f"Лидия - цифровой секретарь ({backend_desc})",
+            },
+        ],
     }
 
 
@@ -877,18 +891,12 @@ async def openai_speech(request: OpenAISpeechRequest):
         else:
             # Cache MISS - синтезируем с текущим голосом
             synthesize_with_current_voice(
-                text=request.input,
-                output_path=str(output_file),
-                language="ru"
+                text=request.input, output_path=str(output_file), language="ru"
             )
             elapsed = time.time() - start_time
             logger.info(f"🎙️ TTS синтезирован за {elapsed:.2f}s")
 
-        return FileResponse(
-            path=output_file,
-            media_type="audio/wav",
-            filename="speech.wav"
-        )
+        return FileResponse(path=output_file, media_type="audio/wav", filename="speech.wav")
 
     except Exception as e:
         logger.error(f"❌ OpenAI TTS Error: {e}")
@@ -905,7 +913,9 @@ async def chat_completions(request: ChatCompletionRequest):
     if not llm_service:
         raise HTTPException(status_code=503, detail="LLM service not initialized")
 
-    logger.info(f"💬 Chat completions request: stream={request.stream}, messages={len(request.messages)}")
+    logger.info(
+        f"💬 Chat completions request: stream={request.stream}, messages={len(request.messages)}"
+    )
 
     # Конвертируем Pydantic модели в dict
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
@@ -918,36 +928,31 @@ async def chat_completions(request: ChatCompletionRequest):
             session_id = f"tts-{created}"
 
             # Начинаем сессию streaming TTS если сервисы доступны
-            use_streaming_tts = (
-                streaming_tts_manager is not None and
-                voice_service is not None
-            )
+            use_streaming_tts = streaming_tts_manager is not None and voice_service is not None
 
             if use_streaming_tts:
                 streaming_tts_manager.start_session(session_id)
                 logger.info(f"🎬 Streaming TTS активирован для сессии {session_id}")
 
             try:
-                for text_chunk in llm_service.generate_response_from_messages(messages, stream=True):
+                for text_chunk in llm_service.generate_response_from_messages(
+                    messages, stream=True
+                ):
                     # Отправляем chunk клиенту
                     chunk_data = {
                         "id": chunk_id,
                         "object": "chat.completion.chunk",
                         "created": created,
                         "model": request.model,
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"content": text_chunk},
-                            "finish_reason": None
-                        }]
+                        "choices": [
+                            {"index": 0, "delta": {"content": text_chunk}, "finish_reason": None}
+                        ],
                     }
                     yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
 
                     # Параллельно добавляем chunk в streaming TTS manager
                     if use_streaming_tts and text_chunk:
-                        streaming_tts_manager.add_text_chunk(
-                            session_id, text_chunk, voice_service
-                        )
+                        streaming_tts_manager.add_text_chunk(session_id, text_chunk, voice_service)
 
                 # Final chunk
                 final_chunk = {
@@ -955,11 +960,7 @@ async def chat_completions(request: ChatCompletionRequest):
                     "object": "chat.completion.chunk",
                     "created": created,
                     "model": request.model,
-                    "choices": [{
-                        "index": 0,
-                        "delta": {},
-                        "finish_reason": "stop"
-                    }]
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                 }
                 yield f"data: {json.dumps(final_chunk)}\n\n"
                 yield "data: [DONE]\n\n"
@@ -970,14 +971,12 @@ async def chat_completions(request: ChatCompletionRequest):
                     threading.Thread(
                         target=streaming_tts_manager.finish_session,
                         args=(session_id, voice_service),
-                        daemon=True
+                        daemon=True,
                     ).start()
 
             except Exception as e:
                 logger.error(f"❌ Streaming error: {e}")
-                error_chunk = {
-                    "error": {"message": str(e), "type": "server_error"}
-                }
+                error_chunk = {"error": {"message": str(e), "type": "server_error"}}
                 yield f"data: {json.dumps(error_chunk)}\n\n"
 
         return StreamingResponse(
@@ -986,7 +985,7 @@ async def chat_completions(request: ChatCompletionRequest):
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-            }
+            },
         )
     else:
         # Non-streaming response
@@ -994,7 +993,7 @@ async def chat_completions(request: ChatCompletionRequest):
             response_text = llm_service.generate_response_from_messages(messages, stream=False)
 
             # Consume generator if it returns one
-            if hasattr(response_text, '__iter__') and not isinstance(response_text, str):
+            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
                 response_text = "".join(response_text)
 
             return {
@@ -1002,19 +1001,14 @@ async def chat_completions(request: ChatCompletionRequest):
                 "object": "chat.completion",
                 "created": int(time.time()),
                 "model": request.model,
-                "choices": [{
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": response_text
-                    },
-                    "finish_reason": "stop"
-                }],
-                "usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0
-                }
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": response_text},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             }
         except Exception as e:
             logger.error(f"❌ Chat completions error: {e}")
@@ -1029,6 +1023,7 @@ async def chat_completions(request: ChatCompletionRequest):
 
 # ============== Auth Endpoints ==============
 
+
 @app.post("/admin/auth/login", response_model=LoginResponse)
 async def admin_login(request: LoginRequest):
     """
@@ -1039,35 +1034,22 @@ async def admin_login(request: LoginRequest):
     """
     user = authenticate_user(request.username, request.password)
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid username or password"
-        )
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token, expires_in = create_access_token(user.username, user.role)
 
     # Audit log
     await async_audit_logger.log(
-        action="login",
-        resource="auth",
-        user_id=user.username,
-        details={"role": user.role}
+        action="login", resource="auth", user_id=user.username, details={"role": user.role}
     )
 
-    return LoginResponse(
-        access_token=token,
-        token_type="bearer",
-        expires_in=expires_in
-    )
+    return LoginResponse(access_token=token, token_type="bearer", expires_in=expires_in)
 
 
 @app.get("/admin/auth/me")
 async def admin_get_current_user(user: User = Depends(get_current_user)):
     """Get current authenticated user info"""
-    return {
-        "username": user.username,
-        "role": user.role
-    }
+    return {"username": user.username, "role": user.role}
 
 
 @app.get("/admin/auth/status")
@@ -1078,23 +1060,28 @@ async def admin_auth_status():
 
 # ============== Admin Models ==============
 
+
 class AdminTTSPresetRequest(BaseModel):
     """Запрос на изменение пресета TTS"""
+
     preset: str  # warm, calm, energetic, natural, neutral
 
 
 class AdminLLMPromptRequest(BaseModel):
     """Запрос на изменение системного промпта"""
+
     prompt: str
 
 
 class AdminLLMModelRequest(BaseModel):
     """Запрос на изменение модели LLM"""
+
     model: str  # gemini-2.5-flash, gemini-2.5-pro
 
 
 class AdminTTSTestRequest(BaseModel):
     """Запрос на тестовый синтез"""
+
     text: str
     preset: str = "natural"
 
@@ -1127,12 +1114,14 @@ async def admin_status():
                 name = torch.cuda.get_device_name(i)
                 total = torch.cuda.get_device_properties(i).total_memory / (1024**3)
                 allocated = torch.cuda.memory_allocated(i) / (1024**3)
-                gpu_info.append({
-                    "id": i,
-                    "name": name,
-                    "total_gb": round(total, 2),
-                    "used_gb": round(allocated, 2),
-                })
+                gpu_info.append(
+                    {
+                        "id": i,
+                        "name": name,
+                        "total_gb": round(total, 2),
+                        "used_gb": round(allocated, 2),
+                    }
+                )
             except Exception:
                 pass
         status["gpu"] = gpu_info
@@ -1143,14 +1132,14 @@ async def admin_status():
 
     # LLM конфигурация
     if llm_service:
-        if hasattr(llm_service, 'get_config'):
+        if hasattr(llm_service, "get_config"):
             status["llm_config"] = llm_service.get_config()
         else:
             # Для vLLM и других сервисов без get_config
             status["llm_config"] = {
-                "model_name": getattr(llm_service, 'model_name', 'unknown'),
-                "api_url": getattr(llm_service, 'api_url', None),
-                "backend": "vllm" if hasattr(llm_service, 'api_url') else "gemini",
+                "model_name": getattr(llm_service, "model_name", "unknown"),
+                "api_url": getattr(llm_service, "api_url", None),
+                "backend": "vllm" if hasattr(llm_service, "api_url") else "gemini",
             }
 
     # TTS конфигурация
@@ -1169,7 +1158,6 @@ async def admin_status():
 @app.get("/admin/tts/presets")
 async def admin_tts_presets():
     """Список доступных TTS пресетов"""
-    from voice_clone_service import INTONATION_PRESETS
 
     presets = {}
     for name, preset in INTONATION_PRESETS.items():
@@ -1194,12 +1182,11 @@ async def admin_tts_presets():
 @app.post("/admin/tts/preset")
 async def admin_set_tts_preset(request: AdminTTSPresetRequest):
     """Установить текущий пресет TTS"""
-    from voice_clone_service import INTONATION_PRESETS
 
     if request.preset not in INTONATION_PRESETS:
         raise HTTPException(
             status_code=400,
-            detail=f"Неизвестный пресет: {request.preset}. Доступные: {list(INTONATION_PRESETS.keys())}"
+            detail=f"Неизвестный пресет: {request.preset}. Доступные: {list(INTONATION_PRESETS.keys())}",
         )
 
     xtts_svc = gulya_voice_service or voice_service
@@ -1213,7 +1200,7 @@ async def admin_set_tts_preset(request: AdminTTSPresetRequest):
             "settings": {
                 "temperature": preset.temperature,
                 "speed": preset.speed,
-            }
+            },
         }
 
     raise HTTPException(status_code=503, detail="No XTTS voice service available")
@@ -1228,6 +1215,7 @@ async def admin_tts_test(request: AdminTTSTestRequest):
 
     try:
         import time as t
+
         start = t.time()
 
         output_file = TEMP_DIR / f"admin_test_{datetime.now().timestamp()}.wav"
@@ -1238,17 +1226,15 @@ async def admin_tts_test(request: AdminTTSTestRequest):
             piper_service.synthesize_to_file(
                 text=request.text,
                 output_path=str(output_file),
-                voice=voice  # dmitri или irina
+                voice=voice,  # dmitri или irina
             )
             logger.info(f"🔊 Piper TTS test: voice={voice}")
         elif engine == "openvoice" and openvoice_service:
             # OpenVoice v2
             openvoice_service.synthesize_to_file(
-                text=request.text,
-                output_path=str(output_file),
-                language="ru"
+                text=request.text, output_path=str(output_file), language="ru"
             )
-            logger.info(f"🔊 OpenVoice TTS test")
+            logger.info("🔊 OpenVoice TTS test")
         elif engine == "xtts":
             # XTTS v2
             tts_service = None
@@ -1268,40 +1254,41 @@ async def admin_tts_test(request: AdminTTSTestRequest):
                 text=request.text,
                 output_path=str(output_file),
                 preset=request.preset,
-                language="ru"
+                language="ru",
             )
             logger.info(f"🔊 XTTS TTS test: voice={voice}, preset={request.preset}")
+        # Fallback - попробуем любой доступный сервис
+        elif piper_service:
+            piper_service.synthesize_to_file(
+                text=request.text, output_path=str(output_file), voice="dmitri"
+            )
+        elif gulya_voice_service:
+            gulya_voice_service.synthesize_to_file(
+                text=request.text,
+                output_path=str(output_file),
+                preset=request.preset,
+                language="ru",
+            )
         else:
-            # Fallback - попробуем любой доступный сервис
-            if piper_service:
-                piper_service.synthesize_to_file(
-                    text=request.text,
-                    output_path=str(output_file),
-                    voice="dmitri"
-                )
-            elif gulya_voice_service:
-                gulya_voice_service.synthesize_to_file(
-                    text=request.text,
-                    output_path=str(output_file),
-                    preset=request.preset,
-                    language="ru"
-                )
-            else:
-                raise HTTPException(status_code=503, detail="No TTS service available")
+            raise HTTPException(status_code=503, detail="No TTS service available")
 
         elapsed = t.time() - start
 
         # Получаем длительность аудио
         import wave
-        with wave.open(str(output_file), 'rb') as wf:
+
+        with wave.open(str(output_file), "rb") as wf:
             frames = wf.getnframes()
             rate = wf.getframerate()
             duration = frames / float(rate)
 
-        logger.info(f"🔊 TTS test: {duration:.2f}s audio in {elapsed:.2f}s (RTF: {elapsed/duration:.2f})")
+        logger.info(
+            f"🔊 TTS test: {duration:.2f}s audio in {elapsed:.2f}s (RTF: {elapsed / duration:.2f})"
+        )
 
         # Возвращаем аудио-файл для воспроизведения в браузере
         from fastapi.responses import FileResponse
+
         return FileResponse(
             path=str(output_file),
             media_type="audio/wav",
@@ -1310,7 +1297,7 @@ async def admin_tts_test(request: AdminTTSTestRequest):
                 "X-Duration-Sec": str(round(duration, 2)),
                 "X-Synthesis-Time-Sec": str(round(elapsed, 2)),
                 "X-RTF": str(round(elapsed / duration, 2) if duration > 0 else 0),
-            }
+            },
         )
 
     except Exception as e:
@@ -1370,6 +1357,7 @@ def get_unified_stt() -> Optional[UnifiedSTTService]:
 
 class STTTranscribeRequest(BaseModel):
     """Запрос на распознавание речи"""
+
     language: str = "ru"
     engine: str = "auto"  # auto, vosk, whisper
 
@@ -1387,14 +1375,13 @@ async def admin_stt_status():
         if vosk:
             vosk_available = True
             vosk_model = str(vosk.model_path.name) if vosk.model_path else None
-    except:
+    except Exception:
         pass
 
     # Проверяем Whisper
     try:
-        from faster_whisper import WhisperModel
         whisper_available = True
-    except:
+    except Exception:
         pass
 
     return {
@@ -1402,14 +1389,12 @@ async def admin_stt_status():
             "available": vosk_available,
             "model": vosk_model,
             "realtime": True,
-            "offline": True
+            "offline": True,
         },
-        "whisper": {
-            "available": whisper_available,
-            "realtime": False,
-            "offline": True
-        },
-        "preferred_engine": "vosk" if vosk_available else ("whisper" if whisper_available else None)
+        "whisper": {"available": whisper_available, "realtime": False, "offline": True},
+        "preferred_engine": "vosk"
+        if vosk_available
+        else ("whisper" if whisper_available else None),
     }
 
 
@@ -1424,25 +1409,27 @@ async def admin_stt_models():
             if path.is_dir() and "model" in path.name.lower():
                 # Определяем размер модели
                 size_bytes = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-                models.append({
-                    "name": path.name,
-                    "path": str(path),
-                    "size_mb": round(size_bytes / (1024 * 1024), 1),
-                    "language": "ru" if "ru" in path.name else ("en" if "en" in path.name else "unknown")
-                })
+                models.append(
+                    {
+                        "name": path.name,
+                        "path": str(path),
+                        "size_mb": round(size_bytes / (1024 * 1024), 1),
+                        "language": "ru"
+                        if "ru" in path.name
+                        else ("en" if "en" in path.name else "unknown"),
+                    }
+                )
 
     return {
         "models_dir": str(models_dir),
         "models": models,
-        "download_url": "https://alphacephei.com/vosk/models"
+        "download_url": "https://alphacephei.com/vosk/models",
     }
 
 
 @app.post("/admin/stt/transcribe")
 async def admin_stt_transcribe(
-    file: UploadFile = File(...),
-    language: str = "ru",
-    engine: str = "auto"
+    file: UploadFile = File(...), language: str = "ru", engine: str = "auto"
 ):
     """
     Распознать речь из загруженного аудио файла
@@ -1521,7 +1508,7 @@ async def admin_stt_test(text_to_speak: str = "Привет, это тест р�
             "original_text": text_to_speak,
             "recognized_text": result["text"],
             "match": text_to_speak.lower().strip() == result["text"].lower().strip(),
-            "words_count": len(result.get("words", []))
+            "words_count": len(result.get("words", [])),
         }
 
     finally:
@@ -1532,7 +1519,9 @@ async def admin_stt_test(text_to_speak: str = "Привет, это тест р�
 async def admin_get_llm_prompt():
     """Получить текущий системный промпт LLM"""
     if llm_service:
-        persona = getattr(llm_service, 'current_persona', None) or os.getenv("SECRETARY_PERSONA", "gulya")
+        persona = getattr(llm_service, "current_persona", None) or os.getenv(
+            "SECRETARY_PERSONA", "gulya"
+        )
         return {
             "prompt": llm_service.system_prompt,
             "model": llm_service.model_name,
@@ -1569,7 +1558,7 @@ async def admin_set_llm_model(request: AdminLLMModelRequest):
     if request.model not in allowed_models:
         raise HTTPException(
             status_code=400,
-            detail=f"Неизвестная модель: {request.model}. Доступные: {allowed_models}"
+            detail=f"Неизвестная модель: {request.model}. Доступные: {allowed_models}",
         )
 
     if llm_service:
@@ -1605,6 +1594,7 @@ async def admin_get_llm_history():
 
 # ============== Voice Selection API ==============
 
+
 class AdminVoiceRequest(BaseModel):
     voice: str  # gulya / lidia / dmitri / irina
 
@@ -1616,49 +1606,59 @@ async def admin_get_voices():
 
     # XTTS голос (Гуля) - требует GPU CC >= 7.0 (по умолчанию)
     if gulya_voice_service:
-        voices.append({
-            "id": "gulya",
-            "name": "Гуля (XTTS)",
-            "engine": "xtts",
-            "description": "Клонированный голос Гули (XTTS v2, GPU CC >= 7.0)",
-            "available": True,
-            "samples_count": len(gulya_voice_service.voice_samples),
-            "default": True,
-        })
+        voices.append(
+            {
+                "id": "gulya",
+                "name": "Гуля (XTTS)",
+                "engine": "xtts",
+                "description": "Клонированный голос Гули (XTTS v2, GPU CC >= 7.0)",
+                "available": True,
+                "samples_count": len(gulya_voice_service.voice_samples),
+                "default": True,
+            }
+        )
 
     # XTTS голос (Лидия) - требует GPU CC >= 7.0
     if voice_service:
-        voices.append({
-            "id": "lidia",
-            "name": "Лидия (XTTS)",
-            "engine": "xtts",
-            "description": "Клонированный голос Лидии (XTTS v2, GPU CC >= 7.0)",
-            "available": True,
-            "samples_count": len(voice_service.voice_samples),
-        })
+        voices.append(
+            {
+                "id": "lidia",
+                "name": "Лидия (XTTS)",
+                "engine": "xtts",
+                "description": "Клонированный голос Лидии (XTTS v2, GPU CC >= 7.0)",
+                "available": True,
+                "samples_count": len(voice_service.voice_samples),
+            }
+        )
 
     # OpenVoice голос (Лидия) - работает на GPU CC 6.1+
     if openvoice_service:
-        voices.append({
-            "id": "lidia_openvoice",
-            "name": "Лидия (OpenVoice)",
-            "engine": "openvoice",
-            "description": "Клонированный голос (OpenVoice v2, GPU CC 6.1+)",
-            "available": True,
-            "samples_count": len(openvoice_service.voice_samples) if openvoice_service.voice_samples else 0,
-        })
+        voices.append(
+            {
+                "id": "lidia_openvoice",
+                "name": "Лидия (OpenVoice)",
+                "engine": "openvoice",
+                "description": "Клонированный голос (OpenVoice v2, GPU CC 6.1+)",
+                "available": True,
+                "samples_count": len(openvoice_service.voice_samples)
+                if openvoice_service.voice_samples
+                else 0,
+            }
+        )
 
     # Piper голоса (CPU)
     if piper_service:
         piper_voices = piper_service.get_available_voices()
         for voice_id, info in piper_voices.items():
-            voices.append({
-                "id": voice_id,
-                "name": info["name"],
-                "engine": "piper",
-                "description": info["description"],
-                "available": info["available"],
-            })
+            voices.append(
+                {
+                    "id": voice_id,
+                    "name": info["name"],
+                    "engine": "piper",
+                    "description": info["description"],
+                    "available": info["available"],
+                }
+            )
 
     return {
         "voices": voices,
@@ -1682,21 +1682,26 @@ async def admin_set_voice(request: AdminVoiceRequest):
     # Проверяем доступность голоса
     if voice_id == "gulya":
         if not gulya_voice_service:
-            raise HTTPException(status_code=503, detail="XTTS service (Гуля) not available (requires GPU CC >= 7.0)")
+            raise HTTPException(
+                status_code=503, detail="XTTS service (Гуля) not available (requires GPU CC >= 7.0)"
+            )
         current_voice_config = {"engine": "xtts", "voice": "gulya"}
-        logger.info(f"🎤 Голос изменён на: Гуля (XTTS)")
+        logger.info("🎤 Голос изменён на: Гуля (XTTS)")
 
     elif voice_id == "lidia":
         if not voice_service:
-            raise HTTPException(status_code=503, detail="XTTS service (Лидия) not available (requires GPU CC >= 7.0)")
+            raise HTTPException(
+                status_code=503,
+                detail="XTTS service (Лидия) not available (requires GPU CC >= 7.0)",
+            )
         current_voice_config = {"engine": "xtts", "voice": "lidia"}
-        logger.info(f"🎤 Голос изменён на: Лидия (XTTS)")
+        logger.info("🎤 Голос изменён на: Лидия (XTTS)")
 
     elif voice_id == "lidia_openvoice":
         if not openvoice_service:
             raise HTTPException(status_code=503, detail="OpenVoice service not available")
         current_voice_config = {"engine": "openvoice", "voice": "lidia_openvoice"}
-        logger.info(f"🎤 Голос изменён на: Лидия (OpenVoice)")
+        logger.info("🎤 Голос изменён на: Лидия (OpenVoice)")
 
     elif voice_id in ["dmitri", "irina"]:
         if not piper_service:
@@ -1710,7 +1715,7 @@ async def admin_set_voice(request: AdminVoiceRequest):
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown voice: {voice_id}. Available: gulya, lidia, lidia_openvoice, dmitri, irina"
+            detail=f"Unknown voice: {voice_id}. Available: gulya, lidia, lidia_openvoice, dmitri, irina",
         )
 
     return {"status": "ok", **current_voice_config}
@@ -1727,12 +1732,16 @@ async def admin_test_voice(request: AdminVoiceRequest):
     try:
         if voice_id == "gulya":
             if not gulya_voice_service:
-                raise HTTPException(status_code=503, detail="XTTS (Гуля) not available (requires GPU CC >= 7.0)")
+                raise HTTPException(
+                    status_code=503, detail="XTTS (Гуля) not available (requires GPU CC >= 7.0)"
+                )
             gulya_voice_service.synthesize_to_file(test_text, str(output_path), preset="natural")
 
         elif voice_id == "lidia":
             if not voice_service:
-                raise HTTPException(status_code=503, detail="XTTS (Лидия) not available (requires GPU CC >= 7.0)")
+                raise HTTPException(
+                    status_code=503, detail="XTTS (Лидия) not available (requires GPU CC >= 7.0)"
+                )
             voice_service.synthesize_to_file(test_text, str(output_path), preset="natural")
 
         elif voice_id == "lidia_openvoice":
@@ -1746,13 +1755,12 @@ async def admin_test_voice(request: AdminVoiceRequest):
             piper_service.synthesize_to_file(test_text, str(output_path), voice=voice_id)
 
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown voice: {voice_id}. Available: gulya, lidia, lidia_openvoice, dmitri, irina")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown voice: {voice_id}. Available: gulya, lidia, lidia_openvoice, dmitri, irina",
+            )
 
-        return FileResponse(
-            output_path,
-            media_type="audio/wav",
-            filename=f"test_{voice_id}.wav"
-        )
+        return FileResponse(output_path, media_type="audio/wav", filename=f"test_{voice_id}.wav")
 
     except Exception as e:
         logger.error(f"❌ Ошибка тестового синтеза: {e}")
@@ -1777,6 +1785,7 @@ def get_current_tts_service():
 
 # ============== Extended Admin API Endpoints ==============
 
+
 # Pydantic models for new endpoints
 class AdminBackendRequest(BaseModel):
     backend: str  # "vllm", "gemini", or "cloud:{provider_id}"
@@ -1785,6 +1794,7 @@ class AdminBackendRequest(BaseModel):
 
 class CloudProviderCreate(BaseModel):
     """Create cloud LLM provider"""
+
     name: str
     provider_type: str  # gemini, kimi, openai, claude, deepseek, custom
     api_key: Optional[str] = None
@@ -1798,6 +1808,7 @@ class CloudProviderCreate(BaseModel):
 
 class CloudProviderUpdate(BaseModel):
     """Update cloud LLM provider"""
+
     name: Optional[str] = None
     provider_type: Optional[str] = None
     api_key: Optional[str] = None
@@ -1885,17 +1896,19 @@ class AdminFinetuneConfigRequest(BaseModel):
 class AdminAdapterRequest(BaseModel):
     adapter: str
 
+
 class AdminAuditQueryRequest(BaseModel):
     action: Optional[str] = None
     resource: Optional[str] = None
     user_id: Optional[str] = None
     from_date: Optional[str] = None  # ISO format
-    to_date: Optional[str] = None    # ISO format
+    to_date: Optional[str] = None  # ISO format
     limit: int = 100
     offset: int = 0
 
 
 # ============== Chat Models & Manager ==============
+
 
 class ChatMessageModel(BaseModel):
     id: str
@@ -1933,6 +1946,7 @@ class EditMessageRequest(BaseModel):
 
 
 # ============== Services Endpoints ==============
+
 
 @app.get("/admin/services/status")
 async def admin_services_status():
@@ -1993,6 +2007,7 @@ async def admin_stop_all_services():
 
 # ============== Logs Endpoints ==============
 
+
 @app.get("/admin/logs")
 async def admin_list_logs():
     """Список доступных логов"""
@@ -2002,10 +2017,7 @@ async def admin_list_logs():
 
 @app.get("/admin/logs/{logfile}")
 async def admin_read_log(
-    logfile: str,
-    lines: int = 100,
-    offset: int = 0,
-    search: Optional[str] = None
+    logfile: str, lines: int = 100, offset: int = 0, search: Optional[str] = None
 ):
     """Прочитать лог файл"""
     manager = get_service_manager()
@@ -2024,11 +2036,12 @@ async def admin_stream_log(logfile: str):
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
 # ============== LLM Enhanced Endpoints ==============
+
 
 @app.get("/admin/llm/backend")
 async def admin_get_llm_backend():
@@ -2037,16 +2050,16 @@ async def admin_get_llm_backend():
         # Detect backend type
         if isinstance(llm_service, CloudLLMService):
             backend = f"cloud:{llm_service.provider_id}"
-        elif hasattr(llm_service, 'api_url'):
+        elif hasattr(llm_service, "api_url"):
             backend = "vllm"
         else:
             backend = "gemini"
 
         return {
             "backend": backend,
-            "model": getattr(llm_service, 'model_name', 'unknown'),
-            "api_url": getattr(llm_service, 'api_url', None),
-            "provider_type": getattr(llm_service, 'provider_type', None),
+            "model": getattr(llm_service, "model_name", "unknown"),
+            "api_url": getattr(llm_service, "api_url", None),
+            "provider_type": getattr(llm_service, "provider_type", None),
         }
     return {"backend": "none", "error": "LLM service not initialized"}
 
@@ -2057,7 +2070,7 @@ async def admin_get_llm_models():
     Получить список доступных моделей vLLM и текущую модель.
     Возвращает информацию о Qwen, Llama, DeepSeek и других моделях.
     """
-    from vllm_llm_service import AVAILABLE_MODELS, VLLMLLMService
+    from vllm_llm_service import AVAILABLE_MODELS
 
     result = {
         "available_models": AVAILABLE_MODELS,
@@ -2067,17 +2080,17 @@ async def admin_get_llm_models():
     }
 
     if llm_service:
-        is_vllm = hasattr(llm_service, 'api_url')
+        is_vllm = hasattr(llm_service, "api_url")
         result["backend"] = "vllm" if is_vllm else "gemini"
 
-        if is_vllm and hasattr(llm_service, 'get_current_model_info'):
+        if is_vllm and hasattr(llm_service, "get_current_model_info"):
             result["current_model"] = llm_service.get_current_model_info()
             result["loaded_models"] = llm_service.get_loaded_models()
         elif not is_vllm:
             # Gemini backend
             result["current_model"] = {
                 "id": "gemini",
-                "name": getattr(llm_service, 'model_name', 'gemini-2.0-flash'),
+                "name": getattr(llm_service, "model_name", "gemini-2.0-flash"),
                 "description": "Google Gemini API",
                 "available": True,
             }
@@ -2086,7 +2099,9 @@ async def admin_get_llm_models():
 
 
 @app.post("/admin/llm/backend")
-async def admin_set_llm_backend(request: AdminBackendRequest, user: User = Depends(get_current_user)):
+async def admin_set_llm_backend(
+    request: AdminBackendRequest, user: User = Depends(get_current_user)
+):
     """Переключить LLM backend с горячей перезагрузкой сервиса"""
     global LLM_BACKEND, llm_service
 
@@ -2096,19 +2111,22 @@ async def admin_set_llm_backend(request: AdminBackendRequest, user: User = Depen
         return await _switch_to_cloud_provider(provider_id, request.stop_unused, user)
 
     if request.backend not in ["vllm", "gemini"]:
-        raise HTTPException(status_code=400, detail="Invalid backend. Use 'vllm', 'gemini', or 'cloud:{provider_id}'")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid backend. Use 'vllm', 'gemini', or 'cloud:{provider_id}'",
+        )
 
     # Проверяем текущий бэкенд
-    current_backend = "vllm" if (llm_service and hasattr(llm_service, 'api_url')) else "gemini"
+    current_backend = "vllm" if (llm_service and hasattr(llm_service, "api_url")) else "gemini"
     if request.backend == current_backend:
         return {
             "status": "ok",
             "backend": request.backend,
-            "message": f"Уже используется {request.backend}"
+            "message": f"Уже используется {request.backend}",
         }
 
     manager = get_service_manager()
-    stop_vllm = request.stop_unused if hasattr(request, 'stop_unused') else False
+    stop_vllm = request.stop_unused if hasattr(request, "stop_unused") else False
 
     try:
         if request.backend == "vllm":
@@ -2125,24 +2143,27 @@ async def admin_set_llm_backend(request: AdminBackendRequest, user: User = Depen
                 if start_result.get("status") != "ok":
                     raise HTTPException(
                         status_code=503,
-                        detail=f"Не удалось запустить vLLM: {start_result.get('message', 'Unknown error')}"
+                        detail=f"Не удалось запустить vLLM: {start_result.get('message', 'Unknown error')}",
                     )
 
                 # Ждём готовности vLLM (до 120 секунд)
                 logger.info("⏳ Ожидание готовности vLLM...")
                 import httpx
+
                 for i in range(60):  # 60 * 2 = 120 секунд
                     await asyncio.sleep(2)
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.get("http://localhost:11434/health", timeout=5.0)
                             if resp.status_code == 200:
-                                logger.info(f"✅ vLLM готов (попытка {i+1})")
+                                logger.info(f"✅ vLLM готов (попытка {i + 1})")
                                 break
-                    except:
+                    except Exception:
                         pass
                 else:
-                    raise HTTPException(status_code=503, detail="vLLM не стал доступен за 120 секунд")
+                    raise HTTPException(
+                        status_code=503, detail="vLLM не стал доступен за 120 секунд"
+                    )
 
             # Создаём новый vLLM сервис
             if VLLMLLMService is None:
@@ -2164,14 +2185,14 @@ async def admin_set_llm_backend(request: AdminBackendRequest, user: User = Depen
                 resource="config",
                 resource_id="llm_backend",
                 user_id=user.username,
-                details={"backend": "vllm", "model": getattr(llm_service, 'model_name', 'unknown')}
+                details={"backend": "vllm", "model": getattr(llm_service, "model_name", "unknown")},
             )
 
             return {
                 "status": "ok",
                 "backend": "vllm",
-                "model": getattr(llm_service, 'model_name', 'unknown'),
-                "message": "Переключено на vLLM"
+                "model": getattr(llm_service, "model_name", "unknown"),
+                "message": "Переключено на vLLM",
             }
 
         else:
@@ -2198,14 +2219,17 @@ async def admin_set_llm_backend(request: AdminBackendRequest, user: User = Depen
                 resource="config",
                 resource_id="llm_backend",
                 user_id=user.username,
-                details={"backend": "gemini", "model": getattr(llm_service, 'model_name', 'unknown')}
+                details={
+                    "backend": "gemini",
+                    "model": getattr(llm_service, "model_name", "unknown"),
+                },
             )
 
             return {
                 "status": "ok",
                 "backend": "gemini",
-                "model": getattr(llm_service, 'model_name', 'unknown'),
-                "message": "Переключено на Gemini" + (" (vLLM остановлен)" if stop_vllm else "")
+                "model": getattr(llm_service, "model_name", "unknown"),
+                "message": "Переключено на Gemini" + (" (vLLM остановлен)" if stop_vllm else ""),
             }
 
     except HTTPException:
@@ -2223,11 +2247,13 @@ async def _switch_to_cloud_provider(provider_id: str, stop_unused: bool, user: U
     if not provider_config:
         raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
 
-    if not provider_config.get('enabled'):
+    if not provider_config.get("enabled"):
         raise HTTPException(status_code=400, detail=f"Provider {provider_id} is disabled")
 
-    if not provider_config.get('api_key'):
-        raise HTTPException(status_code=400, detail=f"Provider {provider_id} has no API key configured")
+    if not provider_config.get("api_key"):
+        raise HTTPException(
+            status_code=400, detail=f"Provider {provider_id} has no API key configured"
+        )
 
     try:
         new_service = CloudLLMService(provider_config)
@@ -2256,18 +2282,18 @@ async def _switch_to_cloud_provider(provider_id: str, stop_unused: bool, user: U
             user_id=user.username,
             details={
                 "backend": f"cloud:{provider_id}",
-                "provider_type": provider_config.get('provider_type'),
-                "model": provider_config.get('model_name'),
-            }
+                "provider_type": provider_config.get("provider_type"),
+                "model": provider_config.get("model_name"),
+            },
         )
 
         return {
             "status": "ok",
             "backend": f"cloud:{provider_id}",
             "provider_id": provider_id,
-            "provider_type": provider_config.get('provider_type'),
-            "model": provider_config.get('model_name'),
-            "message": f"Switched to cloud provider: {provider_config.get('name')}"
+            "provider_type": provider_config.get("provider_type"),
+            "model": provider_config.get("model_name"),
+            "message": f"Switched to cloud provider: {provider_config.get('name')}",
         }
     except HTTPException:
         raise
@@ -2277,6 +2303,7 @@ async def _switch_to_cloud_provider(provider_id: str, stop_unused: bool, user: U
 
 
 # ============== Cloud LLM Providers API ==============
+
 
 @app.get("/admin/llm/providers")
 async def admin_list_cloud_providers(enabled_only: bool = False):
@@ -2290,9 +2317,7 @@ async def admin_list_cloud_providers(enabled_only: bool = False):
 
 @app.get("/admin/llm/providers/{provider_id}")
 async def admin_get_cloud_provider(
-    provider_id: str,
-    include_key: bool = False,
-    user: User = Depends(get_current_user)
+    provider_id: str, include_key: bool = False, user: User = Depends(get_current_user)
 ):
     """Get cloud provider by ID"""
     if include_key:
@@ -2307,8 +2332,7 @@ async def admin_get_cloud_provider(
 
 @app.post("/admin/llm/providers")
 async def admin_create_cloud_provider(
-    data: CloudProviderCreate,
-    user: User = Depends(get_current_user)
+    data: CloudProviderCreate, user: User = Depends(get_current_user)
 ):
     """Create new cloud LLM provider"""
     try:
@@ -2330,7 +2354,7 @@ async def admin_create_cloud_provider(
             resource="cloud_provider",
             resource_id=provider["id"],
             user_id=user.username,
-            details={"name": data.name, "provider_type": data.provider_type}
+            details={"name": data.name, "provider_type": data.provider_type},
         )
 
         return {"status": "ok", "provider": provider}
@@ -2340,9 +2364,7 @@ async def admin_create_cloud_provider(
 
 @app.put("/admin/llm/providers/{provider_id}")
 async def admin_update_cloud_provider(
-    provider_id: str,
-    data: CloudProviderUpdate,
-    user: User = Depends(get_current_user)
+    provider_id: str, data: CloudProviderUpdate, user: User = Depends(get_current_user)
 ):
     """Update cloud LLM provider"""
     # Filter out None values
@@ -2358,17 +2380,14 @@ async def admin_update_cloud_provider(
         resource="cloud_provider",
         resource_id=provider_id,
         user_id=user.username,
-        details=update_data
+        details=update_data,
     )
 
     return {"status": "ok", "provider": provider}
 
 
 @app.delete("/admin/llm/providers/{provider_id}")
-async def admin_delete_cloud_provider(
-    provider_id: str,
-    user: User = Depends(get_current_user)
-):
+async def admin_delete_cloud_provider(provider_id: str, user: User = Depends(get_current_user)):
     """Delete cloud LLM provider"""
     if not await async_cloud_provider_manager.delete_provider(provider_id):
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -2385,16 +2404,13 @@ async def admin_delete_cloud_provider(
 
 
 @app.post("/admin/llm/providers/{provider_id}/test")
-async def admin_test_cloud_provider(
-    provider_id: str,
-    user: User = Depends(get_current_user)
-):
+async def admin_test_cloud_provider(provider_id: str, user: User = Depends(get_current_user)):
     """Test cloud provider connection"""
     provider_config = await async_cloud_provider_manager.get_provider_with_key(provider_id)
     if not provider_config:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    if not provider_config.get('api_key'):
+    if not provider_config.get("api_key"):
         return {
             "status": "error",
             "available": False,
@@ -2429,8 +2445,7 @@ async def admin_test_cloud_provider(
 
 @app.post("/admin/llm/providers/{provider_id}/set-default")
 async def admin_set_default_cloud_provider(
-    provider_id: str,
-    user: User = Depends(get_current_user)
+    provider_id: str, user: User = Depends(get_current_user)
 ):
     """Set cloud provider as default"""
     if not await async_cloud_provider_manager.set_default(provider_id):
@@ -2441,7 +2456,7 @@ async def admin_set_default_cloud_provider(
         resource="cloud_provider",
         resource_id=provider_id,
         user_id=user.username,
-        details={"is_default": True}
+        details={"is_default": True},
     )
 
     return {"status": "ok", "message": f"Provider {provider_id} set as default"}
@@ -2450,11 +2465,12 @@ async def admin_set_default_cloud_provider(
 @app.get("/admin/llm/personas")
 async def admin_get_personas():
     """Получить список доступных персон"""
-    if llm_service and hasattr(llm_service, 'get_available_personas'):
+    if llm_service and hasattr(llm_service, "get_available_personas"):
         return {"personas": llm_service.get_available_personas()}
 
     # Fallback для Gemini LLM Service
     from vllm_llm_service import SECRETARY_PERSONAS
+
     return {
         "personas": {
             pid: {"name": p["name"], "full_name": p.get("full_name", p["name"])}
@@ -2467,8 +2483,8 @@ async def admin_get_personas():
 async def admin_get_current_persona():
     """Получить текущую персону"""
     if llm_service:
-        persona_id = getattr(llm_service, 'persona_id', 'gulya')
-        persona = getattr(llm_service, 'persona', {})
+        persona_id = getattr(llm_service, "persona_id", "gulya")
+        persona = getattr(llm_service, "persona", {})
         return {
             "id": persona_id,
             "name": persona.get("name", "Unknown"),
@@ -2479,7 +2495,7 @@ async def admin_get_current_persona():
 @app.post("/admin/llm/persona")
 async def admin_set_persona(request: AdminPersonaRequest, user: User = Depends(get_current_user)):
     """Установить персону"""
-    if llm_service and hasattr(llm_service, 'set_persona'):
+    if llm_service and hasattr(llm_service, "set_persona"):
         success = llm_service.set_persona(request.persona)
         if success:
             # Audit log
@@ -2488,7 +2504,7 @@ async def admin_set_persona(request: AdminPersonaRequest, user: User = Depends(g
                 resource="config",
                 resource_id="llm_persona",
                 user_id=user.username,
-                details={"persona": request.persona}
+                details={"persona": request.persona},
             )
             return {"status": "ok", "persona": request.persona}
         raise HTTPException(status_code=400, detail=f"Persona not found: {request.persona}")
@@ -2498,31 +2514,26 @@ async def admin_set_persona(request: AdminPersonaRequest, user: User = Depends(g
 @app.get("/admin/llm/params")
 async def admin_get_llm_params():
     """Получить параметры генерации LLM"""
-    if llm_service and hasattr(llm_service, 'runtime_params'):
+    if llm_service and hasattr(llm_service, "runtime_params"):
         return {"params": llm_service.runtime_params}
 
     # Возвращаем значения по умолчанию
     return {
-        "params": {
-            "temperature": 0.7,
-            "max_tokens": 512,
-            "top_p": 0.9,
-            "repetition_penalty": 1.1
-        }
+        "params": {"temperature": 0.7, "max_tokens": 512, "top_p": 0.9, "repetition_penalty": 1.1}
     }
 
 
 @app.post("/admin/llm/params")
 async def admin_set_llm_params(request: AdminLLMParamsRequest):
     """Установить параметры генерации LLM"""
-    if llm_service and hasattr(llm_service, 'set_params'):
+    if llm_service and hasattr(llm_service, "set_params"):
         params = {k: v for k, v in request.dict().items() if v is not None}
         llm_service.set_params(**params)
         return {"status": "ok", "params": llm_service.runtime_params}
 
     # Для vLLM сервиса без set_params - сохраняем в атрибуте
     if llm_service:
-        if not hasattr(llm_service, 'runtime_params'):
+        if not hasattr(llm_service, "runtime_params"):
             llm_service.runtime_params = {}
         params = {k: v for k, v in request.dict().items() if v is not None}
         llm_service.runtime_params.update(params)
@@ -2536,11 +2547,9 @@ async def admin_get_persona_prompt(persona: str):
     """Получить системный промпт для персоны"""
     try:
         from vllm_llm_service import SECRETARY_PERSONAS
+
         if persona in SECRETARY_PERSONAS:
-            return {
-                "persona": persona,
-                "prompt": SECRETARY_PERSONAS[persona]["prompt"]
-            }
+            return {"persona": persona, "prompt": SECRETARY_PERSONAS[persona]["prompt"]}
         raise HTTPException(status_code=404, detail=f"Persona not found: {persona}")
     except ImportError:
         raise HTTPException(status_code=503, detail="vLLM service not available")
@@ -2551,6 +2560,7 @@ async def admin_set_persona_prompt(persona: str, request: AdminLLMPromptRequest)
     """Установить системный промпт для персоны"""
     try:
         from vllm_llm_service import SECRETARY_PERSONAS
+
         if persona not in SECRETARY_PERSONAS:
             raise HTTPException(status_code=404, detail=f"Persona not found: {persona}")
 
@@ -2558,7 +2568,7 @@ async def admin_set_persona_prompt(persona: str, request: AdminLLMPromptRequest)
         SECRETARY_PERSONAS[persona]["prompt"] = request.prompt
 
         # Если это текущая персона - обновляем в сервисе
-        if llm_service and hasattr(llm_service, 'persona_id') and llm_service.persona_id == persona:
+        if llm_service and hasattr(llm_service, "persona_id") and llm_service.persona_id == persona:
             llm_service.system_prompt = request.prompt
 
         return {"status": "ok", "persona": persona}
@@ -2574,6 +2584,7 @@ async def admin_reset_persona_prompt(persona: str):
 
 
 # ============== TTS Enhanced Endpoints ==============
+
 
 @app.get("/admin/tts/xtts/params")
 async def admin_get_xtts_params():
@@ -2593,7 +2604,7 @@ async def admin_get_xtts_params():
             "speed": preset.speed,
             "gpt_cond_len": preset.gpt_cond_len,
             "gpt_cond_chunk_len": preset.gpt_cond_chunk_len,
-        }
+        },
     }
 
 
@@ -2602,7 +2613,7 @@ async def admin_set_xtts_params(request: AdminXTTSParamsRequest):
     """Установить параметры XTTS (для следующего синтеза)"""
     # Сохраняем как глобальные переопределения
     global xtts_param_overrides
-    if 'xtts_param_overrides' not in globals():
+    if "xtts_param_overrides" not in globals():
         xtts_param_overrides = {}
 
     params = {k: v for k, v in request.dict().items() if v is not None}
@@ -2618,8 +2629,8 @@ async def admin_get_piper_params():
         raise HTTPException(status_code=503, detail="Piper service not available")
 
     return {
-        "speed": getattr(piper_service, 'speed', 1.0),
-        "voices": piper_service.get_available_voices()
+        "speed": getattr(piper_service, "speed", 1.0),
+        "voices": piper_service.get_available_voices(),
     }
 
 
@@ -2638,7 +2649,7 @@ async def _reload_voice_presets():
     presets_dict = await async_preset_manager.get_custom()
     # Reload for all XTTS voice services
     for svc in [voice_service, gulya_voice_service]:
-        if svc and hasattr(svc, 'reload_presets'):
+        if svc and hasattr(svc, "reload_presets"):
             svc.reload_presets(presets_dict)
 
 
@@ -2680,9 +2691,10 @@ async def admin_delete_custom_preset(name: str):
 
 # ============== FAQ Endpoints ==============
 
+
 async def _reload_llm_faq():
     """Загружает FAQ из БД и обновляет LLM сервис."""
-    if llm_service and hasattr(llm_service, 'reload_faq'):
+    if llm_service and hasattr(llm_service, "reload_faq"):
         faq_dict = await async_faq_manager.get_all()
         llm_service.reload_faq(faq_dict)
 
@@ -2705,7 +2717,7 @@ async def admin_add_faq(request: AdminFAQRequest, user: User = Depends(get_curre
         resource="faq",
         resource_id=request.trigger,
         user_id=user.username,
-        details={"response": request.response[:100]}
+        details={"response": request.response[:100]},
     )
 
     # Перезагружаем FAQ в LLM сервисе из БД
@@ -2715,7 +2727,9 @@ async def admin_add_faq(request: AdminFAQRequest, user: User = Depends(get_curre
 
 
 @app.put("/admin/faq/{trigger}")
-async def admin_update_faq(trigger: str, request: AdminFAQRequest, user: User = Depends(get_current_user)):
+async def admin_update_faq(
+    trigger: str, request: AdminFAQRequest, user: User = Depends(get_current_user)
+):
     """Обновить FAQ запись"""
     result = await async_faq_manager.update(trigger, request.trigger, request.response)
     if not result:
@@ -2727,7 +2741,7 @@ async def admin_update_faq(trigger: str, request: AdminFAQRequest, user: User = 
         resource="faq",
         resource_id=request.trigger,
         user_id=user.username,
-        details={"old_trigger": trigger, "response": request.response[:100]}
+        details={"old_trigger": trigger, "response": request.response[:100]},
     )
 
     await _reload_llm_faq()
@@ -2743,10 +2757,7 @@ async def admin_delete_faq(trigger: str, user: User = Depends(get_current_user))
 
     # Audit log
     await async_audit_logger.log(
-        action="delete",
-        resource="faq",
-        resource_id=trigger,
-        user_id=user.username
+        action="delete", resource="faq", resource_id=trigger, user_id=user.username
     )
 
     await _reload_llm_faq()
@@ -2758,7 +2769,7 @@ async def admin_delete_faq(trigger: str, user: User = Depends(get_current_user))
 async def admin_reload_faq():
     """Перезагрузить FAQ из БД"""
     await _reload_llm_faq()
-    faq_count = len(llm_service.faq) if llm_service and hasattr(llm_service, 'faq') else 0
+    faq_count = len(llm_service.faq) if llm_service and hasattr(llm_service, "faq") else 0
     return {"status": "ok", "count": faq_count}
 
 
@@ -2771,7 +2782,7 @@ async def admin_save_faq():
 @app.post("/admin/faq/test")
 async def admin_test_faq(request: AdminFAQTestRequest):
     """Тестировать FAQ поиск"""
-    if llm_service and hasattr(llm_service, '_check_faq'):
+    if llm_service and hasattr(llm_service, "_check_faq"):
         result = llm_service._check_faq(request.text)
         if result:
             return {"match": True, "response": result}
@@ -2780,6 +2791,7 @@ async def admin_test_faq(request: AdminFAQTestRequest):
 
 
 # ============== Fine-tuning Endpoints ==============
+
 
 @app.post("/admin/finetune/dataset/upload")
 async def admin_upload_dataset(file: UploadFile = File(...)):
@@ -2886,7 +2898,7 @@ async def admin_get_finetune_config():
                 "num_epochs": p.num_epochs,
             }
             for name, p in manager.get_config_presets().items()
-        }
+        },
     }
 
 
@@ -2964,7 +2976,7 @@ async def admin_stream_training_log():
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
@@ -2985,7 +2997,7 @@ async def admin_list_adapters():
             }
             for a in adapters
         ],
-        "active": manager.active_adapter
+        "active": manager.active_adapter,
     }
 
 
@@ -3004,6 +3016,7 @@ async def admin_delete_adapter(name: str):
 
 
 # ============== TTS Finetune Endpoints ==============
+
 
 @app.get("/admin/tts-finetune/config")
 async def admin_get_tts_finetune_config():
@@ -3032,12 +3045,15 @@ async def admin_upload_tts_sample(file: UploadFile = File(...)):
     manager = get_tts_finetune_manager()
     content = await file.read()
     sample = manager.add_sample(file.filename, content)
-    return {"status": "ok", "sample": {
-        "filename": sample.filename,
-        "path": sample.path,
-        "duration_sec": sample.duration_sec,
-        "size_kb": sample.size_kb
-    }}
+    return {
+        "status": "ok",
+        "sample": {
+            "filename": sample.filename,
+            "path": sample.path,
+            "duration_sec": sample.duration_sec,
+            "size_kb": sample.size_kb,
+        },
+    }
 
 
 @app.delete("/admin/tts-finetune/samples/{filename}")
@@ -3057,11 +3073,14 @@ async def admin_update_tts_transcript(filename: str, request: dict):
     sample = manager.update_transcript(filename, transcript)
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found")
-    return {"status": "ok", "sample": {
-        "filename": sample.filename,
-        "transcript": sample.transcript,
-        "transcript_edited": sample.transcript_edited
-    }}
+    return {
+        "status": "ok",
+        "sample": {
+            "filename": sample.filename,
+            "transcript": sample.transcript,
+            "transcript_edited": sample.transcript_edited,
+        },
+    }
 
 
 @app.post("/admin/tts-finetune/transcribe")
@@ -3130,6 +3149,7 @@ async def admin_get_tts_trained_models():
 
 # ============== Monitoring Endpoints ==============
 
+
 @app.get("/admin/monitor/gpu")
 async def admin_get_gpu_stats():
     """Получить статистику GPU"""
@@ -3152,30 +3172,39 @@ async def admin_get_gpu_stats():
             temperature = None
             try:
                 import subprocess
+
                 result = subprocess.run(
-                    ['nvidia-smi', f'--id={i}', '--query-gpu=utilization.gpu,temperature.gpu',
-                     '--format=csv,noheader,nounits'],
-                    capture_output=True, text=True, timeout=5
+                    [
+                        "nvidia-smi",
+                        f"--id={i}",
+                        "--query-gpu=utilization.gpu,temperature.gpu",
+                        "--format=csv,noheader,nounits",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
                 if result.returncode == 0:
-                    parts = result.stdout.strip().split(',')
+                    parts = result.stdout.strip().split(",")
                     if len(parts) >= 2:
                         utilization = int(parts[0].strip())
                         temperature = int(parts[1].strip())
             except Exception:
                 pass
 
-            gpus.append({
-                "id": i,
-                "name": name,
-                "total_memory_gb": round(total_memory, 2),
-                "allocated_gb": round(allocated, 2),
-                "reserved_gb": round(reserved, 2),
-                "free_gb": round(total_memory - reserved, 2),
-                "utilization_percent": utilization,
-                "temperature_c": temperature,
-                "compute_capability": f"{props.major}.{props.minor}",
-            })
+            gpus.append(
+                {
+                    "id": i,
+                    "name": name,
+                    "total_memory_gb": round(total_memory, 2),
+                    "allocated_gb": round(allocated, 2),
+                    "reserved_gb": round(reserved, 2),
+                    "free_gb": round(total_memory - reserved, 2),
+                    "utilization_percent": utilization,
+                    "temperature_c": temperature,
+                    "compute_capability": f"{props.major}.{props.minor}",
+                }
+            )
         except Exception as e:
             logger.warning(f"Error getting GPU {i} stats: {e}")
 
@@ -3195,11 +3224,13 @@ async def admin_stream_gpu_stats():
                     try:
                         allocated = torch.cuda.memory_allocated(i) / (1024**3)
                         reserved = torch.cuda.memory_reserved(i) / (1024**3)
-                        gpus.append({
-                            "id": i,
-                            "allocated_gb": round(allocated, 2),
-                            "reserved_gb": round(reserved, 2),
-                        })
+                        gpus.append(
+                            {
+                                "id": i,
+                                "allocated_gb": round(allocated, 2),
+                                "reserved_gb": round(reserved, 2),
+                            }
+                        )
                     except Exception:
                         pass
 
@@ -3212,7 +3243,7 @@ async def admin_stream_gpu_stats():
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
@@ -3220,11 +3251,7 @@ async def admin_stream_gpu_stats():
 async def admin_get_health():
     """Расширенная проверка здоровья всех компонентов"""
     manager = get_service_manager()
-    health = {
-        "timestamp": datetime.now().isoformat(),
-        "overall": "healthy",
-        "components": {}
-    }
+    health = {"timestamp": datetime.now().isoformat(), "overall": "healthy", "components": {}}
 
     # Orchestrator
     health["components"]["orchestrator"] = {"status": "healthy", "uptime": "running"}
@@ -3232,7 +3259,7 @@ async def admin_get_health():
     # LLM
     if llm_service:
         try:
-            if hasattr(llm_service, 'is_available') and llm_service.is_available():
+            if hasattr(llm_service, "is_available") and llm_service.is_available():
                 health["components"]["llm"] = {"status": "healthy", "backend": "vllm"}
             else:
                 health["components"]["llm"] = {"status": "healthy", "backend": "gemini"}
@@ -3283,8 +3310,8 @@ async def admin_get_metrics():
     # LLM метрики
     if llm_service:
         metrics["llm"] = {
-            "history_length": len(getattr(llm_service, 'conversation_history', [])),
-            "faq_count": len(getattr(llm_service, 'faq', {})),
+            "history_length": len(getattr(llm_service, "conversation_history", [])),
+            "faq_count": len(getattr(llm_service, "faq", {})),
         }
 
     return metrics
@@ -3294,10 +3321,7 @@ async def admin_get_metrics():
 async def admin_get_errors():
     """Получить последние ошибки"""
     manager = get_service_manager()
-    return {
-        "errors": manager.last_errors,
-        "timestamp": datetime.now().isoformat()
-    }
+    return {"errors": manager.last_errors, "timestamp": datetime.now().isoformat()}
 
 
 @app.post("/admin/monitor/metrics/reset")
@@ -3319,6 +3343,7 @@ async def admin_get_system_status():
 
 
 # ============== Chat Endpoints ==============
+
 
 @app.get("/admin/chat/sessions")
 async def admin_list_chat_sessions():
@@ -3346,7 +3371,9 @@ async def admin_get_chat_session(session_id: str):
 @app.put("/admin/chat/sessions/{session_id}")
 async def admin_update_chat_session(session_id: str, request: UpdateSessionRequest):
     """Обновить чат-сессию"""
-    session = await async_chat_manager.update_session(session_id, request.title, request.system_prompt)
+    session = await async_chat_manager.update_session(
+        session_id, request.title, request.system_prompt
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"session": session}
@@ -3371,21 +3398,21 @@ async def admin_send_chat_message(session_id: str, request: SendMessageRequest):
         raise HTTPException(status_code=503, detail="LLM service not available")
 
     # Добавляем сообщение пользователя
-    user_msg = await async_chat_manager.add_message(session_id, 'user', request.content)
+    user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
 
     # Получаем историю для LLM
     default_prompt = None
-    if hasattr(llm_service, 'get_system_prompt'):
+    if hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
     messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
 
     # Генерируем ответ
     try:
         response_text = llm_service.generate_response_from_messages(messages, stream=False)
-        if hasattr(response_text, '__iter__') and not isinstance(response_text, str):
-            response_text = ''.join(response_text)
+        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+            response_text = "".join(response_text)
 
-        assistant_msg = await async_chat_manager.add_message(session_id, 'assistant', response_text)
+        assistant_msg = await async_chat_manager.add_message(session_id, "assistant", response_text)
         return {"message": user_msg, "response": assistant_msg}
 
     except Exception as e:
@@ -3404,11 +3431,11 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
         raise HTTPException(status_code=503, detail="LLM service not available")
 
     # Добавляем сообщение пользователя
-    user_msg = await async_chat_manager.add_message(session_id, 'user', request.content)
+    user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
 
     # Получаем историю для LLM
     default_prompt = None
-    if hasattr(llm_service, 'get_system_prompt'):
+    if hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
     messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
 
@@ -3424,8 +3451,10 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             # Сохраняем полный ответ
-            response_text = ''.join(full_response)
-            assistant_msg = await async_chat_manager.add_message(session_id, 'assistant', response_text)
+            response_text = "".join(full_response)
+            assistant_msg = await async_chat_manager.add_message(
+                session_id, "assistant", response_text
+            )
 
             # Отправляем финальное сообщение
             yield f"data: {json.dumps({'type': 'assistant_message', 'message': assistant_msg}, ensure_ascii=False)}\n\n"
@@ -3438,7 +3467,7 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
     return StreamingResponse(
         generate_stream(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
@@ -3451,40 +3480,38 @@ async def admin_edit_chat_message(session_id: str, message_id: str, request: Edi
 
     # Находим сообщение
     message = None
-    message_index = -1
-    for i, msg in enumerate(session['messages']):
-        if msg['id'] == message_id:
+    for msg in session["messages"]:
+        if msg["id"] == message_id:
             message = msg
-            message_index = i
             break
 
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    if message['role'] != 'user':
+    if message["role"] != "user":
         raise HTTPException(status_code=400, detail="Can only edit user messages")
 
     # Удаляем это сообщение и все последующие
     await async_chat_manager.delete_message(session_id, message_id)
 
     # Добавляем отредактированное сообщение
-    user_msg = await async_chat_manager.add_message(session_id, 'user', request.content)
+    user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
 
     # Если был ответ после этого сообщения - генерируем новый
     if not llm_service:
         return {"message": user_msg}
 
     default_prompt = None
-    if hasattr(llm_service, 'get_system_prompt'):
+    if hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
     messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
 
     try:
         response_text = llm_service.generate_response_from_messages(messages, stream=False)
-        if hasattr(response_text, '__iter__') and not isinstance(response_text, str):
-            response_text = ''.join(response_text)
+        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+            response_text = "".join(response_text)
 
-        assistant_msg = await async_chat_manager.add_message(session_id, 'assistant', response_text)
+        assistant_msg = await async_chat_manager.add_message(session_id, "assistant", response_text)
         return {"message": user_msg, "response": assistant_msg}
 
     except Exception as e:
@@ -3512,8 +3539,8 @@ async def admin_regenerate_chat_response(session_id: str, message_id: str):
 
     # Находим сообщение пользователя
     message_index = -1
-    for i, msg in enumerate(session['messages']):
-        if msg['id'] == message_id:
+    for i, msg in enumerate(session["messages"]):
+        if msg["id"] == message_id:
             message_index = i
             break
 
@@ -3521,22 +3548,22 @@ async def admin_regenerate_chat_response(session_id: str, message_id: str):
         raise HTTPException(status_code=404, detail="Message not found")
 
     # Если есть сообщение после этого - удаляем его (ответ ассистента)
-    if message_index + 1 < len(session['messages']):
-        next_msg = session['messages'][message_index + 1]
-        await async_chat_manager.delete_message(session_id, next_msg['id'])
+    if message_index + 1 < len(session["messages"]):
+        next_msg = session["messages"][message_index + 1]
+        await async_chat_manager.delete_message(session_id, next_msg["id"])
 
     # Генерируем новый ответ
     default_prompt = None
-    if hasattr(llm_service, 'get_system_prompt'):
+    if hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
     llm_messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
 
     try:
         response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
-        if hasattr(response_text, '__iter__') and not isinstance(response_text, str):
-            response_text = ''.join(response_text)
+        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+            response_text = "".join(response_text)
 
-        assistant_msg = await async_chat_manager.add_message(session_id, 'assistant', response_text)
+        assistant_msg = await async_chat_manager.add_message(session_id, "assistant", response_text)
         return {"response": assistant_msg}
 
     except Exception as e:
@@ -3545,6 +3572,7 @@ async def admin_regenerate_chat_response(session_id: str, message_id: str):
 
 
 # ============== Model Management API ==============
+
 
 @app.get("/admin/models/list")
 async def admin_list_models():
@@ -3556,8 +3584,8 @@ async def admin_list_models():
 @app.post("/admin/models/scan")
 async def admin_scan_models(request: Request):
     """Запустить сканирование моделей"""
-    data = await request.json() if request.headers.get('content-type') == 'application/json' else {}
-    include_system = data.get('include_system', False)
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    include_system = data.get("include_system", False)
 
     manager = get_model_manager()
     if manager.scan_all_models(include_system=include_system):
@@ -3585,8 +3613,8 @@ async def admin_scan_status():
 async def admin_download_model(request: Request):
     """Скачать модель с HuggingFace"""
     data = await request.json()
-    repo_id = data.get('repo_id')
-    revision = data.get('revision', 'main')
+    repo_id = data.get("repo_id")
+    revision = data.get("revision", "main")
 
     if not repo_id:
         raise HTTPException(status_code=400, detail="repo_id required")
@@ -3618,10 +3646,10 @@ async def admin_delete_model(path: str):
     """Удалить модель"""
     manager = get_model_manager()
     result = manager.delete_model(path)
-    if result['status'] == 'ok':
+    if result["status"] == "ok":
         return result
     else:
-        raise HTTPException(status_code=400, detail=result.get('error', 'Delete failed'))
+        raise HTTPException(status_code=400, detail=result.get("error", "Delete failed"))
 
 
 @app.get("/admin/models/search")
@@ -3644,6 +3672,7 @@ async def admin_get_model_details(repo_id: str):
 
 
 # ============== Widget Config Endpoints ==============
+
 
 @app.get("/admin/widget/config")
 async def admin_get_widget_config():
@@ -3669,7 +3698,9 @@ async def admin_get_widget_config():
 
 
 @app.post("/admin/widget/config")
-async def admin_save_widget_config(request: AdminWidgetConfigRequest, user: User = Depends(get_current_user)):
+async def admin_save_widget_config(
+    request: AdminWidgetConfigRequest, user: User = Depends(get_current_user)
+):
     """Сохранить конфигурацию виджета (legacy endpoint - saves to 'default' instance)"""
     config = {
         "enabled": request.enabled,
@@ -3679,7 +3710,7 @@ async def admin_save_widget_config(request: AdminWidgetConfigRequest, user: User
         "primary_color": request.primary_color,
         "position": request.position,
         "allowed_domains": request.allowed_domains,
-        "tunnel_url": request.tunnel_url
+        "tunnel_url": request.tunnel_url,
     }
 
     # Save to legacy config (backward compatibility)
@@ -3692,10 +3723,7 @@ async def admin_save_widget_config(request: AdminWidgetConfigRequest, user: User
     else:
         # Create default instance if it doesn't exist
         await async_widget_instance_manager.create_instance(
-            name="Default Widget",
-            description="Default widget (legacy)",
-            id="default",
-            **config
+            name="Default Widget", description="Default widget (legacy)", id="default", **config
         )
 
     # Audit log
@@ -3704,10 +3732,15 @@ async def admin_save_widget_config(request: AdminWidgetConfigRequest, user: User
         resource="config",
         resource_id="widget",
         user_id=user.username,
-        details={"enabled": config["enabled"], "title": config["title"]}
+        details={"enabled": config["enabled"], "title": config["title"]},
     )
 
     return {"status": "ok", "config": config}
+
+
+def _escape_js_string(s: str) -> str:
+    """Escape a string for safe use in JavaScript."""
+    return s.replace("'", "\\'")
 
 
 @app.get("/widget.js")
@@ -3728,7 +3761,7 @@ async def get_widget_script(request: Request, instance: Optional[str] = None):
             return Response(
                 content=f"// Widget instance '{instance}' not found",
                 media_type="application/javascript",
-                status_code=404
+                status_code=404,
             )
     else:
         # Try default instance first, fallback to legacy config
@@ -3741,20 +3774,19 @@ async def get_widget_script(request: Request, instance: Optional[str] = None):
 
     # Проверяем включен ли виджет
     if not config.get("enabled", False):
-        return Response(
-            content="// Widget is disabled",
-            media_type="application/javascript"
-        )
+        return Response(content="// Widget is disabled", media_type="application/javascript")
 
     # Проверяем домен (если указаны разрешенные)
     origin = request.headers.get("origin", "") or request.headers.get("referer", "")
     allowed_domains = config.get("allowed_domains", [])
     if allowed_domains and origin:
-        origin_domain = origin.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+        origin_domain = (
+            origin.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+        )
         if not any(d in origin_domain for d in allowed_domains):
             return Response(
                 content=f"// Widget not allowed for domain: {origin_domain}",
-                media_type="application/javascript"
+                media_type="application/javascript",
             )
 
     # Определяем API URL
@@ -3769,10 +3801,10 @@ async def get_widget_script(request: Request, instance: Optional[str] = None):
         return Response(
             content="// Widget script not found",
             media_type="application/javascript",
-            status_code=404
+            status_code=404,
         )
 
-    widget_js = widget_path.read_text(encoding='utf-8')
+    widget_js = widget_path.read_text(encoding="utf-8")
 
     # Генерируем скрипт с настройками
     instance_id = instance or config.get("id", "default")
@@ -3783,8 +3815,8 @@ window.aiChatSettings = {{
   apiUrl: '{api_url}',
   instanceId: '{instance_id}',
   title: '{config.get("title", "AI Ассистент")}',
-  greeting: '{(config.get("greeting") or "").replace("'", "\\'")}',
-  placeholder: '{(config.get("placeholder") or "").replace("'", "\\'")}',
+  greeting: '{_escape_js_string(config.get("greeting") or "")}',
+  placeholder: '{_escape_js_string(config.get("placeholder") or "")}',
   primaryColor: '{config.get("primary_color", "#6366f1")}',
   position: '{config.get("position", "right")}'
 }};
@@ -3797,8 +3829,8 @@ window.aiChatSettings = {{
         media_type="application/javascript",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Access-Control-Allow-Origin": "*"
-        }
+            "Access-Control-Allow-Origin": "*",
+        },
     )
 
 
@@ -3844,7 +3876,9 @@ async def admin_get_telegram_config():
 
 
 @app.post("/admin/telegram/config")
-async def admin_save_telegram_config(request: AdminTelegramConfigRequest, user: User = Depends(get_current_user)):
+async def admin_save_telegram_config(
+    request: AdminTelegramConfigRequest, user: User = Depends(get_current_user)
+):
     """Сохранить конфигурацию Telegram бота (legacy endpoint - saves to 'default' instance)"""
     # Load existing to preserve token if not provided
     existing_instance = await async_bot_instance_manager.get_instance_with_token("default")
@@ -3866,7 +3900,7 @@ async def admin_save_telegram_config(request: AdminTelegramConfigRequest, user: 
         "welcome_message": request.welcome_message,
         "unauthorized_message": request.unauthorized_message,
         "error_message": request.error_message,
-        "typing_enabled": request.typing_enabled
+        "typing_enabled": request.typing_enabled,
     }
 
     # Save to legacy config (backward compatibility)
@@ -3892,7 +3926,7 @@ async def admin_save_telegram_config(request: AdminTelegramConfigRequest, user: 
             name="Default Bot",
             description="Default Telegram bot (legacy)",
             id="default",
-            **instance_data
+            **instance_data,
         )
 
     # Audit log
@@ -3901,7 +3935,7 @@ async def admin_save_telegram_config(request: AdminTelegramConfigRequest, user: 
         resource="config",
         resource_id="telegram",
         user_id=user.username,
-        details={"enabled": config["enabled"]}
+        details={"enabled": config["enabled"]},
     )
 
     return {"status": "ok", "config": config}
@@ -3939,7 +3973,7 @@ async def admin_get_telegram_status():
             "active_sessions": sessions_count,
             "allowed_users_count": len(config.get("allowed_users", [])),
             "admin_users_count": len(config.get("admin_users", [])),
-            "pid": _telegram_bot_process.pid if _telegram_bot_process else None
+            "pid": _telegram_bot_process.pid if _telegram_bot_process else None,
         }
     }
 
@@ -3963,6 +3997,7 @@ async def admin_start_telegram_bot():
 
     # Start bot process
     import subprocess
+
     bot_script = Path(__file__).parent / "telegram_bot_service.py"
     bot_log = Path(__file__).parent / "logs" / "telegram_bot.log"
 
@@ -3980,7 +4015,7 @@ async def admin_start_telegram_bot():
             cwd=str(Path(__file__).parent),
             stdout=log_file,
             stderr=subprocess.STDOUT,  # Redirect stderr to stdout (both to log file)
-            start_new_session=True  # Detach from parent process group
+            start_new_session=True,  # Detach from parent process group
         )
         logger.info(f"Started Telegram bot with PID {_telegram_bot_process.pid}, logs: {bot_log}")
         return {"status": "started", "pid": _telegram_bot_process.pid}
@@ -4037,6 +4072,7 @@ async def admin_get_telegram_sessions():
 
 # ============== Telegram Bot Instances API ==============
 
+
 class BotInstanceCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
@@ -4091,7 +4127,9 @@ async def admin_list_bot_instances(enabled_only: bool = False):
 
 
 @app.post("/admin/telegram/instances")
-async def admin_create_bot_instance(request: BotInstanceCreateRequest, user: User = Depends(get_current_user)):
+async def admin_create_bot_instance(
+    request: BotInstanceCreateRequest, user: User = Depends(get_current_user)
+):
     """Create a new Telegram bot instance"""
     # Convert request to dict, removing None values
     kwargs = {k: v for k, v in request.dict().items() if v is not None}
@@ -4104,7 +4142,7 @@ async def admin_create_bot_instance(request: BotInstanceCreateRequest, user: Use
         resource="bot_instance",
         resource_id=instance["id"],
         user_id=user.username,
-        details={"name": instance["name"]}
+        details={"name": instance["name"]},
     )
 
     return {"instance": instance}
@@ -4131,9 +4169,7 @@ async def admin_get_bot_instance(instance_id: str, include_token: bool = False):
 
 @app.put("/admin/telegram/instances/{instance_id}")
 async def admin_update_bot_instance(
-    instance_id: str,
-    request: BotInstanceUpdateRequest,
-    user: User = Depends(get_current_user)
+    instance_id: str, request: BotInstanceUpdateRequest, user: User = Depends(get_current_user)
 ):
     """Update a bot instance"""
     # Check if exists
@@ -4152,7 +4188,7 @@ async def admin_update_bot_instance(
         resource="bot_instance",
         resource_id=instance_id,
         user_id=user.username,
-        details={"name": instance.get("name")}
+        details={"name": instance.get("name")},
     )
 
     return {"instance": instance}
@@ -4170,10 +4206,7 @@ async def admin_delete_bot_instance(instance_id: str, user: User = Depends(get_c
 
     # Audit log
     await async_audit_logger.log(
-        action="delete",
-        resource="bot_instance",
-        resource_id=instance_id,
-        user_id=user.username
+        action="delete", resource="bot_instance", resource_id=instance_id, user_id=user.username
     )
 
     return {"status": "ok", "message": f"Bot instance {instance_id} deleted"}
@@ -4277,6 +4310,7 @@ async def admin_get_bot_instance_logs(instance_id: str, lines: int = 100):
 
 # ============== Widget Instances API ==============
 
+
 class WidgetInstanceCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
@@ -4325,7 +4359,9 @@ async def admin_list_widget_instances(enabled_only: bool = False):
 
 
 @app.post("/admin/widget/instances")
-async def admin_create_widget_instance(request: WidgetInstanceCreateRequest, user: User = Depends(get_current_user)):
+async def admin_create_widget_instance(
+    request: WidgetInstanceCreateRequest, user: User = Depends(get_current_user)
+):
     """Create a new widget instance"""
     kwargs = {k: v for k, v in request.dict().items() if v is not None}
 
@@ -4337,7 +4373,7 @@ async def admin_create_widget_instance(request: WidgetInstanceCreateRequest, use
         resource="widget_instance",
         resource_id=instance["id"],
         user_id=user.username,
-        details={"name": instance["name"]}
+        details={"name": instance["name"]},
     )
 
     return {"instance": instance}
@@ -4355,9 +4391,7 @@ async def admin_get_widget_instance(instance_id: str):
 
 @app.put("/admin/widget/instances/{instance_id}")
 async def admin_update_widget_instance(
-    instance_id: str,
-    request: WidgetInstanceUpdateRequest,
-    user: User = Depends(get_current_user)
+    instance_id: str, request: WidgetInstanceUpdateRequest, user: User = Depends(get_current_user)
 ):
     """Update a widget instance"""
     existing = await async_widget_instance_manager.get_instance(instance_id)
@@ -4374,7 +4408,7 @@ async def admin_update_widget_instance(
         resource="widget_instance",
         resource_id=instance_id,
         user_id=user.username,
-        details={"name": instance.get("name")}
+        details={"name": instance.get("name")},
     )
 
     return {"instance": instance}
@@ -4389,16 +4423,14 @@ async def admin_delete_widget_instance(instance_id: str, user: User = Depends(ge
 
     # Audit log
     await async_audit_logger.log(
-        action="delete",
-        resource="widget_instance",
-        resource_id=instance_id,
-        user_id=user.username
+        action="delete", resource="widget_instance", resource_id=instance_id, user_id=user.username
     )
 
     return {"status": "ok", "message": f"Widget instance {instance_id} deleted"}
 
 
 # ============== Audit Log API ==============
+
 
 @app.get("/admin/audit/logs")
 async def admin_get_audit_logs(
@@ -4412,6 +4444,7 @@ async def admin_get_audit_logs(
 ):
     """Get audit logs with optional filters."""
     from datetime import datetime
+
     from db.database import AsyncSessionLocal
     from db.repositories import AuditRepository
 
@@ -4420,12 +4453,12 @@ async def admin_get_audit_logs(
     to_dt = None
     if from_date:
         try:
-            from_dt = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
+            from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
         except ValueError:
             pass
     if to_date:
         try:
-            to_dt = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
+            to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
         except ValueError:
             pass
 
@@ -4462,23 +4495,24 @@ async def admin_export_audit_logs(
     format: str = "json",  # json or csv
 ):
     """Export audit logs as JSON or CSV."""
-    from datetime import datetime
-    from db.database import AsyncSessionLocal
-    from db.repositories import AuditRepository
     import csv
     import io
+    from datetime import datetime
+
+    from db.database import AsyncSessionLocal
+    from db.repositories import AuditRepository
 
     # Parse dates
     from_dt = None
     to_dt = None
     if from_date:
         try:
-            from_dt = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
+            from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
         except ValueError:
             pass
     if to_date:
         try:
-            to_dt = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
+            to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
         except ValueError:
             pass
 
@@ -4497,7 +4531,7 @@ async def admin_export_audit_logs(
         return Response(
             content=csv_content,
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=audit_logs.csv"}
+            headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
         )
     else:
         # Return as JSON
@@ -4536,14 +4570,12 @@ if DEV_MODE:
             try:
                 resp = await client.get(url, headers=dict(request.headers))
                 return Response(
-                    content=resp.content,
-                    status_code=resp.status_code,
-                    headers=dict(resp.headers)
+                    content=resp.content, status_code=resp.status_code, headers=dict(resp.headers)
                 )
             except httpx.ConnectError:
                 return Response(
                     content=b"Vite dev server not running. Start with: cd admin && npm run dev",
-                    status_code=503
+                    status_code=503,
                 )
 
     @app.get("/admin")
@@ -4557,19 +4589,15 @@ else:
     admin_dist_path = Path(__file__).parent / "admin" / "dist"
     if admin_dist_path.exists():
         from fastapi.staticfiles import StaticFiles
+
         app.mount("/admin", StaticFiles(directory=str(admin_dist_path), html=True), name="admin")
         logger.info(f"📂 Vue admin mounted at /admin from {admin_dist_path}")
 
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     port = int(os.getenv("ORCHESTRATOR_PORT", 8002))
     logger.info(f"🎯 Запуск Orchestrator на порту {port}")
-    uvicorn.run(
-        "orchestrator:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False,
-        log_level="info"
-    )
+    uvicorn.run("orchestrator:app", host="0.0.0.0", port=port, reload=False, log_level="info")

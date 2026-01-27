@@ -1,0 +1,102 @@
+# =============================================================================
+# AI Secretary System - Pre-commit Hooks
+# =============================================================================
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Manual run:
+#   pre-commit run --all-files
+#
+# =============================================================================
+
+repos:
+  # ---------------------------------------------------------------------------
+  # General
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(admin/dist/|web-widget/dist/)
+      - id: end-of-file-fixer
+        exclude: ^(admin/dist/|web-widget/dist/)
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom tags in docker-compose
+      - id: check-json
+        exclude: ^(admin/node_modules/|package-lock\.json)
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # ---------------------------------------------------------------------------
+  # Python - Ruff (Linter + Formatter)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(admin/|finetune/datasets/|models/)
+      - id: ruff-format
+        exclude: ^(admin/|finetune/datasets/|models/)
+
+  # ---------------------------------------------------------------------------
+  # Python - MyPy (Type Checking)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - types-redis
+          - types-aiofiles
+          - sqlalchemy[mypy]
+        exclude: ^(admin/|finetune/|tests/|models/)
+        # Only run on core modules for now
+        files: ^(db/|auth_manager\.py|service_manager\.py)
+
+  # ---------------------------------------------------------------------------
+  # JavaScript/TypeScript/Vue - ESLint + Prettier
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd admin && npm run lint'
+        language: system
+        files: ^admin/src/.*\.(vue|ts|js)$
+        pass_filenames: false
+
+  # ---------------------------------------------------------------------------
+  # Security (optional - requires baseline file)
+  # ---------------------------------------------------------------------------
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.4.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       args: ['--baseline', '.secrets.baseline']
+  #       exclude: ^(admin/node_modules/|\.env\.docker|package-lock\.json)
+
+  # ---------------------------------------------------------------------------
+  # Docker
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3013]  # Ignore apt-get version pinning
+
+# =============================================================================
+# CI Configuration
+# =============================================================================
+ci:
+  autofix_prs: true
+  autoupdate_schedule: monthly
+  skip:
+    - eslint  # Requires npm
+    - mypy    # Requires additional dependencies

@@ -3,16 +3,19 @@ Authentication Manager for Admin Panel
 
 Simple JWT-based authentication with configurable credentials.
 """
-import os
-import jwt
+
 import hashlib
+import logging
+import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Dict, Optional
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from fastapi import HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", None)
 
 # If no hash provided, use default password "admin" (for development only)
 if not ADMIN_PASSWORD_HASH:
-    ADMIN_PASSWORD_HASH = hashlib.sha256("admin".encode()).hexdigest()
+    ADMIN_PASSWORD_HASH = hashlib.sha256(b"admin").hexdigest()
     logger.warning("⚠️ Using default admin password. Set ADMIN_PASSWORD_HASH in production!")
 
 
@@ -82,7 +85,7 @@ def create_access_token(username: str, role: str = "admin") -> tuple[str, int]:
         "sub": username,
         "role": role,
         "exp": int(expires.timestamp()),
-        "iat": int(now.timestamp())
+        "iat": int(now.timestamp()),
     }
 
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -123,7 +126,7 @@ def authenticate_user(username: str, password: str) -> Optional[User]:
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[User]:
     """
     Dependency to get the current authenticated user.
@@ -135,7 +138,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     token_payload = decode_token(credentials.credentials)
@@ -143,14 +146,14 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return User(username=token_payload.sub, role=token_payload.role)
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[User]:
     """
     Dependency to get the current user if authenticated, None otherwise.
@@ -172,10 +175,7 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     Dependency to require admin role.
     """
     if user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
 
 
@@ -188,5 +188,5 @@ def get_auth_status() -> Dict:
     return {
         "enabled": AUTH_ENABLED,
         "jwt_expiration_hours": JWT_EXPIRATION_HOURS,
-        "username": ADMIN_USERNAME
+        "username": ADMIN_USERNAME,
     }

@@ -5,7 +5,7 @@ Cloud LLM provider repository for managing cloud provider configurations.
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,14 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import CloudLLMProvider
 from db.repositories.base import BaseRepository
 
+
 logger = logging.getLogger(__name__)
 
 
 def slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
     return text[:50]
 
 
@@ -83,10 +84,10 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         api_key: str = None,
         base_url: str = None,
         model_name: str = "",
-        **kwargs
+        **kwargs,
     ) -> dict:
         """Create new provider."""
-        provider_id = kwargs.pop('id', None) or self._generate_id(name, provider_type)
+        provider_id = kwargs.pop("id", None) or self._generate_id(name, provider_type)
 
         # Check if ID exists
         existing = await self.session.get(CloudLLMProvider, provider_id)
@@ -94,7 +95,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             provider_id = f"{provider_id}-{int(datetime.utcnow().timestamp())}"
 
         # If this is set as default, unset others
-        if kwargs.get('is_default', False):
+        if kwargs.get("is_default", False):
             await self._unset_all_defaults()
 
         provider = CloudLLMProvider(
@@ -104,15 +105,15 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             api_key=api_key,
             base_url=base_url,
             model_name=model_name,
-            enabled=kwargs.get('enabled', True),
-            is_default=kwargs.get('is_default', False),
-            description=kwargs.get('description'),
+            enabled=kwargs.get("enabled", True),
+            is_default=kwargs.get("is_default", False),
+            description=kwargs.get("description"),
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
         )
 
-        if 'config' in kwargs and kwargs['config']:
-            provider.set_config(kwargs['config'])
+        if kwargs.get("config"):
+            provider.set_config(kwargs["config"])
 
         self.session.add(provider)
         await self.session.commit()
@@ -121,35 +122,37 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         logger.info(f"Created cloud provider: {provider_id}")
         return provider.to_dict()
 
-    async def update_provider(
-        self,
-        provider_id: str,
-        **kwargs
-    ) -> Optional[dict]:
+    async def update_provider(self, provider_id: str, **kwargs) -> Optional[dict]:
         """Update provider."""
         provider = await self.session.get(CloudLLMProvider, provider_id)
         if not provider:
             return None
 
         # If setting as default, unset others
-        if kwargs.get('is_default', False) and not provider.is_default:
+        if kwargs.get("is_default", False) and not provider.is_default:
             await self._unset_all_defaults()
 
         # Update simple fields
         simple_fields = [
-            'name', 'provider_type', 'api_key', 'base_url', 'model_name',
-            'enabled', 'is_default', 'description'
+            "name",
+            "provider_type",
+            "api_key",
+            "base_url",
+            "model_name",
+            "enabled",
+            "is_default",
+            "description",
         ]
         for field in simple_fields:
             if field in kwargs and kwargs[field] is not None:
                 # Don't update api_key if empty string
-                if field == 'api_key' and kwargs[field] == '':
+                if field == "api_key" and kwargs[field] == "":
                     continue
                 setattr(provider, field, kwargs[field])
 
         # Update JSON config
-        if 'config' in kwargs and kwargs['config'] is not None:
-            provider.set_config(kwargs['config'])
+        if "config" in kwargs and kwargs["config"] is not None:
+            provider.set_config(kwargs["config"])
 
         provider.updated = datetime.utcnow()
         await self.session.commit()

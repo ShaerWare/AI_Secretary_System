@@ -5,38 +5,38 @@ Provides backward-compatible wrapper classes that match the old API
 while using the new database repositories internally.
 """
 
-import time
 import hashlib
-import json
 import logging
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+import time
+from typing import Any, Dict, List, Optional
 
-from db.database import AsyncSessionLocal, init_db, close_db, get_db_status
-from db.redis_client import init_redis, close_redis, get_redis_status
+from db.database import AsyncSessionLocal, close_db, get_db_status, init_db
+from db.redis_client import close_redis, get_redis_status, init_redis
 from db.repositories import (
-    ChatRepository,
-    FAQRepository,
-    PresetRepository,
-    ConfigRepository,
-    TelegramRepository,
     AuditRepository,
     BotInstanceRepository,
-    WidgetInstanceRepository,
+    ChatRepository,
     CloudProviderRepository,
+    ConfigRepository,
+    FAQRepository,
+    PresetRepository,
+    TelegramRepository,
+    WidgetInstanceRepository,
 )
+
 
 logger = logging.getLogger(__name__)
 
 
 # ============== Database Manager ==============
 
+
 class DatabaseManager:
     """
     Singleton manager for database operations.
     Provides async context managers for repository access.
     """
+
     _instance = None
     _initialized = False
 
@@ -85,6 +85,7 @@ db_manager = DatabaseManager()
 
 
 # ============== Chat Manager (Backward-Compatible) ==============
+
 
 class AsyncChatManager:
     """
@@ -183,6 +184,7 @@ class AsyncChatManager:
 
 # ============== FAQ Manager ==============
 
+
 class AsyncFAQManager:
     """Async FAQ manager using database with caching."""
 
@@ -246,6 +248,7 @@ class AsyncFAQManager:
 
 # ============== Preset Manager ==============
 
+
 class AsyncPresetManager:
     """Async TTS preset manager using database."""
 
@@ -281,6 +284,7 @@ class AsyncPresetManager:
 
 
 # ============== Config Manager ==============
+
 
 class AsyncConfigManager:
     """Async config manager using database."""
@@ -323,6 +327,7 @@ class AsyncConfigManager:
 
 
 # ============== Telegram Session Manager ==============
+
 
 class AsyncTelegramSessionManager:
     """Async Telegram session manager using database (supports multi-bot)."""
@@ -393,6 +398,7 @@ class AsyncTelegramSessionManager:
 
 
 # ============== Bot Instance Manager ==============
+
 
 class AsyncBotInstanceManager:
     """Async manager for Telegram bot instances."""
@@ -466,6 +472,7 @@ class AsyncBotInstanceManager:
 
 # ============== Widget Instance Manager ==============
 
+
 class AsyncWidgetInstanceManager:
     """Async manager for website widget instances."""
 
@@ -531,6 +538,7 @@ class AsyncWidgetInstanceManager:
 
 
 # ============== Cloud Provider Manager ==============
+
 
 class AsyncCloudProviderManager:
     """Async manager for cloud LLM providers."""
@@ -610,6 +618,7 @@ class AsyncCloudProviderManager:
 
 # ============== Audit Logger ==============
 
+
 class AsyncAuditLogger:
     """Async audit logger using database."""
 
@@ -660,6 +669,7 @@ async_cloud_provider_manager = AsyncCloudProviderManager()
 
 
 # ============== Initialization Function ==============
+
 
 async def init_database():
     """Initialize database - call this on startup."""

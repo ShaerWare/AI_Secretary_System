@@ -4,12 +4,15 @@
 Поддерживает Qwen2.5-7B с LoRA, Llama-3.1-8B и DeepSeek-LLM-7B через vLLM.
 Поддерживает несколько персон (Гуля, Лидия и др.)
 """
-import os
-import logging
-from typing import List, Dict, Optional, Generator
-import httpx
+
 import json
+import logging
+import os
 from datetime import datetime
+from typing import Dict, Generator, List, Optional
+
+import httpx
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,7 +78,7 @@ SECRETARY_PERSONAS = {
 - "Здравствуйте! Компания Шэарвэар Диджитал, помощник Артёма Юрьевича, Гуля. Слушаю вас."
 - "Принято. Я передам Артёму Юрьевичу, что вы звонили."
 - "К сожалению, это предложение сейчас не актуально. Всего доброго."
-"""
+""",
     },
     "lidia": {
         "name": "Лидия",
@@ -100,7 +103,7 @@ SECRETARY_PERSONAS = {
 - "Здравствуйте! Компания Шэарвэар Диджитал, помощник Артёма Юрьевича, Лидия. Слушаю вас."
 - "Принято. Я передам Артёму Юрьевичу, что вы звонили."
 - "К сожалению, это предложение сейчас не актуально. Всего доброго."
-"""
+""",
     },
 }
 
@@ -124,7 +127,7 @@ class VLLMLLMService:
         model_name: Optional[str] = None,
         system_prompt: Optional[str] = None,
         persona: Optional[str] = None,
-        timeout: float = 60.0
+        timeout: float = 60.0,
     ):
         """
         Инициализация сервиса vLLM
@@ -150,7 +153,7 @@ class VLLMLLMService:
             "temperature": 0.7,
             "max_tokens": 512,
             "top_p": 0.9,
-            "repetition_penalty": 1.1
+            "repetition_penalty": 1.1,
         }
 
         # Персона секретаря
@@ -186,7 +189,9 @@ class VLLMLLMService:
                 if self.model_name in available_models:
                     logger.info(f"✅ vLLM подключен, модель: {self.model_name}")
                 else:
-                    logger.warning(f"⚠️ Модель '{self.model_name}' не найдена, доступны: {available_models}")
+                    logger.warning(
+                        f"⚠️ Модель '{self.model_name}' не найдена, доступны: {available_models}"
+                    )
                     # Fallback на первую доступную
                     if available_models:
                         self.model_name = available_models[0]
@@ -242,8 +247,15 @@ class VLLMLLMService:
         replacements = {
             "{current_time}": now.strftime("%H:%M"),
             "{current_date}": now.strftime("%d.%m.%Y"),
-            "{day_of_week}": ["понедельник", "вторник", "среда", "четверг",
-                             "пятница", "суббота", "воскресенье"][now.weekday()],
+            "{day_of_week}": [
+                "понедельник",
+                "вторник",
+                "среда",
+                "четверг",
+                "пятница",
+                "суббота",
+                "воскресенье",
+            ][now.weekday()],
         }
 
         for placeholder, value in replacements.items():
@@ -339,11 +351,7 @@ class VLLMLLMService:
 - "К сожалению, это предложение сейчас не актуально. Всего доброго."
 """
 
-    def generate_response(
-        self,
-        user_message: str,
-        use_history: bool = True
-    ) -> str:
+    def generate_response(self, user_message: str, use_history: bool = True) -> str:
         """Генерирует ответ на сообщение пользователя"""
         logger.info(f"💬 Запрос к vLLM: '{user_message[:50]}...'")
 
@@ -375,8 +383,8 @@ class VLLMLLMService:
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "top_p": self.runtime_params.get("top_p", 0.9),
                     "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
-                    "stream": False
-                }
+                    "stream": False,
+                },
             )
             response.raise_for_status()
 
@@ -386,7 +394,9 @@ class VLLMLLMService:
             # Добавляем в историю
             if use_history:
                 self.conversation_history.append({"role": "user", "content": user_message})
-                self.conversation_history.append({"role": "assistant", "content": assistant_message})
+                self.conversation_history.append(
+                    {"role": "assistant", "content": assistant_message}
+                )
 
             logger.info(f"✅ Ответ vLLM: '{assistant_message[:50]}...'")
             return assistant_message
@@ -399,9 +409,7 @@ class VLLMLLMService:
             return "Извините, возникла техническая проблема. Пожалуйста, повторите ваш вопрос."
 
     def generate_response_stream(
-        self,
-        user_message: str,
-        use_history: bool = True
+        self, user_message: str, use_history: bool = True
     ) -> Generator[str, None, None]:
         """Генерирует ответ в потоковом режиме"""
         logger.info(f"💬 Streaming запрос к vLLM: '{user_message[:50]}...'")
@@ -435,8 +443,8 @@ class VLLMLLMService:
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "top_p": self.runtime_params.get("top_p", 0.9),
                     "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
-                    "stream": True
-                }
+                    "stream": True,
+                },
             ) as response:
                 response.raise_for_status()
 
@@ -459,7 +467,9 @@ class VLLMLLMService:
                 # Добавляем в историю
                 if use_history and full_response:
                     self.conversation_history.append({"role": "user", "content": user_message})
-                    self.conversation_history.append({"role": "assistant", "content": full_response})
+                    self.conversation_history.append(
+                        {"role": "assistant", "content": full_response}
+                    )
 
                 logger.info(f"✅ Streaming ответ завершён: '{full_response[:50]}...'")
 
@@ -470,11 +480,7 @@ class VLLMLLMService:
             logger.error(f"❌ Ошибка streaming генерации: {e}")
             yield "Извините, возникла техническая проблема."
 
-    def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
-    ):
+    def generate_response_from_messages(self, messages: List[Dict[str, str]], stream: bool = False):
         """
         Генерирует ответ на основе списка сообщений OpenAI формата.
         Совместимо с форматом orchestrator.py.
@@ -522,8 +528,8 @@ class VLLMLLMService:
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "top_p": self.runtime_params.get("top_p", 0.9),
                     "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
-                    "stream": False
-                }
+                    "stream": False,
+                },
             )
             response.raise_for_status()
             result = response.json()
@@ -536,7 +542,9 @@ class VLLMLLMService:
             logger.error(f"❌ Ошибка генерации: {e}")
             return "Извините, возникла техническая проблема."
 
-    def _generate_response_stream(self, messages: List[Dict[str, str]]) -> Generator[str, None, None]:
+    def _generate_response_stream(
+        self, messages: List[Dict[str, str]]
+    ) -> Generator[str, None, None]:
         """Streaming генерация ответа"""
         # Добавляем system prompt если его нет
         has_system = any(m.get("role") == "system" for m in messages)
@@ -575,8 +583,8 @@ class VLLMLLMService:
                     "temperature": self.runtime_params.get("temperature", 0.7),
                     "top_p": self.runtime_params.get("top_p", 0.9),
                     "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
-                    "stream": True
-                }
+                    "stream": True,
+                },
             ) as response:
                 response.raise_for_status()
 
@@ -615,7 +623,7 @@ class VLLMLLMService:
         try:
             response = self.client.get(f"{self.api_url}/health", timeout=5.0)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -670,7 +678,7 @@ class VLLMLLMService:
             response.raise_for_status()
             models = response.json()
             return [m["id"] for m in models.get("data", [])]
-        except:
+        except Exception:
             return []
 
 

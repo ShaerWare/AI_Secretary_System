@@ -4,14 +4,14 @@ TTS Preset repository for managing voice presets.
 
 import json
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Dict, Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import TTSPreset
+from db.redis_client import CacheKey, cache_delete, cache_get, cache_set
 from db.repositories.base import BaseRepository
-from db.redis_client import cache_set, cache_get, cache_delete, CacheKey
 
 
 class PresetRepository(BaseRepository[TTSPreset]):
@@ -67,9 +67,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
 
     async def get_by_name(self, name: str) -> Optional[dict]:
         """Get preset by name."""
-        result = await self.session.execute(
-            select(TTSPreset).where(TTSPreset.name == name)
-        )
+        result = await self.session.execute(select(TTSPreset).where(TTSPreset.name == name))
         preset = result.scalar_one_or_none()
         return preset.to_dict() if preset else None
 
@@ -101,9 +99,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
         params: dict,
     ) -> Optional[dict]:
         """Update existing preset parameters."""
-        result = await self.session.execute(
-            select(TTSPreset).where(TTSPreset.name == name)
-        )
+        result = await self.session.execute(select(TTSPreset).where(TTSPreset.name == name))
         preset = result.scalar_one_or_none()
 
         if not preset:
@@ -164,9 +160,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
         total = await self.count()
 
         result = await self.session.execute(
-            select(func.count())
-            .select_from(TTSPreset)
-            .where(TTSPreset.builtin == True)
+            select(func.count()).select_from(TTSPreset).where(TTSPreset.builtin == True)
         )
         builtin = result.scalar() or 0
 

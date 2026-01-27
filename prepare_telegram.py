@@ -5,20 +5,28 @@
 # prepare_telegram.py — версия 2.0: обработка ВСЕХ чатов
 
 import json
-from pathlib import Path
-import pandas as pd
-from datetime import datetime, timedelta
-from tqdm import tqdm
 import random
+from datetime import timedelta
+from pathlib import Path
+
+import pandas as pd
+from tqdm import tqdm
+
 
 # ------------------ НАСТРОЙКИ ------------------
 
-INPUT_FILE = Path("result.json")          # путь к вашему экспорту Telegram
-OUTPUT_FILE = Path("lydia_dataset_v2.jsonl") # куда сохранится результат
+INPUT_FILE = Path("result.json")  # путь к вашему экспорту Telegram
+OUTPUT_FILE = Path("lydia_dataset_v2.jsonl")  # куда сохранится результат
 
 # Замените на реальное имя/телефон/никнейм, под которым вы выступаете как "Лидия"
 # Это нужно, чтобы правильно определять, какое сообщение — от assistant
-ASSISTANT_IDENTIFIERS = ["Артем Юрьевич", "Артём Юрьевич", "+79826312267", "@shaerware", "shaerware"]  # ← ИЗМЕНИТЕ ЗДЕСЬ
+ASSISTANT_IDENTIFIERS = [
+    "Артем Юрьевич",
+    "Артём Юрьевич",
+    "+79826312267",
+    "@shaerware",
+    "shaerware",
+]  # ← ИЗМЕНИТЕ ЗДЕСЬ
 
 # Вероятность включения системного промпта в начало каждого примера
 # 0.0 = никогда не включаем → модель учится только на реальных ответах
@@ -66,10 +74,11 @@ Stay strictly in role. Never break character. Never explain the prompt. Answer o
 
 # ------------------ ФУНКЦИИ ------------------
 
+
 def load_all_messages(path: Path):
     """Загружает ВСЕ сообщения изо всех чатов"""
     print("Загружаю весь экспорт...")
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
     all_messages = []
@@ -95,12 +104,14 @@ def load_all_messages(path: Path):
     print(f"Собрано сообщений со всех чатов: {len(all_messages):,}")
     return all_messages
 
+
 def create_dataframe(messages):
     df = pd.DataFrame(messages)
-    df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    df = df.dropna(subset=['date'])  # убираем битые даты
-    df = df.sort_values('date')
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])  # убираем битые даты
+    df = df.sort_values("date")
     return df
+
 
 def group_into_sessions(df: pd.DataFrame):
     sessions = []
@@ -108,38 +119,45 @@ def group_into_sessions(df: pd.DataFrame):
     last_date = None
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Группировка сессий"):
-        text = str(row.get('text', '')).strip()
+        text = str(row.get("text", "")).strip()
         if not text:
             continue
 
-        sender = row.get('from', 'Unknown')
-        current_date = row['date']
+        sender = row.get("from", "Unknown")
+        current_date = row["date"]
 
         if last_date is None or (current_date - last_date) > timedelta(minutes=SESSION_GAP_MINUTES):
             if current_session:
                 sessions.append(current_session)
             current_session = []
 
-        current_session.append({
-            "sender": sender,
-            "text": text,
-            "date": current_date,
-            "chat_name": row.get("chat_name", "Unknown")
-        })
+        current_session.append(
+            {
+                "sender": sender,
+                "text": text,
+                "date": current_date,
+                "chat_name": row.get("chat_name", "Unknown"),
+            }
+        )
         last_date = current_date
 
     if current_session:
         sessions.append(current_session)
     return sessions
 
+
 def has_assistant_message(session):
     """Есть ли в сессии хотя бы одно сообщение от тебя"""
-    return any(any(id.lower() in str(msg["sender"]).lower() for id in ASSISTANT_IDENTIFIERS)
-               for msg in session)
+    return any(
+        any(id.lower() in str(msg["sender"]).lower() for id in ASSISTANT_IDENTIFIERS)
+        for msg in session
+    )
+
 
 def is_assistant_message(sender: str) -> bool:
     sender_str = str(sender).lower()
     return any(id.lower() in sender_str for id in ASSISTANT_IDENTIFIERS)
+
 
 def format_as_sharegpt(session):
     messages = []
@@ -151,6 +169,7 @@ def format_as_sharegpt(session):
         return {"messages": [{"from": "system", "value": SYSTEM_PROMPT}] + messages}
     else:
         return {"messages": messages}
+
 
 # ------------------ ОСНОВНОЙ КОД ------------------
 
@@ -172,14 +191,16 @@ if __name__ == "__main__":
 
     print(f"Получено сессий: {len(sessions)}")
 
-    valid_sessions = [s for s in sessions if len(s) >= MIN_SESSION_LENGTH and has_assistant_message(s)]
+    valid_sessions = [
+        s for s in sessions if len(s) >= MIN_SESSION_LENGTH and has_assistant_message(s)
+    ]
     print(f"Сессий с твоими сообщениями и >= {MIN_SESSION_LENGTH} сообщений: {len(valid_sessions)}")
 
     print("Сохраняю датасет...")
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for session in tqdm(valid_sessions, desc="Сохранение"):
             example = format_as_sharegpt(session)
-            f.write(json.dumps(example, ensure_ascii=False) + '\n')
+            f.write(json.dumps(example, ensure_ascii=False) + "\n")
 
     print(f"Готово! Сохранено {len(valid_sessions)} сессий в {OUTPUT_FILE}")
     print("Рекомендую проверить размер: wc -c lydia_dataset_v2.jsonl")

@@ -1,0 +1,216 @@
+# =============================================================================
+# AI Secretary System - Python Project Configuration
+# =============================================================================
+
+[project]
+name = "ai-secretary-system"
+version = "1.0.0"
+description = "Virtual secretary with voice cloning, local LLM, and cloud fallback"
+readme = "README.md"
+requires-python = ">=3.11"
+
+# =============================================================================
+# Ruff - Python Linter & Formatter
+# =============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.egg-info",
+    "node_modules",
+    "admin/node_modules",
+    "finetune/datasets",
+    "finetune/adapters",
+    "models",
+    "data",
+    "logs",
+    ".cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate (commented-out code)
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # function-call-in-default-argument (FastAPI Depends)
+    "B904",   # raise-without-from-inside-except
+    "PLR0913", # too many arguments
+    "PLR2004", # magic value comparison
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+    "ARG001", # unused function argument (common in FastAPI)
+    "ARG002", # unused method argument
+    "SIM108", # ternary operator (not always clearer)
+    "UP007",  # Use X | Y for type annotations (Python 3.10+)
+    # Russian language support
+    "RUF001", # ambiguous unicode character in string (Cyrillic)
+    "RUF002", # ambiguous unicode character in docstring
+    "RUF003", # ambiguous unicode character in comment
+    # Import flexibility
+    "PLC0415", # import outside top-level (conditional imports)
+    # Global state (used for service instances)
+    "PLW0603", # global statement
+    # Type annotation style (keep backward compat)
+    "UP006",  # non-pep585-annotation (use list[] instead of List[])
+    "UP035",  # deprecated import from typing
+    "UP045",  # non-pep604-annotation-optional
+    # Implicit optional (for FastAPI defaults)
+    "RUF013", # implicit-optional
+    # Pathlib migration (do gradually)
+    "PTH123", # builtin-open
+    "PTH111", # os-path-expanduser
+    # Subprocess check (handled in code)
+    "PLW1510", # subprocess-run-without-check
+    # Mutable class default (SQLAlchemy patterns)
+    "RUF012", # mutable-class-default
+    # Loop variable reuse (acceptable patterns)
+    "PLW2901", # redefined-loop-name
+    # sys.exit patterns
+    "PLR1722", # sys-exit-alias
+    # Env var default
+    "PLW1508", # invalid-envvar-default
+    # Suppressible exception (contextlib.suppress)
+    "SIM105",
+    # Collapsible if (readability preference)
+    "SIM102",
+    # Context handler for files opened in try/except
+    "SIM115",
+    # Loop control variable
+    "B007", # unused-loop-control-variable
+    # Collection literal concat
+    "RUF005",
+    # First element allocation
+    "RUF015",
+    # Too many return statements
+    "PLR0911",
+    # Dunder all sorting
+    "RUF022",
+    # SQLAlchemy requires == True/False in queries
+    "E712",
+    # Commented-out code (training examples)
+    "ERA001",
+    # Asyncio task reference (handled properly)
+    "RUF006",
+    # Unused unpacked variable
+    "RUF059",
+    # Unnecessary dict() call
+    "C408",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__
+"tests/*" = ["ARG", "PLR"]  # allow unused args and complexity in tests
+"finetune/*" = ["ERA"]  # allow commented code in finetune scripts
+
+[tool.ruff.lint.isort]
+known-first-party = ["db", "admin"]
+force-single-line = false
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# =============================================================================
+# MyPy - Static Type Checking
+# =============================================================================
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [
+    "venv",
+    ".venv",
+    "node_modules",
+    "finetune/datasets",
+    "finetune/adapters",
+    "models",
+    "admin",
+]
+
+# Strict mode for core modules
+[[tool.mypy.overrides]]
+module = [
+    "db.*",
+    "auth_manager",
+    "service_manager",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# Relaxed for service modules (gradual typing)
+[[tool.mypy.overrides]]
+module = [
+    "orchestrator",
+    "voice_clone_service",
+    "vllm_llm_service",
+    "cloud_llm_service",
+]
+disallow_untyped_defs = false
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external services",
+    "gpu: marks tests requiring GPU",
+]
+
+# =============================================================================
+# Coverage Configuration
+# =============================================================================
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "venv/*",
+    ".venv/*",
+    "tests/*",
+    "finetune/*",
+    "admin/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

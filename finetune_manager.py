@@ -3,18 +3,20 @@
 Fine-tune Manager - управление дообучением LoRA адаптеров для AI Secretary System.
 Поддерживает загрузку датасета, настройку параметров и мониторинг обучения.
 """
-import subprocess
-import threading
+
 import asyncio
-import os
 import json
 import logging
+import os
 import re
 import shutil
-from pathlib import Path
-from dataclasses import dataclass, asdict, field
-from typing import Optional, List, Dict, AsyncGenerator
+import subprocess
+import threading
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import AsyncGenerator, Dict, List, Optional
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrainingConfig:
     """Конфигурация обучения LoRA"""
+
     # Model
     base_model: str = "Qwen/Qwen2.5-7B-Instruct"
 
@@ -53,6 +56,7 @@ class TrainingConfig:
 @dataclass
 class AdapterInfo:
     """Информация о LoRA адаптере"""
+
     name: str
     path: str
     size_mb: float
@@ -64,6 +68,7 @@ class AdapterInfo:
 @dataclass
 class TrainingStatus:
     """Статус текущего обучения"""
+
     is_running: bool = False
     current_step: int = 0
     total_steps: int = 0
@@ -79,6 +84,7 @@ class TrainingStatus:
 @dataclass
 class DatasetStats:
     """Статистика датасета"""
+
     total_sessions: int = 0
     total_messages: int = 0
     total_tokens: int = 0
@@ -91,6 +97,7 @@ class DatasetStats:
 @dataclass
 class ProcessingStatus:
     """Статус обработки датасета"""
+
     is_running: bool = False
     stage: str = ""  # "parsing", "transcribing", "building"
     current: int = 0
@@ -103,6 +110,7 @@ class ProcessingStatus:
 @dataclass
 class DatasetConfig:
     """Конфигурация обработки датасета"""
+
     owner_name: str = "Артем Юрьевич"
     transcribe_voice: bool = False
     min_dialog_messages: int = 2
@@ -167,7 +175,7 @@ class FinetuneManager:
         self.active_adapter: Optional[str] = None
         self._load_active_adapter()
 
-        logger.info(f"🎓 FinetuneManager инициализирован")
+        logger.info("🎓 FinetuneManager инициализирован")
         logger.info(f"   📁 Finetune dir: {self.finetune_dir}")
         logger.info(f"   📊 Datasets: {self.datasets_dir}")
         logger.info(f"   🔧 Adapters: {self.adapters_dir}")
@@ -184,7 +192,9 @@ class FinetuneManager:
         active_file.write_text(adapter_name)
         self.active_adapter = adapter_name
 
-    def _run_script(self, script_name: str, args: List[str] = None, capture_output: bool = True) -> dict:
+    def _run_script(
+        self, script_name: str, args: List[str] = None, capture_output: bool = True
+    ) -> dict:
         """Запускает Python скрипт в venv finetune"""
         script_path = self.finetune_dir / script_name
         if not script_path.exists():
@@ -206,20 +216,16 @@ class FinetuneManager:
                 cwd=str(self.finetune_dir),
                 capture_output=capture_output,
                 text=True,
-                timeout=600  # 10 минут таймаут
+                timeout=600,  # 10 минут таймаут
             )
 
             if result.returncode == 0:
-                return {
-                    "status": "ok",
-                    "stdout": result.stdout,
-                    "stderr": result.stderr
-                }
+                return {"status": "ok", "stdout": result.stdout, "stderr": result.stderr}
             else:
                 return {
                     "status": "error",
                     "message": result.stderr or result.stdout,
-                    "returncode": result.returncode
+                    "returncode": result.returncode,
                 }
         except subprocess.TimeoutExpired:
             return {"status": "error", "message": "Таймаут выполнения скрипта"}
@@ -234,7 +240,7 @@ class FinetuneManager:
         """
         try:
             # Определяем путь для сохранения
-            if filename.endswith('.json'):
+            if filename.endswith(".json"):
                 dest_path = self.datasets_dir / "result.json"
             else:
                 dest_path = self.datasets_dir / filename
@@ -248,7 +254,7 @@ class FinetuneManager:
                 "status": "ok",
                 "message": f"Файл сохранён: {dest_path.name}",
                 "path": str(dest_path),
-                "size_mb": round(file_size, 2)
+                "size_mb": round(file_size, 2),
             }
         except Exception as e:
             logger.error(f"❌ Ошибка загрузки датасета: {e}")
@@ -259,7 +265,10 @@ class FinetuneManager:
         if self._stt_service is None:
             try:
                 from stt_service import STTService
-                self._stt_service = STTService(model_size="base", use_faster_whisper=True, device="cpu")
+
+                self._stt_service = STTService(
+                    model_size="base", use_faster_whisper=True, device="cpu"
+                )
                 logger.info("✅ STT сервис загружен для расшифровки голосовых")
             except Exception as e:
                 logger.warning(f"⚠️ STT недоступен: {e}")
@@ -276,9 +285,9 @@ class FinetuneManager:
                 if isinstance(item, str):
                     parts.append(item)
                 elif isinstance(item, dict):
-                    parts.append(item.get('text', ''))
-            return ''.join(parts).strip()
-        return ''
+                    parts.append(item.get("text", ""))
+            return "".join(parts).strip()
+        return ""
 
     def _transcribe_voice(self, voice_path: Path, telegram_export_dir: Path) -> Optional[str]:
         """Расшифровывает голосовое сообщение"""
@@ -332,7 +341,10 @@ class FinetuneManager:
         # Проверяем наличие result.json
         input_file = self.datasets_dir / "result.json"
         if not input_file.exists():
-            return {"status": "error", "message": "Файл result.json не найден. Загрузите Telegram export."}
+            return {
+                "status": "error",
+                "message": "Файл result.json не найден. Загрузите Telegram export.",
+            }
 
         with self._processing_lock:
             if self.processing_status.is_running:
@@ -342,10 +354,10 @@ class FinetuneManager:
         try:
             # Загружаем Telegram export
             logger.info(f"📂 Загрузка {input_file}...")
-            with open(input_file, 'r', encoding='utf-8') as f:
+            with open(input_file, encoding="utf-8") as f:
                 data = json.load(f)
 
-            chat_list = data.get('chats', {}).get('list', [])
+            chat_list = data.get("chats", {}).get("list", [])
             logger.info(f"📊 Найдено чатов: {len(chat_list)}")
 
             with self._processing_lock:
@@ -354,10 +366,10 @@ class FinetuneManager:
             all_dialogs = []
             voice_messages = []  # Для отложенной расшифровки
             stats = {
-                'total_chats': len(chat_list),
-                'processed_chats': 0,
-                'skipped_chats': 0,
-                'voice_messages': 0,
+                "total_chats": len(chat_list),
+                "processed_chats": 0,
+                "skipped_chats": 0,
+                "voice_messages": 0,
             }
 
             # Определяем директорию с медиафайлами
@@ -367,43 +379,50 @@ class FinetuneManager:
                 with self._processing_lock:
                     self.processing_status.current = idx + 1
 
-                chat_type = chat.get('type', '')
+                chat_type = chat.get("type", "")
 
                 # Фильтруем по типу чата
-                if chat_type == 'personal_chat':
+                if chat_type == "personal_chat":
                     pass  # Всегда обрабатываем
-                elif chat_type in ['private_group', 'public_group', 'private_supergroup', 'public_supergroup']:
+                elif chat_type in [
+                    "private_group",
+                    "public_group",
+                    "private_supergroup",
+                    "public_supergroup",
+                ]:
                     if not cfg.include_groups:
-                        stats['skipped_chats'] += 1
+                        stats["skipped_chats"] += 1
                         continue
                 else:
-                    stats['skipped_chats'] += 1
+                    stats["skipped_chats"] += 1
                     continue
 
-                messages = chat.get('messages', [])
+                messages = chat.get("messages", [])
                 current_dialog = []
                 prev_role = None
 
                 for msg in messages:
-                    if msg.get('type') != 'message':
+                    if msg.get("type") != "message":
                         continue
 
-                    sender = msg.get('from', '')
-                    text = self._extract_text(msg.get('text', ''))
+                    sender = msg.get("from", "")
+                    text = self._extract_text(msg.get("text", ""))
 
                     # Обработка голосовых сообщений
-                    media_type = msg.get('media_type')
-                    if media_type == 'voice_message' and cfg.transcribe_voice:
-                        voice_file = msg.get('file')
+                    media_type = msg.get("media_type")
+                    if media_type == "voice_message" and cfg.transcribe_voice:
+                        voice_file = msg.get("file")
                         if voice_file:
-                            stats['voice_messages'] += 1
-                            voice_messages.append({
-                                'file': voice_file,
-                                'sender': sender,
-                                'dialog_idx': len(all_dialogs),
-                                'msg_idx': len(current_dialog),
-                                'export_dir': telegram_export_dir
-                            })
+                            stats["voice_messages"] += 1
+                            voice_messages.append(
+                                {
+                                    "file": voice_file,
+                                    "sender": sender,
+                                    "dialog_idx": len(all_dialogs),
+                                    "msg_idx": len(current_dialog),
+                                    "export_dir": telegram_export_dir,
+                                }
+                            )
                             # Placeholder - будет заменен после расшифровки
                             text = f"[VOICE:{voice_file}]"
 
@@ -411,39 +430,39 @@ class FinetuneManager:
                         continue
 
                     if len(text) > cfg.max_message_length:
-                        text = text[:cfg.max_message_length] + '...'
+                        text = text[: cfg.max_message_length] + "..."
 
                     # Определяем роль
-                    role = 'assistant' if sender == cfg.owner_name else 'user'
+                    role = "assistant" if sender == cfg.owner_name else "user"
 
                     # Склеиваем последовательные сообщения
                     if role == prev_role and current_dialog:
-                        current_dialog[-1]['value'] += '\n' + text
+                        current_dialog[-1]["value"] += "\n" + text
                     else:
-                        current_dialog.append({'from': role, 'value': text})
+                        current_dialog.append({"from": role, "value": text})
 
                     prev_role = role
 
                 # Разбиваем длинные диалоги
                 for i in range(0, len(current_dialog), cfg.max_dialog_length):
-                    chunk = current_dialog[i:i + cfg.max_dialog_length]
+                    chunk = current_dialog[i : i + cfg.max_dialog_length]
 
                     # Диалог должен начинаться с user и заканчиваться assistant
-                    while chunk and chunk[0]['from'] == 'assistant':
+                    while chunk and chunk[0]["from"] == "assistant":
                         chunk = chunk[1:]
-                    while chunk and chunk[-1]['from'] == 'user':
+                    while chunk and chunk[-1]["from"] == "user":
                         chunk = chunk[:-1]
 
                     if len(chunk) >= cfg.min_dialog_messages:
-                        has_user = any(m['from'] == 'user' for m in chunk)
-                        has_assistant = any(m['from'] == 'assistant' for m in chunk)
+                        has_user = any(m["from"] == "user" for m in chunk)
+                        has_assistant = any(m["from"] == "assistant" for m in chunk)
                         if has_user and has_assistant:
-                            all_dialogs.append({'messages': chunk})
+                            all_dialogs.append({"messages": chunk})
 
                 if current_dialog:
-                    stats['processed_chats'] += 1
+                    stats["processed_chats"] += 1
                 else:
-                    stats['skipped_chats'] += 1
+                    stats["skipped_chats"] += 1
 
             # Расшифровка голосовых сообщений
             if voice_messages and cfg.transcribe_voice:
@@ -455,39 +474,40 @@ class FinetuneManager:
                 logger.info(f"🎤 Расшифровка {len(voice_messages)} голосовых сообщений...")
 
                 for vm in voice_messages:
-                    transcribed = self._transcribe_voice(Path(vm['file']), vm['export_dir'])
+                    transcribed = self._transcribe_voice(Path(vm["file"]), vm["export_dir"])
                     if transcribed:
                         # Находим и заменяем placeholder
                         # Это упрощённая логика - в реальности нужно отслеживать индексы
                         for dialog in all_dialogs:
-                            for msg in dialog['messages']:
+                            for msg in dialog["messages"]:
                                 placeholder = f"[VOICE:{vm['file']}]"
-                                if placeholder in msg['value']:
-                                    msg['value'] = msg['value'].replace(placeholder, transcribed)
+                                if placeholder in msg["value"]:
+                                    msg["value"] = msg["value"].replace(placeholder, transcribed)
 
                     with self._processing_lock:
                         self.processing_status.voice_transcribed += 1
 
             # Удаляем нерасшифрованные плейсхолдеры
             for dialog in all_dialogs:
-                dialog['messages'] = [
-                    m for m in dialog['messages']
-                    if not m['value'].startswith('[VOICE:')
+                dialog["messages"] = [
+                    m for m in dialog["messages"] if not m["value"].startswith("[VOICE:")
                 ]
             # Удаляем пустые диалоги
-            all_dialogs = [d for d in all_dialogs if len(d['messages']) >= cfg.min_dialog_messages]
+            all_dialogs = [d for d in all_dialogs if len(d["messages"]) >= cfg.min_dialog_messages]
 
             # Сохраняем результат
             with self._processing_lock:
                 self.processing_status.stage = "building"
 
             output_file = self.datasets_dir / f"{cfg.output_name}_dataset.jsonl"
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 for dialog in all_dialogs:
-                    f.write(json.dumps(dialog, ensure_ascii=False) + '\n')
+                    f.write(json.dumps(dialog, ensure_ascii=False) + "\n")
 
-            total_messages = sum(len(d['messages']) for d in all_dialogs)
-            logger.info(f"✅ Датасет создан: {len(all_dialogs)} диалогов, {total_messages} сообщений")
+            total_messages = sum(len(d["messages"]) for d in all_dialogs)
+            logger.info(
+                f"✅ Датасет создан: {len(all_dialogs)} диалогов, {total_messages} сообщений"
+            )
 
             return {
                 "status": "ok",
@@ -497,7 +517,7 @@ class FinetuneManager:
                     **stats,
                     "total_dialogs": len(all_dialogs),
                     "total_messages": total_messages,
-                }
+                },
             }
 
         except Exception as e:
@@ -536,7 +556,7 @@ class FinetuneManager:
             stats.modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
 
             # Парсим JSONL
-            with open(train_file, 'r', encoding='utf-8') as f:
+            with open(train_file, encoding="utf-8") as f:
                 sessions = [json.loads(line) for line in f if line.strip()]
 
             stats.total_sessions = len(sessions)
@@ -568,23 +588,27 @@ class FinetuneManager:
         datasets = []
 
         for f in self.datasets_dir.iterdir():
-            if f.suffix == '.jsonl' and f.is_file():
+            if f.suffix == ".jsonl" and f.is_file():
                 stat = f.stat()
-                datasets.append({
-                    "name": f.name,
-                    "path": str(f),
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-                })
-            elif f.suffix == '.json' and f.name == 'result.json':
+                datasets.append(
+                    {
+                        "name": f.name,
+                        "path": str(f),
+                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    }
+                )
+            elif f.suffix == ".json" and f.name == "result.json":
                 stat = f.stat()
-                datasets.append({
-                    "name": f.name,
-                    "path": str(f),
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "type": "telegram_export"
-                })
+                datasets.append(
+                    {
+                        "name": f.name,
+                        "path": str(f),
+                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "type": "telegram_export",
+                    }
+                )
 
         return sorted(datasets, key=lambda x: x["modified"], reverse=True)
 
@@ -597,7 +621,7 @@ class FinetuneManager:
         return {
             "status": "ok",
             "message": "Аугментация пока не реализована. Используйте существующие датасеты.",
-            "stats": asdict(self.get_dataset_stats())
+            "stats": asdict(self.get_dataset_stats()),
         }
 
     # ============== Training Configuration ==============
@@ -686,10 +710,13 @@ class FinetuneManager:
         # Проверяем датасет
         jsonl_files = list(self.datasets_dir.glob("*.jsonl"))
         if not jsonl_files:
-            return {"status": "error", "message": "Датасет не найден. Сначала загрузите и обработайте данные."}
+            return {
+                "status": "error",
+                "message": "Датасет не найден. Сначала загрузите и обработайте данные.",
+            }
 
         # Используем последний датасет
-        train_file = max(jsonl_files, key=lambda f: f.stat().st_mtime)
+        _train_file = max(jsonl_files, key=lambda f: f.stat().st_mtime)
 
         # Создаем директорию для адаптера
         output_dir = self.adapters_dir / config.output_dir
@@ -717,7 +744,9 @@ class FinetuneManager:
             # Очищаем предыдущий лог
             with self._training_lock:
                 self.training_log = []
-                self.training_status = TrainingStatus(is_running=True, total_epochs=config.num_epochs)
+                self.training_status = TrainingStatus(
+                    is_running=True, total_epochs=config.num_epochs
+                )
                 self.training_start_time = datetime.now()
 
             # Запускаем процесс
@@ -740,7 +769,7 @@ class FinetuneManager:
                 "status": "ok",
                 "message": "Обучение запущено",
                 "config": asdict(config),
-                "pid": self.training_process.pid
+                "pid": self.training_process.pid,
             }
 
         except Exception as e:
@@ -761,7 +790,7 @@ class FinetuneManager:
         epoch_pattern = re.compile(r"Epoch (\d+)/(\d+)")
         lr_pattern = re.compile(r"lr[=:\s]+([0-9.e-]+)", re.IGNORECASE)
 
-        for line in iter(self.training_process.stdout.readline, ''):
+        for line in iter(self.training_process.stdout.readline, ""):
             if not line:
                 break
 
@@ -799,8 +828,13 @@ class FinetuneManager:
                     self.training_status.elapsed_seconds = elapsed
 
                     # ETA
-                    if self.training_status.current_step > 0 and self.training_status.total_steps > 0:
-                        steps_remaining = self.training_status.total_steps - self.training_status.current_step
+                    if (
+                        self.training_status.current_step > 0
+                        and self.training_status.total_steps > 0
+                    ):
+                        steps_remaining = (
+                            self.training_status.total_steps - self.training_status.current_step
+                        )
                         time_per_step = elapsed / self.training_status.current_step
                         self.training_status.eta_seconds = steps_remaining * time_per_step
 
@@ -880,17 +914,12 @@ class FinetuneManager:
                     last_line_idx = len(self.training_log)
 
                     for line in new_lines:
-                        yield json.dumps({
-                            "type": "log",
-                            "line": line,
-                            "timestamp": datetime.now().isoformat()
-                        })
+                        yield json.dumps(
+                            {"type": "log", "line": line, "timestamp": datetime.now().isoformat()}
+                        )
 
                 # Отправляем статус
-                yield json.dumps({
-                    "type": "status",
-                    "status": asdict(self.training_status)
-                })
+                yield json.dumps({"type": "status", "status": asdict(self.training_status)})
 
                 is_running = self.training_status.is_running
 
@@ -910,16 +939,20 @@ class FinetuneManager:
             return adapters
 
         for adapter_dir in self.adapters_dir.iterdir():
-            if not adapter_dir.is_dir() or adapter_dir.name.startswith('.'):
+            if not adapter_dir.is_dir() or adapter_dir.name.startswith("."):
                 continue
 
             # Проверяем наличие файлов адаптера
-            adapter_files = list(adapter_dir.glob("adapter_*.safetensors")) + list(adapter_dir.glob("adapter_*.bin"))
+            adapter_files = list(adapter_dir.glob("adapter_*.safetensors")) + list(
+                adapter_dir.glob("adapter_*.bin")
+            )
             if not adapter_files:
                 # Проверяем подпапку final
                 final_dir = adapter_dir / "final"
                 if final_dir.exists():
-                    adapter_files = list(final_dir.glob("adapter_*.safetensors")) + list(final_dir.glob("adapter_*.bin"))
+                    adapter_files = list(final_dir.glob("adapter_*.safetensors")) + list(
+                        final_dir.glob("adapter_*.bin")
+                    )
 
             if not adapter_files:
                 continue
@@ -942,14 +975,16 @@ class FinetuneManager:
                 except Exception:
                     pass
 
-            adapters.append(AdapterInfo(
-                name=adapter_dir.name,
-                path=str(adapter_dir),
-                size_mb=round(size_mb, 2),
-                modified=modified,
-                active=(adapter_dir.name == self.active_adapter),
-                config=config
-            ))
+            adapters.append(
+                AdapterInfo(
+                    name=adapter_dir.name,
+                    path=str(adapter_dir),
+                    size_mb=round(size_mb, 2),
+                    modified=modified,
+                    active=(adapter_dir.name == self.active_adapter),
+                    config=config,
+                )
+            )
 
         return sorted(adapters, key=lambda x: x.modified, reverse=True)
 
@@ -968,7 +1003,9 @@ class FinetuneManager:
         else:
             adapter_path = adapter_dir
 
-        adapter_files = list(adapter_path.glob("adapter_*.safetensors")) + list(adapter_path.glob("adapter_*.bin"))
+        adapter_files = list(adapter_path.glob("adapter_*.safetensors")) + list(
+            adapter_path.glob("adapter_*.bin")
+        )
         if not adapter_files:
             return {"status": "error", "message": f"Файлы адаптера не найдены в {adapter_path}"}
 
@@ -983,7 +1020,7 @@ class FinetuneManager:
             "message": f"Адаптер {adapter_name} активирован. Перезапустите vLLM для применения.",
             "adapter": adapter_name,
             "path": str(adapter_path),
-            "note": "Требуется перезапуск vLLM для применения нового адаптера"
+            "note": "Требуется перезапуск vLLM для применения нового адаптера",
         }
 
     async def delete_adapter(self, adapter_name: str) -> dict:

@@ -11,6 +11,7 @@ import asyncio
 import sys
 from pathlib import Path
 
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -22,7 +23,8 @@ async def test_database():
     # Test 1: Initialize database
     print("1. Testing database initialization...")
     try:
-        from db.database import init_db, get_db_status, AsyncSessionLocal
+        from db.database import AsyncSessionLocal, get_db_status, init_db
+
         await init_db()
         status = await get_db_status()
         assert status["status"] == "ok", f"Database status: {status}"
@@ -65,6 +67,7 @@ async def test_database():
     except Exception as e:
         print(f"   FAIL - {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -89,12 +92,13 @@ async def test_database():
             # Delete entry
             deleted = await repo.delete_by_question("test question")
             assert deleted
-            print(f"   Deleted FAQ entry")
+            print("   Deleted FAQ entry")
 
         print("   OK - FAQRepository working")
     except Exception as e:
         print(f"   FAIL - {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -108,7 +112,7 @@ async def test_database():
 
             # Set config
             await repo.set_config("test_key", {"value": 123})
-            print(f"   Set config: test_key")
+            print("   Set config: test_key")
 
             # Get config
             value = await repo.get_config("test_key")
@@ -118,19 +122,20 @@ async def test_database():
             # Delete config
             deleted = await repo.delete_config("test_key")
             assert deleted
-            print(f"   Deleted config: test_key")
+            print("   Deleted config: test_key")
 
         print("   OK - ConfigRepository working")
     except Exception as e:
         print(f"   FAIL - {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
     # Test 5: Test Redis (optional)
     print("\n5. Testing Redis connection (optional)...")
     try:
-        from db.redis_client import init_redis, get_redis_status, close_redis
+        from db.redis_client import close_redis, get_redis_status, init_redis
 
         redis_ok = await init_redis()
         if redis_ok:

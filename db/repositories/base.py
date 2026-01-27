@@ -2,10 +2,12 @@
 Base repository class with common database operations.
 """
 
-from typing import TypeVar, Generic, Optional, List, Type
+from typing import Generic, List, Optional, Type, TypeVar
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update
 from sqlalchemy.orm import DeclarativeBase
+
 
 T = TypeVar("T", bound=DeclarativeBase)
 
@@ -23,9 +25,7 @@ class BaseRepository(Generic[T]):
 
     async def get_all(self, limit: int = 1000, offset: int = 0) -> List[T]:
         """Get all entities with pagination."""
-        result = await self.session.execute(
-            select(self.model).limit(limit).offset(offset)
-        )
+        result = await self.session.execute(select(self.model).limit(limit).offset(offset))
         return list(result.scalars().all())
 
     async def create(self, entity: T) -> T:
@@ -58,9 +58,8 @@ class BaseRepository(Generic[T]):
     async def count(self) -> int:
         """Count all entities."""
         from sqlalchemy import func
-        result = await self.session.execute(
-            select(func.count()).select_from(self.model)
-        )
+
+        result = await self.session.execute(select(func.count()).select_from(self.model))
         return result.scalar() or 0
 
     async def exists(self, id_value) -> bool:

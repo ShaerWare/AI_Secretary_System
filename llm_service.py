@@ -2,12 +2,15 @@
 """
 Сервис интеграции с Gemini API для генерации ответов секретаря
 """
-import os
+
 import logging
-from typing import List, Dict, Optional
+import os
+from datetime import datetime
+from typing import Dict, List, Optional
+
 import google.generativeai as genai
 from dotenv import load_dotenv
-from datetime import datetime
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +22,7 @@ class LLMService:
         self,
         api_key: Optional[str] = None,
         model_name: str = "gemini-2.0-flash",
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ):
         """
         Инициализация сервиса LLM
@@ -49,8 +52,7 @@ class LLMService:
 
         try:
             self.model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=self.system_prompt
+                model_name=model_name, system_instruction=self.system_prompt
             )
             logger.info("✅ Gemini API подключен")
         except Exception as e:
@@ -96,8 +98,15 @@ class LLMService:
         replacements = {
             "{current_time}": now.strftime("%H:%M"),
             "{current_date}": now.strftime("%d.%m.%Y"),
-            "{day_of_week}": ["понедельник", "вторник", "среда", "четверг",
-                             "пятница", "суббота", "воскресенье"][now.weekday()],
+            "{day_of_week}": [
+                "понедельник",
+                "вторник",
+                "среда",
+                "четверг",
+                "пятница",
+                "суббота",
+                "воскресенье",
+            ][now.weekday()],
         }
 
         for placeholder, value in replacements.items():
@@ -164,11 +173,7 @@ class LLMService:
 
  """
 
-    def generate_response(
-        self,
-        user_message: str,
-        use_history: bool = True
-    ) -> str:
+    def generate_response(self, user_message: str, use_history: bool = True) -> str:
         """
         Генерирует ответ на сообщение пользователя
 
@@ -194,10 +199,12 @@ class LLMService:
         try:
             if use_history:
                 # Используем историю для контекста
-                chat = self.model.start_chat(history=[
-                    {"role": msg["role"], "parts": [msg["content"]]}
-                    for msg in self.conversation_history
-                ])
+                chat = self.model.start_chat(
+                    history=[
+                        {"role": msg["role"], "parts": [msg["content"]]}
+                        for msg in self.conversation_history
+                    ]
+                )
                 response = chat.send_message(user_message)
             else:
                 # Без истории
@@ -207,14 +214,8 @@ class LLMService:
 
             # Добавляем в историю
             if use_history:
-                self.conversation_history.append({
-                    "role": "user",
-                    "content": user_message
-                })
-                self.conversation_history.append({
-                    "role": "model",
-                    "content": assistant_message
-                })
+                self.conversation_history.append({"role": "user", "content": user_message})
+                self.conversation_history.append({"role": "model", "content": assistant_message})
 
             logger.info(f"✅ Ответ LLM: '{assistant_message[:50]}...'")
             return assistant_message
@@ -233,11 +234,7 @@ class LLMService:
         """Возвращает историю диалога"""
         return self.conversation_history
 
-    def generate_response_stream(
-        self,
-        user_message: str,
-        use_history: bool = True
-    ):
+    def generate_response_stream(self, user_message: str, use_history: bool = True):
         """
         Генерирует ответ в потоковом режиме (streaming)
 
@@ -262,10 +259,12 @@ class LLMService:
 
         try:
             if use_history:
-                chat = self.model.start_chat(history=[
-                    {"role": msg["role"], "parts": [msg["content"]]}
-                    for msg in self.conversation_history
-                ])
+                chat = self.model.start_chat(
+                    history=[
+                        {"role": msg["role"], "parts": [msg["content"]]}
+                        for msg in self.conversation_history
+                    ]
+                )
                 response = chat.send_message(user_message, stream=True)
             else:
                 response = self.model.generate_content(user_message, stream=True)
@@ -278,14 +277,8 @@ class LLMService:
 
             # Добавляем в историю после завершения
             if use_history:
-                self.conversation_history.append({
-                    "role": "user",
-                    "content": user_message
-                })
-                self.conversation_history.append({
-                    "role": "model",
-                    "content": full_response
-                })
+                self.conversation_history.append({"role": "user", "content": user_message})
+                self.conversation_history.append({"role": "model", "content": full_response})
 
             logger.info(f"✅ Streaming ответ завершён: '{full_response[:50]}...'")
 
@@ -293,11 +286,7 @@ class LLMService:
             logger.error(f"❌ Ошибка streaming генерации: {e}")
             yield "Извините, возникла техническая проблема."
 
-    def generate_response_from_messages(
-        self,
-        messages: List[Dict[str, str]],
-        stream: bool = False
-    ):
+    def generate_response_from_messages(self, messages: List[Dict[str, str]], stream: bool = False):
         """
         Генерирует ответ на основе списка сообщений OpenAI формата
 

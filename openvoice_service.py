@@ -5,22 +5,24 @@ OpenVoice v2 TTS Service with Voice Cloning
 
 Совместим с API voice_clone_service.py для интеграции с orchestrator.py
 """
-import torch
-import numpy as np
-import soundfile as sf
-from pathlib import Path
-from typing import Optional, Literal
+
 import logging
 import os
-import hashlib
 import tempfile
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal, Optional
+
+import numpy as np
+import soundfile as sf
+import torch
+import uvicorn
 
 # FastAPI для HTTP сервиса
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-import uvicorn
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,6 +59,7 @@ def get_gpu_for_openvoice() -> tuple[str, Optional[int]]:
 @dataclass
 class IntonationPreset:
     """Пресет настроек интонации (совместимость с XTTS API)"""
+
     name: str
     speed: float  # 0.5-2.0: скорость речи
 
@@ -103,16 +106,16 @@ class OpenVoiceService:
         else:
             self.device, self.gpu_index = get_gpu_for_openvoice()
 
-        logger.info(f"OpenVoice Service инициализация")
+        logger.info("OpenVoice Service инициализация")
         logger.info(f"Устройство: {self.device}")
         logger.info(f"Папка образцов: {self.voice_samples_dir}")
         logger.info(f"Checkpoints: {self.checkpoints_dir}")
 
         # Импортируем OpenVoice компоненты
         try:
+            from melo.api import TTS as MeloTTS
             from openvoice import se_extractor
             from openvoice.api import ToneColorConverter
-            from melo.api import TTS as MeloTTS
 
             self.se_extractor = se_extractor
 
@@ -125,16 +128,15 @@ class OpenVoiceService:
                 )
 
             self.tone_converter = ToneColorConverter(
-                f'{converter_ckpt}/config.json',
-                device=self.device
+                f"{converter_ckpt}/config.json", device=self.device
             )
-            self.tone_converter.load_ckpt(f'{converter_ckpt}/checkpoint.pth')
+            self.tone_converter.load_ckpt(f"{converter_ckpt}/checkpoint.pth")
             logger.info("ToneColorConverter загружен")
 
             # Загружаем MeloTTS для базового синтеза
             # Используем английский как базу (лучшее качество),
             # затем клонируем тембр
-            self.melo_tts = MeloTTS(language='EN', device=self.device)
+            self.melo_tts = MeloTTS(language="EN", device=self.device)
             self.melo_speaker_ids = self.melo_tts.hps.data.spk2id
             logger.info(f"MeloTTS загружен. Speakers: {list(self.melo_speaker_ids.keys())}")
 
@@ -181,9 +183,7 @@ class OpenVoiceService:
         try:
             logger.info(f"Извлечение speaker embedding из: {reference_audio}")
             self._target_se, _ = self.se_extractor.get_se(
-                reference_audio,
-                self.tone_converter,
-                vad=True
+                reference_audio, self.tone_converter, vad=True
             )
             logger.info("Speaker embedding извлечён успешно")
         except Exception as e:
@@ -207,7 +207,7 @@ class OpenVoiceService:
         language: str = "ru",
         preset: Optional[str] = None,
         speed: Optional[float] = None,
-        **kwargs  # Для совместимости с XTTS API
+        **kwargs,  # Для совместимости с XTTS API
     ) -> tuple[np.ndarray, int]:
         """
         Синтезирует речь с клонированием голоса.
@@ -230,6 +230,7 @@ class OpenVoiceService:
             raise ValueError("Speaker embedding не загружен. Проверьте образцы голоса.")
 
         import time
+
         start_time = time.time()
 
         # Получаем настройки из пресета
@@ -245,20 +246,13 @@ class OpenVoiceService:
 
                 # MeloTTS использует английский speaker для базы
                 # (качество лучше, затем тембр клонируется)
-                speaker_id = self.melo_speaker_ids.get('EN-Default', 0)
+                speaker_id = self.melo_speaker_ids.get("EN-Default", 0)
 
-                self.melo_tts.tts_to_file(
-                    text,
-                    speaker_id,
-                    base_audio_path,
-                    speed=final_speed
-                )
+                self.melo_tts.tts_to_file(text, speaker_id, base_audio_path, speed=final_speed)
 
                 # Извлекаем source speaker embedding из сгенерированного аудио
                 source_se, _ = self.se_extractor.get_se(
-                    base_audio_path,
-                    self.tone_converter,
-                    vad=False
+                    base_audio_path, self.tone_converter, vad=False
                 )
 
                 # Шаг 2: Конвертация тембра
@@ -269,7 +263,7 @@ class OpenVoiceService:
                     src_se=source_se,
                     tgt_se=self._target_se,
                     output_path=output_audio_path,
-                    message="@OpenVoice"  # watermark
+                    message="@OpenVoice",  # watermark
                 )
 
                 # Читаем результат
@@ -283,7 +277,9 @@ class OpenVoiceService:
                 audio_duration = len(wav) / sample_rate
                 rtf = elapsed / audio_duration if audio_duration > 0 else 0
 
-                logger.info(f"Синтез завершён: {elapsed:.2f}s, аудио: {audio_duration:.2f}s, RTF: {rtf:.2f}x")
+                logger.info(
+                    f"Синтез завершён: {elapsed:.2f}s, аудио: {audio_duration:.2f}s, RTF: {rtf:.2f}x"
+                )
 
                 # Если указан output_path, файл уже сохранён
                 if output_path:
@@ -296,11 +292,7 @@ class OpenVoiceService:
             raise
 
     def synthesize_to_file(
-        self,
-        text: str,
-        output_path: str,
-        language: str = "ru",
-        **kwargs
+        self, text: str, output_path: str, language: str = "ru", **kwargs
     ) -> str:
         """Синтезирует и сохраняет в файл"""
         self.synthesize(text, output_path, language, **kwargs)
@@ -315,10 +307,7 @@ class OpenVoiceService:
     ) -> tuple[np.ndarray, int]:
         """Упрощённый метод синтеза с выбором эмоции"""
         return self.synthesize(
-            text=text,
-            output_path=output_path,
-            language=language,
-            preset=emotion
+            text=text, output_path=output_path, language=language, preset=emotion
         )
 
 
@@ -365,7 +354,7 @@ async def health():
         "status": "ok",
         "device": service.device,
         "samples_loaded": len(service.voice_samples),
-        "speaker_embedding_ready": service._target_se is not None
+        "speaker_embedding_ready": service._target_se is not None,
     }
 
 
@@ -378,10 +367,10 @@ async def list_voices():
             VoiceInfo(
                 name="lidia_openvoice",
                 engine="openvoice",
-                description=f"Клонированный голос Лидии ({len(service.voice_samples)} образцов)"
+                description=f"Клонированный голос Лидии ({len(service.voice_samples)} образцов)",
             )
         ],
-        "presets": service.list_presets()
+        "presets": service.list_presets(),
     }
 
 
@@ -395,25 +384,20 @@ async def synthesize(request: SynthesizeRequest):
 
     try:
         wav, sample_rate = service.synthesize(
-            text=request.text,
-            language=request.language,
-            preset=request.preset,
-            speed=request.speed
+            text=request.text, language=request.language, preset=request.preset, speed=request.speed
         )
 
         # Конвертируем в WAV bytes
         import io
+
         buffer = io.BytesIO()
-        sf.write(buffer, wav, sample_rate, format='WAV')
+        sf.write(buffer, wav, sample_rate, format="WAV")
         buffer.seek(0)
 
         return Response(
             content=buffer.read(),
             media_type="audio/wav",
-            headers={
-                "X-Sample-Rate": str(sample_rate),
-                "X-Duration": str(len(wav) / sample_rate)
-            }
+            headers={"X-Sample-Rate": str(sample_rate), "X-Duration": str(len(wav) / sample_rate)},
         )
 
     except Exception as e:
@@ -449,20 +433,13 @@ if __name__ == "__main__":
         test_text = "Здравствуйте! Это тестовое сообщение от OpenVoice."
 
         wav, sr = service.synthesize(
-            text=test_text,
-            output_path="test_openvoice.wav",
-            preset="natural"
+            text=test_text, output_path="test_openvoice.wav", preset="natural"
         )
 
-        print(f"\nСохранено: test_openvoice.wav")
+        print("\nСохранено: test_openvoice.wav")
         print(f"Sample rate: {sr}")
-        print(f"Duration: {len(wav)/sr:.2f}s")
+        print(f"Duration: {len(wav) / sr:.2f}s")
         print("=" * 70)
     else:
         # Запуск сервера
-        uvicorn.run(
-            "openvoice_service:app",
-            host=args.host,
-            port=args.port,
-            reload=False
-        )
+        uvicorn.run("openvoice_service:app", host=args.host, port=args.port, reload=False)
