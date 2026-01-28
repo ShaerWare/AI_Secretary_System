@@ -55,26 +55,27 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 **Задачи:**
 - [x] Создать `.github/workflows/ci.yml` с lint-backend, lint-frontend, security jobs
 - [x] Добавить CI badge в README
-- [ ] Настроить branch protection (require CI pass) — делается в GitHub UI
+- [x] Настроить branch protection (require CI pass) — GitHub Rulesets
 - [x] Добавить Dependabot для Python и npm
 
 ---
 
 ### 0.2 Code Restructuring [P0]
-**Статус:** `planned`
+**Статус:** `in_progress`
 **Приоритет:** P0 (критичный)
 **Сложность:** 6/10
 **Влияние:** ★★★★★
 
 **Описание:**
-Разбить orchestrator.py (~60 endpoints) на модульную структуру `app/routers/`.
+Разбить orchestrator.py (~170 endpoints) на модульную структуру `app/routers/`.
 
 **Задачи:**
-- [ ] Создать `app/` структуру с routers, services, models
-- [ ] Вынести auth, llm, tts, stt, faq, finetune, monitoring endpoints
+- [x] Создать `app/` структуру с routers, services, models
+- [x] Вынести auth, llm, stt, faq, monitoring, services, audit endpoints (7 роутеров, ~60 endpoints)
+- [ ] Вынести tts, chat, telegram, widget, finetune, models endpoints
 - [ ] Добавить `app/config.py` с Pydantic Settings
 - [ ] Обновить Dockerfile
-- [ ] Сохранить backward compatibility
+- [x] Сохранить backward compatibility (routers + legacy endpoints работают параллельно)
 
 ---
 

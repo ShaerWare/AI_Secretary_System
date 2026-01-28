@@ -26,6 +26,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+# Modular routers
+from app.routers import audit, auth, faq, llm, monitor, services, stt
 from auth_manager import (
     LoginRequest,
     LoginResponse,
@@ -332,6 +334,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include modular routers
+# NOTE: These routers use the ServiceContainer from app.dependencies
+# which is populated in startup_event
+app.include_router(auth.router)
+app.include_router(audit.router)
+app.include_router(services.router)
+app.include_router(monitor.router)
+app.include_router(faq.router)
+app.include_router(stt.router)
+app.include_router(llm.router)
+
 # Глобальные сервисы
 voice_service: Optional[VoiceCloneService] = None  # XTTS (Лидия) - GPU CC >= 7.0
 gulya_voice_service: Optional[VoiceCloneService] = None  # XTTS (Гуля) - GPU CC >= 7.0
@@ -520,6 +533,20 @@ async def startup_event():
             logger.warning("    Legacy файлы можно удалить после проверки миграции:")
             logger.warning("    python scripts/migrate_json_to_db.py")
             logger.warning("=" * 60)
+
+        # Populate service container for modular routers
+        from app.dependencies import get_container
+
+        container = get_container()
+        container.voice_service = voice_service
+        container.gulya_voice_service = gulya_voice_service
+        container.piper_service = piper_service
+        container.openvoice_service = openvoice_service
+        container.stt_service = stt_service
+        container.llm_service = llm_service
+        container.streaming_tts_manager = streaming_tts_manager
+        container.current_voice_config = current_voice_config
+        logger.info("✅ Service container populated for modular routers")
 
         logger.info("✅ Основные сервисы загружены успешно")
 
