@@ -5,7 +5,7 @@ soundfile==0.12.1
 
 # Speech-to-Text
 openai-whisper==20231117
-faster-whisper==1.0.3
+faster-whisper==1.2.1
 vosk==0.3.45  # Offline realtime STT
 sounddevice==0.4.6  # Microphone input for STT
 
