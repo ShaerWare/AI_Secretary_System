@@ -1,7 +1,7 @@
 # Core TTS и Voice Cloning
 TTS==0.22.0  # Coqui TTS с XTTS v2
 pydub==0.25.1
-soundfile==0.12.1
+soundfile==0.13.1
 
 # Speech-to-Text
 openai-whisper==20231117
