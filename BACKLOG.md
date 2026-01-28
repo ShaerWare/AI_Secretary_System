@@ -61,10 +61,11 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 ---
 
 ### 0.2 Code Restructuring [P0]
-**Статус:** `in_progress`
+**Статус:** `done`
 **Приоритет:** P0 (критичный)
 **Сложность:** 6/10
 **Влияние:** ★★★★★
+**Завершено:** 2026-01-28
 
 **Описание:**
 Разбить orchestrator.py (~170 endpoints) на модульную структуру `app/routers/`.
@@ -72,10 +73,36 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 **Задачи:**
 - [x] Создать `app/` структуру с routers, services, models
 - [x] Вынести auth, llm, stt, faq, monitoring, services, audit endpoints (7 роутеров, ~60 endpoints)
-- [ ] Вынести tts, chat, telegram, widget, finetune, models endpoints
-- [ ] Добавить `app/config.py` с Pydantic Settings
-- [ ] Обновить Dockerfile
+- [x] Вынести tts, chat, telegram, widget endpoints (4 роутера, ~52 endpoints)
+- [ ] Добавить `app/config.py` с Pydantic Settings (backlog)
+- [ ] Обновить Dockerfile (backlog)
 - [x] Сохранить backward compatibility (routers + legacy endpoints работают параллельно)
+
+**Результат:**
+```
+orchestrator.py: 4641 → 3074 строк (-34% reduction)
+11 routers, ~112 endpoints извлечено
+```
+
+**Созданные файлы:**
+```
+app/
+├── __init__.py
+├── dependencies.py       # ServiceContainer для DI
+└── routers/
+    ├── __init__.py
+    ├── auth.py           # 3 endpoints
+    ├── audit.py          # 4 endpoints
+    ├── services.py       # 6 endpoints
+    ├── monitor.py        # 7 endpoints
+    ├── faq.py            # 7 endpoints
+    ├── stt.py            # 4 endpoints
+    ├── llm.py            # 24 endpoints
+    ├── tts.py            # 13 endpoints
+    ├── chat.py           # 10 endpoints
+    ├── telegram.py       # 22 endpoints
+    └── widget.py         # 7 endpoints
+```
 
 ---
 

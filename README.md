@@ -44,6 +44,29 @@ service_      finetune_      vLLM/Gemini   voice_clone_  openvoice_   piper_tts_
 manager.py    manager.py                   service.py    service.py   service.py   responses.json service.py
 ```
 
+### Modular API Structure
+
+API endpoints organized into 11 routers with ~112 endpoints:
+
+```
+app/
+├── __init__.py
+├── dependencies.py          # ServiceContainer for DI
+└── routers/
+    ├── __init__.py
+    ├── auth.py              # 3 endpoints  - JWT login, logout, token refresh
+    ├── audit.py             # 4 endpoints  - Audit log viewing, export
+    ├── services.py          # 6 endpoints  - vLLM start/stop/restart, logs
+    ├── monitor.py           # 7 endpoints  - GPU stats, health, metrics SSE
+    ├── faq.py               # 7 endpoints  - FAQ CRUD, reload, test
+    ├── stt.py               # 4 endpoints  - STT status, transcribe, test
+    ├── llm.py               # 24 endpoints - Backend, persona, params, providers
+    ├── tts.py               # 13 endpoints - Presets, params, test, cache
+    ├── chat.py              # 10 endpoints - Sessions, messages, streaming
+    ├── telegram.py          # 22 endpoints - Bot instances CRUD, control
+    └── widget.py            # 7 endpoints  - Widget instances CRUD
+```
+
 ### GPU Configuration (RTX 3060 12GB)
 
 ```
@@ -549,7 +572,7 @@ curl -X POST http://localhost:8002/v1/audio/speech \
 curl http://localhost:8002/v1/models
 ```
 
-### Admin API (~60 endpoints)
+### Admin API (~112 endpoints via 11 routers)
 
 ```bash
 # Authentication
@@ -629,14 +652,37 @@ POST /admin/widget/config            # Update settings
 GET  /widget.js                      # Dynamic widget script (public)
 
 # Telegram
-GET  /admin/telegram/config          # Bot settings
-POST /admin/telegram/config          # Update settings
-GET  /admin/telegram/status          # Bot status
-POST /admin/telegram/start           # Start bot
-POST /admin/telegram/stop            # Stop bot
-POST /admin/telegram/restart         # Restart bot
-GET  /admin/telegram/sessions        # List chat sessions
-DELETE /admin/telegram/sessions/{id} # Delete session
+GET  /admin/telegram/config          # Bot settings (legacy)
+POST /admin/telegram/config          # Update settings (legacy)
+GET  /admin/telegram/instances       # List bot instances
+POST /admin/telegram/instances       # Create instance
+GET  /admin/telegram/instances/{id}  # Get instance
+PUT  /admin/telegram/instances/{id}  # Update instance
+DELETE /admin/telegram/instances/{id} # Delete instance
+POST /admin/telegram/instances/{id}/start # Start bot
+POST /admin/telegram/instances/{id}/stop  # Stop bot
+POST /admin/telegram/instances/{id}/restart # Restart bot
+GET  /admin/telegram/instances/{id}/status  # Bot status
+GET  /admin/telegram/instances/{id}/sessions # Bot sessions
+GET  /admin/telegram/instances/{id}/logs    # Bot logs
+
+# Chat
+GET  /admin/chat/sessions            # List chat sessions
+POST /admin/chat/sessions            # Create session
+GET  /admin/chat/sessions/{id}       # Get session
+PUT  /admin/chat/sessions/{id}       # Update session
+DELETE /admin/chat/sessions/{id}     # Delete session
+POST /admin/chat/sessions/{id}/messages # Send message
+POST /admin/chat/sessions/{id}/stream   # SSE streaming chat
+PUT  /admin/chat/sessions/{id}/messages/{msg_id} # Edit message
+DELETE /admin/chat/sessions/{id}/messages/{msg_id} # Delete message
+POST /admin/chat/sessions/{id}/messages/{msg_id}/regenerate # Regenerate
+
+# Audit
+GET  /admin/audit                    # Audit log with filters
+GET  /admin/audit/stats              # Audit statistics
+GET  /admin/audit/export             # Export to CSV
+DELETE /admin/audit/clear            # Clear old entries
 ```
 
 ## Fine-tuning Pipeline
