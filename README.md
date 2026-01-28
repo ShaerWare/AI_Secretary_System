@@ -1,5 +1,7 @@
 # AI Secretary System
 
+[![CI](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml)
+
 Интеллектуальная система виртуального секретаря с клонированием голоса (XTTS v2, OpenVoice), предобученными голосами (Piper), локальным LLM (vLLM + Qwen/Llama) и облачным fallback (Gemini). Включает полнофункциональную Vue 3 админ-панель с PWA поддержкой.
 
 ## Features

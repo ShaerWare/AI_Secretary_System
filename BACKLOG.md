@@ -33,7 +33,7 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 - [x] **Telegram Action Buttons** — интерактивные кнопки с переключением LLM
 - [ ] **Телефония SIM7600** — в планах
 - [ ] **Монетизация** — в планах
-- [ ] **CI/CD Pipeline** — в планах
+- [x] **CI/CD Pipeline** — выполнено
 
 ---
 
@@ -44,7 +44,7 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 > **Срок:** 2 недели | **Бюджет:** 120,000₽
 
 ### 0.1 CI/CD Pipeline [P0]
-**Статус:** `planned`
+**Статус:** `done`
 **Приоритет:** P0 (критичный)
 **Сложность:** 4/10
 **Влияние:** ★★★★★
@@ -53,10 +53,10 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 Автоматизация проверки кода при каждом PR. Без этого каждый PR — риск сломать production.
 
 **Задачи:**
-- [ ] Создать `.github/workflows/ci.yml` с lint-backend, lint-frontend, security jobs
-- [ ] Добавить CI badge в README
-- [ ] Настроить branch protection (require CI pass)
-- [ ] Добавить Dependabot для Python и npm
+- [x] Создать `.github/workflows/ci.yml` с lint-backend, lint-frontend, security jobs
+- [x] Добавить CI badge в README
+- [ ] Настроить branch protection (require CI pass) — делается в GitHub UI
+- [x] Добавить Dependabot для Python и npm
 
 ---
 
@@ -1156,6 +1156,15 @@ pip install zipfile36  # или стандартный zipfile
 ---
 
 ## Changelog
+
+### 2026-01-28 (update 13) — CI/CD Pipeline
+- **CI/CD Pipeline** — автоматизация проверки кода
+  - `.github/workflows/ci.yml` с lint-backend, lint-frontend, security jobs
+  - `.github/dependabot.yml` для автоматического обновления зависимостей
+  - CI badge в README
+- **PWA Fix** — исправлена установка админки как PWA
+  - Добавлены PNG-иконки 192x192 и 512x512
+  - Исправлены пути в manifest.json
 
 ### 2026-01-28 (update 12) — Consolidated Improvement Plan & Telegram Buttons
 - **Consolidated Improvement Plan** — создан детальный план развития

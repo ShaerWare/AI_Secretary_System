@@ -421,12 +421,12 @@ cd admin && npm test
 
 | Phase | Focus | Timeline | Status |
 |-------|-------|----------|--------|
-| 0 | Foundation (CI/CD, restructuring, security) | 2 weeks | Planned |
+| 0 | Foundation (CI/CD, restructuring, security) | 2 weeks | In Progress |
 | 0.5 | Monetization (Stripe/YooKassa, billing) | 3 weeks | Planned |
 | 1 | Telephony SIM7600G-H | 4 weeks | Planned |
 | 2 | Observability (logging, metrics, testing) | 2 weeks | Planned |
 
 **Next steps:**
-1. CI/CD Pipeline — GitHub Actions for lint, test, security
+1. ~~CI/CD Pipeline~~ — Done (GitHub Actions + Dependabot)
 2. Code Restructuring — Split orchestrator.py into routers
 3. Stripe/YooKassa — Subscription billing

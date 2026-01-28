@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-backend:
+    name: Backend Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install linting dependencies
+        run: pip install ruff mypy
+
+      - name: Run ruff linter
+        run: ruff check .
+
+      - name: Check code formatting
+        run: ruff format --check .
+
+      - name: Run mypy (gradual adoption)
+        run: mypy orchestrator.py --ignore-missing-imports || true
+
+  lint-frontend:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        working-directory: admin
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: admin
+        run: npm run lint
+
+      - name: Type check
+        working-directory: admin
+        run: npm run type-check
+
+      - name: Build production bundle
+        working-directory: admin
+        run: npm run build
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail on vulnerabilities yet (gradual adoption)
