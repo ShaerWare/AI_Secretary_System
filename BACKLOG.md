@@ -2,8 +2,10 @@
 
 Roadmap и план работ для AI Secretary System. Этот файл используется для отслеживания прогресса и планирования разработки.
 
-**Последнее обновление:** 2026-01-27 (v7 — Code Quality & Linting)
+**Последнее обновление:** 2026-01-28 (v8 — Consolidated Improvement Plan)
 **Контекст:** Офлайн-first система + телефония через SIM7600G-H Waveshare
+
+> **See also:** [Consolidated Improvement Plan](docs/IMPROVEMENT_PLAN.md) — detailed technical plan for production readiness with timeline, budget, and ROI calculations.
 
 ---
 
@@ -28,8 +30,139 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 - [x] **DeepSeek LLM** — третья модель для vLLM (--deepseek flag)
 - [x] **LLM Models UI** — отображение доступных моделей с характеристиками
 - [x] **Cloud LLM Providers** — универсальное подключение облачных LLM (Gemini, Kimi, OpenAI, Claude, DeepSeek, OpenRouter, custom)
+- [x] **Telegram Action Buttons** — интерактивные кнопки с переключением LLM
 - [ ] **Телефония SIM7600** — в планах
-- [ ] **Enterprise-функции** — в планах
+- [ ] **Монетизация** — в планах
+- [ ] **CI/CD Pipeline** — в планах
+
+---
+
+## Фаза 0: Foundation (P0 — блокирующие задачи)
+
+> **Детали:** [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md#phase-0-foundation-before-everything-else)
+>
+> **Срок:** 2 недели | **Бюджет:** 120,000₽
+
+### 0.1 CI/CD Pipeline [P0]
+**Статус:** `planned`
+**Приоритет:** P0 (критичный)
+**Сложность:** 4/10
+**Влияние:** ★★★★★
+
+**Описание:**
+Автоматизация проверки кода при каждом PR. Без этого каждый PR — риск сломать production.
+
+**Задачи:**
+- [ ] Создать `.github/workflows/ci.yml` с lint-backend, lint-frontend, security jobs
+- [ ] Добавить CI badge в README
+- [ ] Настроить branch protection (require CI pass)
+- [ ] Добавить Dependabot для Python и npm
+
+---
+
+### 0.2 Code Restructuring [P0]
+**Статус:** `planned`
+**Приоритет:** P0 (критичный)
+**Сложность:** 6/10
+**Влияние:** ★★★★★
+
+**Описание:**
+Разбить orchestrator.py (~60 endpoints) на модульную структуру `app/routers/`.
+
+**Задачи:**
+- [ ] Создать `app/` структуру с routers, services, models
+- [ ] Вынести auth, llm, tts, stt, faq, finetune, monitoring endpoints
+- [ ] Добавить `app/config.py` с Pydantic Settings
+- [ ] Обновить Dockerfile
+- [ ] Сохранить backward compatibility
+
+---
+
+### 0.3 Basic Security [P0]
+**Статус:** `planned`
+**Приоритет:** P0 (критичный)
+**Сложность:** 4/10
+**Влияние:** ★★★★★
+
+**Описание:**
+Базовая безопасность для production: rate limiting, CORS whitelist, security headers.
+
+**Задачи:**
+- [ ] Переместить `.env.docker` → `.env.docker.example`
+- [ ] Добавить `slowapi` для rate limiting
+- [ ] Настроить CORS whitelist через env
+- [ ] Security headers (X-Content-Type-Options, X-Frame-Options)
+
+---
+
+### 0.4 Release Management [P0]
+**Статус:** `planned`
+**Приоритет:** P0
+**Сложность:** 2/10
+
+**Задачи:**
+- [ ] Создать `CHANGELOG.md`
+- [ ] Создать GitHub Release v1.0.0
+- [ ] Добавить `CONTRIBUTING.md`
+
+---
+
+## Фаза 0.5: Monetization (P1)
+
+> **Детали:** [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md#phase-1-monetization-mvp-for-revenue)
+>
+> **Срок:** 3 недели | **Бюджет:** 180,000₽
+
+### 0.5.1 Stripe/YooKassa Integration [P1]
+**Статус:** `planned`
+**Приоритет:** P1 (высокий)
+**Сложность:** 6/10
+**Влияние:** ★★★★★
+
+**Описание:**
+Интеграция с платёжными системами для подписок.
+
+**Задачи:**
+- [ ] Зарегистрировать Stripe/YooKassa аккаунт
+- [ ] Создать `app/routers/billing.py`
+- [ ] Добавить таблицу `subscriptions` в БД
+- [ ] Webhook endpoint с верификацией подписи
+- [ ] UI: страница тарифов в админке
+
+**Тарифы:**
+| План | Цена | Минуты/мес | Голоса | Fine-tuning |
+|------|------|------------|--------|-------------|
+| Basic | 990₽ | 100 | 2 | Нет |
+| Pro | 2,990₽ | 500 | 5 | 1/мес |
+| Enterprise | 9,990₽ | ∞ | ∞ | ∞ |
+
+---
+
+### 0.5.2 Usage Limits [P1]
+**Статус:** `planned`
+**Приоритет:** P1
+**Сложность:** 5/10
+
+**Задачи:**
+- [ ] Таблица `usage_logs` (user_id, type, amount, timestamp)
+- [ ] Middleware для подсчёта минут TTS/STT
+- [ ] API endpoint `/admin/usage/stats`
+- [ ] UI: dashboard с usage графиками
+- [ ] Email уведомления при 80% и 100% лимита
+
+---
+
+### 0.5.3 Legal Compliance [P1]
+**Статус:** `planned`
+**Приоритет:** P1 (критичный для РФ)
+**Сложность:** 3/10
+
+**Задачи:**
+- [ ] Политика конфиденциальности
+- [ ] Согласие на обработку голоса
+- [ ] Согласие на запись звонков (IVR)
+- [ ] Право на удаление данных (GDPR)
+- [ ] Шифрование голосовых записей (AES-256)
 
 ---
 
@@ -1023,6 +1156,20 @@ pip install zipfile36  # или стандартный zipfile
 ---
 
 ## Changelog
+
+### 2026-01-28 (update 12) — Consolidated Improvement Plan & Telegram Buttons
+- **Consolidated Improvement Plan** — создан детальный план развития
+  - [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) с timeline, budget, ROI
+  - Phase 0: Foundation (CI/CD, restructuring, security)
+  - Phase 0.5: Monetization (Stripe/YooKassa, usage limits, legal)
+  - Phase 2: Telephony SIM7600G-H (modem service, call manager)
+  - Phase 3: Observability (structured logging, Prometheus, testing)
+  - Production readiness checklist
+- **Telegram Action Buttons** — интерактивные кнопки в Telegram ботах
+  - Три дефолтные кнопки: "Составление ТЗ", "Связь с менеджером", "Главное меню"
+  - Переключение LLM backend для каждой кнопки
+  - Индивидуальные system prompts
+  - UI для управления кнопками в админке
 
 ### 2026-01-27 (update 11) — Code Quality & Linting
 - **Code Quality Tools** — настроены инструменты для качества кода

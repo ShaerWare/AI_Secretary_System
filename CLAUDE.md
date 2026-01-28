@@ -408,12 +408,25 @@ pytest tests/
 cd admin && npm test
 ```
 
-## Roadmap
+## Roadmap & Planning
 
-See [BACKLOG.md](./BACKLOG.md) for full development roadmap.
+| Document | Purpose |
+|----------|---------|
+| [BACKLOG.md](./BACKLOG.md) | Task tracking and development history |
+| [docs/IMPROVEMENT_PLAN.md](./docs/IMPROVEMENT_PLAN.md) | Production readiness plan with timeline, budget, ROI |
 
 **Current focus:** Offline-first + GSM telephony via SIM7600G-H Waveshare
 
-**Next planned:**
-1. Telephony Gateway — SIM7600 integration (AT commands)
-2. Backup & Restore — full system backup
+**Strategic phases:**
+
+| Phase | Focus | Timeline | Status |
+|-------|-------|----------|--------|
+| 0 | Foundation (CI/CD, restructuring, security) | 2 weeks | Planned |
+| 0.5 | Monetization (Stripe/YooKassa, billing) | 3 weeks | Planned |
+| 1 | Telephony SIM7600G-H | 4 weeks | Planned |
+| 2 | Observability (logging, metrics, testing) | 2 weeks | Planned |
+
+**Next steps:**
+1. CI/CD Pipeline — GitHub Actions for lint, test, security
+2. Code Restructuring — Split orchestrator.py into routers
+3. Stripe/YooKassa — Subscription billing
