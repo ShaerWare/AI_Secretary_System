@@ -1937,8 +1937,15 @@ class UpdateSessionRequest(BaseModel):
     system_prompt: Optional[str] = None
 
 
+class LLMOverrideConfig(BaseModel):
+    llm_backend: Optional[str] = None  # "vllm", "gemini", or "cloud:provider-id"
+    system_prompt: Optional[str] = None
+    llm_params: Optional[dict] = None
+
+
 class SendMessageRequest(BaseModel):
     content: str
+    llm_override: Optional[LLMOverrideConfig] = None
 
 
 class EditMessageRequest(BaseModel):
@@ -3427,16 +3434,47 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if not llm_service:
+    # Determine which LLM service to use
+    active_llm = llm_service
+    custom_prompt = None
+
+    if request.llm_override:
+        override = request.llm_override
+        backend = override.llm_backend
+
+        if backend and backend.startswith("cloud:"):
+            # Use specific cloud provider
+            provider_id = backend.split(":", 1)[1]
+            try:
+                provider_config = await async_cloud_provider_manager.get_provider_with_key(
+                    provider_id
+                )
+                if provider_config:
+                    active_llm = CloudLLMService(provider_config)
+                    logger.info(f"Using cloud provider: {provider_id}")
+            except Exception as e:
+                logger.warning(f"Failed to load cloud provider {provider_id}: {e}")
+        elif backend == "gemini":
+            # Use Gemini (LLMService from llm_service.py)
+            try:
+                active_llm = LLMService()
+                logger.info("Using Gemini LLM for override")
+            except Exception as e:
+                logger.warning(f"Failed to create Gemini LLM: {e}")
+        # else use default vllm/llm_service
+
+        custom_prompt = override.system_prompt
+
+    if not active_llm:
         raise HTTPException(status_code=503, detail="LLM service not available")
 
     # Добавляем сообщение пользователя
     user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
 
     # Получаем историю для LLM
-    default_prompt = None
-    if hasattr(llm_service, "get_system_prompt"):
-        default_prompt = llm_service.get_system_prompt()
+    default_prompt = custom_prompt
+    if not default_prompt and hasattr(active_llm, "get_system_prompt"):
+        default_prompt = active_llm.get_system_prompt()
     messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
 
     async def generate_stream():
@@ -3445,8 +3483,8 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
             # Отправляем сообщение пользователя
             yield f"data: {json.dumps({'type': 'user_message', 'message': user_msg}, ensure_ascii=False)}\n\n"
 
-            # Streaming ответ
-            for chunk in llm_service.generate_response_from_messages(messages, stream=True):
+            # Streaming ответ (use active_llm which may be overridden)
+            for chunk in active_llm.generate_response_from_messages(messages, stream=True):
                 full_response.append(chunk)
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 

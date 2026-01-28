@@ -28,9 +28,11 @@ import {
   Cpu,
   Volume2,
   MoreVertical,
-  FileText
+  FileText,
+  Zap,
+  GripVertical
 } from 'lucide-vue-next'
-import { botInstancesApi, type BotInstance, type BotInstanceSession } from '@/api'
+import { botInstancesApi, type BotInstance, type BotInstanceSession, type ActionButton } from '@/api'
 import { useToastStore } from '@/stores/toast'
 
 const { t } = useI18n()
@@ -42,7 +44,20 @@ const selectedInstanceId = ref<string | null>(null)
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showLogsDialog = ref(false)
-const activeTab = ref<'settings' | 'users' | 'messages' | 'ai' | 'sessions'>('settings')
+const activeTab = ref<'settings' | 'users' | 'messages' | 'ai' | 'sessions' | 'buttons'>('settings')
+
+// Button editing state
+const showButtonEditDialog = ref(false)
+const editingButtonIndex = ref(-1)
+const editingButton = ref<Partial<ActionButton>>({
+  id: '',
+  label: '',
+  icon: '',
+  enabled: true,
+  order: 0,
+  llm_backend: '',
+  system_prompt: '',
+})
 
 // Form state for create/edit
 const formData = ref<Partial<BotInstance>>({
@@ -63,6 +78,7 @@ const formData = ref<Partial<BotInstance>>({
   tts_engine: 'xtts',
   tts_voice: 'gulya',
   tts_preset: '',
+  action_buttons: [],
 })
 
 const newAllowedUser = ref('')
@@ -192,6 +208,7 @@ function openCreateDialog() {
     tts_engine: 'xtts',
     tts_voice: 'gulya',
     tts_preset: '',
+    action_buttons: [],
   }
   showCreateDialog.value = true
 }
@@ -249,6 +266,91 @@ function removeAdminUser(userId: number) {
 function openLogs() {
   showLogsDialog.value = true
   refetchLogs()
+}
+
+// Button management functions
+function openAddButtonDialog() {
+  editingButtonIndex.value = -1
+  const maxOrder = Math.max(0, ...(formData.value.action_buttons || []).map(b => b.order))
+  editingButton.value = {
+    id: `button-${Date.now()}`,
+    label: '',
+    icon: '',
+    enabled: true,
+    order: maxOrder + 1,
+    llm_backend: '',
+    system_prompt: '',
+  }
+  showButtonEditDialog.value = true
+}
+
+function openEditButtonDialog(index: number) {
+  const button = formData.value.action_buttons?.[index]
+  if (button) {
+    editingButtonIndex.value = index
+    editingButton.value = { ...button }
+    showButtonEditDialog.value = true
+  }
+}
+
+function saveButton() {
+  if (!editingButton.value.label) return
+
+  const buttons = [...(formData.value.action_buttons || [])]
+  const buttonToSave: ActionButton = {
+    id: editingButton.value.id || `button-${Date.now()}`,
+    label: editingButton.value.label || '',
+    icon: editingButton.value.icon || '',
+    enabled: editingButton.value.enabled ?? true,
+    order: editingButton.value.order ?? 0,
+    llm_backend: editingButton.value.llm_backend || undefined,
+    system_prompt: editingButton.value.system_prompt || undefined,
+  }
+
+  if (editingButtonIndex.value >= 0) {
+    buttons[editingButtonIndex.value] = buttonToSave
+  } else {
+    buttons.push(buttonToSave)
+  }
+
+  // Sort by order
+  buttons.sort((a, b) => a.order - b.order)
+  formData.value.action_buttons = buttons
+  showButtonEditDialog.value = false
+  toast.success(t('telegram.buttonSaved'))
+}
+
+function deleteButton(index: number) {
+  const button = formData.value.action_buttons?.[index]
+  if (button && confirm(t('telegram.confirmDeleteButton', { label: button.label }))) {
+    const buttons = [...(formData.value.action_buttons || [])]
+    buttons.splice(index, 1)
+    formData.value.action_buttons = buttons
+    toast.success(t('telegram.buttonDeleted'))
+  }
+}
+
+function toggleButtonEnabled(index: number) {
+  const buttons = [...(formData.value.action_buttons || [])]
+  if (buttons[index]) {
+    buttons[index] = { ...buttons[index], enabled: !buttons[index].enabled }
+    formData.value.action_buttons = buttons
+  }
+}
+
+function moveButton(index: number, direction: 'up' | 'down') {
+  const buttons = [...(formData.value.action_buttons || [])]
+  const newIndex = direction === 'up' ? index - 1 : index + 1
+  if (newIndex < 0 || newIndex >= buttons.length) return
+
+  // Swap orders
+  const tempOrder = buttons[index].order
+  buttons[index] = { ...buttons[index], order: buttons[newIndex].order }
+  buttons[newIndex] = { ...buttons[newIndex], order: tempOrder }
+
+  // Sort by order
+  buttons.sort((a, b) => a.order - b.order)
+  formData.value.action_buttons = buttons
 }
 
 // Auto-select first instance
@@ -446,7 +548,7 @@ watch(instances, (newInstances) => {
         <!-- Tabs -->
         <div class="flex gap-1 bg-secondary/50 p-1 rounded-lg w-fit mb-6">
           <button
-            v-for="tab in ['settings', 'users', 'messages', 'ai', 'sessions'] as const"
+            v-for="tab in ['settings', 'users', 'messages', 'ai', 'buttons', 'sessions'] as const"
             :key="tab"
             @click="activeTab = tab"
             :class="[
@@ -461,6 +563,7 @@ watch(instances, (newInstances) => {
               <Users v-else-if="tab === 'users'" class="w-4 h-4" />
               <MessageSquare v-else-if="tab === 'messages'" class="w-4 h-4" />
               <Cpu v-else-if="tab === 'ai'" class="w-4 h-4" />
+              <Zap v-else-if="tab === 'buttons'" class="w-4 h-4" />
               <BookOpen v-else class="w-4 h-4" />
               {{ t(`telegram.tabs.${tab}`) }}
             </span>
@@ -567,6 +670,45 @@ watch(instances, (newInstances) => {
             <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('telegram.systemPrompt') }}</h3>
               <p class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap">{{ selectedInstance.system_prompt }}</p>
+            </div>
+          </template>
+
+          <!-- Buttons Tab -->
+          <template v-if="activeTab === 'buttons'">
+            <div class="bg-card rounded-xl border border-border p-4">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h3 class="font-medium">{{ t('telegram.actionButtons') }}</h3>
+                  <p class="text-sm text-muted-foreground">{{ t('telegram.actionButtonsDesc') }}</p>
+                </div>
+              </div>
+
+              <div v-if="!selectedInstance.action_buttons?.length" class="text-center py-8 text-muted-foreground">
+                <Zap class="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>{{ t('telegram.noButtons') }}</p>
+              </div>
+
+              <div v-else class="space-y-2">
+                <div
+                  v-for="(button, index) in selectedInstance.action_buttons"
+                  :key="button.id"
+                  class="flex items-center gap-3 p-3 bg-secondary rounded-lg"
+                >
+                  <span class="text-xl w-8 text-center">{{ button.icon || '🔘' }}</span>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-medium truncate">{{ button.label }}</p>
+                    <p class="text-xs text-muted-foreground truncate">
+                      {{ button.llm_backend || t('telegram.useDefaultBackend') }}
+                    </p>
+                  </div>
+                  <span :class="[
+                    'px-2 py-0.5 text-xs rounded-full',
+                    button.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                  ]">
+                    {{ button.enabled ? t('common.enabled') : t('common.disabled') }}
+                  </span>
+                </div>
+              </div>
             </div>
           </template>
 
@@ -841,6 +983,68 @@ watch(instances, (newInstances) => {
                 :placeholder="t('telegram.systemPromptPlaceholder')"
               />
             </div>
+
+            <!-- Action Buttons -->
+            <div class="border-t border-border pt-4">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="font-medium">{{ t('telegram.actionButtons') }}</h3>
+                  <p class="text-sm text-muted-foreground">{{ t('telegram.actionButtonsDesc') }}</p>
+                </div>
+                <button
+                  @click="openAddButtonDialog"
+                  class="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+                >
+                  <Plus class="w-4 h-4" />
+                  {{ t('telegram.addButton') }}
+                </button>
+              </div>
+
+              <div v-if="!formData.action_buttons?.length" class="text-center py-6 text-muted-foreground bg-secondary rounded-lg">
+                {{ t('telegram.noButtons') }}
+              </div>
+
+              <div v-else class="space-y-2">
+                <div
+                  v-for="(button, index) in formData.action_buttons"
+                  :key="button.id"
+                  class="flex items-center gap-2 p-3 bg-secondary rounded-lg"
+                >
+                  <GripVertical class="w-4 h-4 text-muted-foreground cursor-move" />
+                  <span class="text-xl w-8 text-center">{{ button.icon || '🔘' }}</span>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-medium truncate">{{ button.label }}</p>
+                    <p class="text-xs text-muted-foreground truncate">
+                      {{ button.llm_backend || t('telegram.useDefaultBackend') }}
+                    </p>
+                  </div>
+                  <button
+                    @click="toggleButtonEnabled(index)"
+                    :class="[
+                      'relative w-10 h-5 rounded-full transition-colors',
+                      button.enabled ? 'bg-green-500' : 'bg-gray-500'
+                    ]"
+                  >
+                    <span :class="[
+                      'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform',
+                      button.enabled ? 'translate-x-5' : 'translate-x-0'
+                    ]" />
+                  </button>
+                  <button
+                    @click="openEditButtonDialog(index)"
+                    class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded"
+                  >
+                    <Edit3 class="w-4 h-4" />
+                  </button>
+                  <button
+                    @click="deleteButton(index)"
+                    class="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/20 rounded"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="p-4 border-t border-border flex justify-end gap-2">
@@ -888,6 +1092,112 @@ watch(instances, (newInstances) => {
           </div>
           <div class="p-4 max-h-[calc(90vh-80px)] overflow-y-auto">
             <pre class="bg-secondary rounded-lg p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto">{{ logsData?.logs || t('telegram.noLogs') }}</pre>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Button Edit Dialog -->
+    <Teleport to="body">
+      <div
+        v-if="showButtonEditDialog"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+        @click.self="showButtonEditDialog = false"
+      >
+        <div class="bg-card rounded-xl border border-border w-full max-w-lg overflow-hidden">
+          <div class="p-4 border-b border-border flex items-center justify-between">
+            <h2 class="text-lg font-semibold">
+              {{ editingButtonIndex >= 0 ? t('telegram.editButton') : t('telegram.addButton') }}
+            </h2>
+            <button @click="showButtonEditDialog = false" class="p-1 hover:bg-secondary rounded">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <!-- Label & Icon -->
+            <div class="grid grid-cols-3 gap-4">
+              <div class="col-span-2">
+                <label class="block text-sm font-medium mb-1">{{ t('telegram.buttonLabel') }} *</label>
+                <input
+                  v-model="editingButton.label"
+                  type="text"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  :placeholder="t('telegram.buttonLabelPlaceholder')"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">{{ t('telegram.buttonIcon') }}</label>
+                <input
+                  v-model="editingButton.icon"
+                  type="text"
+                  maxlength="2"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-xl"
+                  :placeholder="t('telegram.buttonIconPlaceholder')"
+                />
+              </div>
+            </div>
+
+            <!-- LLM Backend -->
+            <div>
+              <label class="block text-sm font-medium mb-1">{{ t('telegram.buttonLlmBackend') }}</label>
+              <select
+                v-model="editingButton.llm_backend"
+                class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{{ t('telegram.useDefaultBackend') }}</option>
+                <option value="vllm">vLLM (Local)</option>
+                <option value="gemini">Gemini</option>
+              </select>
+              <p class="text-xs text-muted-foreground mt-1">
+                Cloud providers can be configured as "cloud:provider-id"
+              </p>
+            </div>
+
+            <!-- System Prompt -->
+            <div>
+              <label class="block text-sm font-medium mb-1">{{ t('telegram.buttonSystemPrompt') }}</label>
+              <textarea
+                v-model="editingButton.system_prompt"
+                rows="4"
+                class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                :placeholder="t('telegram.buttonSystemPromptPlaceholder')"
+              />
+            </div>
+
+            <!-- Enabled -->
+            <div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
+              <span class="font-medium">{{ t('telegram.buttonEnabled') }}</span>
+              <button
+                @click="editingButton.enabled = !editingButton.enabled"
+                :class="[
+                  'relative w-11 h-6 rounded-full transition-colors',
+                  editingButton.enabled ? 'bg-green-500' : 'bg-gray-500'
+                ]"
+              >
+                <span :class="[
+                  'absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform',
+                  editingButton.enabled ? 'translate-x-5' : 'translate-x-0'
+                ]" />
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 border-t border-border flex justify-end gap-2">
+            <button
+              @click="showButtonEditDialog = false"
+              class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              @click="saveButton"
+              :disabled="!editingButton.label"
+              class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              <Check class="w-4 h-4" />
+              {{ t('common.save') }}
+            </button>
           </div>
         </div>
       </div>

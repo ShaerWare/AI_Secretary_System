@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import aiohttp
-from telegram import Update
+from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
@@ -57,6 +57,8 @@ class TelegramBotService:
         self.instance_id = instance_id or BOT_INSTANCE_ID
         self.config: Dict = {}
         self.sessions: Dict[int, str] = {}  # user_id -> session_id
+        self.user_modes: Dict[int, Optional[str]] = {}  # user_id -> action_id or None
+        self.action_buttons: list = []  # Action buttons configuration
         self.app: Optional[Application] = None
         self.running = False
         self._http_session: Optional[aiohttp.ClientSession] = None
@@ -95,12 +97,15 @@ class TelegramBotService:
                         ),
                         "typing_enabled": instance.get("typing_enabled", True),
                         "max_message_length": DEFAULT_CONFIG["max_message_length"],
-                        # AI config for potential future use
+                        # AI config
                         "llm_backend": instance.get("llm_backend", "vllm"),
                         "llm_persona": instance.get("llm_persona", "gulya"),
                         "system_prompt": instance.get("system_prompt"),
+                        "llm_params": instance.get("llm_params", {}),
                         "tts_engine": instance.get("tts_engine", "xtts"),
                         "tts_voice": instance.get("tts_voice", "gulya"),
+                        # Action buttons
+                        "action_buttons": instance.get("action_buttons", []),
                     }
 
                     logger.info(f"Loaded config from API for instance {self.instance_id}")
@@ -136,6 +141,7 @@ class TelegramBotService:
             logger.info(f"Using file-based config for instance {self.instance_id}")
 
         self.config = config
+        self.action_buttons = config.get("action_buttons", [])
         self._config_loaded = True
         return config
 
@@ -191,6 +197,87 @@ class TelegramBotService:
     def is_admin(self, user_id: int) -> bool:
         """Check if user is admin"""
         return user_id in self.config.get("admin_users", [])
+
+    def get_main_keyboard(self) -> Optional[ReplyKeyboardMarkup]:
+        """Build reply keyboard with enabled action buttons."""
+        enabled_buttons = [b for b in self.action_buttons if b.get("enabled", True)]
+        if not enabled_buttons:
+            return None
+
+        # Sort by order
+        enabled_buttons.sort(key=lambda x: x.get("order", 0))
+
+        # Create rows of buttons (2 per row)
+        keyboard = []
+        row = []
+        for button in enabled_buttons:
+            icon = button.get("icon", "")
+            label = f"{icon} {button['label']}" if icon else button["label"]
+            row.append(KeyboardButton(label))
+            if len(row) >= 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+
+        return ReplyKeyboardMarkup(
+            keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=False,
+        )
+
+    def find_button_by_label(self, text: str) -> Optional[dict]:
+        """Find action button by displayed label text."""
+        text = text.strip()
+        for button in self.action_buttons:
+            if not button.get("enabled", True):
+                continue
+            icon = button.get("icon", "")
+            label = f"{icon} {button['label']}" if icon else button["label"]
+            if text == label.strip():
+                return button
+        return None
+
+    def get_user_mode(self, user_id: int) -> Optional[str]:
+        """Get user's current action mode."""
+        return self.user_modes.get(user_id)
+
+    def set_user_mode(self, user_id: int, mode_id: Optional[str]):
+        """Set user's current action mode."""
+        if mode_id is None:
+            self.user_modes.pop(user_id, None)
+        else:
+            self.user_modes[user_id] = mode_id
+
+    def get_llm_config_for_user(self, user_id: int) -> dict:
+        """Get LLM configuration based on user's current action mode."""
+        action_id = self.user_modes.get(user_id)
+
+        if not action_id:
+            # Default bot config
+            return {
+                "llm_backend": self.config.get("llm_backend", "vllm"),
+                "system_prompt": self.config.get("system_prompt"),
+                "llm_params": self.config.get("llm_params", {}),
+            }
+
+        # Find action button config
+        for button in self.action_buttons:
+            if button["id"] == action_id:
+                return {
+                    "llm_backend": button.get("llm_backend")
+                    or self.config.get("llm_backend", "vllm"),
+                    "system_prompt": button.get("system_prompt")
+                    or self.config.get("system_prompt"),
+                    "llm_params": button.get("llm_params") or self.config.get("llm_params", {}),
+                }
+
+        # Fallback to default
+        return {
+            "llm_backend": self.config.get("llm_backend", "vllm"),
+            "system_prompt": self.config.get("system_prompt"),
+            "llm_params": self.config.get("llm_params", {}),
+        }
 
     async def get_http_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session"""
@@ -257,17 +344,26 @@ class TelegramBotService:
             logger.error(f"Error creating session: {e}")
             raise
 
-    async def send_message_to_ai(self, user_id: int, message: str, user_info: Dict = None) -> str:
+    async def send_message_to_ai(
+        self, user_id: int, message: str, user_info: Dict = None, llm_config: Dict = None
+    ) -> str:
         """Send message to AI and get response"""
         session_id = await self.get_or_create_session(user_id, user_info=user_info)
         api_url = self.config.get("api_url", "http://localhost:8002")
         session = await self.get_http_session()
 
         try:
+            # Build request payload
+            payload = {"content": message}
+
+            # Add LLM override if in action mode
+            if llm_config:
+                payload["llm_override"] = llm_config
+
             # Use streaming endpoint
             async with session.post(
                 f"{api_url}/admin/chat/sessions/{session_id}/stream",
-                json={"content": message},
+                json=payload,
                 timeout=aiohttp.ClientTimeout(total=120),
             ) as resp:
                 if resp.status != 200:
@@ -315,8 +411,13 @@ class TelegramBotService:
             logger.warning(f"Unauthorized user {user_id} ({user.username}) tried to access bot")
             return
 
+        # Reset user mode to default
+        self.set_user_mode(user_id, None)
+
         welcome = self.config.get("welcome_message", DEFAULT_CONFIG["welcome_message"])
-        await update.message.reply_text(welcome)
+        keyboard = self.get_main_keyboard()
+
+        await update.message.reply_text(welcome, reply_markup=keyboard)
         logger.info(f"User {user_id} ({user.username}) started bot")
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -346,7 +447,13 @@ class TelegramBotService:
             del self.sessions[user_id]
             self._save_sessions()
 
-        await update.message.reply_text("Начинаем новый диалог. Чем могу помочь?")
+        # Reset user mode to default
+        self.set_user_mode(user_id, None)
+
+        keyboard = self.get_main_keyboard()
+        await update.message.reply_text(
+            "Начинаем новый диалог. Чем могу помочь?", reply_markup=keyboard
+        )
         logger.info(f"User {user_id} started new conversation")
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,6 +472,33 @@ class TelegramBotService:
 
         await update.message.reply_text(status)
 
+    async def handle_action_button(self, user_id: int, button: dict, update: Update) -> None:
+        """Handle action button press - switch mode and notify user."""
+        action_id = button["id"]
+
+        if action_id == "main_menu":
+            # Reset to default mode
+            self.set_user_mode(user_id, None)
+            keyboard = self.get_main_keyboard()
+            await update.message.reply_text(
+                "Возврат в главное меню. Чем могу помочь?", reply_markup=keyboard
+            )
+            logger.info(f"User {user_id} returned to main menu")
+            return
+
+        # Switch to action mode
+        self.set_user_mode(user_id, action_id)
+
+        # Send confirmation with action-specific hint
+        icon = button.get("icon", "")
+        label = button.get("label", action_id)
+        keyboard = self.get_main_keyboard()
+
+        await update.message.reply_text(
+            f"{icon} Режим: {label}\n\nОпишите ваш запрос.", reply_markup=keyboard
+        )
+        logger.info(f"User {user_id} switched to mode: {action_id}")
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages"""
         user = update.effective_user
@@ -376,6 +510,12 @@ class TelegramBotService:
                 self.config.get("unauthorized_message", DEFAULT_CONFIG["unauthorized_message"])
             )
             logger.warning(f"Unauthorized message from {user_id}")
+            return
+
+        # Check if message matches an action button
+        button = self.find_button_by_label(message_text)
+        if button:
+            await self.handle_action_button(user_id, button, update)
             return
 
         logger.info(
@@ -395,8 +535,13 @@ class TelegramBotService:
             "last_name": user.last_name,
         }
 
+        # Get LLM config for this user's current mode
+        llm_config = self.get_llm_config_for_user(user_id)
+
         # Get AI response
-        response = await self.send_message_to_ai(user_id, message_text, user_info=user_info)
+        response = await self.send_message_to_ai(
+            user_id, message_text, user_info=user_info, llm_config=llm_config
+        )
 
         # Split long messages
         max_length = self.config.get("max_message_length", 4096)

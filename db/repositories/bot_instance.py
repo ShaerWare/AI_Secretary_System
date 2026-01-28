@@ -10,7 +10,7 @@ from typing import List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import BotInstance
+from db.models import DEFAULT_ACTION_BUTTONS, BotInstance
 from db.repositories.base import BaseRepository
 
 
@@ -118,6 +118,11 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.set_admin_users(kwargs["admin_users"])
         if "llm_params" in kwargs:
             instance.set_llm_params(kwargs["llm_params"])
+        if "action_buttons" in kwargs:
+            instance.set_action_buttons(kwargs["action_buttons"])
+        else:
+            # Set default action buttons for new instances
+            instance.set_action_buttons(DEFAULT_ACTION_BUTTONS)
 
         self.session.add(instance)
         await self.session.commit()
@@ -161,6 +166,8 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.set_admin_users(kwargs["admin_users"])
         if "llm_params" in kwargs:
             instance.set_llm_params(kwargs["llm_params"])
+        if "action_buttons" in kwargs:
+            instance.set_action_buttons(kwargs["action_buttons"])
 
         instance.updated = datetime.utcnow()
         await self.session.commit()

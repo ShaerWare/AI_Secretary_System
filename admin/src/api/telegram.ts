@@ -24,6 +24,18 @@ export interface TelegramStatus {
   pid: number | null
 }
 
+// Action button for Telegram bot
+export interface ActionButton {
+  id: string
+  label: string
+  icon?: string
+  enabled: boolean
+  order: number
+  llm_backend?: string  // "vllm", "gemini", or "cloud:provider-id"
+  system_prompt?: string
+  llm_params?: Record<string, unknown>
+}
+
 // Bot instance types
 export interface BotInstance {
   id: string
@@ -49,6 +61,8 @@ export interface BotInstance {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  // Action buttons
+  action_buttons: ActionButton[]
   // Status (added by API)
   running?: boolean
   pid?: number

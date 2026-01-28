@@ -10,6 +10,7 @@ ENV/
 *.egg-info/
 dist/
 build/
+.venv/
 
 # Environment (НЕ КОММИТИМ API КЛЮЧИ!)
 .env

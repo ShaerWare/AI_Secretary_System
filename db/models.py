@@ -285,6 +285,9 @@ class BotInstance(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     typing_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Action buttons configuration (JSON array)
+    action_buttons: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # AI configuration
     llm_backend: Mapped[str] = mapped_column(String(20), default="vllm")  # vllm or gemini
     llm_persona: Mapped[str] = mapped_column(String(50), default="gulya")
@@ -337,6 +340,19 @@ class BotInstance(Base):
     def set_llm_params(self, params: dict):
         self.llm_params = json.dumps(params, ensure_ascii=False)
 
+    def get_action_buttons(self) -> List[dict]:
+        """Get action buttons configuration."""
+        if not self.action_buttons:
+            return []
+        try:
+            return json.loads(self.action_buttons)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_action_buttons(self, buttons: List[dict]):
+        """Set action buttons configuration."""
+        self.action_buttons = json.dumps(buttons, ensure_ascii=False)
+
     def to_dict(self, include_token: bool = False) -> dict:
         result = {
             "id": self.id,
@@ -363,6 +379,8 @@ class BotInstance(Base):
             "tts_engine": self.tts_engine,
             "tts_voice": self.tts_voice,
             "tts_preset": self.tts_preset,
+            # Action buttons
+            "action_buttons": self.get_action_buttons(),
             # Timestamps
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
@@ -587,3 +605,46 @@ PROVIDER_TYPES = {
         "requires_base_url": True,
     },
 }
+
+
+# Default action buttons for Telegram bots
+DEFAULT_ACTION_BUTTONS = [
+    {
+        "id": "tz_compose",
+        "label": "Составление ТЗ",
+        "icon": "📝",
+        "enabled": True,
+        "order": 1,
+        "llm_backend": None,
+        "system_prompt": (
+            "Ты - специалист по составлению технических заданий. "
+            "Помоги пользователю сформулировать и структурировать ТЗ для проекта. "
+            "Задавай уточняющие вопросы о целях, функционале, технических требованиях."
+        ),
+        "llm_params": {"temperature": 0.3, "max_tokens": 2048},
+    },
+    {
+        "id": "manager_contact",
+        "label": "Связь с менеджером",
+        "icon": "👤",
+        "enabled": True,
+        "order": 2,
+        "llm_backend": None,
+        "system_prompt": (
+            "Ты - персональный менеджер компании. "
+            "Помоги клиенту с его вопросами, уточни детали запроса, предложи решения. "
+            "Будь вежлив и профессионален."
+        ),
+        "llm_params": {"temperature": 0.7},
+    },
+    {
+        "id": "main_menu",
+        "label": "Главное меню",
+        "icon": "🏠",
+        "enabled": True,
+        "order": 99,
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+]
