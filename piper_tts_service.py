@@ -148,7 +148,7 @@ class PiperTTSService:
             proc = subprocess.Popen(
                 cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            stdout, stderr = proc.communicate(input=text.encode("utf-8"), timeout=30)
+            _stdout, stderr = proc.communicate(input=text.encode("utf-8"), timeout=30)
 
             if proc.returncode != 0:
                 logger.error(f"❌ Piper error: {stderr.decode()}")

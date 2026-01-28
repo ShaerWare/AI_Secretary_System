@@ -61,7 +61,6 @@ ignore = [
     "SIM108", # ternary operator (not always clearer)
     "UP007",  # Use X | Y for type annotations (Python 3.10+)
     "UP037",  # Remove quotes from type annotation
-    "UP045",  # Use X | None instead of Optional[X]
     # Russian language support
     "RUF001", # ambiguous unicode character in string (Cyrillic)
     "RUF002", # ambiguous unicode character in docstring
@@ -118,6 +117,7 @@ ignore = [
 "__init__.py" = ["F401"]  # unused imports in __init__
 "tests/*" = ["ARG", "PLR"]  # allow unused args and complexity in tests
 "finetune/*" = ["ERA"]  # allow commented code in finetune scripts
+"app/*" = ["UP"]  # allow Optional[X] style in routers (compatibility)
 
 [tool.ruff.lint.isort]
 known-first-party = ["db", "admin"]

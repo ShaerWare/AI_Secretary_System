@@ -289,7 +289,7 @@ class ServiceManager:
                 "message": f"Сервис {config.display_name} управляется orchestrator",
             }
 
-        is_running, pid, _ = self._is_service_running(service_name)
+        is_running, _pid, _ = self._is_service_running(service_name)
         if not is_running:
             return {"status": "ok", "message": f"{config.display_name} уже остановлен"}
 

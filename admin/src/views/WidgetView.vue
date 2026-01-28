@@ -190,7 +190,7 @@ const scriptTag = computed(() => {
   const instanceParam = selectedInstance.value?.id && selectedInstance.value.id !== 'default'
     ? `?instance=${selectedInstance.value.id}`
     : ''
-  return `<script src="${apiUrl.value}/widget.js${instanceParam}"><\/script>`
+  return `<script src="${apiUrl.value}/widget.js${instanceParam}"></` + 'script>'
 })
 
 const fullSnippet = computed(() => {
@@ -198,7 +198,7 @@ const fullSnippet = computed(() => {
     ? `?instance=${selectedInstance.value.id}`
     : ''
   return `<!-- AI Chat Widget -->
-<script src="${apiUrl.value}/widget.js${instanceParam}"><\/script>`
+<script src="${apiUrl.value}/widget.js${instanceParam}"></` + 'script>'
 })
 
 // Color presets
@@ -231,9 +231,9 @@ watch(instances, (newInstances) => {
             {{ t('widget.widgets') }}
           </h2>
           <button
-            @click="openCreateDialog"
             class="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             :title="t('widget.createWidget')"
+            @click="openCreateDialog"
           >
             <Plus class="w-4 h-4" />
           </button>
@@ -256,17 +256,18 @@ watch(instances, (newInstances) => {
           <button
             v-for="instance in instances"
             :key="instance.id"
-            @click="selectedInstanceId = instance.id"
             :class="[
               'w-full p-3 rounded-lg text-left transition-colors',
               selectedInstanceId === instance.id
                 ? 'bg-primary/10 border border-primary/30'
                 : 'hover:bg-secondary'
             ]"
+            @click="selectedInstanceId = instance.id"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span :class="[
+                <span
+:class="[
                   'w-2 h-2 rounded-full',
                   instance.enabled ? 'bg-green-400' : 'bg-gray-400'
                 ]" />
@@ -299,7 +300,8 @@ watch(instances, (newInstances) => {
           <div>
             <h1 class="text-2xl font-bold flex items-center gap-2">
               {{ selectedInstance.name }}
-              <span :class="[
+              <span
+:class="[
                 'px-2 py-0.5 text-xs rounded-full',
                 selectedInstance.enabled
                   ? 'bg-green-500/20 text-green-400'
@@ -323,16 +325,16 @@ watch(instances, (newInstances) => {
               {{ t('widget.testWidget') }}
             </a>
             <button
-              @click="openEditDialog(selectedInstance)"
               class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              @click="openEditDialog(selectedInstance)"
             >
               <Edit3 class="w-4 h-4" />
               {{ t('common.edit') }}
             </button>
             <button
-              @click="confirmDelete(selectedInstance)"
               class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
               :title="t('common.delete')"
+              @click="confirmDelete(selectedInstance)"
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -386,13 +388,13 @@ watch(instances, (newInstances) => {
           <button
             v-for="tab in ['settings', 'appearance', 'domains', 'ai', 'code'] as const"
             :key="tab"
-            @click="activeTab = tab"
             :class="[
               'px-4 py-2 text-sm rounded-md transition-colors',
               activeTab === tab
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             ]"
+            @click="activeTab = tab"
           >
             <span class="flex items-center gap-2">
               <Settings2 v-if="tab === 'settings'" class="w-4 h-4" />
@@ -504,8 +506,8 @@ watch(instances, (newInstances) => {
                   {{ t('widget.simpleCode') }}
                 </h3>
                 <button
-                  @click="copyToClipboard(fullSnippet, 'simple')"
                   class="flex items-center gap-2 px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                  @click="copyToClipboard(fullSnippet, 'simple')"
                 >
                   <Check v-if="copied === 'simple'" class="w-4 h-4 text-green-400" />
                   <Copy v-else class="w-4 h-4" />
@@ -572,8 +574,8 @@ watch(instances, (newInstances) => {
               {{ showCreateDialog ? t('widget.createWidget') : t('widget.editWidget') }}
             </h2>
             <button
-              @click="showCreateDialog = false; showEditDialog = false"
               class="p-1 hover:bg-secondary rounded"
+              @click="showCreateDialog = false; showEditDialog = false"
             >
               <X class="w-5 h-5" />
             </button>
@@ -620,13 +622,14 @@ watch(instances, (newInstances) => {
                 <p class="text-sm text-muted-foreground">{{ t('widget.enableWidgetDesc') }}</p>
               </div>
               <button
-                @click="formData.enabled = !formData.enabled"
                 :class="[
                   'relative w-11 h-6 rounded-full transition-colors',
                   formData.enabled ? 'bg-green-500' : 'bg-gray-500'
                 ]"
+                @click="formData.enabled = !formData.enabled"
               >
-                <span :class="[
+                <span
+:class="[
                   'absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform',
                   formData.enabled ? 'translate-x-5' : 'translate-x-0'
                 ]" />
@@ -675,7 +678,6 @@ watch(instances, (newInstances) => {
                     <button
                       v-for="preset in colorPresets"
                       :key="preset.value"
-                      @click="formData.primary_color = preset.value"
                       :class="[
                         'w-8 h-8 rounded-full border-2 transition-all',
                         formData.primary_color === preset.value
@@ -684,6 +686,7 @@ watch(instances, (newInstances) => {
                       ]"
                       :style="{ backgroundColor: preset.value }"
                       :title="preset.name"
+                      @click="formData.primary_color = preset.value"
                     />
                   </div>
                   <input
@@ -706,13 +709,13 @@ watch(instances, (newInstances) => {
                   <button
                     v-for="pos in ['left', 'right'] as const"
                     :key="pos"
-                    @click="formData.position = pos"
                     :class="[
                       'px-4 py-2 rounded-lg transition-colors capitalize',
                       formData.position === pos
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary hover:bg-secondary/80'
                     ]"
+                    @click="formData.position = pos"
                   >
                     {{ t(`widget.positions.${pos}`) }}
                   </button>
@@ -732,8 +735,8 @@ watch(instances, (newInstances) => {
                   @keydown.enter="addDomain"
                 />
                 <button
-                  @click="addDomain"
                   class="px-3 py-2 bg-primary text-primary-foreground rounded-lg"
+                  @click="addDomain"
                 >
                   <Plus class="w-4 h-4" />
                 </button>
@@ -745,7 +748,7 @@ watch(instances, (newInstances) => {
                   class="flex items-center gap-1 px-2 py-1 bg-secondary rounded text-sm"
                 >
                   {{ domain }}
-                  <button @click="removeDomain(domain)" class="text-muted-foreground hover:text-red-400">
+                  <button class="text-muted-foreground hover:text-red-400" @click="removeDomain(domain)">
                     <X class="w-3 h-3" />
                   </button>
                 </span>
@@ -818,15 +821,15 @@ watch(instances, (newInstances) => {
 
           <div class="p-4 border-t border-border flex justify-end gap-2">
             <button
-              @click="showCreateDialog = false; showEditDialog = false"
               class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+              @click="showCreateDialog = false; showEditDialog = false"
             >
               {{ t('common.cancel') }}
             </button>
             <button
-              @click="saveInstance"
               :disabled="createMutation.isPending.value || updateMutation.isPending.value || !formData.name"
               class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              @click="saveInstance"
             >
               <Loader2 v-if="createMutation.isPending.value || updateMutation.isPending.value" class="w-4 h-4 animate-spin" />
               <Check v-else class="w-4 h-4" />
