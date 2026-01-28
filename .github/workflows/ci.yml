@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint-backend:
-    name: Backend Lint & Type Check
+    name: lint-backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         run: mypy orchestrator.py --ignore-missing-imports || true
 
   lint-frontend:
-    name: Frontend Lint & Build
+    name: lint-frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +55,7 @@ jobs:
         run: npm run build
 
   security:
-    name: Security Scan
+    name: security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
