@@ -50,11 +50,7 @@ jobs:
         working-directory: admin
         run: npm run lint
 
-      - name: Type check
-        working-directory: admin
-        run: npm run type-check
-
-      - name: Build production bundle
+      - name: Build production bundle (includes type check)
         working-directory: admin
         run: npm run build
 

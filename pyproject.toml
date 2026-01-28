@@ -39,7 +39,7 @@ select = [
     "I",      # isort
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
-    "UP",     # pyupgrade
+    # "UP",   # pyupgrade - disabled (too many Optional[X] -> X | None warnings)
     "ARG",    # flake8-unused-arguments
     "SIM",    # flake8-simplify
     "TCH",    # flake8-type-checking
@@ -61,6 +61,7 @@ ignore = [
     "SIM108", # ternary operator (not always clearer)
     "UP007",  # Use X | Y for type annotations (Python 3.10+)
     "UP037",  # Remove quotes from type annotation
+    "UP040",  # Non-PEP 695 type alias
     # Russian language support
     "RUF001", # ambiguous unicode character in string (Cyrillic)
     "RUF002", # ambiguous unicode character in docstring
