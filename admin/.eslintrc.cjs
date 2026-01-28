@@ -41,6 +41,9 @@ module.exports = {
     "no-unused-vars": "off", // Use @typescript-eslint/no-unused-vars instead
     "prefer-const": "warn",
     "no-var": "error",
+    "no-constant-condition": "warn", // Allow while(true) etc
+    "no-useless-catch": "warn", // Allow for readability
+    "@typescript-eslint/ban-types": "warn", // Allow {} type in declaration files
   },
   ignorePatterns: [
     "dist/",

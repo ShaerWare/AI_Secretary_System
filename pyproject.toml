@@ -60,6 +60,8 @@ ignore = [
     "ARG002", # unused method argument
     "SIM108", # ternary operator (not always clearer)
     "UP007",  # Use X | Y for type annotations (Python 3.10+)
+    "UP037",  # Remove quotes from type annotation
+    "UP045",  # Use X | None instead of Optional[X]
     # Russian language support
     "RUF001", # ambiguous unicode character in string (Cyrillic)
     "RUF002", # ambiguous unicode character in docstring
