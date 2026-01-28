@@ -6,7 +6,9 @@ This module provides FastAPI dependencies that give routers access to
 shared services (TTS, LLM, STT, etc.) without global state.
 """
 
-from typing import TYPE_CHECKING, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
@@ -26,16 +28,16 @@ class ServiceContainer:
 
     def __init__(self):
         # TTS services
-        self.voice_service: Optional["VoiceCloneService"] = None  # XTTS Лидия
-        self.gulya_voice_service: Optional["VoiceCloneService"] = None  # XTTS Гуля
-        self.piper_service: Optional["PiperTTSService"] = None  # Piper CPU
+        self.voice_service: VoiceCloneService | None = None  # XTTS Лидия
+        self.gulya_voice_service: VoiceCloneService | None = None  # XTTS Гуля
+        self.piper_service: PiperTTSService | None = None  # Piper CPU
         self.openvoice_service = None  # OpenVoice v2
 
         # LLM service
-        self.llm_service: Optional["LLMService"] = None
+        self.llm_service: LLMService | None = None
 
         # STT service
-        self.stt_service: Optional["STTService"] = None
+        self.stt_service: STTService | None = None
 
         # Streaming TTS manager
         self.streaming_tts_manager = None
@@ -46,7 +48,7 @@ class ServiceContainer:
             "voice": "gulya",
         }
 
-    def get_current_voice_service(self) -> Optional["VoiceCloneService"]:
+    def get_current_voice_service(self) -> VoiceCloneService | None:
         """Get the currently active voice service based on config."""
         engine = self.current_voice_config.get("engine", "xtts")
         voice = self.current_voice_config.get("voice", "gulya")
@@ -66,7 +68,7 @@ class ServiceContainer:
 
 
 # Global service container instance
-_container: Optional[ServiceContainer] = None
+_container: ServiceContainer | None = None
 
 
 def get_container() -> ServiceContainer:
