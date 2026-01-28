@@ -40,5 +40,5 @@ psutil==5.9.8
 # Database
 aiosqlite==0.19.0
 sqlalchemy[asyncio]==2.0.25
-alembic==1.13.1
+alembic==1.18.1
 redis>=5.0.0
