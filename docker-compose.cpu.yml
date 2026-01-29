@@ -1,15 +1,11 @@
 # =============================================================================
-# AI Secretary System - Docker Compose Override (CPU Mode)
+# AI Secretary System - CPU Mode (no GPU required)
 # =============================================================================
+#
+# Uses Piper TTS (CPU) + Gemini API instead of XTTS + vLLM.
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
-#
-# This override file:
-#   - Uses CPU-only image (smaller, no CUDA)
-#   - Disables vLLM service
-#   - Sets Gemini as default LLM backend
-#   - Uses Piper TTS instead of XTTS
 #
 # =============================================================================
 
@@ -19,25 +15,13 @@ services:
       target: cpu
     image: ai-secretary:cpu
     environment:
-      # Override to use cloud LLM
+      # Use cloud LLM instead of local vLLM
       - LLM_BACKEND=gemini
       - VLLM_API_URL=
+      - GEMINI_API_KEY=${GEMINI_API_KEY:?GEMINI_API_KEY required for CPU mode}
       # Disable CUDA
       - CUDA_VISIBLE_DEVICES=
-    depends_on:
-      redis:
-        condition: service_healthy
-      # Remove vLLM dependency
     deploy:
       resources:
         reservations:
-          devices: []
-
-  # Disable vLLM service in CPU mode
-  vllm:
-    profiles:
-      - gpu-only
-
-  # Redis still used for caching
-  redis:
-    # No changes needed
+          devices: []  # No GPU

@@ -1,0 +1,79 @@
+# =============================================================================
+# AI Secretary System - Full Containerized Setup (with vLLM container)
+# =============================================================================
+#
+# Use this for production deployment or CI/CD where you need everything in Docker.
+# WARNING: vLLM image is ~9GB, first pull takes time.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
+#
+# =============================================================================
+
+services:
+  orchestrator:
+    environment:
+      # Override to use containerized vLLM
+      - VLLM_API_URL=http://vllm:8000/v1
+    extra_hosts: []  # Remove host.docker.internal
+    depends_on:
+      redis:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+    volumes:
+      # Persistent data
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      # Voice samples
+      - ./Гуля:/app/Гуля:ro
+      - ./Лидия:/app/Лидия:ro
+      # Named volumes for caches (not host mounts)
+      - tts_cache:/root/.local/share/tts
+      - hf_cache:/root/.cache/huggingface
+
+  # ---------------------------------------------------------------------------
+  # vLLM - Local LLM Inference Server (containerized)
+  # ---------------------------------------------------------------------------
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: ai-secretary-vllm
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      --gpu-memory-utilization 0.5
+      --max-model-len 4096
+      --dtype float16
+      --max-num-seqs 32
+      --enforce-eager
+      --trust-remote-code
+      --host 0.0.0.0
+      --port 8000
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ./finetune/adapters:/app/adapters:ro
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_LOGGING_LEVEL=WARNING
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+    networks:
+      - ai-secretary
+
+volumes:
+  tts_cache:
+    driver: local
+  hf_cache:
+    driver: local

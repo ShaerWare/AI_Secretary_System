@@ -19,14 +19,14 @@ COPY admin/ ./
 RUN npm run build
 
 # -----------------------------------------------------------------------------
-# Stage 2: Python Runtime with CUDA support
+# Stage 2: Python Runtime with CUDA
 # -----------------------------------------------------------------------------
+# Using nvidia/cuda base (smaller, likely cached) + install PyTorch via pip
 FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS runtime
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System dependencies
+# System dependencies + Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-venv \
@@ -42,25 +42,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Create virtual environment
+# Create venv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Install PyTorch + torchaudio (with pip cache for resume on network issues)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel \
+    && pip install torch==2.3.1 torchaudio==2.3.1 \
+       --index-url https://download.pytorch.org/whl/cu121
 
-# Install PyTorch with CUDA support first (large dependency)
-RUN pip install --no-cache-dir \
-    torch==2.1.2 \
-    torchaudio==2.1.2 \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# Install remaining Python dependencies
+# Install remaining dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Application code
 COPY *.py ./
+COPY app/ ./app/
 COPY db/ ./db/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
@@ -119,14 +118,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies (CPU versions)
+# Install Python dependencies (CPU versions, uses cache mount)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel \
+    && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
 
 # Application code
 COPY *.py ./
+COPY app/ ./app/
 COPY db/ ./db/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./

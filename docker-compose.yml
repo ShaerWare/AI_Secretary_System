@@ -1,16 +1,16 @@
 # =============================================================================
-# AI Secretary System - Docker Compose (GPU Mode)
+# AI Secretary System - Docker Compose
 # =============================================================================
 #
-# Usage:
-#   docker compose up -d                    # Start all services
-#   docker compose logs -f orchestrator     # View logs
-#   docker compose down                     # Stop all services
+# Default: Uses LOCAL vLLM (start with ./start_qwen.sh before docker compose)
 #
-# Requirements:
-#   - NVIDIA GPU with 12GB+ VRAM
-#   - NVIDIA Container Toolkit installed
-#   - Docker Compose v2.x
+# Usage:
+#   ./start_qwen.sh                    # Start local vLLM first
+#   docker compose up -d               # Start orchestrator + redis
+#   docker compose logs -f orchestrator
+#
+# For FULL containerized setup (downloads ~9GB vLLM image):
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
 #
 # =============================================================================
 
@@ -32,19 +32,19 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./models:/app/models
-      # Voice samples (read-only, already in image but can override)
+      # Voice samples
       - ./Гуля:/app/Гуля:ro
       - ./Лидия:/app/Лидия:ro
-      # Model caches (named volumes for persistence)
-      - tts_cache:/root/.cache/tts_models
-      - hf_cache:/root/.cache/huggingface
+      # Mount LOCAL caches (no re-download)
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+      - ${HOME}/.local/share/tts:/root/.local/share/tts
     environment:
-      # LLM Configuration
+      # LLM - connect to LOCAL vLLM on host
       - LLM_BACKEND=${LLM_BACKEND:-vllm}
-      - VLLM_API_URL=http://vllm:8000/v1
+      - VLLM_API_URL=http://host.docker.internal:11434/v1
       - VLLM_MODEL_NAME=${VLLM_MODEL_NAME:-}
       - SECRETARY_PERSONA=${SECRETARY_PERSONA:-gulya}
-      # Cloud LLM (optional fallback)
+      # Cloud LLM fallback
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       # Database
       - REDIS_URL=redis://redis:6379/0
@@ -53,11 +53,11 @@ services:
       - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-}
       # TTS
       - COQUI_TOS_AGREED=1
-      - TTS_CACHE_PATH=/root/.cache/tts_models
+      - TTS_CACHE_PATH=/root/.local/share/tts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_healthy
-      vllm:
         condition: service_healthy
     deploy:
       resources:
@@ -75,45 +75,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-  # ---------------------------------------------------------------------------
-  # vLLM - Local LLM Inference Server
-  # ---------------------------------------------------------------------------
-  vllm:
-    image: vllm/vllm-openai:latest
-    container_name: ai-secretary-vllm
-    command: >
-      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
-      --gpu-memory-utilization 0.5
-      --max-model-len 4096
-      --dtype float16
-      --max-num-seqs 32
-      --enforce-eager
-      --trust-remote-code
-      --host 0.0.0.0
-      --port 8000
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-      - ./finetune/adapters:/app/adapters:ro
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
-      - VLLM_LOGGING_LEVEL=WARNING
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 180s
-    restart: unless-stopped
-    networks:
-      - ai-secretary
 
   # ---------------------------------------------------------------------------
   # Redis - Caching and Rate Limiting
@@ -138,10 +99,6 @@ services:
 # =============================================================================
 volumes:
   redis_data:
-    driver: local
-  tts_cache:
-    driver: local
-  hf_cache:
     driver: local
 
 # =============================================================================

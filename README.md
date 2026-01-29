@@ -87,10 +87,14 @@ cd AI_Secretary_System
 cp .env.docker .env
 # Edit .env: set GEMINI_API_KEY for cloud fallback
 
-# GPU Mode (XTTS + vLLM) - requires NVIDIA GPU 12GB+
-docker compose up -d
+# Option 1: Use LOCAL vLLM (recommended - faster, no 9GB download)
+./start_qwen.sh                    # Start local vLLM first
+docker compose up -d               # Start orchestrator + redis
 
-# CPU Mode (Piper + Gemini) - no GPU required
+# Option 2: FULL containerized (downloads ~9GB vLLM image)
+docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
+
+# Option 3: CPU Mode (Piper + Gemini) - no GPU required
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
 
 # Check status
