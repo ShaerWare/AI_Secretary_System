@@ -41,7 +41,7 @@ services:
     environment:
       # LLM - connect to LOCAL vLLM on host
       - LLM_BACKEND=${LLM_BACKEND:-vllm}
-      - VLLM_API_URL=http://host.docker.internal:11434/v1
+      - VLLM_API_URL=http://host.docker.internal:11434
       - VLLM_MODEL_NAME=${VLLM_MODEL_NAME:-}
       - SECRETARY_PERSONA=${SECRETARY_PERSONA:-gulya}
       # Cloud LLM fallback
