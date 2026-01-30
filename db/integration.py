@@ -116,11 +116,13 @@ class AsyncChatManager:
         self,
         title: str = None,
         system_prompt: str = None,
+        source: str = None,
+        source_id: str = None,
     ) -> dict:
         """Create new session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.create_session(title, system_prompt)
+            return await repo.create_session(title, system_prompt, source, source_id)
 
     async def update_session(
         self,
@@ -138,6 +140,18 @@ class AsyncChatManager:
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.delete_session(session_id)
+
+    async def delete_sessions_bulk(self, session_ids: List[str]) -> int:
+        """Delete multiple sessions by ID list."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.delete_sessions_bulk(session_ids)
+
+    async def list_sessions_grouped(self) -> dict:
+        """Get sessions grouped by source."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.list_sessions_grouped()
 
     async def add_message(
         self,

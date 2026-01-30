@@ -93,13 +93,23 @@ pytest tests/                          # All tests
 pytest tests/unit/test_db.py -v        # Single file
 pytest -k "test_chat" -v               # By name pattern
 pytest -m "not slow" -v                # Exclude slow tests
+pytest -m "not integration" -v         # Exclude integration tests
+pytest -m "not gpu" -v                 # Exclude GPU-required tests
 
 # Frontend tests
 cd admin && npm test
 
 # Integration test (requires running system)
 ./test_system.sh
+
+# Database tests
+python scripts/test_db.py
 ```
+
+**Test markers** (defined in `pyproject.toml`):
+- `slow` — long-running tests
+- `integration` — requires external services
+- `gpu` — requires CUDA GPU
 
 ### External Access (for Widget/Telegram)
 
@@ -134,7 +144,7 @@ app/
 │   ├── stt.py               # 4 endpoints  - STT status, transcribe
 │   ├── llm.py               # 24 endpoints - Backend, persona, cloud providers
 │   ├── tts.py               # 15 endpoints - Presets, params, test, cache, streaming
-│   ├── chat.py              # 10 endpoints - Sessions, messages, streaming
+│   ├── chat.py              # 12 endpoints - Sessions (CRUD, bulk delete, grouping), messages, streaming
 │   ├── telegram.py          # 22 endpoints - Bot instances CRUD, control
 │   └── widget.py            # 7 endpoints  - Widget instances CRUD
 └── services/
@@ -166,13 +176,30 @@ admin/src/
 
 **Location:** `data/secretary.db`
 
-**Key tables:** `chat_sessions`, `chat_messages`, `faq_entries`, `tts_presets`, `system_config`, `telegram_sessions`, `audit_log`, `cloud_llm_providers`, `bot_instances`, `widget_instances`
+**Key tables:** `chat_sessions` (with `source`, `source_id` for tracking origin), `chat_messages`, `faq_entries`, `tts_presets`, `system_config`, `telegram_sessions`, `audit_log`, `cloud_llm_providers`, `bot_instances`, `widget_instances`
 
 **Redis (optional):** Used for caching with graceful fallback if unavailable.
 
 ```bash
 python scripts/migrate_json_to_db.py      # First-time migration
 python scripts/migrate_to_instances.py    # Multi-instance migration
+```
+
+**Repository pattern:**
+```
+db/
+├── database.py           # SQLite async connection
+├── models.py             # SQLAlchemy ORM models + PROVIDER_TYPES dict
+├── redis_client.py       # Redis caching with fallback
+├── integration.py        # Backward-compatible managers
+└── repositories/         # Data access layer
+    ├── base.py           # BaseRepository with CRUD
+    ├── chat.py           # ChatRepository
+    ├── faq.py            # FAQRepository
+    ├── preset.py         # PresetRepository
+    ├── config.py         # ConfigRepository
+    ├── telegram.py       # TelegramRepository
+    └── audit.py          # AuditRepository
 ```
 
 ## Environment Variables
@@ -197,10 +224,11 @@ REDIS_URL=redis://localhost:6379/0  # Optional, for caching
 3. Router is auto-registered via `app/routers/__init__.py`
 
 **Adding a new cloud LLM provider type:**
-1. Add entry to `PROVIDER_TYPES` dict in `db/models.py`
-2. If OpenAI-compatible, `OpenAICompatibleProvider` in `cloud_llm_service.py` handles it
-3. For custom SDK, create new provider class inheriting `BaseLLMProvider`
+1. Add entry to `PROVIDER_TYPES` dict in `db/models.py` (includes name, base_url, default_model)
+2. If OpenAI-compatible, `OpenAICompatibleProvider` in `cloud_llm_service.py` handles it automatically
+3. For custom SDK (like Gemini), create new provider class inheriting `BaseLLMProvider`
 4. Register in `CloudLLMService.PROVIDER_CLASSES`
+5. UI dropdown auto-populates from `GET /admin/llm/providers` endpoint
 
 **Adding a new XTTS voice:**
 1. Create folder with WAV samples: `./NewVoice/`
@@ -259,16 +287,19 @@ Key patterns:
 2. **XTTS requires CC >= 7.0** — RTX 3060+; use OpenVoice for older GPUs (CC >= 6.1)
 3. **GPU memory sharing** — vLLM 50% (~6GB) + XTTS ~5GB on 12GB GPU
 4. **OpenWebUI Docker** — Use `172.17.0.1` not `localhost` for API URL
+5. **Ruff ignores Cyrillic** — RUF001/002/003 disabled to allow Russian strings in code
+6. **Docker + vLLM** — vLLM runs on host, not in container. Start `./start_qwen.sh` before switching to vLLM in admin panel
 
 ## Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | ruff, mypy, pytest, coverage config |
+| `pyproject.toml` | ruff, mypy, pytest, coverage config + test markers |
 | `.pre-commit-config.yaml` | Pre-commit hooks |
 | `admin/.eslintrc.cjs` | ESLint config |
 | `admin/.prettierrc` | Prettier config |
 | `.env.docker` | Docker environment template |
+| `.env.example` | Local development environment template |
 
 ## Roadmap
 
@@ -277,6 +308,9 @@ See [BACKLOG.md](./BACKLOG.md) for task tracking and [docs/IMPROVEMENT_PLAN.md](
 **Current focus:** Foundation (security, testing) → Monetization → GSM Telephony
 
 **Recently completed:**
+- ✅ **Chat Management** — Inline rename, bulk delete, grouping by source (Admin/Telegram/Widget)
+- ✅ **Source Tracking** — Chat sessions track origin (admin panel, telegram bot, widget)
+- ✅ **Cloud AI Label** — Renamed "Gemini" to "Cloud AI" for generic cloud provider support
 - ✅ Cloud LLM provider selection with dropdown UI (OpenRouter, Gemini, OpenAI, etc.)
 - ✅ Updated OpenRouter models list (January 2026 free models)
 - ✅ Improved error messages for cloud API errors (401, 404, 429)

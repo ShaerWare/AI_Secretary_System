@@ -309,6 +309,8 @@ class TelegramBotService:
                 json={
                     "title": title,
                     "system_prompt": self.config.get("system_prompt"),
+                    "source": "telegram",
+                    "source_id": f"{self.instance_id}:{user_id}",
                 },
             ) as resp:
                 if resp.status == 200:

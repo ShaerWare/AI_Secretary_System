@@ -72,6 +72,8 @@ class ChatRepository(BaseRepository[ChatSession]):
         self,
         title: str = None,
         system_prompt: str = None,
+        source: str = None,
+        source_id: str = None,
     ) -> dict:
         """Create new chat session."""
         session_id = self._generate_session_id()
@@ -81,6 +83,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             id=session_id,
             title=title or "Новый чат",
             system_prompt=system_prompt,
+            source=source,
+            source_id=source_id,
             created=now,
             updated=now,
         )
@@ -94,6 +98,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             "id": session.id,
             "title": session.title,
             "system_prompt": session.system_prompt,
+            "source": session.source,
+            "source_id": session.source_id,
             "created": session.created.isoformat() if session.created else None,
             "updated": session.updated.isoformat() if session.updated else None,
             "messages": [],  # New session has no messages
@@ -133,6 +139,48 @@ class ChatRepository(BaseRepository[ChatSession]):
         await self.session.commit()
         await invalidate_session_cache(session_id)
         return result.rowcount > 0
+
+    async def delete_sessions_bulk(self, session_ids: List[str]) -> int:
+        """Delete multiple sessions by ID list."""
+        if not session_ids:
+            return 0
+
+        result = await self.session.execute(
+            delete(ChatSession).where(ChatSession.id.in_(session_ids))
+        )
+        await self.session.commit()
+
+        # Invalidate cache for all deleted sessions
+        for sid in session_ids:
+            await invalidate_session_cache(sid)
+
+        return result.rowcount
+
+    async def list_sessions_grouped(self) -> dict:
+        """Get sessions grouped by source."""
+        result = await self.session.execute(
+            select(ChatSession)
+            .options(selectinload(ChatSession.messages))
+            .order_by(ChatSession.updated.desc())
+        )
+        sessions = result.scalars().all()
+
+        grouped = {
+            "admin": [],
+            "telegram": [],
+            "widget": [],
+            "unknown": [],
+        }
+
+        for s in sessions:
+            summary = s.to_summary()
+            source = s.source or "unknown"
+            if source in grouped:
+                grouped[source].append(summary)
+            else:
+                grouped["unknown"].append(summary)
+
+        return grouped
 
     async def add_message(
         self,

@@ -933,7 +933,7 @@ watch(instances, (newInstances) => {
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="vllm">vLLM</option>
-                  <option value="gemini">Gemini</option>
+                  <option value="gemini">{{ t('llm.cloudAI') }}</option>
                 </select>
               </div>
               <div>
@@ -1146,8 +1146,8 @@ watch(instances, (newInstances) => {
                 class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">{{ t('telegram.useDefaultBackend') }}</option>
-                <option value="vllm">vLLM (Local)</option>
-                <option value="gemini">Gemini</option>
+                <option value="vllm">{{ t('llm.vllmLocal') }}</option>
+                <option value="gemini">{{ t('llm.cloudAI') }}</option>
               </select>
               <p class="text-xs text-muted-foreground mt-1">
                 Cloud providers can be configured as "cloud:provider-id"

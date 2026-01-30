@@ -26,6 +26,12 @@ router = APIRouter(prefix="/admin/chat", tags=["chat"])
 class CreateSessionRequest(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    source: Optional[str] = None  # "admin", "telegram", "widget"
+    source_id: Optional[str] = None  # identifier (e.g., "bot_id:user_id")
+
+
+class BulkDeleteRequest(BaseModel):
+    session_ids: list[str]
 
 
 class UpdateSessionRequest(BaseModel):
@@ -52,8 +58,11 @@ class EditMessageRequest(BaseModel):
 
 
 @router.get("/sessions")
-async def admin_list_chat_sessions():
-    """Список всех чат-сессий"""
+async def admin_list_chat_sessions(group_by: Optional[str] = None):
+    """Список всех чат-сессий. group_by=source для группировки по источнику."""
+    if group_by == "source":
+        grouped = await async_chat_manager.list_sessions_grouped()
+        return {"sessions": grouped, "grouped": True}
     sessions = await async_chat_manager.list_sessions()
     return {"sessions": sessions}
 
@@ -61,8 +70,17 @@ async def admin_list_chat_sessions():
 @router.post("/sessions")
 async def admin_create_chat_session(request: CreateSessionRequest):
     """Создать новую чат-сессию"""
-    session = await async_chat_manager.create_session(request.title, request.system_prompt)
+    session = await async_chat_manager.create_session(
+        request.title, request.system_prompt, request.source, request.source_id
+    )
     return {"session": session}
+
+
+@router.post("/sessions/bulk-delete")
+async def admin_bulk_delete_sessions(request: BulkDeleteRequest):
+    """Удалить несколько сессий сразу"""
+    count = await async_chat_manager.delete_sessions_bulk(request.session_ids)
+    return {"status": "ok", "deleted": count}
 
 
 @router.get("/sessions/{session_id}")

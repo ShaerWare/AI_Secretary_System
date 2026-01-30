@@ -72,7 +72,10 @@ const messages = {
       topP: 'Top P',
       repetitionPenalty: 'Штраф повтора',
       systemPrompt: 'Системный промпт',
-      resetPrompt: 'Сбросить промпт'
+      resetPrompt: 'Сбросить промпт',
+      vllmLocal: 'vLLM (Local)',
+      cloudAI: 'Облачный ИИ',
+      stopVllmHint: 'Остановить vLLM при переключении на облачный ИИ (освободит ~6GB GPU)'
     },
     // Cloud Providers
     cloudProviders: {
@@ -170,6 +173,29 @@ const messages = {
       settings: 'Настройки',
       copy: 'Копировать',
       copied: 'Скопировано'
+    },
+    // Chat View
+    chatView: {
+      title: 'Чаты',
+      newChat: 'Новый чат',
+      deleteChat: 'Удалить чат',
+      deleteSelected: 'Удалить выбранные',
+      selectAll: 'Выбрать все',
+      deselectAll: 'Снять выделение',
+      selectedCount: 'Выбрано: {count}',
+      rename: 'Переименовать',
+      confirmDelete: 'Удалить чат "{title}"?',
+      confirmBulkDelete: 'Удалить {count} чатов?',
+      deleteWarning: 'Это действие нельзя отменить',
+      noChats: 'Нет чатов',
+      noChatsInGroup: 'Нет чатов в этой группе',
+      createFirst: 'Создать первый чат',
+      groups: {
+        admin: 'Админ-панель',
+        telegram: 'Telegram',
+        widget: 'Виджет',
+        unknown: 'Другие'
+      }
     },
     // Auth
     auth: {
@@ -493,7 +519,10 @@ const messages = {
       topP: 'Top P',
       repetitionPenalty: 'Repetition Penalty',
       systemPrompt: 'System Prompt',
-      resetPrompt: 'Reset Prompt'
+      resetPrompt: 'Reset Prompt',
+      vllmLocal: 'vLLM (Local)',
+      cloudAI: 'Cloud AI',
+      stopVllmHint: 'Stop vLLM when switching to Cloud AI (will free ~6GB GPU)'
     },
     // Cloud LLM Providers
     cloudProviders: {
@@ -591,6 +620,29 @@ const messages = {
       settings: 'Settings',
       copy: 'Copy',
       copied: 'Copied'
+    },
+    // Chat View
+    chatView: {
+      title: 'Chats',
+      newChat: 'New Chat',
+      deleteChat: 'Delete chat',
+      deleteSelected: 'Delete selected',
+      selectAll: 'Select all',
+      deselectAll: 'Deselect all',
+      selectedCount: 'Selected: {count}',
+      rename: 'Rename',
+      confirmDelete: 'Delete chat "{title}"?',
+      confirmBulkDelete: 'Delete {count} chats?',
+      deleteWarning: 'This action cannot be undone',
+      noChats: 'No chats',
+      noChatsInGroup: 'No chats in this group',
+      createFirst: 'Create first chat',
+      groups: {
+        admin: 'Admin Panel',
+        telegram: 'Telegram',
+        widget: 'Widget',
+        unknown: 'Other'
+      }
     },
     // Auth
     auth: {

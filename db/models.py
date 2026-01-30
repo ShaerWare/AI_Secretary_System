@@ -49,6 +49,10 @@ class ChatSession(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    # Source tracking (admin, telegram, widget)
+    source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     # Relationships
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage",
@@ -62,6 +66,8 @@ class ChatSession(Base):
             "id": self.id,
             "title": self.title,
             "system_prompt": self.system_prompt,
+            "source": self.source,
+            "source_id": self.source_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
@@ -78,6 +84,8 @@ class ChatSession(Base):
             "title": self.title,
             "message_count": len(messages),
             "last_message": last_msg,
+            "source": self.source,
+            "source_id": self.source_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }

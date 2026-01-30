@@ -115,6 +115,26 @@ docker compose down
 - NVIDIA Container Toolkit (GPU mode only)
 - 12GB+ VRAM (GPU) or Gemini API key (CPU)
 
+**vLLM в Docker режиме:**
+
+vLLM автоматически запускается как отдельный контейнер при переключении LLM backend в админ-панели.
+
+```bash
+# Первый раз: скачать образ vLLM (~9GB, одноразово)
+docker pull vllm/vllm-openai:latest
+
+# После этого переключение на vLLM в Admin Panel → LLM → Backend
+# автоматически создаст и запустит vLLM контейнер
+
+# Проверить статус vLLM контейнера
+docker ps | grep vllm
+
+# Логи vLLM
+docker logs ai-secretary-vllm
+```
+
+Загрузка модели при первом запуске занимает 2-3 минуты.
+
 ## Quick Start (Local Development)
 
 ```bash
@@ -148,7 +168,7 @@ open http://localhost:8002/admin
 | Tab | Description |
 |-----|-------------|
 | **Dashboard** | Статусы сервисов, GPU спарклайны, health индикаторы |
-| **Chat** | Чат с ИИ, Voice Mode (auto-TTS), голосовой ввод (STT), редактирование промптов |
+| **Chat** | Чат с ИИ, Voice Mode (auto-TTS), голосовой ввод (STT), редактирование промптов, управление чатами (rename, bulk delete, grouping) |
 | **Services** | Запуск/остановка vLLM, SSE логи в реальном времени |
 | **LLM** | Выбор модели (Qwen/Llama/DeepSeek), персоны, параметры генерации |
 | **TTS** | Выбор голоса, пресеты XTTS, тестирование синтеза |
@@ -175,6 +195,7 @@ open http://localhost:8002/admin
 | **Voice Mode** | Auto-play TTS при получении ответа |
 | **Voice Input** | Голосовой ввод через микрофон (STT) |
 | **Prompt Editor** | Редактирование дефолтного промпта из чата |
+| **Chat Management** | Переименование, групповое удаление, группировка по источнику (Admin/Telegram/Widget) |
 | **Charts** | Спарклайны и графики на Chart.js |
 | **Command Palette** | Быстрый поиск ⌘K / Ctrl+K |
 | **Audit Log** | Логирование всех действий пользователей |
@@ -285,7 +306,7 @@ curl -X POST http://localhost:8002/admin/stt/transcribe \
 
 | Таблица | Назначение |
 |---------|------------|
-| `chat_sessions` | Сессии чата (id, title, system_prompt) |
+| `chat_sessions` | Сессии чата (id, title, system_prompt, source, source_id) |
 | `chat_messages` | Сообщения (role, content, timestamp) |
 | `faq_entries` | FAQ вопрос-ответ |
 | `tts_presets` | Пользовательские пресеты TTS |
@@ -493,7 +514,7 @@ open http://localhost:8002/admin → LLM tab
 |---------|-------|-------|--------------|
 | `vllm` | Qwen2.5-7B + LoRA | Fast | GPU 12GB+ |
 | `vllm` | Llama-3.1-8B GPTQ | Fast | GPU 12GB+ |
-| `gemini` | Gemini 2.5 Pro | Variable | API key |
+| `gemini` (Cloud AI) | Any cloud provider | Variable | API key |
 
 **Switching Backend:**
 ```bash
@@ -672,9 +693,11 @@ GET  /admin/telegram/instances/{id}/logs    # Bot logs
 
 # Chat
 GET  /admin/chat/sessions            # List chat sessions
-POST /admin/chat/sessions            # Create session
+GET  /admin/chat/sessions?group_by=source # List grouped by source (admin/telegram/widget)
+POST /admin/chat/sessions            # Create session (with source tracking)
+POST /admin/chat/sessions/bulk-delete # Bulk delete sessions
 GET  /admin/chat/sessions/{id}       # Get session
-PUT  /admin/chat/sessions/{id}       # Update session
+PUT  /admin/chat/sessions/{id}       # Update session (rename)
 DELETE /admin/chat/sessions/{id}     # Delete session
 POST /admin/chat/sessions/{id}/messages # Send message
 POST /admin/chat/sessions/{id}/stream   # SSE streaming chat
@@ -1018,6 +1041,8 @@ npm run build
 - [x] **Multi-Instance Bots/Widgets** — несколько ботов и виджетов с независимыми настройками
 - [x] **Docker Compose** — one-command deployment (GPU + CPU режимы)
 - [x] **Code Quality** — ruff, mypy, eslint, pre-commit hooks
+- [x] **Chat Management** — переименование, групповое удаление, группировка по источнику
+- [x] **Source Tracking** — отслеживание источника чат-сессий (admin/telegram/widget)
 
 **В планах:**
 - [ ] Телефония SIM7600G-H (AT-команды)

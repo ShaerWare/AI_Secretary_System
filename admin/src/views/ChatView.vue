@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { chatApi, ttsApi, llmApi, sttApi, type ChatSession, type ChatMessage, type ChatSessionSummary } from '@/api'
+import { useI18n } from 'vue-i18n'
+import { chatApi, ttsApi, llmApi, sttApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions } from '@/api'
+import { useConfirmStore } from '@/stores/confirm'
 import {
   MessageSquare,
   Plus,
@@ -13,6 +15,8 @@ import {
   Check,
   X,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Loader2,
   Bot,
   User,
@@ -25,8 +29,13 @@ import {
   FileText,
   Sparkles,
   Mic,
-  MicOff
+  MicOff,
+  CheckSquare,
+  ListChecks
 } from 'lucide-vue-next'
+
+const { t } = useI18n()
+const confirmStore = useConfirmStore()
 
 const queryClient = useQueryClient()
 
@@ -44,6 +53,18 @@ const editingDefaultPrompt = ref('')
 const isEditingDefault = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 const showSidebar = ref(true)
+
+// Selection mode state
+const selectionMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+
+// Inline rename state
+const renamingSessionId = ref<string | null>(null)
+const renamingTitle = ref('')
+
+// Grouping state
+const groupBySource = ref(true)
+const collapsedGroups = ref<Set<string>>(new Set())
 
 // TTS state
 const audioRef = ref<HTMLAudioElement | null>(null)
@@ -84,8 +105,15 @@ const { data: defaultPromptData } = useQuery({
   queryFn: () => chatApi.getDefaultPrompt(),
 })
 
+const { data: groupedSessionsData, refetch: refetchGrouped } = useQuery({
+  queryKey: ['chat-sessions-grouped'],
+  queryFn: () => chatApi.listSessionsGrouped(),
+  enabled: computed(() => groupBySource.value),
+})
+
 // Computed
 const sessions = computed(() => sessionsData.value?.sessions || [])
+const groupedSessions = computed(() => groupedSessionsData.value?.sessions || null)
 const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
 const defaultPrompt = computed(() => defaultPromptData.value?.prompt || '')
@@ -99,9 +127,10 @@ watch(currentSession, (session) => {
 
 // Mutations
 const createSessionMutation = useMutation({
-  mutationFn: () => chatApi.createSession(),
+  mutationFn: () => chatApi.createSession(undefined, undefined, 'admin'),
   onSuccess: (data) => {
     refetchSessions()
+    refetchGrouped()
     currentSessionId.value = data.session.id
   },
 })
@@ -110,6 +139,23 @@ const deleteSessionMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.deleteSession(sessionId),
   onSuccess: () => {
     refetchSessions()
+    refetchGrouped()
+    if (sessions.value.length > 0) {
+      currentSessionId.value = sessions.value[0].id
+    } else {
+      currentSessionId.value = null
+    }
+  },
+})
+
+const bulkDeleteMutation = useMutation({
+  mutationFn: (sessionIds: string[]) => chatApi.bulkDeleteSessions(sessionIds),
+  onSuccess: () => {
+    selectedIds.value.clear()
+    selectionMode.value = false
+    refetchSessions()
+    refetchGrouped()
+    // Select first remaining session or clear
     if (sessions.value.length > 0) {
       currentSessionId.value = sessions.value[0].id
     } else {
@@ -124,6 +170,7 @@ const updateSessionMutation = useMutation({
   onSuccess: () => {
     refetchSession()
     refetchSessions()
+    refetchGrouped()
   },
 })
 
@@ -199,9 +246,104 @@ function createNewChat() {
   createSessionMutation.mutate()
 }
 
-function deleteCurrentSession() {
-  if (currentSessionId.value && confirm('Delete this chat?')) {
+async function deleteCurrentSession() {
+  if (!currentSessionId.value) return
+  const session = sessions.value.find(s => s.id === currentSessionId.value)
+
+  const confirmed = await confirmStore.confirmDelete(
+    session?.title || 'chat',
+    'chat'
+  )
+
+  if (confirmed) {
     deleteSessionMutation.mutate(currentSessionId.value)
+  }
+}
+
+// Selection mode methods
+function toggleSelection(sessionId: string) {
+  if (selectedIds.value.has(sessionId)) {
+    selectedIds.value.delete(sessionId)
+  } else {
+    selectedIds.value.add(sessionId)
+  }
+}
+
+function selectAllSessions() {
+  sessions.value.forEach(s => selectedIds.value.add(s.id))
+}
+
+function deselectAll() {
+  selectedIds.value.clear()
+}
+
+async function deleteSelected() {
+  if (selectedIds.value.size === 0) return
+
+  const confirmed = await confirmStore.confirm({
+    title: t('chatView.deleteSelected'),
+    message: t('chatView.confirmBulkDelete', { count: selectedIds.value.size }),
+    confirmText: t('common.delete'),
+    type: 'danger'
+  })
+
+  if (confirmed) {
+    bulkDeleteMutation.mutate([...selectedIds.value])
+  }
+}
+
+// Grouping methods
+function toggleGroup(groupName: string) {
+  if (collapsedGroups.value.has(groupName)) {
+    collapsedGroups.value.delete(groupName)
+  } else {
+    collapsedGroups.value.add(groupName)
+  }
+}
+
+// Inline rename methods
+function startRename(session: ChatSessionSummary, event: Event) {
+  event.stopPropagation()
+  renamingSessionId.value = session.id
+  renamingTitle.value = session.title
+  nextTick(() => {
+    const input = document.querySelector('.rename-input') as HTMLInputElement
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelRename() {
+  renamingSessionId.value = null
+  renamingTitle.value = ''
+}
+
+function saveRename() {
+  if (!renamingSessionId.value || !renamingTitle.value.trim()) {
+    cancelRename()
+    return
+  }
+
+  updateSessionMutation.mutate({
+    sessionId: renamingSessionId.value,
+    data: { title: renamingTitle.value.trim() }
+  })
+
+  renamingSessionId.value = null
+  renamingTitle.value = ''
+}
+
+// Delete single session from list
+async function deleteSingleSession(session: ChatSessionSummary, event: Event) {
+  event.stopPropagation()
+
+  const confirmed = await confirmStore.confirmDelete(
+    session.title,
+    'chat'
+  )
+
+  if (confirmed) {
+    deleteSessionMutation.mutate(session.id)
   }
 }
 
@@ -270,6 +412,28 @@ function regenerateResponse(messageId: string) {
     sessionId: currentSessionId.value,
     messageId,
   })
+}
+
+// Find the previous user message for an assistant message
+function findPreviousUserMessageId(assistantMessageId: string): string | null {
+  const msgList = messages.value
+  const index = msgList.findIndex(m => m.id === assistantMessageId)
+  if (index <= 0) return null
+
+  // Look backwards for the user message
+  for (let i = index - 1; i >= 0; i--) {
+    if (msgList[i].role === 'user') {
+      return msgList[i].id
+    }
+  }
+  return null
+}
+
+function regenerateAssistantResponse(assistantMessageId: string) {
+  const userMessageId = findPreviousUserMessageId(assistantMessageId)
+  if (userMessageId) {
+    regenerateResponse(userMessageId)
+  }
 }
 
 function deleteMessage(messageId: string) {
@@ -484,46 +648,225 @@ watch(sessions, (newSessions) => {
       <div class="p-4 border-b border-border flex items-center justify-between">
         <h2 class="font-semibold flex items-center gap-2">
           <MessageSquare class="w-5 h-5" />
-          Chats
+          {{ t('chatView.title') }}
         </h2>
-        <button
-          @click="createNewChat"
-          :disabled="createSessionMutation.isPending.value"
-          class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Plus class="w-4 h-4" />
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            @click="selectionMode = !selectionMode"
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
+            :title="selectionMode ? t('chatView.deselectAll') : t('chatView.selectAll')"
+          >
+            <ListChecks class="w-4 h-4" />
+          </button>
+          <button
+            @click="createNewChat"
+            :disabled="createSessionMutation.isPending.value"
+            class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <!-- Sessions List -->
-      <div class="flex-1 overflow-y-auto">
+      <!-- Bulk actions toolbar (when in selection mode) -->
+      <div v-if="selectionMode && selectedIds.size > 0" class="p-2 border-b border-border bg-secondary/50">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-muted-foreground">{{ t('chatView.selectedCount', { count: selectedIds.size }) }}</span>
+          <div class="flex gap-2">
+            <button @click="selectAllSessions" class="text-xs text-primary hover:underline">{{ t('chatView.selectAll') }}</button>
+            <button @click="deselectAll" class="text-xs hover:underline">{{ t('chatView.deselectAll') }}</button>
+            <button @click="deleteSelected" class="text-xs text-red-500 hover:underline">{{ t('chatView.deleteSelected') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sessions List (Grouped) -->
+      <div v-if="groupBySource && groupedSessions" class="flex-1 overflow-y-auto">
+        <template v-for="groupName in ['admin', 'telegram', 'widget', 'unknown']" :key="groupName">
+          <div v-if="groupedSessions[groupName as keyof typeof groupedSessions]?.length > 0">
+            <!-- Group header (collapsible) -->
+            <div
+              @click="toggleGroup(groupName)"
+              class="px-3 py-2 bg-secondary/30 flex items-center gap-2 cursor-pointer hover:bg-secondary/50 sticky top-0"
+            >
+              <ChevronRight v-if="collapsedGroups.has(groupName)" class="w-4 h-4 text-muted-foreground" />
+              <ChevronDown v-else class="w-4 h-4 text-muted-foreground" />
+              <span class="text-xs font-medium uppercase text-muted-foreground">
+                {{ t(`chatView.groups.${groupName}`) }}
+              </span>
+              <span class="text-xs text-muted-foreground ml-auto">
+                {{ groupedSessions[groupName as keyof typeof groupedSessions].length }}
+              </span>
+            </div>
+
+            <!-- Group sessions -->
+            <div v-if="!collapsedGroups.has(groupName)">
+              <div
+                v-for="session in groupedSessions[groupName as keyof typeof groupedSessions]"
+                :key="session.id"
+                @click="!selectionMode && selectSession(session.id)"
+                :class="[
+                  'p-3 cursor-pointer border-b border-border transition-colors group',
+                  currentSessionId === session.id
+                    ? 'bg-primary/10 border-l-2 border-l-primary'
+                    : 'hover:bg-secondary/50'
+                ]"
+              >
+                <div class="flex items-start gap-2">
+                  <!-- Checkbox (selection mode) -->
+                  <input
+                    v-if="selectionMode"
+                    type="checkbox"
+                    :checked="selectedIds.has(session.id)"
+                    @click.stop="toggleSelection(session.id)"
+                    class="mt-1 rounded border-border"
+                  />
+
+                  <div class="flex-1 min-w-0">
+                    <!-- Title (normal or editing) -->
+                    <template v-if="renamingSessionId === session.id">
+                      <input
+                        v-model="renamingTitle"
+                        @keydown.enter="saveRename"
+                        @keydown.escape="cancelRename"
+                        @blur="saveRename"
+                        @click.stop
+                        class="rename-input w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </template>
+                    <template v-else>
+                      <p
+                        class="font-medium text-sm truncate"
+                        @dblclick="startRename(session, $event)"
+                      >
+                        {{ session.title }}
+                      </p>
+                    </template>
+
+                    <p class="text-xs text-muted-foreground truncate mt-1">
+                      {{ session.last_message || t('chatView.noChats') }}
+                    </p>
+                    <p class="text-xs text-muted-foreground mt-1">
+                      {{ session.message_count }} messages
+                    </p>
+                  </div>
+
+                  <!-- Action buttons (on hover, not in selection mode) -->
+                  <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                    <button
+                      @click.stop="startRename(session, $event)"
+                      class="p-1 rounded hover:bg-background text-muted-foreground"
+                      :title="t('chatView.rename')"
+                    >
+                      <Edit3 class="w-3 h-3" />
+                    </button>
+                    <button
+                      @click.stop="deleteSingleSession(session, $event)"
+                      class="p-1 rounded hover:bg-background text-red-500"
+                      :title="t('chatView.deleteChat')"
+                    >
+                      <Trash2 class="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="!sessions.length" class="p-4 text-center text-muted-foreground">
+          <p>{{ t('chatView.noChats') }}</p>
+          <button
+            @click="createNewChat"
+            class="mt-2 text-primary hover:underline"
+          >
+            {{ t('chatView.createFirst') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Sessions List (Flat, when grouping is disabled) -->
+      <div v-else class="flex-1 overflow-y-auto">
         <div
           v-for="session in sessions"
           :key="session.id"
-          @click="selectSession(session.id)"
+          @click="!selectionMode && selectSession(session.id)"
           :class="[
-            'p-3 cursor-pointer border-b border-border transition-colors',
+            'p-3 cursor-pointer border-b border-border transition-colors group',
             currentSessionId === session.id
               ? 'bg-primary/10 border-l-2 border-l-primary'
               : 'hover:bg-secondary/50'
           ]"
         >
-          <p class="font-medium text-sm truncate">{{ session.title }}</p>
-          <p class="text-xs text-muted-foreground truncate mt-1">
-            {{ session.last_message || 'No messages' }}
-          </p>
-          <p class="text-xs text-muted-foreground mt-1">
-            {{ session.message_count }} messages
-          </p>
+          <div class="flex items-start gap-2">
+            <!-- Checkbox (selection mode) -->
+            <input
+              v-if="selectionMode"
+              type="checkbox"
+              :checked="selectedIds.has(session.id)"
+              @click.stop="toggleSelection(session.id)"
+              class="mt-1 rounded border-border"
+            />
+
+            <div class="flex-1 min-w-0">
+              <!-- Title (normal or editing) -->
+              <template v-if="renamingSessionId === session.id">
+                <input
+                  v-model="renamingTitle"
+                  @keydown.enter="saveRename"
+                  @keydown.escape="cancelRename"
+                  @blur="saveRename"
+                  @click.stop
+                  class="rename-input w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </template>
+              <template v-else>
+                <p
+                  class="font-medium text-sm truncate"
+                  @dblclick="startRename(session, $event)"
+                >
+                  {{ session.title }}
+                </p>
+              </template>
+
+              <p class="text-xs text-muted-foreground truncate mt-1">
+                {{ session.last_message || 'No messages' }}
+              </p>
+              <p class="text-xs text-muted-foreground mt-1">
+                {{ session.message_count }} messages
+              </p>
+            </div>
+
+            <!-- Action buttons (on hover, not in selection mode) -->
+            <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
+              <button
+                @click.stop="startRename(session, $event)"
+                class="p-1 rounded hover:bg-background text-muted-foreground"
+                :title="t('chatView.rename')"
+              >
+                <Edit3 class="w-3 h-3" />
+              </button>
+              <button
+                @click.stop="deleteSingleSession(session, $event)"
+                class="p-1 rounded hover:bg-background text-red-500"
+                :title="t('chatView.deleteChat')"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div v-if="!sessions.length" class="p-4 text-center text-muted-foreground">
-          <p>No chats yet</p>
+          <p>{{ t('chatView.noChats') }}</p>
           <button
             @click="createNewChat"
             class="mt-2 text-primary hover:underline"
           >
-            Create first chat
+            {{ t('chatView.createFirst') }}
           </button>
         </div>
       </div>
@@ -671,6 +1014,16 @@ watch(sessions, (newSessions) => {
                     <Loader2 v-if="ttsLoading === message.id" class="w-3 h-3 animate-spin" />
                     <Square v-else-if="speakingMessageId === message.id && isSpeaking" class="w-3 h-3 text-primary" />
                     <Volume2 v-else class="w-3 h-3" />
+                  </button>
+                  <!-- Regenerate button for assistant messages -->
+                  <button
+                    v-if="message.role === 'assistant'"
+                    @click="regenerateAssistantResponse(message.id)"
+                    :disabled="regenerateMutation.isPending.value"
+                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    title="Regenerate response"
+                  >
+                    <RefreshCw class="w-3 h-3" />
                   </button>
                   <button
                     @click="copyToClipboard(message.content)"

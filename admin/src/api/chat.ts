@@ -13,6 +13,8 @@ export interface ChatSession {
   title: string
   messages: ChatMessage[]
   system_prompt?: string
+  source?: 'admin' | 'telegram' | 'widget' | null
+  source_id?: string
   created: string
   updated: string
 }
@@ -22,8 +24,17 @@ export interface ChatSessionSummary {
   title: string
   message_count: number
   last_message?: string
+  source?: 'admin' | 'telegram' | 'widget' | null
+  source_id?: string
   created: string
   updated: string
+}
+
+export interface GroupedSessions {
+  admin: ChatSessionSummary[]
+  telegram: ChatSessionSummary[]
+  widget: ChatSessionSummary[]
+  unknown: ChatSessionSummary[]
 }
 
 // Chat API
@@ -32,13 +43,17 @@ export const chatApi = {
   listSessions: () =>
     api.get<{ sessions: ChatSessionSummary[] }>('/admin/chat/sessions'),
 
+  listSessionsGrouped: () =>
+    api.get<{ sessions: GroupedSessions; grouped: true }>('/admin/chat/sessions?group_by=source'),
+
   getSession: (sessionId: string) =>
     api.get<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`),
 
-  createSession: (title?: string, systemPrompt?: string) =>
+  createSession: (title?: string, systemPrompt?: string, source?: string) =>
     api.post<{ session: ChatSession }>('/admin/chat/sessions', {
       title,
       system_prompt: systemPrompt,
+      source,
     }),
 
   updateSession: (sessionId: string, data: { title?: string; system_prompt?: string }) =>
@@ -46,6 +61,11 @@ export const chatApi = {
 
   deleteSession: (sessionId: string) =>
     api.delete<{ status: string }>(`/admin/chat/sessions/${sessionId}`),
+
+  bulkDeleteSessions: (sessionIds: string[]) =>
+    api.post<{ status: string; deleted: number }>('/admin/chat/sessions/bulk-delete', {
+      session_ids: sessionIds,
+    }),
 
   // Messages
   sendMessage: (sessionId: string, content: string) =>

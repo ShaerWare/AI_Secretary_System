@@ -767,7 +767,7 @@ watch(instances, (newInstances) => {
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="vllm">vLLM</option>
-                  <option value="gemini">Gemini</option>
+                  <option value="gemini">{{ t('llm.cloudAI') }}</option>
                 </select>
               </div>
               <div>

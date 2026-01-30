@@ -24,8 +24,10 @@ import {
   RefreshCw
 } from 'lucide-vue-next'
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToastStore } from '@/stores/toast'
 
+const { t } = useI18n()
 const queryClient = useQueryClient()
 const toast = useToastStore()
 
@@ -338,7 +340,7 @@ function switchToCloudProvider(providerId: string) {
                 @click="setBackendMutation.mutate('gemini')"
               >
                 <Loader2 v-if="setBackendMutation.isPending.value && isVllm" class="w-4 h-4 animate-spin" />
-                Gemini (Cloud)
+                {{ t('llm.cloudAI') }}
               </button>
             </div>
           </div>
@@ -367,7 +369,7 @@ function switchToCloudProvider(providerId: string) {
               class="w-4 h-4 rounded border-border"
             />
             <label for="stopVllm" class="text-sm text-muted-foreground">
-              Остановить vLLM при переключении на Gemini (освободит ~6GB GPU)
+              {{ t('llm.stopVllmHint') }}
             </label>
           </div>
 
