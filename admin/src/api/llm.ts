@@ -58,6 +58,16 @@ export interface LlmModelInfo {
 }
 
 // VLESS Proxy types
+export interface ProxyInfo {
+  index: number
+  remark: string
+  server: string
+  security: string
+  enabled: boolean
+  fail_count: number
+  is_current: boolean
+}
+
 export interface ProxyStatus {
   xray_available: boolean
   xray_path?: string | null
@@ -65,6 +75,19 @@ export interface ProxyStatus {
   socks_port?: number
   http_port?: number
   configured: boolean
+  fallback_enabled?: boolean
+  total_proxies?: number
+  enabled_proxies?: number
+  current_proxy_index?: number
+  current_proxy?: {
+    remark: string
+    server: string
+    security: string
+    fail_count: number
+    enabled: boolean
+  } | null
+  proxies?: ProxyInfo[]
+  // Legacy single proxy fields
   vless_server?: string | null
   vless_security?: string | null
 }
@@ -74,10 +97,20 @@ export interface ProxyTestResult {
   success: boolean
   message?: string
   error?: string
+  proxy_index?: number
+  proxy_remark?: string
   details?: {
     target?: string
     status_code?: number
   }
+}
+
+export interface ProxyTestMultipleResult {
+  status: string
+  total: number
+  successful: number
+  results: ProxyTestResult[]
+  error?: string
 }
 
 export interface VlessValidation {
@@ -186,6 +219,15 @@ export const llmApi = {
   testProxy: (vlessUrl: string) =>
     api.post<ProxyTestResult>('/admin/llm/proxy/test', { vless_url: vlessUrl }),
 
+  testMultipleProxies: (vlessUrls: string[]) =>
+    api.post<ProxyTestMultipleResult>('/admin/llm/proxy/test-multiple', { vless_urls: vlessUrls }),
+
   validateVlessUrl: (vlessUrl: string) =>
     api.get<VlessValidation>(`/admin/llm/proxy/validate?vless_url=${encodeURIComponent(vlessUrl)}`),
+
+  resetProxies: () =>
+    api.post<{ status: string; message: string }>('/admin/llm/proxy/reset'),
+
+  switchToNextProxy: () =>
+    api.post<{ status: string; proxy: ProxyStatus }>('/admin/llm/proxy/switch-next'),
 }

@@ -55,9 +55,10 @@ const providerForm = ref({
 const useCustomModel = ref(false)
 const customModelName = ref('')
 
-// VLESS proxy state
-const vlessUrl = ref('')
-const vlessTestResult = ref<{ success?: boolean; message?: string; error?: string } | null>(null)
+// VLESS proxy state (supports multiple URLs, one per line)
+const vlessUrlsText = ref('')
+const vlessTestResults = ref<Array<{ success?: boolean; message?: string; error?: string; remark?: string }>>([])
+const testingAllProxies = ref(false)
 
 // Queries
 const { data: backendData, isLoading: backendLoading } = useQuery({
@@ -212,22 +213,59 @@ const savePromptMutation = useMutation({
   },
 })
 
-// VLESS proxy test mutation
+// VLESS proxy test mutation (supports multiple URLs)
 const testProxyMutation = useMutation({
-  mutationFn: (vlessUrl: string) => llmApi.testProxy(vlessUrl),
+  mutationFn: (vlessUrls: string[]) => llmApi.testMultipleProxies(vlessUrls),
   onSuccess: (data) => {
-    vlessTestResult.value = data
-    if (data.success) {
-      toast.success(data.message || 'Proxy connection successful')
+    vlessTestResults.value = data.results.map(r => ({
+      success: r.success,
+      message: r.message,
+      error: r.error,
+      remark: r.proxy_remark,
+    }))
+    testingAllProxies.value = false
+    if (data.successful > 0) {
+      toast.success(`${data.successful}/${data.total} proxies connected successfully`)
     } else {
-      toast.error(data.error || 'Proxy connection failed')
+      toast.error('All proxy connections failed')
     }
   },
   onError: (error: Error) => {
-    vlessTestResult.value = { success: false, error: error.message }
+    vlessTestResults.value = [{ success: false, error: error.message }]
+    testingAllProxies.value = false
     toast.error(`Proxy test failed: ${error.message}`)
   },
 })
+
+// Parse VLESS URLs from textarea
+function getVlessUrls(): string[] {
+  return vlessUrlsText.value
+    .split('\n')
+    .map(url => url.trim())
+    .filter(url => url && url.startsWith('vless://'))
+}
+
+// Test all configured proxies
+function testAllProxies() {
+  const urls = getVlessUrls()
+  if (urls.length === 0) {
+    toast.error('No valid VLESS URLs found')
+    return
+  }
+  testingAllProxies.value = true
+  vlessTestResults.value = []
+  testProxyMutation.mutate(urls)
+}
+
+// Get proxy count from provider config
+function getProxyCount(config: Record<string, unknown> | undefined): number {
+  if (!config) return 0
+  const urls = config.vless_urls as string[] | undefined
+  const url = config.vless_url as string | undefined
+  if (urls && Array.isArray(urls)) return urls.length
+  if (url) return 1
+  return 0
+}
 
 // Computed
 const personas = computed(() => personasData.value?.personas || {})
@@ -279,8 +317,8 @@ function openCreateProviderModal() {
   }
   useCustomModel.value = false
   customModelName.value = ''
-  vlessUrl.value = ''
-  vlessTestResult.value = null
+  vlessUrlsText.value = ''
+  vlessTestResults.value = []
   showProviderModal.value = true
 }
 
@@ -302,9 +340,18 @@ function openEditProviderModal(provider: CloudProvider) {
   useCustomModel.value = isCustomModel
   customModelName.value = isCustomModel ? provider.model_name : ''
 
-  // Load VLESS URL from config if present (Gemini only)
-  vlessUrl.value = (provider.config?.vless_url as string) || ''
-  vlessTestResult.value = null
+  // Load VLESS URLs from config if present (Gemini only)
+  // Support both vless_urls (array) and legacy vless_url (string)
+  const vlessUrls = provider.config?.vless_urls as string[] | undefined
+  const legacyUrl = provider.config?.vless_url as string | undefined
+  if (vlessUrls && Array.isArray(vlessUrls)) {
+    vlessUrlsText.value = vlessUrls.join('\n')
+  } else if (legacyUrl) {
+    vlessUrlsText.value = legacyUrl
+  } else {
+    vlessUrlsText.value = ''
+  }
+  vlessTestResults.value = []
 
   showProviderModal.value = true
 }
@@ -319,8 +366,8 @@ function onProviderTypeChange() {
   }
   // Reset VLESS when changing provider type
   if (providerForm.value.provider_type !== 'gemini') {
-    vlessUrl.value = ''
-    vlessTestResult.value = null
+    vlessUrlsText.value = ''
+    vlessTestResults.value = []
   }
 }
 
@@ -337,17 +384,20 @@ function saveProvider() {
     delete data.api_key // Don't update if empty
   }
 
-  // Add VLESS URL to config for Gemini providers
-  if (providerForm.value.provider_type === 'gemini' && vlessUrl.value) {
+  // Add VLESS URLs to config for Gemini providers
+  const vlessUrls = getVlessUrls()
+  if (providerForm.value.provider_type === 'gemini' && vlessUrls.length > 0) {
     data.config = {
       ...(editingProvider.value?.config || {}),
-      vless_url: vlessUrl.value,
+      vless_urls: vlessUrls,
     }
+    // Remove legacy vless_url if present
+    delete data.config.vless_url
   } else if (providerForm.value.provider_type === 'gemini') {
-    // Remove vless_url if empty
+    // Remove vless_urls and vless_url if empty
     const existingConfig = editingProvider.value?.config || {}
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { vless_url, ...restConfig } = existingConfig as { vless_url?: string }
+    const { vless_url, vless_urls, ...restConfig } = existingConfig as { vless_url?: string; vless_urls?: string[] }
     if (Object.keys(restConfig).length > 0) {
       data.config = restConfig
     }
@@ -506,11 +556,11 @@ function switchToCloudProvider(providerId: string) {
                     Active
                   </span>
                   <span
-                    v-if="provider.provider_type === 'gemini' && provider.config?.vless_url"
+                    v-if="provider.provider_type === 'gemini' && getProxyCount(provider.config) > 0"
                     class="flex items-center gap-1 px-2 py-0.5 bg-purple-500/20 text-purple-600 rounded text-xs"
-                    title="VLESS proxy configured"
+                    :title="`${getProxyCount(provider.config)} VLESS proxy(ies) configured`"
                   >
-                    <Shield class="w-3 h-3" /> Proxy
+                    <Shield class="w-3 h-3" /> {{ getProxyCount(provider.config) }} Proxy
                   </span>
                 </div>
                 <p class="text-sm text-muted-foreground">
@@ -851,7 +901,7 @@ function switchToCloudProvider(providerId: string) {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       @click.self="showProviderModal = false"
     >
-      <div class="bg-card border border-border rounded-lg w-full max-w-lg p-6 m-4">
+      <div class="bg-card border border-border rounded-lg w-full max-w-lg p-6 m-4 max-h-[90vh] overflow-auto">
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
           <Cloud class="w-5 h-5" />
           {{ editingProvider ? 'Edit Provider' : 'Add Cloud Provider' }}
@@ -963,44 +1013,64 @@ function switchToCloudProvider(providerId: string) {
             </div>
 
             <p class="text-xs text-muted-foreground mb-3">
-              Configure a VLESS proxy to route Google Gemini API requests through a proxy server.
-              This is useful in regions where Google API is restricted.
+              Configure VLESS proxies to route Google Gemini API requests. Add multiple URLs (one per line)
+              for automatic failover when a proxy becomes unavailable.
             </p>
 
             <div class="space-y-3">
               <div>
-                <label class="block text-sm font-medium mb-1">VLESS URL</label>
-                <input
-                  v-model="vlessUrl"
-                  type="text"
-                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs"
-                  placeholder="vless://uuid@host:port?security=reality&pbk=...#remark"
+                <label class="block text-sm font-medium mb-1">
+                  VLESS URLs
+                  <span class="text-muted-foreground font-normal">(one per line)</span>
+                </label>
+                <textarea
+                  v-model="vlessUrlsText"
+                  rows="4"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs resize-none"
+                  placeholder="vless://uuid@host1:port?security=reality&pbk=...#proxy1
+vless://uuid@host2:port?security=reality&pbk=...#proxy2"
                 />
+                <p class="text-xs text-muted-foreground mt-1">
+                  {{ getVlessUrls().length }} valid URL(s) configured
+                </p>
               </div>
 
-              <!-- Test result indicator -->
-              <div v-if="vlessTestResult" class="flex items-center gap-2 text-sm">
-                <CheckCircle2 v-if="vlessTestResult.success" class="w-4 h-4 text-green-500" />
-                <AlertCircle v-else class="w-4 h-4 text-red-500" />
-                <span :class="vlessTestResult.success ? 'text-green-600' : 'text-red-600'">
-                  {{ vlessTestResult.success ? vlessTestResult.message : vlessTestResult.error }}
-                </span>
+              <!-- Test results (multiple) -->
+              <div v-if="vlessTestResults.length > 0" class="space-y-2 max-h-32 overflow-auto">
+                <div
+                  v-for="(result, idx) in vlessTestResults"
+                  :key="idx"
+                  class="flex items-center gap-2 text-sm p-2 rounded bg-secondary/50"
+                >
+                  <CheckCircle2 v-if="result.success" class="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <AlertCircle v-else class="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <span class="font-mono text-xs truncate" :title="result.remark">
+                    {{ result.remark || `Proxy ${idx + 1}` }}:
+                  </span>
+                  <span
+                    :class="result.success ? 'text-green-600' : 'text-red-600'"
+                    class="truncate text-xs"
+                    :title="result.success ? result.message : result.error"
+                  >
+                    {{ result.success ? 'OK' : (result.error || 'Failed') }}
+                  </span>
+                </div>
               </div>
 
               <div class="flex gap-2">
                 <button
-                  :disabled="!vlessUrl || testProxyMutation.isPending.value || !proxyStatus?.xray_available"
+                  :disabled="getVlessUrls().length === 0 || testingAllProxies || !proxyStatus?.xray_available"
                   class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
-                  @click="testProxyMutation.mutate(vlessUrl)"
+                  @click="testAllProxies"
                 >
-                  <Loader2 v-if="testProxyMutation.isPending.value" class="w-4 h-4 animate-spin" />
+                  <Loader2 v-if="testingAllProxies" class="w-4 h-4 animate-spin" />
                   <Wifi v-else class="w-4 h-4" />
-                  Test Proxy
+                  Test All Proxies
                 </button>
                 <button
-                  v-if="vlessUrl"
+                  v-if="vlessUrlsText"
                   class="px-3 py-1.5 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors text-sm"
-                  @click="vlessUrl = ''; vlessTestResult = null"
+                  @click="vlessUrlsText = ''; vlessTestResults = []"
                 >
                   Clear
                 </button>
