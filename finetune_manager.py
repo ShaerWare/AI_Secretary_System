@@ -1844,7 +1844,7 @@ class FinetuneManager:
         # Определяем тип команды
         if lang in ("bash", "sh", "shell", ""):
             # Извлекаем первую команду
-            first_line = code.split("\n")[0].strip()
+            first_line = code.split("\n", maxsplit=1)[0].strip()
             if first_line.startswith("#"):
                 return dialogs
 
