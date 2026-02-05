@@ -26,7 +26,8 @@ import {
   GraduationCap,
   ShieldAlert,
   FileText,
-  Zap
+  Zap,
+  Code2
 } from 'lucide-vue-next'
 import { ref, computed, watch, onUnmounted } from 'vue'
 
@@ -53,6 +54,7 @@ const projectDatasetConfig = ref({
   include_faq: true,
   include_docs: true,
   include_escalation: true,
+  include_code: true,
   output_name: 'project_dataset'
 })
 const projectDatasetResult = ref<{
@@ -468,6 +470,15 @@ onUnmounted(() => {
               <div>
                 <p class="text-sm font-medium">Шаблоны эскалации</p>
                 <p class="text-xs text-muted-foreground">Передача на старший уровень поддержки</p>
+              </div>
+            </label>
+
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-secondary/50 cursor-pointer transition-colors md:col-span-2">
+              <input v-model="projectDatasetConfig.include_code" type="checkbox" class="w-4 h-4 rounded" />
+              <Code2 class="w-5 h-5 text-cyan-500 flex-shrink-0" />
+              <div>
+                <p class="text-sm font-medium">Код и документация проекта</p>
+                <p class="text-xs text-muted-foreground">API endpoints, модели, README, wiki-pages (~1000+ пар)</p>
               </div>
             </label>
           </div>

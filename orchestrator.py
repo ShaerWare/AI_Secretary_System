@@ -23,8 +23,17 @@ import soundfile as sf
 import uvicorn
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from pydantic import BaseModel
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.rate_limiter import limiter
 
 # Modular routers
 from app.routers import (
@@ -43,6 +52,10 @@ from app.routers import (
     tts,
     widget,
     yoomoney_webhook,
+)
+from app.security_headers import (
+    SECURITY_HEADERS_ENABLED,
+    SecurityHeadersMiddleware,
 )
 from auth_manager import (
     LoginRequest,
@@ -337,14 +350,28 @@ streaming_tts_manager: Optional[StreamingTTSManager] = None
 
 app = FastAPI(title="AI Secretary Orchestrator", version="1.0.0")
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS для доступа из браузера
+# Read allowed origins from env (comma-separated), default to "*" for development
+CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
+CORS_ORIGINS = (
+    ["*"]
+    if CORS_ORIGINS_RAW == "*"
+    else [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers
+app.add_middleware(SecurityHeadersMiddleware, enabled=SECURITY_HEADERS_ENABLED)
 
 # Include modular routers
 # NOTE: These routers use the ServiceContainer from app.dependencies
@@ -409,7 +436,7 @@ async def _reload_voice_presets():
 async def _auto_start_telegram_bots():
     """Auto-start Telegram bots that have auto_start=True."""
     from db.integration import async_bot_instance_manager
-    from multi_bot_manager import MultiBotManager
+    from multi_bot_manager import multi_bot_manager
 
     try:
         instances = await async_bot_instance_manager.get_auto_start_instances()
@@ -417,12 +444,11 @@ async def _auto_start_telegram_bots():
             logger.info("📱 No Telegram bots configured for auto-start")
             return
 
-        manager = MultiBotManager()
         started = 0
         for instance in instances:
             instance_id = instance["id"]
             try:
-                result = await manager.start_bot(instance_id)
+                result = await multi_bot_manager.start_bot(instance_id)
                 if result.get("status") in ["started", "already_running"]:
                     started += 1
                     logger.info(f"📱 Auto-started Telegram bot: {instance['name']}")
@@ -2431,18 +2457,20 @@ class GenerateProjectDatasetRequest(BaseModel):
     include_faq: bool = True
     include_docs: bool = True
     include_escalation: bool = True
+    include_code: bool = True  # Python код и Markdown документация
     output_name: str = "project_dataset"
 
 
 @app.post("/admin/finetune/dataset/generate-project")
 async def admin_generate_project_dataset(request: GenerateProjectDatasetRequest):
-    """Генерировать датасет из проектных источников (ТЗ, FAQ, документация, эскалации)"""
+    """Генерировать датасет из проектных источников (ТЗ, FAQ, документация, эскалации, код)"""
     manager = get_finetune_manager()
     return await manager.generate_project_dataset(
         include_tz=request.include_tz,
         include_faq=request.include_faq,
         include_docs=request.include_docs,
         include_escalation=request.include_escalation,
+        include_code=request.include_code,
         output_name=request.output_name,
     )
 

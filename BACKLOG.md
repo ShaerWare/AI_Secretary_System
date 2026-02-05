@@ -109,31 +109,33 @@ app/
 ---
 
 ### 0.3 Basic Security [P0]
-**Статус:** `planned`
+**Статус:** `done`
 **Приоритет:** P0 (критичный)
 **Сложность:** 4/10
 **Влияние:** ★★★★★
+**Завершено:** 2026-02-05
 
 **Описание:**
 Базовая безопасность для production: rate limiting, CORS whitelist, security headers.
 
 **Задачи:**
-- [ ] Переместить `.env.docker` → `.env.docker.example`
-- [ ] Добавить `slowapi` для rate limiting
-- [ ] Настроить CORS whitelist через env
-- [ ] Security headers (X-Content-Type-Options, X-Frame-Options)
+- [x] Переместить `.env.docker` → `.env.docker.example`
+- [x] Добавить `slowapi` для rate limiting
+- [x] Настроить CORS whitelist через env
+- [x] Security headers (X-Content-Type-Options, X-Frame-Options)
 
 ---
 
 ### 0.4 Release Management [P0]
-**Статус:** `planned`
+**Статус:** `done`
 **Приоритет:** P0
 **Сложность:** 2/10
+**Завершено:** 2026-02-05
 
 **Задачи:**
-- [ ] Создать `CHANGELOG.md`
-- [ ] Создать GitHub Release v1.0.0
-- [ ] Добавить `CONTRIBUTING.md`
+- [x] Создать `CHANGELOG.md`
+- [x] Создать GitHub Release v1.0.0
+- [x] Добавить `CONTRIBUTING.md`
 
 ---
 
@@ -1386,6 +1388,19 @@ pip install zipfile36  # или стандартный zipfile
 ---
 
 ## Changelog
+
+### 2026-02-05 (update 15) — Basic Security & Release v1.0.0
+- **0.3 Basic Security [P0]** — базовая безопасность для production
+  - Переименован `.env.docker` → `.env.docker.example`
+  - Добавлен `slowapi` для rate limiting (auth: 10/min, chat: 30/min, TTS: 20/min)
+  - CORS whitelist через `CORS_ORIGINS` env variable
+  - Security headers middleware (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
+  - Новые файлы: `app/rate_limiter.py`, `app/security_headers.py`
+  - API endpoint: `GET /admin/monitor/security` — просмотр security конфигурации
+- **0.4 Release Management [P0]** — подготовка к релизу
+  - Создан `CHANGELOG.md` (Keep a Changelog format)
+  - Создан `CONTRIBUTING.md` (guidelines for contributors)
+  - Версия 1.0.0 в pyproject.toml
 
 ### 2026-02-02 (update 14) — amoCRM & Network Resilience
 - **amoCRM Integration (1.2.1)** — интеграция с amoCRM

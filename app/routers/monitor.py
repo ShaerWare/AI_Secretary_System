@@ -214,3 +214,31 @@ async def admin_get_system_status():
     """Полная информация о системе: GPU, CPU, RAM, диски, Docker, сеть"""
     monitor = get_system_monitor()
     return monitor.get_full_status()
+
+
+@router.get("/rate-limits")
+async def admin_get_rate_limits():
+    """Get current rate limiting configuration"""
+    from app.rate_limiter import get_rate_limit_status
+
+    return get_rate_limit_status()
+
+
+@router.get("/security")
+async def admin_get_security_status():
+    """Get current security configuration (rate limits, CORS, headers)"""
+    import os
+
+    from app.rate_limiter import get_rate_limit_status
+    from app.security_headers import get_security_headers_status
+
+    cors_origins = os.getenv("CORS_ORIGINS", "*")
+
+    return {
+        "rate_limiting": get_rate_limit_status(),
+        "security_headers": get_security_headers_status(),
+        "cors": {
+            "origins": cors_origins,
+            "allow_credentials": True,
+        },
+    }

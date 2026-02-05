@@ -4,7 +4,7 @@
 
 ```bash
 # Docker (рекомендуется)
-cp .env.docker .env
+cp .env.docker.example .env
 # Отредактируйте .env при необходимости
 docker compose up -d
 

@@ -5,11 +5,12 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.dependencies import get_container
+from app.rate_limiter import RATE_LIMIT_CHAT, limiter
 from cloud_llm_service import CloudLLMService
 from db.integration import async_chat_manager, async_cloud_provider_manager
 from llm_service import LLMService
@@ -115,7 +116,10 @@ async def admin_delete_chat_session(session_id: str):
 
 
 @router.post("/sessions/{session_id}/messages")
-async def admin_send_chat_message(session_id: str, request: SendMessageRequest):
+@limiter.limit(RATE_LIMIT_CHAT)
+async def admin_send_chat_message(
+    request: Request, session_id: str, msg_request: SendMessageRequest
+):
     """Отправить сообщение и получить ответ (non-streaming)"""
     container = get_container()
     session = await async_chat_manager.get_session(session_id)
@@ -127,7 +131,7 @@ async def admin_send_chat_message(session_id: str, request: SendMessageRequest):
         raise HTTPException(status_code=503, detail="LLM service not available")
 
     # Добавляем сообщение пользователя
-    user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
+    user_msg = await async_chat_manager.add_message(session_id, "user", msg_request.content)
 
     # Получаем историю для LLM
     default_prompt = None
@@ -150,7 +154,10 @@ async def admin_send_chat_message(session_id: str, request: SendMessageRequest):
 
 
 @router.post("/sessions/{session_id}/stream")
-async def admin_stream_chat_message(session_id: str, request: SendMessageRequest):
+@limiter.limit(RATE_LIMIT_CHAT)
+async def admin_stream_chat_message(
+    request: Request, session_id: str, msg_request: SendMessageRequest
+):
     """Отправить сообщение и получить streaming ответ"""
     container = get_container()
     session = await async_chat_manager.get_session(session_id)
@@ -161,8 +168,8 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
     active_llm = container.llm_service
     custom_prompt = None
 
-    if request.llm_override:
-        override = request.llm_override
+    if msg_request.llm_override:
+        override = msg_request.llm_override
         backend = override.llm_backend
 
         if backend and backend.startswith("cloud:"):
@@ -192,7 +199,7 @@ async def admin_stream_chat_message(session_id: str, request: SendMessageRequest
         raise HTTPException(status_code=503, detail="LLM service not available")
 
     # Добавляем сообщение пользователя
-    user_msg = await async_chat_manager.add_message(session_id, "user", request.content)
+    user_msg = await async_chat_manager.add_message(session_id, "user", msg_request.content)
 
     # Получаем историю для LLM
     default_prompt = custom_prompt

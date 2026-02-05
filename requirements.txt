@@ -14,6 +14,7 @@ fastapi==0.128.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 websockets==12.0
+slowapi==0.1.9  # Rate limiting
 
 # Telephony
 twilio==8.11.1

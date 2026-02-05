@@ -9,11 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.dependencies import get_container
+from app.rate_limiter import RATE_LIMIT_TTS, limiter
 from db.integration import async_preset_manager
 from voice_clone_service import INTONATION_PRESETS
 
@@ -149,7 +150,8 @@ async def admin_set_tts_preset(request: AdminTTSPresetRequest):
 
 
 @router.post("/test")
-async def admin_tts_test(request: AdminTTSTestRequest):
+@limiter.limit(RATE_LIMIT_TTS)
+async def admin_tts_test(request: Request, tts_request: AdminTTSTestRequest):
     """Тестовый синтез речи - возвращает аудио-файл для воспроизведения в браузере"""
     import time as t
 
@@ -166,7 +168,7 @@ async def admin_tts_test(request: AdminTTSTestRequest):
         if engine == "piper" and container.piper_service:
             # Piper TTS (CPU)
             container.piper_service.synthesize_to_file(
-                text=request.text,
+                text=tts_request.text,
                 output_path=str(output_file),
                 voice=voice,
             )
@@ -174,7 +176,7 @@ async def admin_tts_test(request: AdminTTSTestRequest):
         elif engine == "openvoice" and container.openvoice_service:
             # OpenVoice v2
             container.openvoice_service.synthesize_to_file(
-                text=request.text, output_path=str(output_file), language="ru"
+                text=tts_request.text, output_path=str(output_file), language="ru"
             )
             logger.info("🔊 OpenVoice TTS test")
         elif engine == "xtts":
@@ -193,22 +195,22 @@ async def admin_tts_test(request: AdminTTSTestRequest):
                 raise HTTPException(status_code=503, detail="No XTTS voice service available")
 
             tts_service.synthesize_to_file(
-                text=request.text,
+                text=tts_request.text,
                 output_path=str(output_file),
-                preset=request.preset,
+                preset=tts_request.preset,
                 language="ru",
             )
-            logger.info(f"🔊 XTTS TTS test: voice={voice}, preset={request.preset}")
+            logger.info(f"🔊 XTTS TTS test: voice={voice}, preset={tts_request.preset}")
         # Fallback - попробуем любой доступный сервис
         elif container.piper_service:
             container.piper_service.synthesize_to_file(
-                text=request.text, output_path=str(output_file), voice="dmitri"
+                text=tts_request.text, output_path=str(output_file), voice="dmitri"
             )
         elif container.gulya_voice_service:
             container.gulya_voice_service.synthesize_to_file(
-                text=request.text,
+                text=tts_request.text,
                 output_path=str(output_file),
-                preset=request.preset,
+                preset=tts_request.preset,
                 language="ru",
             )
         else:
@@ -370,7 +372,8 @@ async def admin_delete_custom_preset(name: str):
 
 
 @router.post("/stream")
-async def tts_stream(request: StreamingTTSRequest):
+@limiter.limit(RATE_LIMIT_TTS)
+async def tts_stream(request: Request, stream_request: StreamingTTSRequest):
     """
     Потоковый синтез речи - выдаёт аудио чанки по мере генерации.
 
@@ -387,9 +390,9 @@ async def tts_stream(request: StreamingTTSRequest):
 
     # Выбираем XTTS сервис по голосу
     tts_service = None
-    if request.voice == "gulya" and container.gulya_voice_service:
+    if stream_request.voice == "gulya" and container.gulya_voice_service:
         tts_service = container.gulya_voice_service
-    elif request.voice == "lidia" and container.voice_service:
+    elif stream_request.voice == "lidia" and container.voice_service:
         tts_service = container.voice_service
     elif container.gulya_voice_service:
         tts_service = container.gulya_voice_service
@@ -426,11 +429,11 @@ async def tts_stream(request: StreamingTTSRequest):
             def run_streaming():
                 return list(
                     tts_service.synthesize_streaming(
-                        text=request.text,
-                        language=request.language,
-                        preset=request.preset,
-                        stream_chunk_size=request.stream_chunk_size,
-                        target_sample_rate=request.target_sample_rate,
+                        text=stream_request.text,
+                        language=stream_request.language,
+                        preset=stream_request.preset,
+                        stream_chunk_size=stream_request.stream_chunk_size,
+                        target_sample_rate=stream_request.target_sample_rate,
                         on_first_chunk=on_first_chunk,
                     )
                 )
@@ -441,7 +444,7 @@ async def tts_stream(request: StreamingTTSRequest):
             # Отдаём чанки
             for audio_chunk, sample_rate in chunks:
                 # Конвертируем в нужный формат
-                if request.output_format == "pcm16":
+                if stream_request.output_format == "pcm16":
                     # float32 -> int16
                     import numpy as np
 
@@ -456,12 +459,12 @@ async def tts_stream(request: StreamingTTSRequest):
             raise
 
     # Определяем sample rate для заголовка
-    output_rate = request.target_sample_rate or 24000
+    output_rate = stream_request.target_sample_rate or 24000
 
     headers = {
         "X-Sample-Rate": str(output_rate),
         "X-Channels": "1",
-        "X-Format": request.output_format,
+        "X-Format": stream_request.output_format,
     }
 
     # Создаём response

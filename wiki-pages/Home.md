@@ -58,7 +58,7 @@
 
 ```bash
 # GPU режим
-cp .env.docker .env && docker compose up -d
+cp .env.docker.example .env && docker compose up -d
 
 # CPU режим
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d

@@ -87,7 +87,7 @@ git clone https://github.com/ShaerWare/AI_Secretary_System
 cd AI_Secretary_System
 
 # Configure environment
-cp .env.docker .env
+cp .env.docker.example .env
 # Edit .env: set GEMINI_API_KEY for cloud fallback
 
 # Option 1: Use LOCAL vLLM (recommended - faster, no 9GB download)

@@ -42,7 +42,7 @@ AI Secretary System - virtual secretary with voice cloning (XTTS v2, OpenVoice),
 ### Quick Start (Docker - Recommended)
 
 ```bash
-cp .env.docker .env && docker compose up -d     # GPU mode
+cp .env.docker.example .env && docker compose up -d     # GPU mode
 # OR
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d  # CPU mode
 
@@ -188,6 +188,8 @@ app/
 | `stt_service.py` | Vosk (realtime) + Whisper (batch) STT |
 | `multi_bot_manager.py` | Subprocess manager for multiple Telegram bots (auto-start on app launch) |
 | `finetune_manager.py` | LoRA fine-tuning manager (dataset processing, training, adapters, project dataset generation) |
+| `app/rate_limiter.py` | Rate limiting with slowapi (configurable per endpoint type) |
+| `app/security_headers.py` | Security headers middleware (X-Frame-Options, CSP, etc.) |
 | `app/services/audio_pipeline.py` | GSM telephony audio processing (8kHz, PCM16, G.711) |
 | `app/services/sales_funnel.py` | Sales funnel logic (segmentation, pricing calculator, follow-ups) |
 
@@ -259,6 +261,16 @@ ORCHESTRATOR_PORT=8002
 CUDA_VISIBLE_DEVICES=1
 ADMIN_JWT_SECRET=...                # Auto-generated if empty
 REDIS_URL=redis://localhost:6379/0  # Optional, for caching
+
+# Security (production)
+CORS_ORIGINS=*                      # Comma-separated origins, "*" for dev
+RATE_LIMIT_ENABLED=true             # Enable rate limiting
+RATE_LIMIT_DEFAULT=60/minute        # Default rate limit
+RATE_LIMIT_AUTH=10/minute           # Auth endpoints rate limit
+RATE_LIMIT_CHAT=30/minute           # Chat endpoints rate limit
+RATE_LIMIT_TTS=20/minute            # TTS endpoints rate limit
+SECURITY_HEADERS_ENABLED=true       # Enable security headers
+X_FRAME_OPTIONS=DENY                # DENY or SAMEORIGIN
 ```
 
 ## Code Patterns
@@ -349,7 +361,7 @@ Key patterns:
 | `.pre-commit-config.yaml` | Pre-commit hooks |
 | `admin/.eslintrc.cjs` | ESLint config |
 | `admin/.prettierrc` | Prettier config |
-| `.env.docker` | Docker environment template |
+| `.env.docker.example` | Docker environment template |
 | `.env.example` | Local development environment template |
 
 ## Roadmap

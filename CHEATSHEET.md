@@ -4,7 +4,7 @@
 
 ```bash
 # Docker (рекомендуется)
-cp .env.docker .env
+cp .env.docker.example .env
 docker compose up -d
 
 # Локальный запуск с GPU

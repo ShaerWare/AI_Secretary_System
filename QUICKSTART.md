@@ -9,7 +9,7 @@ git clone https://github.com/ShaerWare/AI_Secretary_System
 cd AI_Secretary_System
 
 # Настройка переменных окружения
-cp .env.docker .env
+cp .env.docker.example .env
 nano .env  # Добавьте GEMINI_API_KEY (опционально для CPU режима)
 ```
 

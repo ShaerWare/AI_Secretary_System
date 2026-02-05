@@ -1,8 +1,9 @@
 # app/routers/auth.py
 """Authentication router - login, user info, auth status."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.rate_limiter import RATE_LIMIT_AUTH, limiter
 from auth_manager import (
     LoginRequest,
     LoginResponse,
@@ -19,14 +20,15 @@ router = APIRouter(prefix="/admin/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def admin_login(request: LoginRequest):
+@limiter.limit(RATE_LIMIT_AUTH)
+async def admin_login(request: Request, login_request: LoginRequest):
     """
     Authenticate user and return JWT token.
 
     Default credentials: admin / admin
     Set ADMIN_USERNAME and ADMIN_PASSWORD_HASH env vars for production.
     """
-    user = authenticate_user(request.username, request.password)
+    user = authenticate_user(login_request.username, login_request.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 

@@ -114,6 +114,7 @@ export const finetuneApi = {
     include_faq?: boolean
     include_docs?: boolean
     include_escalation?: boolean
+    include_code?: boolean
     output_name?: string
   }) =>
     api.post<{

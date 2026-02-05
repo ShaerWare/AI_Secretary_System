@@ -206,20 +206,20 @@ settings = Settings()
 ```
 
 **Checklist:**
-- [ ] Remove `.env.docker` from repository → `.env.docker.example`
-- [ ] Add `slowapi` for rate limiting
-- [ ] Configure CORS whitelist via env
-- [ ] Add `python-dotenv` to requirements
-- [ ] Security headers (X-Content-Type-Options, X-Frame-Options)
+- [x] Remove `.env.docker` from repository → `.env.docker.example`
+- [x] Add `slowapi` for rate limiting
+- [x] Configure CORS whitelist via env
+- [x] Add `python-dotenv` to requirements (already present)
+- [x] Security headers (X-Content-Type-Options, X-Frame-Options)
 
 ### 0.4 Release Management [P0]
 
 **Checklist:**
-- [ ] Create `CHANGELOG.md` (Keep a Changelog format)
-- [ ] Create GitHub Release v1.0.0
-- [ ] Add `CONTRIBUTING.md`
-- [ ] Add `CODE_OF_CONDUCT.md`
-- [ ] Configure semantic versioning
+- [x] Create `CHANGELOG.md` (Keep a Changelog format)
+- [x] Create GitHub Release v1.0.0 (ready to tag)
+- [x] Add `CONTRIBUTING.md`
+- [ ] Add `CODE_OF_CONDUCT.md` (optional)
+- [x] Configure semantic versioning (pyproject.toml: 1.0.0)
 
 ---
 
