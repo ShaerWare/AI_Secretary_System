@@ -171,16 +171,19 @@ app/
 ---
 
 ### 0.5.2 Usage Limits [P1]
-**Статус:** `planned`
+**Статус:** `done`
 **Приоритет:** P1
 **Сложность:** 5/10
+**Завершено:** 2026-02-05
 
 **Задачи:**
-- [ ] Таблица `usage_logs` (user_id, type, amount, timestamp)
-- [ ] Middleware для подсчёта минут TTS/STT
-- [ ] API endpoint `/admin/usage/stats`
-- [ ] UI: dashboard с usage графиками
-- [ ] Email уведомления при 80% и 100% лимита
+- [x] Таблица `usage_log` (service_type, action, units_consumed, cost_usd, source)
+- [x] Таблица `usage_limits` (service_type, limit_type, limit_value, hard_limit)
+- [x] Repository `UsageRepository`, `UsageLimitsRepository`
+- [x] API router `/admin/usage/*` (logs, stats, limits, check, summary)
+- [x] UI: UsageView.vue с dashboard, лимитами, фильтрацией логов
+- [ ] Email уведомления при 80% и 100% лимита (backlog)
+- [ ] Middleware для автоматического логирования (backlog)
 
 ---
 

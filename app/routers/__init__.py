@@ -15,6 +15,7 @@ from app.routers import (
     stt,
     telegram,
     tts,
+    usage,
     widget,
     yoomoney_webhook,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "tts",
     "chat",
     "telegram",
+    "usage",
     "widget",
     "gsm",
     "bot_sales",

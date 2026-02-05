@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Secretary System - virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini with VLESS proxy support, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony support (SIM7600E-H), a Vue 3 PWA admin panel with 15 tabs, i18n (ru/en), themes, ~160 API endpoints across 15 routers, website chat widgets (multi-instance), Telegram bot integration (multi-instance) with sales bot features and YooMoney/YooKassa/Stars payments, and fine-tuning with project dataset generation.
+AI Secretary System - virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini with VLESS proxy support, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony support (SIM7600E-H), a Vue 3 PWA admin panel with 16 tabs, i18n (ru/en), themes, ~170 API endpoints across 16 routers, website chat widgets (multi-instance), Telegram bot integration (multi-instance) with sales bot features and YooMoney/YooKassa/Stars payments, and fine-tuning with project dataset generation.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                     Orchestrator (port 8002)                              │
-│  orchestrator.py + app/routers/ (15 modular routers, ~160 endpoints)     │
+│  orchestrator.py + app/routers/ (16 modular routers, ~170 endpoints)     │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐   │
-│  │              Vue 3 Admin Panel (15 tabs, PWA)                      │   │
+│  │              Vue 3 Admin Panel (16 tabs, PWA)                      │   │
 │  │                      admin/dist/                                   │   │
 │  └───────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────┬─────────────────────────────────────────┘
@@ -164,6 +164,7 @@ app/
 │   ├── llm.py               # 30 endpoints - Backend, persona, cloud providers, VLESS proxy, bridge
 │   ├── tts.py               # 15 endpoints - Presets, params, test, cache, streaming
 │   ├── chat.py              # 12 endpoints - Sessions (CRUD, bulk delete, grouping), messages, streaming
+│   ├── usage.py             # 10 endpoints - Usage tracking, limits, stats, cleanup
 │   ├── telegram.py          # 29 endpoints - Bot instances CRUD, control, payments, YooMoney
 │   ├── widget.py            # 7 endpoints  - Widget instances CRUD
 │   ├── gsm.py               # 12 endpoints - GSM telephony, SIM7600E-H module

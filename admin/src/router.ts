@@ -13,6 +13,7 @@ import WidgetView from './views/WidgetView.vue'
 import TelegramView from './views/TelegramView.vue'
 import GSMView from './views/GSMView.vue'
 import AuditView from './views/AuditView.vue'
+import UsageView from './views/UsageView.vue'
 import SettingsView from './views/SettingsView.vue'
 import LoginView from './views/LoginView.vue'
 import CrmView from './views/CrmView.vue'
@@ -105,6 +106,12 @@ const router = createRouter({
       name: 'audit',
       component: AuditView,
       meta: { title: 'Audit', icon: 'FileText' }
+    },
+    {
+      path: '/usage',
+      name: 'usage',
+      component: UsageView,
+      meta: { title: 'Usage', icon: 'BarChart3' }
     },
     {
       path: '/settings',

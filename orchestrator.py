@@ -50,6 +50,7 @@ from app.routers import (
     stt,
     telegram,
     tts,
+    usage,
     widget,
     yoomoney_webhook,
 )
@@ -386,6 +387,7 @@ app.include_router(llm.router)
 app.include_router(tts.router)
 app.include_router(chat.router)
 app.include_router(telegram.router)
+app.include_router(usage.router)
 app.include_router(widget.router)
 app.include_router(gsm.router)
 app.include_router(bot_sales.router)

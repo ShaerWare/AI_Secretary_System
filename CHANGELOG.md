@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Usage Tracking & Limits**: Track TTS/STT/LLM usage with configurable limits
+  - New models: `UsageLog`, `UsageLimits` in database
+  - API endpoints: `/admin/usage/logs`, `/admin/usage/stats`, `/admin/usage/limits`, `/admin/usage/summary`
+  - Admin UI: UsageView.vue with dashboard, usage bars, limit configuration
+  - Daily/monthly limits with hard/soft enforcement and warning thresholds
+
 ### Planned
 - GSM Telephony real service (SIM7600E-H serial connection)
 - amoCRM Integration
