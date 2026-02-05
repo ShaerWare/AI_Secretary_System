@@ -2464,12 +2464,14 @@ class GenerateProjectDatasetRequest(BaseModel):
     include_docs: bool = True
     include_escalation: bool = True
     include_code: bool = True  # Python код и Markdown документация
+    github_repo_url: Optional[str] = None  # URL публичного GitHub/GitLab репозитория
+    github_branch: str = "main"  # Ветка для клонирования
     output_name: str = "project_dataset"
 
 
 @app.post("/admin/finetune/dataset/generate-project")
 async def admin_generate_project_dataset(request: GenerateProjectDatasetRequest):
-    """Генерировать датасет из проектных источников (ТЗ, FAQ, документация, эскалации, код)"""
+    """Генерировать датасет из проектных источников (ТЗ, FAQ, документация, эскалации, код, GitHub)"""
     manager = get_finetune_manager()
     return await manager.generate_project_dataset(
         include_tz=request.include_tz,
@@ -2477,6 +2479,8 @@ async def admin_generate_project_dataset(request: GenerateProjectDatasetRequest)
         include_docs=request.include_docs,
         include_escalation=request.include_escalation,
         include_code=request.include_code,
+        github_repo_url=request.github_repo_url,
+        github_branch=request.github_branch,
         output_name=request.output_name,
     )
 

@@ -27,7 +27,8 @@ import {
   ShieldAlert,
   FileText,
   Zap,
-  Code2
+  Code2,
+  Github
 } from 'lucide-vue-next'
 import { ref, computed, watch, onUnmounted } from 'vue'
 
@@ -55,6 +56,8 @@ const projectDatasetConfig = ref({
   include_docs: true,
   include_escalation: true,
   include_code: true,
+  github_repo_url: '',
+  github_branch: 'main',
   output_name: 'project_dataset'
 })
 const projectDatasetResult = ref<{
@@ -483,12 +486,46 @@ onUnmounted(() => {
             </label>
           </div>
 
+          <!-- GitHub Repository Section -->
+          <div class="p-4 border border-border rounded-lg">
+            <h4 class="text-sm font-medium mb-3 flex items-center gap-2">
+              <Github class="w-4 h-4" />
+              Внешний репозиторий (опционально)
+            </h4>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">URL репозитория</label>
+                <input
+                  v-model="projectDatasetConfig.github_repo_url"
+                  type="text"
+                  placeholder="https://github.com/user/repo"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">Ветка</label>
+                <input
+                  v-model="projectDatasetConfig.github_branch"
+                  type="text"
+                  placeholder="main"
+                  class="w-48 px-3 py-2 bg-secondary rounded-lg text-sm"
+                />
+              </div>
+              <p class="text-xs text-muted-foreground">
+                Поддерживаются публичные GitHub и GitLab репозитории. Будут спарсены все *.py и *.md файлы.
+              </p>
+            </div>
+          </div>
+
           <!-- Output name -->
           <div>
             <label class="block text-sm mb-1">Имя выходного файла</label>
             <input
-              v-model="projectDatasetConfig.output_name" type="text" placeholder="project_dataset"
-              class="w-full px-3 py-2 bg-secondary rounded-lg text-sm max-w-xs" />
+              v-model="projectDatasetConfig.output_name"
+              type="text"
+              placeholder="project_dataset"
+              class="w-full px-3 py-2 bg-secondary rounded-lg text-sm max-w-xs"
+            />
           </div>
 
           <!-- Result stats -->

@@ -115,6 +115,8 @@ export const finetuneApi = {
     include_docs?: boolean
     include_escalation?: boolean
     include_code?: boolean
+    github_repo_url?: string
+    github_branch?: string
     output_name?: string
   }) =>
     api.post<{

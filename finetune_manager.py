@@ -12,7 +12,9 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -634,6 +636,8 @@ class FinetuneManager:
         include_docs: bool = True,
         include_escalation: bool = True,
         include_code: bool = True,
+        github_repo_url: Optional[str] = None,
+        github_branch: str = "main",
         output_name: str = "project_dataset",
     ) -> dict:
         """
@@ -682,6 +686,14 @@ class FinetuneManager:
                 md_dialogs = self._generate_from_markdown_docs()
                 all_dialogs.extend(md_dialogs)
                 sources_stats["markdown_docs"] = len(md_dialogs)
+
+            # Парсинг внешнего GitHub репозитория (если указан)
+            if github_repo_url:
+                github_dialogs = await self._generate_from_github_repo(
+                    github_repo_url, github_branch
+                )
+                all_dialogs.extend(github_dialogs)
+                sources_stats["github"] = len(github_dialogs)
 
             if not all_dialogs:
                 return {
@@ -1894,6 +1906,123 @@ class FinetuneManager:
         dialogs.append(self._make_dialog([(q, a)]))
 
         return dialogs
+
+    # ============== GitHub Repository Parsing ==============
+
+    async def _clone_repo(self, url: str, branch: str, dest: Path) -> None:
+        """
+        Клонирует GitHub репозиторий (shallow clone).
+
+        Args:
+            url: URL публичного репозитория (GitHub/GitLab)
+            branch: Название ветки
+            dest: Целевая директория
+        """
+        # Валидация URL
+        if not url.startswith(("https://github.com/", "https://gitlab.com/")):
+            raise ValueError("Только GitHub/GitLab URL поддерживаются")
+
+        logger.info(f"🔄 Клонирование {url} (ветка: {branch})...")
+
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "clone",
+            "--branch",
+            branch,
+            "--depth",
+            "1",
+            "--single-branch",
+            url,
+            str(dest),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+
+        if process.returncode != 0:
+            error_msg = stderr.decode().strip() if stderr else "Unknown error"
+            raise RuntimeError(f"Git clone failed: {error_msg}")
+
+        logger.info(f"✅ Репозиторий клонирован в {dest}")
+
+    async def _generate_from_github_repo(
+        self,
+        repo_url: str,
+        branch: str = "main",
+    ) -> List[dict]:
+        """
+        Клонирует публичный репозиторий и парсит все *.py и *.md файлы.
+
+        Args:
+            repo_url: URL публичного GitHub/GitLab репозитория
+            branch: Ветка для клонирования (по умолчанию "main")
+
+        Returns:
+            Список диалогов (Q&A пар) из репозитория
+        """
+        temp_dir = Path(tempfile.gettempdir()) / f"github_{uuid.uuid4().hex[:8]}"
+        dialogs: List[dict] = []
+
+        try:
+            # 1. Shallow clone
+            await self._clone_repo(repo_url, branch, temp_dir)
+
+            # Получаем название репозитория для контекста
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            if repo_name.endswith(".git"):
+                repo_name = repo_name[:-4]
+
+            logger.info(f"📂 Парсинг репозитория {repo_name}...")
+
+            # 2. Парсим Python файлы
+            py_count = 0
+            for py_file in temp_dir.rglob("*.py"):
+                # Пропускаем служебные директории
+                if any(
+                    skip in str(py_file)
+                    for skip in ["__pycache__", ".git", "venv", "node_modules", ".tox"]
+                ):
+                    continue
+                try:
+                    file_dialogs = self._parse_router_file(py_file)
+                    dialogs.extend(file_dialogs)
+                    py_count += len(file_dialogs)
+                except Exception as e:
+                    logger.debug(f"⚠️ Ошибка парсинга {py_file.name}: {e}")
+
+            # 3. Парсим Markdown файлы
+            md_count = 0
+            for md_file in temp_dir.rglob("*.md"):
+                if ".git" in str(md_file):
+                    continue
+                try:
+                    file_dialogs = self._parse_markdown_file(md_file)
+                    dialogs.extend(file_dialogs)
+                    md_count += len(file_dialogs)
+                except Exception as e:
+                    logger.debug(f"⚠️ Ошибка парсинга {md_file.name}: {e}")
+
+            logger.info(
+                f"📝 Из GitHub репозитория {repo_name} сгенерировано "
+                f"{len(dialogs)} диалогов (Python: {py_count}, Markdown: {md_count})"
+            )
+
+            return dialogs
+
+        except asyncio.TimeoutError:
+            logger.error(f"❌ Таймаут при клонировании {repo_url}")
+            raise RuntimeError(f"Таймаут клонирования (60 сек). Проверьте URL: {repo_url}")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при парсинге GitHub репозитория: {e}")
+            raise
+
+        finally:
+            # Cleanup - всегда удаляем временные файлы
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.debug(f"🧹 Временные файлы удалены: {temp_dir}")
 
     # ============== Training Configuration ==============
 
