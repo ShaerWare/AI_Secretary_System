@@ -1,9 +1,17 @@
 """Telegram bot configuration."""
 
+import logging
+import os
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
+import httpx
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+
+logger = logging.getLogger(__name__)
 
 
 class TelegramSettings(BaseSettings):
@@ -94,3 +102,87 @@ class TelegramSettings(BaseSettings):
 def get_telegram_settings() -> TelegramSettings:
     """Get cached telegram settings instance."""
     return TelegramSettings()
+
+
+# ─── Multi-instance API config ───────────────────────────────────────────────
+
+
+@dataclass
+class BotConfig:
+    """Dynamic bot configuration loaded from orchestrator API.
+
+    Used in multi-instance mode when BOT_INSTANCE_ID is set.
+    """
+
+    instance_id: str
+    bot_token: str
+    name: str = "Telegram Bot"
+    llm_backend: str = "vllm"
+    system_prompt: str | None = None
+    action_buttons: list[dict[str, Any]] = field(default_factory=list)
+    payment_provider_token: str | None = None
+    payment_currency: str = "RUB"
+    yoomoney_token: str | None = None
+    auto_start: bool = False
+
+    # Merged settings from TelegramSettings for convenience
+    stream_edit_interval: float = 1.5
+    stream_edit_min_chars: int = 100
+    max_messages_per_session: int = 100
+    sales_db_path: str = "sales.db"
+    admin_ids: set[int] = field(default_factory=set)
+
+
+def get_bot_instance_id() -> str | None:
+    """Get BOT_INSTANCE_ID from environment."""
+    return os.environ.get("BOT_INSTANCE_ID")
+
+
+def get_orchestrator_url() -> str:
+    """Get orchestrator URL from environment."""
+    return os.environ.get("ORCHESTRATOR_URL", "http://localhost:8002")
+
+
+async def load_config_from_api(instance_id: str) -> BotConfig:
+    """Load bot configuration from orchestrator API.
+
+    Args:
+        instance_id: Bot instance ID from database
+
+    Returns:
+        BotConfig with all settings from API
+
+    Raises:
+        httpx.HTTPError: If API request fails
+    """
+    api_url = get_orchestrator_url()
+    url = f"{api_url}/admin/telegram/instances/{instance_id}"
+
+    logger.info(f"Loading bot config from API: {url}")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, params={"include_token": "true"})
+        resp.raise_for_status()
+        data = resp.json()
+
+    instance = data["instance"]
+
+    # Parse admin IDs from config
+    admin_ids_str = instance.get("config", {}).get("admin_ids", "")
+    admin_ids = set()
+    if admin_ids_str:
+        admin_ids = {int(x.strip()) for x in admin_ids_str.split(",") if x.strip().isdigit()}
+
+    return BotConfig(
+        instance_id=instance["id"],
+        bot_token=instance["bot_token"],
+        name=instance.get("name", "Telegram Bot"),
+        llm_backend=instance.get("llm_backend", "vllm"),
+        system_prompt=instance.get("system_prompt"),
+        action_buttons=instance.get("action_buttons", []),
+        payment_provider_token=instance.get("payment_provider_token"),
+        payment_currency=instance.get("payment_currency", "RUB"),
+        yoomoney_token=instance.get("yoomoney_access_token"),
+        auto_start=instance.get("auto_start", False),
+        admin_ids=admin_ids,
+    )

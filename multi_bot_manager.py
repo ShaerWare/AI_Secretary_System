@@ -68,7 +68,9 @@ class MultiBotManager:
         self._lock = asyncio.Lock()
         self._logs_dir = Path(__file__).parent / "logs"
         self._logs_dir.mkdir(exist_ok=True)
-        self._bot_script = Path(__file__).parent / "telegram_bot_service.py"
+        # New aiogram bot module (replaces old telegram_bot_service.py)
+        self._bot_module = "telegram_bot"
+        self._bot_module_path = Path(__file__).parent / "telegram_bot"
 
     def _get_log_path(self, instance_id: str) -> Path:
         """Get log file path for bot instance."""
@@ -98,10 +100,10 @@ class MultiBotManager:
                     # Clean up dead process
                     del self._processes[instance_id]
 
-            if not self._bot_script.exists():
+            if not self._bot_module_path.exists():
                 return {
                     "status": "error",
-                    "error": f"Bot script not found: {self._bot_script}",
+                    "error": f"Bot module not found: {self._bot_module_path}",
                     "instance_id": instance_id,
                 }
 
@@ -121,12 +123,14 @@ class MultiBotManager:
                     log_fd.write(f"Time: {datetime.utcnow().isoformat()}\n")
                     log_fd.write(f"{'=' * 60}\n\n")
 
+                    # Run as module: python -m telegram_bot
                     process = subprocess.Popen(
-                        [sys.executable, str(self._bot_script)],
+                        [sys.executable, "-m", self._bot_module],
                         env=env,
                         stdout=log_fd,
                         stderr=subprocess.STDOUT,
                         start_new_session=True,  # Don't kill on parent exit
+                        cwd=str(Path(__file__).parent),  # Run from project root
                     )
 
                 self._processes[instance_id] = BotProcess(

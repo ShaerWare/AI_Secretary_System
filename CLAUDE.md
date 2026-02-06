@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Secretary System - virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini with VLESS proxy support, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony support (SIM7600E-H), a Vue 3 PWA admin panel with 16 tabs, i18n (ru/en), themes, ~193 API endpoints across 18 routers, website chat widgets (multi-instance), Telegram bot integration (multi-instance) with sales bot features and YooMoney/YooKassa/Stars payments, and fine-tuning with project dataset generation.
+AI Secretary System - virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini with VLESS proxy support, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony support (SIM7600E-H), a Vue 3 PWA admin panel with 19 views, i18n (ru/en), themes, ~236 API endpoints across 18 routers, website chat widgets (multi-instance), Telegram bot integration (multi-instance) with sales bot features and YooMoney/YooKassa/Stars payments, and fine-tuning with project dataset generation.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                     Orchestrator (port 8002)                              │
-│  orchestrator.py + app/routers/ (18 modular routers, ~193 endpoints)     │
+│  orchestrator.py + app/routers/ (18 modular routers, ~236 endpoints)     │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐   │
 │  │              Vue 3 Admin Panel (19 views, PWA)                     │   │
@@ -154,25 +154,25 @@ python prepare_dataset.py && python train.py
 orchestrator.py              # FastAPI entry point, global state, legacy endpoints
 app/
 ├── dependencies.py          # ServiceContainer for DI
-├── routers/                 # 18 modular routers (~193 endpoints)
+├── routers/                 # 18 modular routers (~236 endpoints)
 │   ├── auth.py              # 3 endpoints  - JWT login/logout/refresh
 │   ├── audit.py             # 4 endpoints  - Audit log viewing/export
 │   ├── services.py          # 6 endpoints  - vLLM start/stop/restart
-│   ├── monitor.py           # 7 endpoints  - GPU stats, health, SSE metrics
-│   ├── faq.py               # 7 endpoints  - FAQ CRUD, reload, test
-│   ├── stt.py               # 4 endpoints  - STT status, transcribe
-│   ├── llm.py               # 30 endpoints - Backend, persona, cloud providers, VLESS proxy, bridge
-│   ├── tts.py               # 15 endpoints - Presets, params, test, cache, streaming
-│   ├── chat.py              # 12 endpoints - Sessions (CRUD, bulk delete, grouping), messages, streaming
+│   ├── monitor.py           # 9 endpoints  - GPU stats, health, SSE metrics
+│   ├── faq.py               # 8 endpoints  - FAQ CRUD, reload, test
+│   ├── stt.py               # 6 endpoints  - STT status, transcribe
+│   ├── llm.py               # 43 endpoints - Backend, persona, cloud providers, VLESS proxy, bridge
+│   ├── tts.py               # 16 endpoints - Presets, params, test, cache, streaming
+│   ├── chat.py              # 11 endpoints - Sessions (CRUD, bulk delete, grouping), messages, streaming
 │   ├── usage.py             # 10 endpoints - Usage tracking, limits, stats, cleanup
-│   ├── telegram.py          # 29 endpoints - Bot instances CRUD, control, payments, YooMoney
+│   ├── telegram.py          # 28 endpoints - Bot instances CRUD, control, payments, YooMoney
 │   ├── widget.py            # 7 endpoints  - Widget instances CRUD
-│   ├── gsm.py               # 12 endpoints - GSM telephony, SIM7600E-H module
-│   ├── bot_sales.py         # 20 endpoints - Sales bot (quiz, segments, funnels, testimonials)
-│   ├── legal.py             # 15 endpoints - GDPR compliance, consents, privacy policy
+│   ├── gsm.py               # 15 endpoints - GSM telephony, SIM7600E-H module
+│   ├── bot_sales.py         # 44 endpoints - Sales bot (quiz, segments, funnels, A/B tests, discovery, events)
+│   ├── legal.py             # 11 endpoints - GDPR compliance, consents, privacy policy
 │   ├── backup.py            # 8 endpoints  - Backup/restore system
-│   ├── github_webhook.py    # 4 endpoints  - GitHub webhook (stars, releases)
-│   └── yoomoney_webhook.py  # 2 endpoints  - YooMoney payment webhook
+│   ├── github_webhook.py    # 6 endpoints  - GitHub webhook (stars, releases)
+│   └── yoomoney_webhook.py  # 1 endpoint   - YooMoney payment webhook
 └── services/
     ├── audio_pipeline.py    # Telephony audio processing (GSM frames, G.711)
     ├── sales_funnel.py      # Sales funnel logic (segmentation, pricing, follow-ups)
@@ -191,7 +191,7 @@ app/
 | `piper_tts_service.py` | Piper TTS (CPU) with Dmitri/Irina voices, auto-discovers models dir |
 | `stt_service.py` | Vosk (realtime) + Whisper (batch) STT |
 | `multi_bot_manager.py` | Subprocess manager for multiple Telegram bots (auto-start on app launch) |
-| `telegram_bot/` | Standalone bot module with LLM routing (Claude for TZ, Qwen for chat) |
+| `telegram_bot/` | Standalone bot module (see structure below) |
 | `finetune_manager.py` | LoRA fine-tuning manager (dataset processing, training, adapters, project dataset generation) |
 | `app/rate_limiter.py` | Rate limiting with slowapi (configurable per endpoint type) |
 | `app/security_headers.py` | Security headers middleware (X-Frame-Options, CSP, etc.) |
@@ -205,8 +205,8 @@ admin/src/
 ├── views/                   # 19 views (grouped into 5 accordion sections)
 ├── components/AccordionNav.vue  # Collapsible navigation with 5 groups
 ├── api/                     # API clients + SSE helpers
-├── stores/                  # Pinia (auth, theme, toast, audit, services, llm)
-├── composables/             # useSSE, useRealtimeMetrics, useExportImport
+├── stores/                  # Pinia (auth, theme, toast, audit, services, llm, settings, tts, confirm, search)
+├── composables/             # useSSE, useRealtimeMetrics, useExportImport, useGpuStats
 └── plugins/i18n.ts          # vue-i18n translations (ru/en)
 ```
 
@@ -216,6 +216,33 @@ admin/src/
 - **Каналы**: Chat, Telegram, Widget, Telephony (GSM)
 - **Бизнес**: FAQ, Sales, CRM (amoCRM placeholder)
 - **Система**: Settings, About
+
+### Telegram Bot Module
+
+```
+telegram_bot/
+├── bot.py               # Main bot class (TelegramBot)
+├── config.py            # Bot configuration, multi-instance support
+├── handlers/            # Message/command handlers
+│   ├── messages.py      # General message routing
+│   ├── commands.py      # /start, /help, /settings
+│   ├── callbacks.py     # Inline button callbacks
+│   ├── tz.py            # TZ (technical spec) handler
+│   ├── news.py          # News digest handler
+│   ├── files.py         # File upload handler
+│   └── sales/           # Sales-specific handlers
+│       ├── welcome.py   # Onboarding flow
+│       ├── quiz.py      # Quiz funnel
+│       ├── payment.py   # Payment processing
+│       ├── basic.py, diy.py, common.py, custom.py
+├── middleware/           # Access control middleware
+├── prompts/             # LLM prompt templates
+├── sales/               # Sales logic (keyboards, flows)
+├── services/            # Shared services (LLM routing, etc.)
+└── utils/               # Helper utilities
+```
+
+**LLM routing:** Claude for TZ (technical specs), configurable backend for chat.
 
 ### Database (SQLite + Redis)
 
@@ -240,11 +267,12 @@ db/
 ├── models.py             # SQLAlchemy ORM models + PROVIDER_TYPES dict
 ├── redis_client.py       # Redis caching with fallback
 ├── integration.py        # Backward-compatible managers
-└── repositories/         # Data access layer
+└── repositories/         # Data access layer (27 repositories)
     ├── base.py           # BaseRepository with CRUD
     ├── chat.py           # ChatRepository
     ├── faq.py            # FAQRepository
     ├── preset.py         # PresetRepository
+    ├── llm_preset.py     # LLM preset management
     ├── config.py         # ConfigRepository
     ├── telegram.py       # TelegramRepository
     ├── bot_instance.py   # BotInstanceRepository (Telegram bots)
@@ -253,7 +281,10 @@ db/
     ├── cloud_provider.py # CloudProviderRepository
     ├── consent.py        # ConsentRepository (GDPR consent management)
     ├── usage.py          # UsageRepository, UsageLimitsRepository
-    └── audit.py          # AuditRepository
+    ├── audit.py          # AuditRepository
+    └── bot_*.py          # Sales bot repositories (A/B tests, discovery, events,
+                          #   follow-ups, GitHub, hardware, quiz, segments,
+                          #   subscribers, testimonials, user profiles, agent prompts)
 ```
 
 ## Environment Variables
@@ -286,7 +317,8 @@ X_FRAME_OPTIONS=DENY                # DENY or SAMEORIGIN
 **Adding a new API endpoint:**
 1. Create or edit router in `app/routers/`
 2. Use `ServiceContainer` from `app/dependencies.py` for DI
-3. Router is auto-registered via `app/routers/__init__.py`
+3. Add router to imports and `__all__` in `app/routers/__init__.py`
+4. Register router in `orchestrator.py` with `app.include_router()`
 
 **Adding a new cloud LLM provider type:**
 1. Add entry to `PROVIDER_TYPES` dict in `db/models.py` (includes name, base_url, default_model)
@@ -405,268 +437,67 @@ Supported providers (configured via Admin Panel → LLM → Cloud Providers):
 
 ## VLESS Proxy for Gemini
 
-For regions where Google API is restricted, Gemini providers support optional VLESS proxy routing via xray-core with **automatic failover** support.
+Optional VLESS proxy for Gemini in restricted regions, with automatic failover across multiple proxies.
 
-**Setup:**
-1. Install xray-core (included in Docker image, or download to `./bin/xray`)
-2. Create/edit Gemini provider in Admin Panel → LLM → Cloud Providers
-3. In the modal, enter VLESS URLs in the "VLESS Proxy" section (one per line for failover)
-4. Click "Test All Proxies" to verify connections
-5. Save — all Gemini API requests will route through the proxy
+**Key files:** `xray_proxy_manager.py` (manages xray-core subprocess), `cloud_llm_service.py` (GeminiProvider uses it)
 
-**Multiple Proxies with Fallback:**
-- Add multiple VLESS URLs (one per line) for automatic failover
-- When current proxy fails, system switches to next available
-- UI shows proxy count badge (e.g., "3 Proxy") on provider cards
-- "Test All Proxies" tests each URL and shows per-proxy results
+**Flow:** `GeminiProvider → XrayProxyManagerWithFallback → xray-core (SOCKS5) → VLESS Server → Google API`
 
-**VLESS URL format:**
-```
-vless://uuid@host:port?security=reality&pbk=PUBLIC_KEY&sid=SHORT_ID&type=tcp&flow=xtls-rprx-vision#Name
-```
+**Storage:** VLESS URLs stored in provider's `config` JSON field as `vless_urls` array. Proxy endpoints are in `app/routers/llm.py` under `/admin/llm/proxy/` prefix.
 
-**Supported protocols:**
-- Security: `none`, `tls`, `reality`
-- Transport: `tcp`, `ws` (WebSocket), `grpc`
-- Flow: `xtls-rprx-vision` (for XTLS)
-
-**API endpoints:**
-- `GET /admin/llm/proxy/status` — xray availability, proxy list and current proxy
-- `POST /admin/llm/proxy/test` — Test single VLESS URL
-- `POST /admin/llm/proxy/test-multiple` — Test multiple VLESS URLs
-- `POST /admin/llm/proxy/reset` — Reset all proxies to enabled state
-- `POST /admin/llm/proxy/switch-next` — Manually switch to next proxy
-- `GET /admin/llm/proxy/validate` — Validate VLESS URL format
-
-**How it works:**
-```
-GeminiProvider → XrayProxyManagerWithFallback → xray-core (SOCKS5/HTTP) → VLESS Server → Google API
-                         ↓ (on failure)
-                 Auto-switch to next proxy
-```
-
-**Storage:** VLESS URLs stored in provider's `config` JSON field:
-```json
-{
-  "temperature": 0.7,
-  "vless_urls": [
-    "vless://uuid@host1:port?...#proxy1",
-    "vless://uuid@host2:port?...#proxy2"
-  ]
-}
-```
-
-**Error handling:**
-- xray not found → Warning logged, falls back to direct connection
-- Invalid VLESS URL → Error shown in UI at save time
-- Proxy fails → Auto-switch to next proxy (if multiple configured)
-- All proxies fail → Fallback to direct connection
-- VLESS server unreachable → SDK timeout, error returned to user
+**VLESS URL format:** `vless://uuid@host:port?security=reality&pbk=KEY&sid=ID&type=tcp&flow=xtls-rprx-vision#Name`
 
 ## CLI-OpenAI Bridge (Claude Code)
 
-The Claude Bridge provider wraps the local `claude` CLI (Claude Code) into an OpenAI-compatible API via a bridge subprocess. This allows using Claude Code as an LLM backend without an API key.
+Wraps local `claude` CLI into an OpenAI-compatible API via a bridge subprocess (`services/bridge/` FastAPI on port 8787). No API key needed.
 
-**How it works:**
-```
-Admin Panel → Select "Claude Bridge" provider → Click "Use"
-                                                      ↓
-                                              BridgeProcessManager.start()
-                                                      ↓
-                                          services/bridge/ (FastAPI on port 8787)
-                                                      ↓
-                                              claude CLI (subprocess)
-                                                      ↓
-                                          OpenAICompatibleProvider → /v1/chat/completions
-```
+**Key files:** `bridge_manager.py` (process manager), `services/bridge/` (bridge server source)
 
-**Setup:**
-1. Ensure `claude` CLI is installed and authenticated
-2. In Admin → LLM → Cloud Providers → Add Provider
-3. Select type "Claude Bridge (Local CLI)"
-4. Configure permission level (chat/readonly/edit/full) and port
-5. Click "Use" — bridge auto-starts
+**Flow:** `OpenAICompatibleProvider → services/bridge/ → claude CLI subprocess`
 
-**Permission levels:**
-- `chat` — Chat only, no file access (safe, default)
-- `readonly` — Can read files
-- `edit` — Can edit files
-- `full` — Full access (dangerous)
+**Config:** Stored in provider's `config` JSON: `{"bridge_port": 8787, "permission_level": "chat"}`. Permission levels: `chat` (safe default), `readonly`, `edit`, `full`.
 
-**API endpoints:**
-- `GET /admin/llm/bridge/status` — Bridge process status (running, pid, port, uptime)
-- `POST /admin/llm/bridge/start` — Manually start bridge
-- `POST /admin/llm/bridge/stop` — Manually stop bridge
-
-**Auto-management:**
-- Bridge auto-starts when switching to a `claude_bridge` provider
-- Bridge auto-stops when switching to another provider or backend
-- Bridge config stored in provider's `config` JSON: `{"bridge_port": 8787, "permission_level": "chat"}`
-
-**Key files:**
-- `bridge_manager.py` — Process manager (start/stop/status)
-- `services/bridge/` — Full bridge source (FastAPI server)
-- `services/bridge/.env` — Bridge configuration
+**Auto-management:** Bridge auto-starts/stops when switching LLM providers. Endpoints under `/admin/llm/bridge/`.
 
 ## GSM Telephony (SIM7600E-H)
 
-Support for GSM telephony via SIM7600E-H 4G LTE module for voice calls and SMS.
+GSM telephony via SIM7600E-H 4G LTE module (USB). Audio: 8kHz, 16-bit PCM, mono.
 
-**Hardware:**
-- Module: SIM7600E-H (4G LTE, voice, SMS)
-- Connection: USB to server
-- Antennas: MAIN (required), AUX (optional for better signal)
+**Key files:** `app/routers/gsm.py` (15 endpoints under `/admin/gsm/`), `app/services/audio_pipeline.py` (TelephonyAudioPipeline for G.711/PCM processing)
 
-**USB Ports (Linux):**
-```
-/dev/ttyUSB0 - Diag (diagnostics)
-/dev/ttyUSB1 - NMEA (GPS data)
-/dev/ttyUSB2 - AT commands ← main control port
-/dev/ttyUSB3 - Modem (PPP)
-/dev/ttyUSB4 - Audio (USB PCM) ← voice stream
-```
-
-**Audio format:** 8kHz, 16-bit PCM, mono (compatible with TelephonyAudioPipeline)
-
-**Key AT commands:**
-```bash
-AT           # Check connection
-AT+CPIN?     # SIM status
-AT+CSQ       # Signal strength (0-31, 99=unknown)
-AT+CREG?     # Network registration
-AT+CLIP=1    # Enable Caller ID
-ATA          # Answer incoming call
-ATH          # Hang up
-AT+CMGF=1    # SMS text mode
-AT+CMGS="+7..." # Send SMS
-```
-
-**API endpoints (`/admin/gsm/`):**
-- `GET /status` — Module status (signal, SIM, network)
-- `GET/PUT /config` — Configuration (auto-answer, timeouts, messages)
-- `GET /calls` — Call history
-- `POST /calls/answer|hangup|dial` — Call control
-- `GET/POST /sms` — SMS history and send
-- `POST /at` — Execute AT command (debug)
-- `GET /ports` — List serial ports
-
-**Admin UI:** Tab "Телефония" with status, calls, SMS, settings, and AT console.
+**USB ports:** `/dev/ttyUSB2` (AT commands), `/dev/ttyUSB4` (audio/voice stream)
 
 ## Telegram Bot Auto-Start
 
-Telegram bots persist their running state and automatically restart after app/container restart.
-
-**How it works:**
-1. When bot is started via UI → `auto_start=true` saved in DB
-2. When bot is stopped via UI → `auto_start=false` saved in DB
-3. On app startup → all bots with `auto_start=true` automatically start
-
-**Startup logs:**
-```
-📱 Auto-started Telegram bot: MyBot
-📱 Auto-started 2/2 Telegram bots
-```
-
-**Migration for existing databases:**
-```sql
-ALTER TABLE bot_instances ADD COLUMN auto_start BOOLEAN DEFAULT 0;
-```
+Bots with `auto_start=true` in `bot_instances` table automatically restart on app startup. Managed by `multi_bot_manager.py`.
 
 ## Telegram Bot Payments
 
-Telegram bots support accepting payments via YooKassa (RUB), YooMoney (OAuth), and Telegram Stars (XTR).
+Three payment methods: YooKassa (RUB, via BotFather token), YooMoney (OAuth), Telegram Stars (XTR, no token needed).
 
-**Supported payment methods:**
-- **YooKassa** — Russian payment provider, requires provider token from BotFather
-- **YooMoney** — Direct wallet payments via OAuth (no BotFather token needed)
-- **Telegram Stars (XTR)** — Telegram's native digital currency, no provider token needed
+**Key files:** `telegram_bot/handlers/sales/payment.py` (bot-side), `app/routers/telegram.py` (admin endpoints under `/admin/telegram/instances/{id}/payments`), `app/services/yoomoney_service.py` (OAuth), `app/routers/yoomoney_webhook.py`
 
-**How it works:**
-1. Configure payment in Admin Panel → Telegram → Edit bot → Payments section
-2. Enable payments, add products (title, description, price in RUB/Stars)
-3. Bot shows "Оплата" button in keyboard and responds to `/pay` command
-4. User selects product → Telegram sends invoice → payment processed
-5. Payment logged to `payment_log` table, visible in admin panel
-
-**Payment flow:**
-```
-/pay or "Оплата" button → send_invoice() → PreCheckoutQuery (auto-approved) → SuccessfulPayment → log to DB
-```
-
-**YooMoney OAuth flow:**
-1. Configure YooMoney client_id/secret in bot settings
-2. Click "Authorize YooMoney" → OAuth popup
-3. User grants access → callback stores access token
-4. Bot can now accept YooMoney payments
-
-**API endpoints:**
-- `POST /admin/telegram/instances/{id}/payments` — Log payment (internal, from bot)
-- `GET /admin/telegram/instances/{id}/payments` — Payment history (admin UI)
-- `GET /admin/telegram/instances/{id}/payments/stats` — Payment statistics
-- `GET /admin/telegram/instances/{id}/yoomoney/auth-url` — Get YooMoney OAuth URL
-- `GET /admin/telegram/instances/{id}/yoomoney/callback` — OAuth callback handler
-- `POST /admin/telegram/instances/{id}/yoomoney/disconnect` — Disconnect YooMoney
-- `POST /yoomoney/webhook` — YooMoney payment notification webhook
-
-**Migration for existing databases:**
-```bash
-python scripts/migrate_add_payment_fields.py
-```
+**Flow:** `/pay` → `send_invoice()` → `PreCheckoutQuery` (auto-approved) → `SuccessfulPayment` → log to `payment_log` table
 
 ## Sales Bot Features
 
-Telegram bots support advanced sales automation via `app/routers/bot_sales.py` (20 endpoints).
+Advanced sales automation with 44 endpoints in `app/routers/bot_sales.py`.
 
-**Features:**
-- **Quiz funnels** — lead qualification via interactive questions
-- **Segment targeting** — different messages for different user segments
-- **Pricing calculator** — dynamic pricing based on user responses
-- **Testimonials** — social proof integration
-- **Follow-up sequences** — automated drip campaigns
+**Features:** Quiz funnels, segment targeting, A/B testing, pricing calculator, testimonials, follow-up sequences, discovery prompts, event tracking, agent prompts.
 
-**Key files:**
-- `app/routers/bot_sales.py` — API endpoints
-- `app/services/sales_funnel.py` — Funnel logic, segmentation, pricing
-
-**Migration:**
-```bash
-python scripts/migrate_sales_bot.py
-```
+**Key files:** `app/routers/bot_sales.py`, `app/services/sales_funnel.py`, `telegram_bot/handlers/sales/`, `db/repositories/bot_*.py` (14 domain-specific repositories)
 
 ## Fine-tuning & Project Dataset Generation
 
-The system supports LoRA fine-tuning for Qwen2.5-7B with built-in dataset generation from project sources.
+LoRA fine-tuning for Qwen2.5-7B with dataset generation from project sources (FAQ, code, docs, sales scenarios) and external GitHub repos.
 
-**Admin panel:** Tab "Обучение" (Fine-tune) → "Датасет из проекта"
+**Key files:** `finetune_manager.py` (dataset processing, training control, adapter management), `finetune/train.py` (4-bit QLoRA training), `finetune/prepare_dataset.py` (Telegram export → JSONL)
 
-**Project dataset sources:**
-- **Sales scenarios (ТЗ)** — pricing, objection handling, case studies, multi-turn sales flows
-- **FAQ from DB** — all FAQ entries automatically converted to training pairs
-- **Technical docs** — installation, configuration, API, models, integrations
-- **Escalation templates** — examples of handoff to senior support
+**Output:** `finetune/datasets/project_dataset.jsonl`
 
-**API endpoint:**
-```bash
-# Generate project dataset
-curl -X POST http://localhost:8002/admin/finetune/dataset/generate-project \
-  -H "Content-Type: application/json" \
-  -d '{"include_tz": true, "include_faq": true, "include_docs": true, "include_escalation": true}'
-```
+**Pipeline:** Generate dataset → configure LoRA params → train on GPU → activate adapter → restart vLLM
 
-**Output:** `finetune/datasets/project_dataset.jsonl` (same format as Telegram export dataset)
-
-**Training pipeline:**
-1. Generate project dataset OR upload Telegram export → process
-2. Configure LoRA params (rank, alpha, epochs, learning rate)
-3. Start training (runs on GPU in background)
-4. Activate trained adapter → restart vLLM
-
-**Key files:**
-| File | Purpose |
-|------|---------|
-| `finetune_manager.py` | Dataset processing, training control, adapter management |
-| `finetune/train.py` | LoRA training script (4-bit QLoRA on RTX 3060) |
-| `finetune/prepare_dataset.py` | Telegram export → JSONL conversion |
+**External repo support:** Shallow clone public GitHub/GitLab repos, parse `*.py` and `*.md` files. API: `POST /admin/finetune/dataset/generate-project`
 
 ## Local Model Discovery
 

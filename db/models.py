@@ -696,14 +696,97 @@ PROVIDER_TYPES = {
 }
 
 
-# Default action buttons for Telegram bots
+# Default action buttons for Telegram bots (sales funnel)
+# These match the keyboard layout in telegram_bot/sales/keyboards.py
 DEFAULT_ACTION_BUTTONS = [
     {
-        "id": "tz_compose",
-        "label": "Составление ТЗ",
-        "icon": "📝",
+        "id": "diy",
+        "label": "Установить самостоятельно",
+        "icon": "📦",
         "enabled": True,
         "order": 1,
+        "row": 0,  # First row (single button)
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "pay_5k",
+        "label": "Оплата 5К",
+        "icon": "💳",
+        "enabled": True,
+        "order": 2,
+        "row": 1,  # Second row (3 buttons)
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "support",
+        "label": "Техподдержка",
+        "icon": "🛠️",
+        "enabled": True,
+        "order": 3,
+        "row": 1,
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "wiki",
+        "label": "Wiki",
+        "icon": "📚",
+        "enabled": True,
+        "order": 4,
+        "row": 1,
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "ask",
+        "label": "Задать вопрос",
+        "icon": "❓",
+        "enabled": True,
+        "order": 5,
+        "row": 2,  # Third row (3 buttons)
+        "llm_backend": None,
+        "system_prompt": (
+            "Ты - AI-ассистент проекта AI Secretary. "
+            "Отвечай на вопросы пользователей об установке, настройке, функционале системы. "
+            "Будь полезен и конкретен."
+        ),
+        "llm_params": {"temperature": 0.7},
+    },
+    {
+        "id": "news",
+        "label": "Новости",
+        "icon": "📰",
+        "enabled": True,
+        "order": 6,
+        "row": 2,
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "start",
+        "label": "Старт",
+        "icon": "🚀",
+        "enabled": True,
+        "order": 7,
+        "row": 2,
+        "llm_backend": None,
+        "system_prompt": None,
+        "llm_params": None,
+    },
+    {
+        "id": "tz_calc",
+        "label": "Рассчитать заказ",
+        "icon": "📋",
+        "enabled": True,
+        "order": 8,
+        "row": 3,  # Fourth row (single button)
         "llm_backend": None,
         "system_prompt": (
             "Ты - специалист по составлению технических заданий. "
@@ -711,30 +794,6 @@ DEFAULT_ACTION_BUTTONS = [
             "Задавай уточняющие вопросы о целях, функционале, технических требованиях."
         ),
         "llm_params": {"temperature": 0.3, "max_tokens": 2048},
-    },
-    {
-        "id": "manager_contact",
-        "label": "Связь с менеджером",
-        "icon": "👤",
-        "enabled": True,
-        "order": 2,
-        "llm_backend": None,
-        "system_prompt": (
-            "Ты - персональный менеджер компании. "
-            "Помоги клиенту с его вопросами, уточни детали запроса, предложи решения. "
-            "Будь вежлив и профессионален."
-        ),
-        "llm_params": {"temperature": 0.7},
-    },
-    {
-        "id": "main_menu",
-        "label": "Главное меню",
-        "icon": "🏠",
-        "enabled": True,
-        "order": 99,
-        "llm_backend": None,
-        "system_prompt": None,
-        "llm_params": None,
     },
 ]
 

@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from ...bot import get_action_buttons
 from ...sales.database import get_sales_db
 from ...sales.keyboards import (
     GITHUB_URL,
@@ -25,6 +26,19 @@ from ...services.social_proof import get_social_proof_data
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+# ── Helper to get keyboard with current buttons config ────────────────────
+
+
+def get_main_kb() -> Message:
+    """Get main reply keyboard with current action_buttons config."""
+    return main_reply_kb(get_action_buttons())
+
+
+def get_submenu_kb() -> Message:
+    """Get submenu reply keyboard with current action_buttons config."""
+    return submenu_reply_kb(get_action_buttons())
 
 
 # ── Reply Keyboard Button Handlers ────────────────────────────────────
@@ -104,7 +118,7 @@ async def reply_kb_payment(message: Message, state: FSMContext) -> None:
         await db.log_event(message.from_user.id, "reply_kb_payment")
 
     # Switch to submenu keyboard (with back button)
-    await message.answer("💳", reply_markup=submenu_reply_kb())
+    await message.answer("💳", reply_markup=get_submenu_kb())
     await message.answer(
         CHECKOUT_TEXT,
         reply_markup=basic_checkout_kb(),
@@ -239,7 +253,7 @@ async def reply_kb_ask_question(message: Message, state: FSMContext) -> None:
     # Switch to submenu keyboard (with back button)
     await message.answer(
         ASK_QUESTION_TEXT,
-        reply_markup=submenu_reply_kb(),
+        reply_markup=get_submenu_kb(),
         parse_mode="Markdown",
     )
 
@@ -257,7 +271,7 @@ async def reply_kb_start(message: Message, state: FSMContext) -> None:
     first_name = message.from_user.first_name or "друг"
 
     # Show main keyboard (with manager button, no back)
-    await message.answer("🚀", reply_markup=main_reply_kb())
+    await message.answer("🚀", reply_markup=get_main_kb())
 
     # Get dynamic social proof
     social = await get_social_proof_data(name=first_name)
@@ -299,7 +313,7 @@ async def reply_kb_back(message: Message, state: FSMContext) -> None:
     # Return to welcome screen (main menu) with main keyboard (no back button)
     await message.answer(
         f"👋 {first_name}, возвращаемся в главное меню!",
-        reply_markup=main_reply_kb(),
+        reply_markup=get_main_kb(),
     )
 
     # Get dynamic social proof
@@ -426,7 +440,7 @@ async def manager_custom(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message:
         await callback.message.answer(
             custom_text,
-            reply_markup=submenu_reply_kb(),
+            reply_markup=get_submenu_kb(),
             parse_mode="Markdown",
         )
 
@@ -458,7 +472,7 @@ async def manager_question(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message:
         await callback.message.answer(
             question_text,
-            reply_markup=submenu_reply_kb(),
+            reply_markup=get_submenu_kb(),
             parse_mode="Markdown",
         )
 

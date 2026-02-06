@@ -7,6 +7,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from ...bot import get_action_buttons
 from ...sales.database import get_sales_db
 from ...sales.keyboards import main_reply_kb, welcome_kb, what_is_kb
 from ...sales.states import SalesFunnel
@@ -17,6 +18,11 @@ from ...services.social_proof import get_social_proof_data
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+def _get_keyboard():
+    """Get main keyboard with current action buttons."""
+    return main_reply_kb(get_action_buttons())
 
 
 async def _get_social_proof(name: str = "друг") -> dict:
@@ -51,7 +57,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     # Send persistent reply keyboard (always visible at bottom)
     await message.answer(
         f"👋 Добро пожаловать, {first_name}! Используйте кнопки ниже для быстрого доступа.",
-        reply_markup=main_reply_kb(),
+        reply_markup=_get_keyboard(),
     )
 
     # Send welcome message with inline keyboard

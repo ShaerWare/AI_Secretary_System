@@ -159,6 +159,18 @@ function formatBytes(mb: number): string {
   return `${mb.toFixed(0)} MB`
 }
 
+function shortenGpuName(name: string): string {
+  // "NVIDIA GeForce RTX 3060" → "RTX 3060"
+  // "NVIDIA GeForce GTX 1080 Ti" → "GTX 1080 Ti"
+  // "NVIDIA A100-SXM4-40GB" → "A100-SXM4"
+  if (!name) return 'GPU'
+  return name
+    .replace(/^NVIDIA\s*/i, '')
+    .replace(/^GeForce\s*/i, '')
+    .replace(/-\d+GB$/i, '') // Remove memory suffix like -40GB
+    .trim()
+}
+
 onMounted(() => {
   startGpuStream()
 })
@@ -286,7 +298,10 @@ onUnmounted(() => {
               <Activity class="w-5 h-5 text-purple-500" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm text-muted-foreground truncate">GPU {{ gpus.length > 0 ? '#0' : '' }}</p>
+              <p class="text-sm text-muted-foreground truncate" :title="gpus[0]?.name">
+                {{ gpus[0] ? shortenGpuName(gpus[0].name) : 'GPU' }}
+                <span v-if="gpus[0]" class="text-xs opacity-75">{{ formatBytes(gpus[0].memory_total_mb) }}</span>
+              </p>
               <p class="text-2xl font-bold">
                 {{ gpus[0] ? Math.round((gpus[0].memory_used_mb / gpus[0].memory_total_mb) * 100) : 0 }}%
               </p>
@@ -298,8 +313,9 @@ onUnmounted(() => {
               :style="{ width: gpus[0] ? `${(gpus[0].memory_used_mb / gpus[0].memory_total_mb) * 100}%` : '0%' }"
             />
           </div>
-          <p v-if="gpus[0]" :class="['text-xs mt-2', getTempColor(gpus[0].temperature_c)]">
-            {{ gpus[0].temperature_c }}°C
+          <p v-if="gpus[0]" class="text-xs text-muted-foreground mt-2">
+            {{ formatBytes(gpus[0].memory_used_mb) }} / {{ formatBytes(gpus[0].memory_total_mb) }}
+            <span :class="['ml-2', getTempColor(gpus[0].temperature_c)]">{{ gpus[0].temperature_c }}°C</span>
           </p>
         </div>
 
@@ -375,7 +391,10 @@ onUnmounted(() => {
                 <Monitor class="w-5 h-5 text-purple-500" />
               </div>
               <div>
-                <h3 class="font-semibold">GPU #{{ gpu.index }}: {{ gpu.name }}</h3>
+                <h3 class="font-semibold">
+                  {{ shortenGpuName(gpu.name) }}
+                  <span class="text-muted-foreground font-normal ml-2">{{ formatBytes(gpu.memory_total_mb) }}</span>
+                </h3>
                 <p class="text-sm text-muted-foreground">Driver: {{ gpu.driver_version }} | CC: {{ gpu.compute_capability }}</p>
               </div>
             </div>

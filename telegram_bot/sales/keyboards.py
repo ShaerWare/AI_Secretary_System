@@ -4,6 +4,8 @@ All callback_data values are prefixed with ``sales:`` to avoid
 conflicts with the existing AI-chat callbacks (``model:``).
 """
 
+from typing import Any
+
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -16,61 +18,146 @@ GITHUB_URL = "https://github.com/ShaerWare/AI_Secretary_System"
 WIKI_URL = "https://github.com/ShaerWare/AI_Secretary_System/wiki"
 
 
+# ── Default action buttons (fallback when not loaded from API) ──────────
+
+DEFAULT_ACTION_BUTTONS: list[dict[str, Any]] = [
+    {"id": "diy", "label": "Установить самостоятельно", "icon": "📦", "order": 1, "enabled": True},
+    {"id": "pay_5k", "label": "Оплата 5К", "icon": "💳", "order": 2, "enabled": True},
+    {"id": "support", "label": "Техподдержка", "icon": "🛠️", "order": 3, "enabled": True},
+    {"id": "wiki", "label": "Wiki", "icon": "📚", "order": 4, "enabled": True},
+    {"id": "ask", "label": "Задать вопрос", "icon": "❓", "order": 5, "enabled": True},
+    {"id": "news", "label": "Новости", "icon": "📰", "order": 6, "enabled": True},
+    {"id": "start", "label": "Старт", "icon": "🚀", "order": 7, "enabled": True},
+    {"id": "tz_calc", "label": "Рассчитать заказ", "icon": "📋", "order": 8, "enabled": True},
+]
+
+# Button ID to text mapping (for handler routing)
+BUTTON_ID_TO_TEXT: dict[str, str] = {}
+
+
+def _update_button_mapping(buttons: list[dict[str, Any]]) -> None:
+    """Update button ID to text mapping for handler routing."""
+    # No global needed - we're mutating the dict, not reassigning
+    BUTTON_ID_TO_TEXT.clear()
+    for btn in buttons:
+        if btn.get("enabled", True):
+            icon = btn.get("icon", "")
+            label = btn.get("label", "")
+            text = f"{icon} {label}" if icon else label
+            BUTTON_ID_TO_TEXT[btn["id"]] = text
+
+
+def get_button_id_by_text(text: str) -> str | None:
+    """Get button ID by its display text (for routing)."""
+    for btn_id, btn_text in BUTTON_ID_TO_TEXT.items():
+        if btn_text == text:
+            return btn_id
+    return None
+
+
 # ── Persistent Reply Keyboard (always visible at bottom) ────────────────
 
 
-def main_reply_kb() -> ReplyKeyboardMarkup:
-    """Main keyboard for welcome screen."""
+def build_main_keyboard(action_buttons: list[dict[str, Any]] | None = None) -> ReplyKeyboardMarkup:
+    """Build main reply keyboard from action_buttons config.
+
+    Args:
+        action_buttons: List of button configs from API. If None, uses defaults.
+
+    Returns:
+        ReplyKeyboardMarkup with buttons arranged in rows.
+    """
+    buttons = action_buttons or DEFAULT_ACTION_BUTTONS
+
+    # Update button mapping for handler routing
+    _update_button_mapping(buttons)
+
+    # Filter enabled buttons and sort by order
+    enabled = sorted(
+        [b for b in buttons if b.get("enabled", True)],
+        key=lambda x: x.get("order", 0),
+    )
+
+    if not enabled:
+        # Fallback to single start button
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🚀 Старт")]],
+            resize_keyboard=True,
+        )
+
+    # Build keyboard rows (layout from button config or default 2-3 per row)
+    keyboard: list[list[KeyboardButton]] = []
+
+    # Group buttons by row (using row_index if available, else auto-layout)
+    rows: dict[int, list[dict[str, Any]]] = {}
+    for btn in enabled:
+        row_idx = btn.get("row", len(rows))
+        if row_idx not in rows:
+            rows[row_idx] = []
+        rows[row_idx].append(btn)
+
+    # If no row info, use default layout
+    if len(rows) == 1 and 0 in rows and len(rows[0]) == len(enabled):
+        # No row info provided - use default 2-3-3-1 layout
+        layout = [1, 3, 3, 1]  # [diy], [pay, support, wiki], [ask, news, start], [tz]
+        idx = 0
+        for row_size in layout:
+            row = []
+            for _ in range(row_size):
+                if idx < len(enabled):
+                    btn = enabled[idx]
+                    icon = btn.get("icon", "")
+                    label = btn.get("label", "")
+                    text = f"{icon} {label}" if icon else label
+                    row.append(KeyboardButton(text=text))
+                    idx += 1
+            if row:
+                keyboard.append(row)
+    else:
+        # Use row info from config
+        for row_idx in sorted(rows.keys()):
+            row = []
+            for btn in rows[row_idx]:
+                icon = btn.get("icon", "")
+                label = btn.get("label", "")
+                text = f"{icon} {label}" if icon else label
+                row.append(KeyboardButton(text=text))
+            if row:
+                keyboard.append(row)
+
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="📦 Установить самостоятельно"),
-            ],
-            [
-                KeyboardButton(text="💳 Оплата 5К"),
-                KeyboardButton(text="🛠️ Техподдержка"),
-                KeyboardButton(text="📚 Wiki"),
-            ],
-            [
-                KeyboardButton(text="❓ Задать вопрос"),
-                KeyboardButton(text="📰 Новости"),
-                KeyboardButton(text="🚀 Старт"),
-            ],
-            [
-                KeyboardButton(text="📋 Рассчитать заказ"),
-            ],
-        ],
+        keyboard=keyboard,
         resize_keyboard=True,
         is_persistent=True,
         input_field_placeholder="Напишите сообщение или выберите действие...",
     )
 
 
-def submenu_reply_kb() -> ReplyKeyboardMarkup:
-    """Keyboard for submenus — has back button."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="📦 Установить самостоятельно"),
-            ],
-            [
-                KeyboardButton(text="💳 Оплата 5К"),
-                KeyboardButton(text="🛠️ Техподдержка"),
-                KeyboardButton(text="📚 Wiki"),
-            ],
-            [
-                KeyboardButton(text="❓ Задать вопрос"),
-                KeyboardButton(text="📰 Новости"),
-                KeyboardButton(text="← Назад"),
-            ],
-            [
-                KeyboardButton(text="📋 Рассчитать заказ"),
-            ],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="Напишите сообщение или выберите действие...",
-    )
+def main_reply_kb(action_buttons: list[dict[str, Any]] | None = None) -> ReplyKeyboardMarkup:
+    """Main keyboard for welcome screen.
+
+    Args:
+        action_buttons: Optional list of button configs from API.
+                       If None, uses DEFAULT_ACTION_BUTTONS.
+    """
+    return build_main_keyboard(action_buttons)
+
+
+def submenu_reply_kb(action_buttons: list[dict[str, Any]] | None = None) -> ReplyKeyboardMarkup:
+    """Keyboard for submenus — has back button.
+
+    Args:
+        action_buttons: Optional list of button configs from API.
+                       If None, uses DEFAULT_ACTION_BUTTONS.
+    """
+    # Build main keyboard and add back button
+    kb = build_main_keyboard(action_buttons)
+
+    # Replace last button in third row with back button if it exists
+    if len(kb.keyboard) >= 3 and len(kb.keyboard[2]) >= 3:
+        kb.keyboard[2][-1] = KeyboardButton(text="← Назад")
+
+    return kb
 
 
 # ── Welcome ────────────────────────────────────────────────
