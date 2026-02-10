@@ -21,7 +21,7 @@ twilio==8.11.1
 pydub==0.25.1
 
 # Telegram Bot
-python-telegram-bot==21.0.1
+python-telegram-bot==22.6
 aiogram>=3.3.0
 
 # AI Integration
