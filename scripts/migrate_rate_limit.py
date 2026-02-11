@@ -49,12 +49,8 @@ def migrate():
                 print(f"  Column already exists: {col_name}")
 
         # Set defaults on existing rows that have NULL
-        cursor.execute(
-            f"UPDATE {table} SET rate_limit_count = 5 WHERE rate_limit_count IS NULL"
-        )
-        cursor.execute(
-            f"UPDATE {table} SET rate_limit_hours = 5 WHERE rate_limit_hours IS NULL"
-        )
+        cursor.execute(f"UPDATE {table} SET rate_limit_count = 5 WHERE rate_limit_count IS NULL")
+        cursor.execute(f"UPDATE {table} SET rate_limit_hours = 5 WHERE rate_limit_hours IS NULL")
         updated = cursor.rowcount
         print(f"  Set default 5/5 on {updated} row(s)")
 

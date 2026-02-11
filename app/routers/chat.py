@@ -206,7 +206,11 @@ async def admin_stream_chat_message(
 
     # Per-instance rate limiting for telegram bot sessions
     if session.get("source") == "telegram_bot" and session.get("source_id"):
-        bot_id = session["source_id"].split(":")[0] if ":" in session["source_id"] else session["source_id"]
+        bot_id = (
+            session["source_id"].split(":")[0]
+            if ":" in session["source_id"]
+            else session["source_id"]
+        )
         bot_config = await async_bot_instance_manager.get_instance(bot_id)
         if bot_config:
             rl_count = bot_config.get("rate_limit_count")
