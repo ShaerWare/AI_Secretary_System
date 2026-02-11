@@ -103,6 +103,9 @@ class BotInstanceUpdateRequest(BaseModel):
     yoomoney_client_id: Optional[str] = None
     yoomoney_client_secret: Optional[str] = None
     yoomoney_redirect_uri: Optional[str] = None
+    # Rate limiting
+    rate_limit_count: Optional[int] = None
+    rate_limit_hours: Optional[int] = None
 
 
 # ============== Legacy Config Endpoints ==============

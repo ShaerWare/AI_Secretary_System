@@ -3,6 +3,7 @@
 
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +15,7 @@ from app.rate_limiter import RATE_LIMIT_CHAT, limiter
 from auth_manager import User, get_current_user
 from cloud_llm_service import CloudLLMService
 from db.integration import (
+    async_bot_instance_manager,
     async_chat_manager,
     async_cloud_provider_manager,
     async_widget_instance_manager,
@@ -201,6 +203,22 @@ async def admin_stream_chat_message(
     session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Per-instance rate limiting for telegram bot sessions
+    if session.get("source") == "telegram_bot" and session.get("source_id"):
+        bot_id = session["source_id"].split(":")[0] if ":" in session["source_id"] else session["source_id"]
+        bot_config = await async_bot_instance_manager.get_instance(bot_id)
+        if bot_config:
+            rl_count = bot_config.get("rate_limit_count")
+            rl_hours = bot_config.get("rate_limit_hours")
+            if rl_count and rl_hours:
+                since = datetime.utcnow() - timedelta(hours=rl_hours)
+                msg_count = await async_chat_manager.count_messages(session_id, "user", since)
+                if msg_count >= rl_count:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Rate limit exceeded: {rl_count} messages per {rl_hours}h",
+                    )
 
     # Determine which LLM service to use
     active_llm = container.llm_service

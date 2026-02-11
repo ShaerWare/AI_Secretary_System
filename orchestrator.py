@@ -14,7 +14,7 @@ import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -3411,6 +3411,20 @@ async def widget_stream_message(request: Request, session_id: str):
     custom_prompt = None
 
     widget = await async_widget_instance_manager.get_instance(instance_id)
+
+    # Per-instance rate limiting
+    if widget:
+        rl_count = widget.get("rate_limit_count")
+        rl_hours = widget.get("rate_limit_hours")
+        if rl_count and rl_hours:
+            since = datetime.utcnow() - timedelta(hours=rl_hours)
+            msg_count = await async_chat_manager.count_messages(session_id, "user", since)
+            if msg_count >= rl_count:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded: {rl_count} messages per {rl_hours}h",
+                )
+
     if widget:
         backend = widget.get("llm_backend")
         if backend and backend.startswith("cloud:"):

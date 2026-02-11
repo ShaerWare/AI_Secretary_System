@@ -264,6 +264,8 @@ const formData = ref<Partial<BotInstance>>({
   yoomoney_redirect_uri: '',
   yoomoney_configured: false,
   yoomoney_wallet_id: '',
+  rate_limit_count: null,
+  rate_limit_hours: null,
 })
 
 const newAllowedUser = ref('')
@@ -443,6 +445,8 @@ function openCreateDialog() {
     yoomoney_redirect_uri: '',
     yoomoney_configured: false,
     yoomoney_wallet_id: '',
+    rate_limit_count: null,
+    rate_limit_hours: null,
   }
   showCreateDialog.value = true
 }
@@ -1686,6 +1690,34 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
                 class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 :placeholder="t('telegram.systemPromptPlaceholder')"
               />
+            </div>
+
+            <!-- Rate Limiting -->
+            <div class="space-y-3 p-4 bg-secondary/30 rounded-lg">
+              <h4 class="font-medium text-sm">{{ t('telegram.rateLimit') }}</h4>
+              <p class="text-xs text-muted-foreground">{{ t('telegram.rateLimitHint') }}</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-1">{{ t('telegram.rateLimitCount') }}</label>
+                  <input
+                    v-model.number="formData.rate_limit_count"
+                    type="number"
+                    min="0"
+                    class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="5"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">{{ t('telegram.rateLimitHours') }}</label>
+                  <input
+                    v-model.number="formData.rate_limit_hours"
+                    type="number"
+                    min="0"
+                    class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="5"
+                  />
+                </div>
+              </div>
             </div>
 
             <!-- Action Buttons -->

@@ -198,6 +198,29 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.delete_message(session_id, message_id)
 
+    async def count_messages(
+        self,
+        session_id: str,
+        role: str,
+        since: datetime,
+    ) -> int:
+        """Count messages in a session by role since a given time."""
+        from sqlalchemy import func, select
+
+        from db.models import ChatMessage
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(func.count())
+                .select_from(ChatMessage)
+                .where(
+                    ChatMessage.session_id == session_id,
+                    ChatMessage.role == role,
+                    ChatMessage.created >= since,
+                )
+            )
+            return result.scalar() or 0
+
     async def get_messages_for_llm(
         self,
         session_id: str,

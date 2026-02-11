@@ -399,6 +399,10 @@ class BotInstance(Base):
     payment_products: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
     payment_success_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Rate limiting
+    rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rate_limit_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # YooMoney OAuth2 configuration
     yoomoney_client_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     yoomoney_client_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -513,6 +517,9 @@ class BotInstance(Base):
             "stars_enabled": self.stars_enabled,
             "payment_products": self.get_payment_products(),
             "payment_success_message": self.payment_success_message,
+            # Rate limiting
+            "rate_limit_count": self.rate_limit_count,
+            "rate_limit_hours": self.rate_limit_hours,
             # YooMoney
             "yoomoney_client_id": self.yoomoney_client_id,
             "yoomoney_configured": bool(self.yoomoney_access_token),
@@ -563,6 +570,10 @@ class WidgetInstance(Base):
     tts_engine: Mapped[str] = mapped_column(String(20), default="xtts")
     tts_voice: Mapped[str] = mapped_column(String(50), default="anna")
     tts_preset: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Rate limiting
+    rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rate_limit_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Timestamps
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -621,6 +632,9 @@ class WidgetInstance(Base):
             "tts_engine": self.tts_engine,
             "tts_voice": self.tts_voice,
             "tts_preset": self.tts_preset,
+            # Rate limiting
+            "rate_limit_count": self.rate_limit_count,
+            "rate_limit_hours": self.rate_limit_hours,
             # Timestamps
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,

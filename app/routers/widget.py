@@ -86,6 +86,8 @@ class WidgetInstanceUpdateRequest(BaseModel):
     tts_engine: Optional[str] = None
     tts_voice: Optional[str] = None
     tts_preset: Optional[str] = None
+    rate_limit_count: Optional[int] = None
+    rate_limit_hours: Optional[int] = None
 
 
 # ============== Legacy Config Endpoints ==============

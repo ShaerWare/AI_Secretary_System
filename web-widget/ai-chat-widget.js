@@ -580,6 +580,9 @@
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('RATE_LIMIT');
+        }
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -632,7 +635,11 @@
 
       const errorEl = document.createElement('div');
       errorEl.className = 'ai-chat-error';
-      errorEl.textContent = 'Не удалось отправить сообщение. Попробуйте позже.';
+      if (error.message === 'RATE_LIMIT') {
+        errorEl.textContent = 'Превышен лимит сообщений. Пожалуйста, попробуйте позже.';
+      } else {
+        errorEl.textContent = 'Не удалось отправить сообщение. Попробуйте позже.';
+      }
       messagesEl.appendChild(errorEl);
 
       // Remove error after 5s

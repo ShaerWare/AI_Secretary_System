@@ -101,6 +101,9 @@ export interface BotInstance {
   yoomoney_redirect_uri?: string
   yoomoney_configured?: boolean
   yoomoney_wallet_id?: string
+  // Rate limiting
+  rate_limit_count?: number | null
+  rate_limit_hours?: number | null
   // Status (added by API)
   running?: boolean
   pid?: number

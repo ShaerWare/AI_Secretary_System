@@ -42,6 +42,9 @@ export interface WidgetInstance {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  // Rate limiting
+  rate_limit_count?: number | null
+  rate_limit_hours?: number | null
   // Timestamps
   created?: string
   updated?: string
