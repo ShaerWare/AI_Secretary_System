@@ -153,18 +153,65 @@ def get_orchestrator_url() -> str:
     return os.environ.get("ORCHESTRATOR_URL", "http://localhost:8002")
 
 
-async def load_config_from_api(instance_id: str) -> BotConfig:
+def load_config_from_file(instance_id: str) -> BotConfig | None:
+    """Load bot config from pre-fetched JSON file (written by multi_bot_manager).
+
+    Returns None if file not found or invalid.
+    """
+    import json
+    from pathlib import Path
+
+    config_file = os.environ.get("BOT_CONFIG_FILE")
+    if not config_file:
+        return None
+
+    path = Path(config_file)
+    if not path.exists():
+        logger.warning(f"Config file not found: {config_file}")
+        return None
+
+    try:
+        instance = json.loads(path.read_text())
+        logger.info(f"Loaded config from file: {config_file}")
+
+        # Parse action_buttons from JSON string if needed
+        action_buttons = instance.get("action_buttons", [])
+        if isinstance(action_buttons, str):
+            action_buttons = json.loads(action_buttons) if action_buttons else []
+
+        return BotConfig(
+            instance_id=instance["id"],
+            bot_token=instance["bot_token"],
+            name=instance.get("name", "Telegram Bot"),
+            llm_backend=instance.get("llm_backend", "vllm"),
+            system_prompt=instance.get("system_prompt"),
+            action_buttons=action_buttons,
+            payment_provider_token=instance.get("payment_provider_token"),
+            payment_currency=instance.get("payment_currency", "RUB"),
+            yoomoney_token=instance.get("yoomoney_access_token"),
+            auto_start=instance.get("auto_start", False),
+            admin_ids=set(),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to load config from file {config_file}: {e}")
+        return None
+
+
+async def load_config_from_api(instance_id: str, max_retries: int = 5) -> BotConfig:
     """Load bot configuration from orchestrator API.
 
     Args:
         instance_id: Bot instance ID from database
+        max_retries: Number of retry attempts (orchestrator may still be starting)
 
     Returns:
         BotConfig with all settings from API
 
     Raises:
-        httpx.HTTPError: If API request fails
+        httpx.HTTPError: If API request fails after all retries
     """
+    import asyncio
+
     api_url = get_orchestrator_url()
     url = f"{api_url}/admin/telegram/instances/{instance_id}"
 
@@ -176,10 +223,24 @@ async def load_config_from_api(instance_id: str) -> BotConfig:
     if internal_token:
         headers["Authorization"] = f"Bearer {internal_token}"
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params={"include_token": "true"}, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(url, params={"include_token": "true"}, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                break
+        except Exception as e:
+            if attempt < max_retries:
+                wait = attempt * 3
+                logger.warning(
+                    f"Config API attempt {attempt}/{max_retries} failed: {type(e).__name__}: {e}. "
+                    f"Retrying in {wait}s..."
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.error(f"Config API failed after {max_retries} attempts: {e}")
+                raise
 
     instance = data["instance"]
 

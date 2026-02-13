@@ -197,6 +197,10 @@ class BridgeProcessManager:
             # Disable Gemini and GPT providers
             env["GEMINI_CLI_PATH"] = ""
             env["GPT_CLI_PATH"] = ""
+            # Clear proxy env vars — bridge talks to localhost (Claude CLI),
+            # should not inherit VLESS/HTTP proxy from GeminiProvider
+            for proxy_key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                env.pop(proxy_key, None)
 
             self._process = subprocess.Popen(
                 cmd,

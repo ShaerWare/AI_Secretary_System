@@ -7,6 +7,7 @@ Each bot runs independently with its own configuration loaded from the database.
 """
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -111,6 +112,9 @@ class MultiBotManager:
             env = os.environ.copy()
             env["BOT_INSTANCE_ID"] = instance_id
             env["PYTHONUNBUFFERED"] = "1"
+            # Ensure subprocess can reach orchestrator (use 127.0.0.1 to avoid DNS issues)
+            if "ORCHESTRATOR_URL" not in env:
+                env["ORCHESTRATOR_URL"] = "http://127.0.0.1:8002"
 
             # Generate internal JWT for subprocess to authenticate with orchestrator API
             try:
@@ -120,6 +124,23 @@ class MultiBotManager:
                 env["BOT_INTERNAL_TOKEN"] = token
             except Exception as e:
                 logger.warning(f"Could not generate internal token: {e}")
+
+            # Pre-fetch config and pass via temp file (avoids subprocess→orchestrator callback)
+            try:
+                from db.integration import async_bot_instance_manager
+
+                instance_data = await async_bot_instance_manager.get_instance_with_token(
+                    instance_id
+                )
+                if instance_data:
+                    config_path = Path(f"/tmp/bot_config_{instance_id}.json")
+                    config_path.write_text(
+                        json.dumps(instance_data, ensure_ascii=False, default=str)
+                    )
+                    env["BOT_CONFIG_FILE"] = str(config_path)
+                    logger.info(f"Pre-fetched config for {instance_id} → {config_path}")
+            except Exception as e:
+                logger.warning(f"Could not pre-fetch config for {instance_id}: {e}")
 
             # Set up log file
             log_file = self._get_log_path(instance_id)
