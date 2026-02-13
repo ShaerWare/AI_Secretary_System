@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Secretary System — open-source ИИ-секретарь с голосовым клонированием</title>
+<meta name="description" content="Open-source ИИ-ассистент: голосовое клонирование, Telegram/WhatsApp боты, чат-виджеты, amoCRM, Vue 3 админ-панель. Cloud + Local LLM.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://ai-sekretar24.ru/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ai-sekretar24.ru/">
+<meta property="og:title" content="AI Secretary System — open-source ИИ-секретарь">
+<meta property="og:description" content="Голосовое клонирование, Telegram/WhatsApp боты, чат-виджеты, amoCRM, Vue 3 админ-панель. Cloud + Local LLM.">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:locale:alternate" content="en_US">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AI Secretary System — open-source AI assistant">
+<meta name="twitter:description" content="Voice cloning, Telegram/WhatsApp bots, chat widgets, amoCRM, Vue 3 admin panel. Cloud + Local LLM.">
+
+<!-- JSON-LD -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "AI Secretary System",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Linux",
+  "url": "https://ai-sekretar24.ru/",
+  "downloadUrl": "https://github.com/ShaerWare/AI_Secretary_System",
+  "license": "https://opensource.org/licenses/MIT",
+  "author": {
+    "@type": "Organization",
+    "name": "ShaerWare Digital"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+
+<!-- Unregister stale service workers from Vue demo -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    registrations.forEach(function(r) { r.unregister(); });
+  });
+  if ('caches' in window) {
+    caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+  }
+}
+</script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c-bg:#0a0a0a;
+  --c-surface:#141414;
+  --c-surface2:#1e1e1e;
+  --c-border:#2a2a2a;
+  --c-text:#e5e5e5;
+  --c-text2:#a3a3a3;
+  --c-primary:#c2410c;
+  --c-primary-hover:#ea580c;
+  --c-primary-glow:rgba(194,65,12,0.15);
+  --c-accent:#f97316;
+  --radius:12px;
+  --max-w:1200px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
+html{scroll-behavior:smooth;font-family:var(--font);background:var(--c-bg);color:var(--c-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+a{color:var(--c-primary-hover);text-decoration:none;transition:color .2s}
+a:hover{color:var(--c-accent)}
+img{max-width:100%;height:auto}
+
+/* Layout */
+.container{max-width:var(--max-w);margin:0 auto;padding:0 24px;background:rgba(10,10,10,0.6);border-radius:var(--radius);backdrop-filter:blur(6px)}
+section{padding:80px 0}
+section:nth-child(even){background:rgba(20,20,20,0.65)}
+
+/* Header */
+header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--c-border);padding:0 24px}
+.header-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--c-text)}
+.logo svg{width:28px;height:28px}
+.logo span{color:var(--c-primary)}
+nav{display:flex;align-items:center;gap:24px}
+nav a{color:var(--c-text2);font-size:14px;font-weight:500;transition:color .2s}
+nav a:hover{color:var(--c-text)}
+.lang-switch{display:flex;gap:2px;background:var(--c-surface2);border-radius:6px;padding:2px;border:1px solid var(--c-border)}
+.lang-switch button{background:none;border:none;color:var(--c-text2);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.lang-switch button.active{background:var(--c-primary);color:#fff}
+.mobile-menu-btn{display:none;background:none;border:none;color:var(--c-text);cursor:pointer;padding:8px}
+.mobile-nav{display:none;position:fixed;top:64px;left:0;right:0;background:var(--c-bg);border-bottom:1px solid var(--c-border);padding:16px 24px;flex-direction:column;gap:16px;z-index:99}
+.mobile-nav.open{display:flex}
+
+/* Hero */
+.hero{padding:100px 0 80px;text-align:center}
+.hero h1{font-size:clamp(32px,5vw,56px);font-weight:800;line-height:1.15;margin-bottom:16px}
+.hero h1 .hl{color:var(--c-primary)}
+.hero .subtitle{font-size:clamp(16px,2.5vw,20px);color:var(--c-text2);max-width:700px;margin:0 auto 32px}
+.badge-row{display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:36px;flex-wrap:wrap}
+.cta-row{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;border:none;cursor:pointer;transition:all .2s;text-decoration:none}
+.btn-primary{background:var(--c-primary);color:#fff}
+.btn-primary:hover{background:var(--c-primary-hover);color:#fff;transform:translateY(-1px);box-shadow:0 8px 24px var(--c-primary-glow)}
+.btn-outline{background:transparent;color:var(--c-text);border:2px solid var(--c-border)}
+.btn-outline:hover{border-color:var(--c-primary);color:var(--c-primary)}
+.btn svg{width:20px;height:20px}
+
+/* Section titles */
+.section-title{text-align:center;margin-bottom:48px}
+.section-title h2{font-size:clamp(24px,3.5vw,36px);font-weight:700;margin-bottom:12px}
+.section-title p{color:var(--c-text2);max-width:600px;margin:0 auto;font-size:16px}
+
+/* Features grid */
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.feature-card{background:rgba(30,30,30,0.75);border:1px solid var(--c-border);border-radius:var(--radius);padding:28px;transition:border-color .2s,transform .2s;backdrop-filter:blur(8px)}
+.feature-card:hover{border-color:var(--c-primary);transform:translateY(-2px)}
+.feature-icon{width:44px;height:44px;border-radius:10px;background:var(--c-primary-glow);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:var(--c-primary)}
+.feature-icon svg{width:24px;height:24px}
+.feature-card h3{font-size:16px;font-weight:600;margin-bottom:8px}
+.feature-card p{color:var(--c-text2);font-size:14px;line-height:1.5}
+
+/* Modes comparison */
+.modes-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:32px;align-items:stretch}
+.mode-card{background:rgba(30,30,30,0.75);border:1px solid var(--c-border);border-radius:var(--radius);padding:36px;display:flex;flex-direction:column;backdrop-filter:blur(8px)}
+.mode-card.featured{border-color:var(--c-primary);box-shadow:0 0 40px var(--c-primary-glow)}
+.mode-badge{display:inline-block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:4px 12px;border-radius:20px;margin-bottom:16px;width:fit-content}
+.mode-card:first-child .mode-badge{background:rgba(59,130,246,0.15);color:#60a5fa}
+.mode-card.featured .mode-badge{background:var(--c-primary-glow);color:var(--c-accent)}
+.mode-card h3{font-size:22px;font-weight:700;margin-bottom:8px}
+.mode-card .mode-desc{color:var(--c-text2);font-size:15px;margin-bottom:20px}
+.mode-list{list-style:none;flex:1}
+.mode-list li{padding:8px 0;color:var(--c-text2);font-size:14px;display:flex;align-items:flex-start;gap:8px}
+.mode-list li::before{content:"";display:inline-block;width:18px;height:18px;min-width:18px;margin-top:2px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='9' fill='none' stroke='%23c2410c' stroke-width='1.5'/%3E%3Cpath d='M6 10l3 3 5-5' fill='none' stroke='%23c2410c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center/contain}
+.mode-cta{margin-top:24px}
+
+/* Providers */
+.providers-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px}
+.provider-chip{display:flex;align-items:center;gap:10px;background:rgba(30,30,30,0.75);border:1px solid var(--c-border);border-radius:8px;padding:12px 20px;font-size:14px;font-weight:500;transition:border-color .2s;backdrop-filter:blur(8px)}
+.provider-chip:hover{border-color:var(--c-primary)}
+.provider-chip .plogo{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px}
+
+/* Steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;counter-reset:step}
+.step{position:relative;background:rgba(30,30,30,0.75);border:1px solid var(--c-border);border-radius:var(--radius);padding:32px 28px;backdrop-filter:blur(8px)}
+.step::before{counter-increment:step;content:counter(step);position:absolute;top:-16px;left:28px;width:32px;height:32px;border-radius:50%;background:var(--c-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.step h3{font-size:16px;font-weight:600;margin-bottom:8px;margin-top:4px}
+.step p{color:var(--c-text2);font-size:14px}
+.step code{display:block;background:var(--c-bg);border:1px solid var(--c-border);border-radius:6px;padding:10px 14px;margin-top:12px;font-size:13px;color:var(--c-accent);word-break:break-all;font-family:'SF Mono',Monaco,Consolas,monospace}
+
+/* CTA section */
+.cta-section{text-align:center;padding:80px 0;background:transparent}
+.cta-section h2{font-size:clamp(24px,3.5vw,36px);font-weight:700;margin-bottom:16px}
+.cta-section p{color:var(--c-text2);max-width:600px;margin:0 auto 32px;font-size:16px}
+
+/* Footer */
+footer{border-top:1px solid var(--c-border);padding:32px 0;text-align:center;color:var(--c-text2);font-size:13px}
+footer a{color:var(--c-text2)}
+footer a:hover{color:var(--c-primary-hover)}
+
+/* Matrix rain */
+#matrix-bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+.matrix-vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(to bottom,rgba(10,10,10,0.6),transparent 30%,transparent 70%,rgba(10,10,10,0.8))}
+main,footer{position:relative;z-index:2}
+
+/* Responsive */
+@media(max-width:1024px){
+  .features-grid,.steps{grid-template-columns:repeat(2,1fr)}
+  .modes-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  section{padding:60px 0}
+  .hero{padding:72px 0 60px}
+  .features-grid,.steps{grid-template-columns:1fr}
+  nav{display:none}
+  .mobile-menu-btn{display:block}
+  .cta-row{flex-direction:column;align-items:center}
+  .btn{width:100%;justify-content:center;max-width:320px}
+}
+</style>
+</head>
+<body>
+<canvas id="matrix-bg"></canvas>
+<div class="matrix-vignette"></div>
+
+<!-- Header -->
+<header>
+  <div class="header-inner">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      AI <span>Secretary</span>
+    </a>
+    <nav>
+      <a href="#features" data-ru="Возможности" data-en="Features">Возможности</a>
+      <a href="#modes" data-ru="Режимы" data-en="Modes">Режимы</a>
+      <a href="#start" data-ru="Начать" data-en="Get Started">Начать</a>
+      <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub</a>
+      <div class="lang-switch">
+        <button data-lang="ru" class="active">RU</button>
+        <button data-lang="en">EN</button>
+      </div>
+    </nav>
+    <button class="mobile-menu-btn" aria-label="Menu" onclick="document.querySelector('.mobile-nav').classList.toggle('open')">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="mobile-nav">
+    <a href="#features" data-ru="Возможности" data-en="Features" onclick="document.querySelector('.mobile-nav').classList.remove('open')">Возможности</a>
+    <a href="#modes" data-ru="Режимы" data-en="Modes" onclick="document.querySelector('.mobile-nav').classList.remove('open')">Режимы</a>
+    <a href="#start" data-ru="Начать" data-en="Get Started" onclick="document.querySelector('.mobile-nav').classList.remove('open')">Начать</a>
+    <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub</a>
+    <div class="lang-switch">
+      <button data-lang="ru" class="active">RU</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1>
+      <span data-ru="Open-source" data-en="Open-source">Open-source</span><br>
+      <span class="hl" data-ru="ИИ-Секретарь" data-en="AI Secretary">ИИ-Секретарь</span>
+    </h1>
+    <p class="subtitle" data-ru="Виртуальный ассистент с голосовым клонированием, Telegram и WhatsApp ботами, чат-виджетами для сайтов, amoCRM интеграцией и Vue 3 админ-панелью. Cloud + Local LLM." data-en="Virtual assistant with voice cloning, Telegram &amp; WhatsApp bots, website chat widgets, amoCRM integration, and Vue 3 admin panel. Cloud + Local LLM.">Виртуальный ассистент с голосовым клонированием, Telegram и WhatsApp ботами, чат-виджетами для сайтов, amoCRM интеграцией и Vue 3 админ-панелью. Cloud + Local LLM.</p>
+    <div class="badge-row">
+      <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">
+        <img src="https://img.shields.io/github/stars/ShaerWare/AI_Secretary_System?style=social" alt="GitHub Stars" height="24">
+      </a>
+      <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">
+        <img src="https://img.shields.io/github/license/ShaerWare/AI_Secretary_System?color=c2410c" alt="MIT License" height="24">
+      </a>
+    </div>
+    <div class="cta-row">
+      <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn-outline">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a href="#contact" class="btn btn-primary">
+        <span data-ru="Заказать разработку" data-en="Order Development">Заказать разработку</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-ru="Возможности" data-en="Features">Возможности</h2>
+      <p data-ru="Всё необходимое для создания умного ИИ-ассистента" data-en="Everything you need to build a smart AI assistant">Всё необходимое для создания умного ИИ-ассистента</p>
+    </div>
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <h3 data-ru="Cloud + Local LLM" data-en="Cloud + Local LLM">Cloud + Local LLM</h3>
+        <p data-ru="Гибридная архитектура: облачные провайдеры (Gemini, Claude, GPT, DeepSeek, Kimi, OpenRouter) или локальный vLLM (Qwen, Llama)" data-en="Hybrid architecture: cloud providers (Gemini, Claude, GPT, DeepSeek, Kimi, OpenRouter) or local vLLM (Qwen, Llama)">Гибридная архитектура: облачные провайдеры (Gemini, Claude, GPT, DeepSeek, Kimi, OpenRouter) или локальный vLLM (Qwen, Llama)</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <h3 data-ru="Голосовое клонирование" data-en="Voice Cloning">Голосовое клонирование</h3>
+        <p data-ru="XTTS v2 для клонирования голоса, Piper для быстрой генерации, Vosk STT для распознавания речи" data-en="XTTS v2 for voice cloning, Piper for fast synthesis, Vosk STT for speech recognition">XTTS v2 для клонирования голоса, Piper для быстрой генерации, Vosk STT для распознавания речи</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3 data-ru="Telegram и WhatsApp боты" data-en="Telegram &amp; WhatsApp Bots">Telegram и WhatsApp боты</h3>
+        <p data-ru="Мульти-инстансные боты с воронками продаж, FAQ, оплатой. Независимая настройка LLM и TTS для каждого бота" data-en="Multi-instance bots with sales funnels, FAQ, payments. Independent LLM and TTS config per bot">Мульти-инстансные боты с воронками продаж, FAQ, оплатой. Независимая настройка LLM и TTS для каждого бота</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3 data-ru="Чат-виджеты для сайтов" data-en="Website Chat Widgets">Чат-виджеты для сайтов</h3>
+        <p data-ru="Встраиваемые виджеты с одной строкой кода. Сохранение истории, streaming, кастомизация стилей" data-en="Embeddable widgets with one line of code. Session persistence, streaming, style customization">Встраиваемые виджеты с одной строкой кода. Сохранение истории, streaming, кастомизация стилей</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <h3 data-ru="FAQ + База знаний (Wiki RAG)" data-en="FAQ + Knowledge Base (Wiki RAG)">FAQ + База знаний (Wiki RAG)</h3>
+        <p data-ru="Семантический поиск с embeddings + BM25 fallback. Загрузка .md/.txt документов, автоматический reindex" data-en="Semantic search with embeddings + BM25 fallback. Upload .md/.txt documents, automatic reindex">Семантический поиск с embeddings + BM25 fallback. Загрузка .md/.txt документов, автоматический reindex</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3 data-ru="Vue 3 Админ-панель" data-en="Vue 3 Admin Panel">Vue 3 Админ-панель</h3>
+        <p data-ru="20 вкладок, PWA, i18n (ru/en), RBAC (4 роли), dark/light тема. Управление всем из браузера" data-en="20 tabs, PWA, i18n (ru/en), RBAC (4 roles), dark/light theme. Manage everything from the browser">20 вкладок, PWA, i18n (ru/en), RBAC (4 роли), dark/light тема. Управление всем из браузера</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3 data-ru="Fine-tuning (LoRA)" data-en="Fine-tuning (LoRA)">Fine-tuning (LoRA)</h3>
+        <p data-ru="Тонкая настройка LLM на ваших данных через LoRA адаптеры. Управление моделями и адаптерами из админки" data-en="Fine-tune LLM on your data via LoRA adapters. Model and adapter management from admin panel">Тонкая настройка LLM на ваших данных через LoRA адаптеры. Управление моделями и адаптерами из админки</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3 data-ru="amoCRM + Воронки продаж" data-en="amoCRM + Sales Funnels">amoCRM + Воронки продаж</h3>
+        <p data-ru="OAuth2 интеграция с amoCRM, квиз-воронки в ботах, сегментация, YooMoney оплата, рассылки" data-en="OAuth2 amoCRM integration, quiz funnels in bots, segmentation, YooMoney payments, broadcasts">OAuth2 интеграция с amoCRM, квиз-воронки в ботах, сегментация, YooMoney оплата, рассылки</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </div>
+        <h3 data-ru="GSM-телефония + OpenAI API" data-en="GSM Telephony + OpenAI API">GSM-телефония + OpenAI API</h3>
+        <p data-ru="Телефония через SIM7600E-H модем. OpenAI-совместимый API для подключения к любому клиенту" data-en="Telephony via SIM7600E-H modem. OpenAI-compatible API for connecting to any client">Телефония через SIM7600E-H модем. OpenAI-совместимый API для подключения к любому клиенту</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Modes -->
+<section id="modes">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-ru="Два режима работы" data-en="Two Operating Modes">Два режима работы</h2>
+      <p data-ru="Выберите подходящий вариант в зависимости от вашего оборудования" data-en="Choose the right option based on your hardware">Выберите подходящий вариант в зависимости от вашего оборудования</p>
+    </div>
+    <div class="modes-grid">
+
+      <div class="mode-card">
+        <span class="mode-badge" data-ru="Cloud Mode" data-en="Cloud Mode">Cloud Mode</span>
+        <h3 data-ru="Без GPU" data-en="No GPU Required">Без GPU</h3>
+        <p class="mode-desc" data-ru="Работает на любом VPS. Облачные LLM и TTS." data-en="Works on any VPS. Cloud LLM and TTS.">Работает на любом VPS. Облачные LLM и TTS.</p>
+        <ul class="mode-list">
+          <li data-ru="Cloud LLM: Gemini, Claude, GPT, DeepSeek, Kimi" data-en="Cloud LLM: Gemini, Claude, GPT, DeepSeek, Kimi">Cloud LLM: Gemini, Claude, GPT, DeepSeek, Kimi</li>
+          <li data-ru="OpenRouter (бесплатные модели)" data-en="OpenRouter (free models)">OpenRouter (бесплатные модели)</li>
+          <li data-ru="Telegram и WhatsApp боты" data-en="Telegram &amp; WhatsApp bots">Telegram и WhatsApp боты</li>
+          <li data-ru="Чат-виджеты для сайтов" data-en="Website chat widgets">Чат-виджеты для сайтов</li>
+          <li data-ru="FAQ и база знаний (Wiki RAG)" data-en="FAQ &amp; knowledge base (Wiki RAG)">FAQ и база знаний (Wiki RAG)</li>
+          <li data-ru="Vue 3 админ-панель (PWA)" data-en="Vue 3 admin panel (PWA)">Vue 3 админ-панель (PWA)</li>
+          <li data-ru="amoCRM интеграция" data-en="amoCRM integration">amoCRM интеграция</li>
+          <li data-ru="Воронки продаж + YooMoney" data-en="Sales funnels + YooMoney">Воронки продаж + YooMoney</li>
+        </ul>
+        <div class="mode-cta">
+          <a href="https://demo.ai-sekretar24.ru/cloud/" target="_blank" rel="noopener" class="btn btn-outline" style="width:100%;justify-content:center">
+            <span data-ru="Cloud Demo" data-en="Cloud Demo">Cloud Demo</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="mode-card featured">
+        <span class="mode-badge" data-ru="Full Mode" data-en="Full Mode">Full Mode</span>
+        <h3 data-ru="GPU + Cloud" data-en="GPU + Cloud">GPU + Cloud</h3>
+        <p class="mode-desc" data-ru="Все возможности: локальные LLM, голосовое клонирование, телефония." data-en="All features: local LLM, voice cloning, telephony.">Все возможности: локальные LLM, голосовое клонирование, телефония.</p>
+        <ul class="mode-list">
+          <li data-ru="Всё из Cloud Mode +" data-en="Everything in Cloud Mode +">Всё из Cloud Mode +</li>
+          <li data-ru="Локальный vLLM (Qwen, Llama, DeepSeek)" data-en="Local vLLM (Qwen, Llama, DeepSeek)">Локальный vLLM (Qwen, Llama, DeepSeek)</li>
+          <li data-ru="LoRA fine-tuning" data-en="LoRA fine-tuning">LoRA fine-tuning</li>
+          <li data-ru="Голосовое клонирование XTTS v2" data-en="Voice cloning XTTS v2">Голосовое клонирование XTTS v2</li>
+          <li data-ru="Vosk STT (распознавание речи)" data-en="Vosk STT (speech recognition)">Vosk STT (распознавание речи)</li>
+          <li data-ru="GSM-телефония (SIM7600E-H)" data-en="GSM telephony (SIM7600E-H)">GSM-телефония (SIM7600E-H)</li>
+          <li data-ru="Мониторинг системы (GPU, RAM, CPU)" data-en="System monitoring (GPU, RAM, CPU)">Мониторинг системы (GPU, RAM, CPU)</li>
+          <li data-ru="Claude Code Bridge (CLI → OpenAI)" data-en="Claude Code Bridge (CLI → OpenAI)">Claude Code Bridge (CLI → OpenAI)</li>
+        </ul>
+        <div class="mode-cta">
+          <a href="https://demo.ai-sekretar24.ru/full/" target="_blank" rel="noopener" class="btn btn-primary" style="width:100%;justify-content:center">
+            <span data-ru="Full Demo" data-en="Full Demo">Full Demo</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Providers -->
+<section id="providers">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-ru="Поддерживаемые провайдеры" data-en="Supported Providers">Поддерживаемые провайдеры</h2>
+      <p data-ru="Подключайте любого облачного или локального провайдера LLM" data-en="Connect any cloud or local LLM provider">Подключайте любого облачного или локального провайдера LLM</p>
+    </div>
+    <div class="providers-grid">
+      <div class="provider-chip">
+        <div class="plogo" style="background:#4285f4;color:#fff">G</div>
+        Google Gemini
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#10a37f;color:#fff">O</div>
+        OpenAI GPT
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#d97706;color:#fff">A</div>
+        Anthropic Claude
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#4f46e5;color:#fff">D</div>
+        DeepSeek
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#2563eb;color:#fff">K</div>
+        Moonshot Kimi
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#7c3aed;color:#fff">R</div>
+        <span data-ru="OpenRouter (бесплатные)" data-en="OpenRouter (free)">OpenRouter (бесплатные)</span>
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:#dc2626;color:#fff">V</div>
+        <span data-ru="vLLM (локальный)" data-en="vLLM (local)">vLLM (локальный)</span>
+      </div>
+      <div class="provider-chip">
+        <div class="plogo" style="background:var(--c-primary);color:#fff">C</div>
+        Claude Code Bridge
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Getting Started -->
+<section id="start">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-ru="Начать за 3 шага" data-en="Get Started in 3 Steps">Начать за 3 шага</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3 data-ru="Установка" data-en="Installation">Установка</h3>
+        <p data-ru="Клонируйте репозиторий и запустите через Docker" data-en="Clone the repo and run via Docker">Клонируйте репозиторий и запустите через Docker</p>
+        <code>git clone https://github.com/ShaerWare/AI_Secretary_System.git<br>cp .env.docker.example .env<br>docker compose up -d</code>
+      </div>
+      <div class="step">
+        <h3 data-ru="Настройка" data-en="Configuration">Настройка</h3>
+        <p data-ru="Откройте админ-панель и настройте LLM провайдера, ботов и виджеты" data-en="Open admin panel and configure LLM provider, bots, and widgets">Откройте админ-панель и настройте LLM провайдера, ботов и виджеты</p>
+        <code data-ru="Откройте http://localhost:8002/admin<br>Логин: admin / admin" data-en="Open http://localhost:8002/admin<br>Login: admin / admin">Откройте http://localhost:8002/admin<br>Логин: admin / admin</code>
+      </div>
+      <div class="step">
+        <h3 data-ru="Запуск" data-en="Deploy">Запуск</h3>
+        <p data-ru="Разверните ботов, подключите виджеты к сайту, настройте amoCRM" data-en="Deploy bots, add widgets to your site, connect amoCRM">Разверните ботов, подключите виджеты к сайту, настройте amoCRM</p>
+        <code>&lt;script src="https://your-server.com/widget.js?instance=main" defer&gt;&lt;/script&gt;</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA / Contact -->
+<section id="contact" class="cta-section">
+  <div class="container">
+    <h2 data-ru="Заказать разработку ИИ-ассистента" data-en="Order Custom AI Assistant Development">Заказать разработку ИИ-ассистента</h2>
+    <p data-ru="Разработаем кастомного ИИ-ассистента под ваши задачи на базе AI Secretary System" data-en="We build custom AI assistants for your needs based on AI Secretary System">Разработаем кастомного ИИ-ассистента под ваши задачи на базе AI Secretary System</p>
+    <div class="cta-row">
+      <a href="https://t.me/shaerware_digital_bot" target="_blank" rel="noopener" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        <span data-ru="Написать в Telegram" data-en="Contact via Telegram">Написать в Telegram</span>
+      </a>
+      <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn-outline">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-ru="GitHub репозиторий" data-en="GitHub Repository">GitHub репозиторий</span>
+      </a>
+    </div>
+    <div style="margin-top:32px;display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
+      <a href="https://demo.ai-sekretar24.ru/cloud/" target="_blank" rel="noopener" class="btn btn-outline" style="padding:10px 20px;font-size:14px">
+        <span data-ru="Cloud Demo" data-en="Cloud Demo">Cloud Demo</span>
+      </a>
+      <a href="https://demo.ai-sekretar24.ru/full/" target="_blank" rel="noopener" class="btn btn-outline" style="padding:10px 20px;font-size:14px">
+        <span data-ru="Full Demo" data-en="Full Demo">Full Demo</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>MIT License &copy; 2024&ndash;2026 <a href="https://shaerware.digital" target="_blank" rel="noopener">ShaerWare Digital</a> &middot; <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub</a></p>
+  </div>
+</footer>
+
+<!-- Widget -->
+<script src="/widget.js?instance=tz-generator" defer></script>
+
+<!-- Matrix rain animation -->
+<script>
+(function(){
+  var canvas = document.getElementById('matrix-bg');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  var chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF<>/{}[]';
+  var fontSize = 14;
+  var columns = 0;
+  var drops = [];
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    columns = Math.floor(canvas.width / fontSize);
+    drops = [];
+    for (var i = 0; i < columns; i++) drops[i] = Math.random() * -100;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw() {
+    ctx.fillStyle = 'rgba(9, 9, 11, 0.03)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = fontSize + 'px monospace';
+
+    for (var i = 0; i < drops.length; i++) {
+      var char = chars[Math.floor(Math.random() * chars.length)];
+      var x = i * fontSize;
+      var y = drops[i] * fontSize;
+
+      var brightness = Math.random();
+      if (brightness > 0.95) {
+        ctx.fillStyle = '#fed7aa';
+      } else if (brightness > 0.8) {
+        ctx.fillStyle = '#fb923c';
+      } else {
+        ctx.fillStyle = '#c2410c';
+      }
+      ctx.globalAlpha = 0.6 + Math.random() * 0.4;
+      ctx.fillText(char, x, y);
+      ctx.globalAlpha = 1;
+
+      if (y > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i] += 0.2 + Math.random() * 0.3;
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+
+<!-- Language switcher -->
+<script>
+(function(){
+  var lang = localStorage.getItem('landing_lang') || 'ru';
+  function setLang(l) {
+    lang = l;
+    localStorage.setItem('landing_lang', l);
+    document.documentElement.lang = l === 'ru' ? 'ru' : 'en';
+    document.querySelectorAll('[data-ru]').forEach(function(el) {
+      var text = el.getAttribute('data-' + l);
+      if (text) {
+        if (el.tagName === 'CODE' || el.children.length === 0) {
+          el.innerHTML = text;
+        } else {
+          el.childNodes.forEach(function(node) {
+            if (node.nodeType === 3 && node.textContent.trim()) {
+              node.textContent = text;
+            }
+          });
+        }
+      }
+    });
+    document.querySelectorAll('.lang-switch button').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === l);
+    });
+  }
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.lang-switch button');
+    if (btn) setLang(btn.getAttribute('data-lang'));
+  });
+  if (lang !== 'ru') setLang(lang);
+})();
+</script>
+</body>
+</html>
