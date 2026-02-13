@@ -189,6 +189,14 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
     def __init__(self, config: dict):
         super().__init__(config)
+
+        # Bridge runs on localhost — must bypass global VLESS/HTTP proxy.
+        # GeminiProvider sets HTTP_PROXY globally for xray; httpx picks it up
+        # and routes localhost requests through the proxy, which fails.
+        # Set NO_PROXY BEFORE creating httpx.Client so it respects it.
+        if self.provider_type == "claude_bridge":
+            self._ensure_no_proxy_for_localhost()
+
         self.client = httpx.Client(timeout=60.0)
 
         # Validate required fields (bridge uses CLI auth, no API key needed)
@@ -204,6 +212,18 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 raise ValueError(f"Base URL required for provider {self.provider_id}")
 
         logger.info(f"[{self.provider_id}] Initialized OpenAI-compatible provider: {self.base_url}")
+
+    @staticmethod
+    def _ensure_no_proxy_for_localhost():
+        """Add 127.0.0.1 and localhost to NO_PROXY so httpx bypasses VLESS proxy."""
+        bypass = {"127.0.0.1", "localhost"}
+        for key in ("NO_PROXY", "no_proxy"):
+            current = os.environ.get(key, "")
+            existing = {h.strip() for h in current.split(",") if h.strip()}
+            missing = bypass - existing
+            if missing:
+                new_val = ",".join(sorted(existing | bypass))
+                os.environ[key] = new_val
 
     def _get_headers(self) -> dict:
         headers: dict = {"Content-Type": "application/json"}

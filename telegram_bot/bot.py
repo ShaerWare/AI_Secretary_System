@@ -13,6 +13,7 @@ from .config import (
     get_bot_instance_id,
     get_telegram_settings,
     load_config_from_api,
+    load_config_from_file,
 )
 from .handlers import get_main_router
 from .middleware.access import AccessMiddleware
@@ -36,21 +37,24 @@ async def main() -> None:
     instance_id = get_bot_instance_id()
 
     if instance_id:
-        # Multi-instance mode: load config from orchestrator API
+        # Multi-instance mode: try pre-fetched config file first, then API
         logger.info(f"Multi-instance mode: loading config for {instance_id}")
-        try:
-            bot_config = await load_config_from_api(instance_id)
+        bot_config = load_config_from_file(instance_id)
+        if not bot_config:
+            try:
+                bot_config = await load_config_from_api(instance_id)
+            except Exception as e:
+                logger.error(f"Failed to load config from API: {e}")
+                logger.info("Falling back to .env configuration")
+                settings = get_telegram_settings()
+                bot_token = settings.bot_token
+        if bot_config:
             set_bot_config(bot_config)
             bot_token = bot_config.bot_token
             set_action_buttons(bot_config.action_buttons or DEFAULT_ACTION_BUTTONS)
             logger.info(f"Loaded config for bot: {bot_config.name}")
             logger.info(f"LLM backend: {bot_config.llm_backend}")
             logger.info(f"Action buttons: {len(get_action_buttons())} configured")
-        except Exception as e:
-            logger.error(f"Failed to load config from API: {e}")
-            logger.info("Falling back to .env configuration")
-            settings = get_telegram_settings()
-            bot_token = settings.bot_token
     else:
         # Standalone mode: use .env settings
         logger.info("Standalone mode: using .env configuration")
