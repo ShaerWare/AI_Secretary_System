@@ -197,7 +197,17 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         if self.provider_type == "claude_bridge":
             self._ensure_no_proxy_for_localhost()
 
-        self.client = httpx.Client(timeout=60.0)
+        # Claude bridge needs longer timeouts: CLI warmup (7-30s) + complex
+        # prompt processing can exceed 60s before first token arrives.
+        # Bridge itself allows 600s per-chunk; match that on client side.
+        if self.provider_type == "claude_bridge":
+            self.client = httpx.Client(
+                timeout=httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
+            )
+            # Bridge/Claude can handle much longer responses than default 512
+            self.runtime_params.setdefault("max_tokens", 4096)
+        else:
+            self.client = httpx.Client(timeout=60.0)
 
         # Validate required fields (bridge uses CLI auth, no API key needed)
         if not self.api_key and self.provider_type != "claude_bridge":
