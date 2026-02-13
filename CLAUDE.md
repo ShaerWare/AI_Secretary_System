@@ -26,13 +26,15 @@ curl http://localhost:8002/health
 
 ```bash
 cd admin && npm install     # First-time setup
-cd admin && npm run build   # Production build (served at /admin/)
-cd admin && npm run dev     # Dev server (:5173)
+cd admin && npm run build   # Production build (vue-tsc type-check + vite build)
+cd admin && npm run dev     # Dev server (:5173), proxies /admin + /v1 + /health to :8002
 DEV_MODE=1 ./start_gpu.sh   # Backend proxies to Vite dev server
 ```
 
 Default login: admin / admin
 Guest demo: demo / demo (read-only access)
+
+**Note:** No frontend test infrastructure exists (`npm test` is not configured). Type checking happens during `npm run build` via `vue-tsc -b`.
 
 ### User Management
 
@@ -107,6 +109,49 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main`/`develop` and
 - `lint-backend` — ruff check + format check + mypy on `orchestrator.py` only (mypy is soft — `|| true`, won't fail build)
 - `lint-frontend` — npm ci + eslint + build (includes type check)
 - `security` — Trivy vulnerability scanner
+
+**Always run lint locally before pushing to PRs** to avoid repeated fix-and-push cycles:
+
+```bash
+# Backend
+ruff check . && ruff format --check .
+
+# Frontend
+cd admin && npm run lint:check && npm run format:check
+
+# Or all at once via pre-commit
+pre-commit run --all-files
+```
+
+Protected branches require PR workflow with CI checks — never push directly to `main`.
+
+## Deployment Checklist
+
+Follow this checklist for every production deploy. Do NOT report deployment as complete until all steps pass.
+
+1. **Run lint locally** — `ruff check . && cd admin && npm run lint:check` (avoids CI failures)
+2. **Check for pending DB migrations** — if new columns/tables were added, ensure `scripts/migrate_*.py` exists and is run on server
+3. **Kill stale processes** — `lsof -i :8002` to check for port conflicts before restart
+4. **Clean build artifacts** — `rm -rf admin/dist admin/node_modules/.vite` before building (prevents demo interceptor leaking into production)
+5. **Build and deploy** — `npm run build` (verify `VITE_DEMO_MODE` is NOT set in environment)
+6. **Restart services** — `systemctl restart ai-secretary`
+7. **Verify endpoints** — `curl http://localhost:8002/health` and test `/admin/auth/login`
+8. **Check logs** — `journalctl -u ai-secretary --since "2 minutes ago" --no-pager | tail -20`
+
+**After `git reset --hard`** — always check if local-only files (`.env`, `apply_patches.py`, `deploy.sh`, `admin/.env.production.local`) need to be restored before proceeding.
+
+## Debugging Principles
+
+When diagnosing production or demo issues, check in this order — **infrastructure and build pipeline FIRST**, application logic LAST:
+
+1. **Build artifacts** — is the correct build deployed? Check actual JS files for stale demo interceptors (`grep setupDemoInterceptor admin/dist/assets/*.js`), wrong base paths, or missing chunks
+2. **Deploy pipeline** — stale Vite cache (`node_modules/.vite`), wrong `.env` files, `VITE_DEMO_MODE` leaking from demo builds
+3. **DB state** — were migrations applied? Missing columns cause silent failures (`sqlite3 data/secretary.db ".tables"` / `.schema`)
+4. **Process state** — port conflicts from zombie processes (`lsof -i :8002`), multiple bot instances, systemd service status
+5. **Auth/JWT** — `ADMIN_JWT_SECRET` is auto-generated on startup; restarting the service invalidates all existing tokens
+6. **Application logic** — only investigate after ruling out 1–5
+
+**Never blame browser cache or user error** without first checking server-side build artifacts and config.
 
 ## Architecture
 
@@ -269,7 +314,8 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
 - **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete. Domain repos extend with custom queries.
-- **Admin panel**: Vue 3 + Composition API + Pinia stores + vue-i18n. API clients in `admin/src/api/`, one per domain.
+- **Admin panel**: Vue 3 + Composition API + Pinia stores + vue-i18n. API clients in `admin/src/api/`, one per domain. Path alias `@` → `admin/src/` (e.g., `import { useAuth } from '@/stores/auth'`).
+- **Vite base path** — Production: `/admin/` (served by FastAPI). Demo builds and server deploy: `/` (overridden via `VITE_BASE_PATH` env or `.env.production.local`). Demo mode: `npm run build -- --mode demo` loads `.env.demo` (`VITE_DEMO_MODE=true`).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.
 
@@ -324,10 +370,12 @@ bash deploy.sh                               # deploy to production
 3. Restores local-only files
 4. `python3 apply_patches.py` (cloud-mode: makes TTS/STT/GPU imports optional)
 5. `pip install -r services/bridge/requirements.txt`
-6. `npm ci && npm run build` (admin panel)
-7. `rsync admin/dist/ → /var/www/admin-ai-sekretar24/`
-8. `systemctl restart ai-secretary`
-9. Health check: `curl http://localhost:8002/health`
+6. Cleans `admin/dist/` and `node_modules/.vite` (prevents stale demo artifacts)
+7. `VITE_DEMO_MODE= npm run build` (explicit production mode)
+8. Verifies no `setupDemoInterceptor` in built JS (aborts if found)
+9. `rsync admin/dist/ → /var/www/admin-ai-sekretar24/`
+10. `systemctl restart ai-secretary`
+11. Health check: `curl http://localhost:8002/health`
 
 ### Demo Sites
 

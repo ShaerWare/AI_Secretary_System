@@ -57,8 +57,16 @@ if [ ! -f "$REPO_DIR/admin/.env.production.local" ]; then
 fi
 
 # Build admin panel (production mode)
+# Clean dist/ and Vite cache to prevent stale demo build artifacts
+rm -rf "$REPO_DIR/admin/dist" "$REPO_DIR/admin/node_modules/.vite"
 log "Building admin panel..."
-npm run build 2>&1 | tee -a "$LOG_FILE"
+VITE_DEMO_MODE= npm run build 2>&1 | tee -a "$LOG_FILE"
+
+# Verify no demo interceptor leaked into production build
+if grep -q 'setupDemoInterceptor' "$REPO_DIR/admin/dist/assets/"*.js 2>/dev/null; then
+    log "ERROR: Demo interceptor found in production build! Aborting deploy."
+    exit 1
+fi
 
 # Deploy static files to nginx root
 log "Copying dist to /var/www/admin-ai-sekretar24/..."
