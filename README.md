@@ -1,9 +1,26 @@
-# AI Secretary System
+<!-- HEADER BANNER -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=200&section=header&text=AI%20Secretary%20System&fontSize=45&fontColor=fff&animation=fadeIn&fontAlignY=35&desc=Self-hosted%20AI%20Assistant%20with%20Voice%20Cloning%20%26%20LLM&descSize=16&descAlignY=55" width="100%"/>
+
+<div align="center">
 
 [![CI](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![Endpoints](https://img.shields.io/badge/API-371+_endpoints-FF6D00?logo=fastapi&logoColor=white)](#modular-api-structure)
 
-**[Демо админ-панели](https://ai-sekretar24.ru/)** | **[Чат-бот техподдержки](https://t.me/shaerware_digital_bot)**
+**Self-hosted AI-секретарь с клонированием голоса, локальным и облачным LLM, Telegram/WhatsApp ботами и Vue 3 админ-панелью**
+
+[![Сайт проекта](https://img.shields.io/badge/Сайт_проекта-ai--sekretar24.ru-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ai-sekretar24.ru/)
+[![Демо](https://img.shields.io/badge/Демо_(Web)-demo.ai--sekretar24.ru-00C853?style=for-the-badge&logo=google-chrome&logoColor=white)](https://demo.ai-sekretar24.ru)
+[![Telegram](https://img.shields.io/badge/Telegram_бот-@shaerware__digital__bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/shaerware_digital_bot)
+
+[Сайт проекта](https://ai-sekretar24.ru/) | [Демо (Web)](https://demo.ai-sekretar24.ru) | [Telegram бот](https://t.me/shaerware_digital_bot) | [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) | [Issues](https://github.com/ShaerWare/AI_Secretary_System/issues)
+
+---
+
+</div>
 
 Интеллектуальная система виртуального секретаря с клонированием голоса (XTTS v2, OpenVoice), предобученными голосами (Piper), локальным LLM (vLLM + Qwen/Llama/DeepSeek), облачным LLM (Gemini, OpenAI, Claude, DeepSeek, Kimi, OpenRouter) и CLI-OpenAI bridge (Claude Code, Gemini CLI). Включает полнофункциональную Vue 3 админ-панель с 20 вкладками, i18n, PWA, multi-user RBAC, amoCRM интеграцией и воронкой продаж.
 
@@ -471,11 +488,11 @@ cloudflared tunnel --url http://localhost:8002
 **Интеграция:**
 ```html
 <!-- Default виджет -->
-<script src="https://your-server.com/widget.js"></script>
+<script src="https://admin.ai-sekretar24.ru/widget.js"></script>
 
 <!-- Конкретный инстанс -->
-<script src="https://your-server.com/widget.js?instance=sales"></script>
-<script src="https://your-server.com/widget.js?instance=support"></script>
+<script src="https://admin.ai-sekretar24.ru/widget.js?instance=sales"></script>
+<script src="https://admin.ai-sekretar24.ru/widget.js?instance=support"></script>
 ```
 
 **Функции:**
@@ -1205,6 +1222,20 @@ Copyright (c) 2026 ShaerWare
 
 ## Support
 
-Issues: https://github.com/ShaerWare/AI_Secretary_System/issues
+- **Сайт проекта:** https://ai-sekretar24.ru/
+- **Демо (Web-роль):** https://demo.ai-sekretar24.ru
+- **Telegram бот:** https://t.me/shaerware_digital_bot
+- **Issues:** https://github.com/ShaerWare/AI_Secretary_System/issues
+- **Wiki:** https://github.com/ShaerWare/AI_Secretary_System/wiki
 
-🇷🇺 Russian Voice AI
+---
+
+<div align="center">
+
+**Made with** :brain: **by [ShaerWare](https://github.com/ShaerWare)**
+
+[![Telegram](https://img.shields.io/badge/Telegram-@ShaerWare-26A5E4?logo=telegram&logoColor=white)](https://t.me/ShaerWare)
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer" width="100%"/>
