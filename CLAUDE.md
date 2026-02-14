@@ -158,7 +158,7 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (21 routers, ~371 endpoints) │
+│  orchestrator.py + app/routers/ (21 routers, ~372 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (20 views, PWA)                │  │
 │  │                admin/dist/                              │  │
@@ -187,17 +187,26 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 ### Key Architectural Decisions
 
-**Global state in orchestrator.py** (~3500 lines, ~106 endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
+**Global state in orchestrator.py** (~3650 lines, ~109 endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
 
-**ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
+**ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, GSM, Wiki RAG, streaming TTS manager, voice config). Routers get services via FastAPI `Depends` (`get_llm_service()`, `get_voice_service()`, `get_piper_service()`, `get_stt_service()`, `get_gsm_service()`, `get_streaming_tts_manager()`, `get_voice_config()`). Populated during app startup in `orchestrator.py`.
 
-**Database layer** (`db/`): Async SQLAlchemy with aiosqlite. `db/database.py` creates the engine and `AsyncSessionLocal` factory. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`, `AsyncFAQManager`) that wrap repository calls — these are used as module-level singletons imported by `orchestrator.py` and routers. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD.
+**Middleware stack** (`app/`): Three custom middlewares applied in `orchestrator.py`:
+- `DynamicCORSMiddleware` (`app/cors_middleware.py`) — Combines static `CORS_ORIGINS` env with `allowed_domains` from widget instances in DB. Widget domains cached with 60s TTL, auto-refreshed on requests. Cache invalidated on widget CRUD via `get_cors_middleware().invalidate_cache()`.
+- `SecurityHeadersMiddleware` (`app/security_headers.py`) — Adds `X-Content-Type-Options: nosniff`, `X-Frame-Options` (configurable via `X_FRAME_OPTIONS` env, default `DENY`), `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`. Removes `server` header. Controlled by `SECURITY_HEADERS_ENABLED` env (default: true).
+- **Rate limiter** (`app/rate_limiter.py`) — Global rate limiting via `slowapi`. IP detection reads `X-Forwarded-For`/`X-Real-IP` for reverse proxy awareness. Per-endpoint limits: `RATE_LIMIT_AUTH` (10/min), `RATE_LIMIT_CHAT` (30/min), `RATE_LIMIT_TTS` (20/min), `RATE_LIMIT_STT` (20/min). Global default: `RATE_LIMIT_DEFAULT` (60/min). Decorator: `@limiter.limit(RATE_LIMIT_CHAT)`. Controlled by `RATE_LIMIT_ENABLED` env (default: true).
+
+**Database layer** (`db/`): Async SQLAlchemy with aiosqlite (`sqlite+aiosqlite:///data/secretary.db`). `db/database.py` creates the engine (`StaticPool` for SQLite) and `AsyncSessionLocal` factory. `db/integration.py` provides 15 backward-compatible manager classes as module-level singletons: `DatabaseManager`, `AsyncChatManager`, `AsyncFAQManager`, `AsyncPresetManager`, `AsyncConfigManager`, `AsyncTelegramSessionManager`, `AsyncBotInstanceManager`, `AsyncWidgetInstanceManager`, `AsyncWhatsAppInstanceManager`, `AsyncCloudProviderManager`, `AsyncPaymentManager`, `AsyncAmoCRMManager`, `AsyncGSMManager`, `AsyncUserManager`, `AsyncKnowledgeDocManager`. Repositories in `db/repositories/` (31 files) inherit from `BaseRepository` with generic CRUD. 36 SQLAlchemy models in `db/models.py` using declarative 2.0 style.
 
 **Telegram bots**: Run as subprocesses managed by `multi_bot_manager.py`. Each bot instance has independent config (LLM backend, TTS, prompts, system prompt). Bots with `auto_start=true` restart on app startup. Two Telegram frameworks: `python-telegram-bot` (legacy) and `aiogram` (new bots). In multi-instance mode, `BOT_INSTANCE_ID`, `BOT_INTERNAL_TOKEN`, and `ORCHESTRATOR_URL` env vars are passed to the subprocess. Config loading: manager pre-fetches config from DB and writes it to `/tmp/bot_config_{id}.json` (`BOT_CONFIG_FILE` env var); bot tries this file first (`load_config_from_file()`), then falls back to orchestrator API with retry logic (5 attempts, exponential backoff). `LLMRouter` in `telegram_bot/services/llm_router.py` routes LLM requests through the orchestrator chat API, auto-creates orchestrator DB sessions (mapping bot session IDs to real DB sessions via `_ensure_session()`), and uses the bot instance's `llm_backend` setting. `stream_renderer.py` handles both plain string chunks and OpenAI-format dicts.
 
 **WhatsApp bots**: Run as subprocesses managed by `whatsapp_manager.py` (same pattern as Telegram's `multi_bot_manager.py`). Each instance has independent config (phone_number_id, access_token, LLM backend, TTS, system prompt). Bots with `auto_start=true` restart on app startup. Env vars passed to subprocess: `WA_INSTANCE_ID`, `WA_INTERNAL_TOKEN` (internal admin JWT). Bot module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`). Logs: `logs/whatsapp_bot_{instance_id}.log`. DB model: `WhatsAppInstance` in `db/models.py`, repo: `db/repositories/whatsapp_instance.py`, manager: `AsyncWhatsAppInstanceManager` in `db/integration.py`. API: `app/routers/whatsapp.py` (10 endpoints: CRUD + start/stop/restart/status/logs). Migration: `scripts/migrate_whatsapp.py`. Admin UI: `WhatsAppView.vue`.
 
-**Two service layers**: Core AI services live at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `openvoice_service.py`, `piper_tts_service.py`, `stt_service.py`, `llm_service.py`). Orchestration services also at root: `service_manager.py`, `multi_bot_manager.py`, `whatsapp_manager.py`, `telegram_bot_service.py`, `system_monitor.py`, `tts_finetune_manager.py`, `model_manager.py`, `bridge_manager.py` (Claude Code CLI bridge), `xray_proxy_manager.py` (VLESS proxy for xray-core), `phone_service.py` (telephony). Domain-specific services live in `app/services/` (`amocrm_service.py`, `gsm_service.py`, `backup_service.py`, `sales_funnel.py`, `yoomoney_service.py`, `audio_pipeline.py`, `wiki_rag_service.py`).
+**Two service layers**: Core AI services live at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `openvoice_service.py`, `piper_tts_service.py`, `stt_service.py`, `llm_service.py`). Orchestration services also at root: `service_manager.py`, `multi_bot_manager.py`, `whatsapp_manager.py`, `telegram_bot_service.py`, `system_monitor.py`, `tts_finetune_manager.py`, `model_manager.py`, `bridge_manager.py` (Claude Code CLI bridge), `xray_proxy_manager.py` (VLESS proxy for xray-core), `phone_service.py` (telephony). Domain-specific services live in `app/services/` (`amocrm_service.py`, `gsm_service.py`, `backup_service.py`, `sales_funnel.py`, `yoomoney_service.py`, `audio_pipeline.py`, `wiki_rag_service.py`, `embedding_provider.py`).
+
+**Bridge service** (`services/bridge/`): OpenAI-compatible proxy for multi-provider LLM access (Claude, Gemini, GPT). Runs as a separate FastAPI app managed by `bridge_manager.py`. Has its own provider abstraction (`providers/base.py` → `claude/`, `gemini/`, `gpt/`), middleware (auth, logging, rate limiting), and utils (caching, retry, token counting, streaming). Endpoints: `/v1/chat/completions` (streaming), `/v1/models`, file upload. `STREAM_TIMEOUT=600s`, `CLI_TIMEOUT=300s`.
+
+**Landing page** (`landing/`): Static marketing site (`index.html`, `favicon.svg`, `sw.js`) with Matrix rain canvas animation, responsive design, JSON-LD schema, ru/en language switcher. No backend API calls. Deployed to `/var/www/ai-sekretar24/`.
 
 **Cloud LLM routing**: `cloud_llm_service.py` (project root) has `CloudLLMService` with a factory pattern. OpenAI-compatible providers use `OpenAICompatibleProvider` automatically. Custom SDKs (Gemini) get their own provider class inheriting `BaseLLMProvider`. Provider types defined in `PROVIDER_TYPES` dict in `db/models.py`. The standalone `gemini` backend (`llm_service.py`) is deprecated — all cloud LLM is now routed via `CloudLLMService`. Legacy `LLM_BACKEND=gemini` is auto-migrated to `cloud:{provider_id}` on startup (auto-creates a Gemini provider from `GEMINI_API_KEY` env if needed). Migration script: `scripts/migrate_gemini_to_cloud.py`.
 
@@ -236,11 +245,23 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Backup/restore**: `app/routers/backup.py` + `app/services/backup_service.py` — export/import system configuration and data.
 
-**Widget test chat**: Widget instances can be tested live from the admin panel. `app/routers/chat.py` accepts an optional `widget_instance_id` parameter on streaming endpoints, which overrides LLM/TTS settings to match the widget's config. Frontend in `WidgetView.vue` test tab. The embeddable widget (`web-widget/ai-chat-widget.js`) performs a runtime enabled check via `GET /widget/status` (public, no auth) — if the instance is disabled, the widget icon won't render on the site. When embedded in the admin panel, the widget auto-attaches JWT from `localStorage('admin_token')` for authenticated chat.
+**Widget test chat**: Widget instances can be tested live from the admin panel. `app/routers/chat.py` accepts an optional `widget_instance_id` parameter on streaming endpoints, which overrides LLM/TTS settings to match the widget's config. Frontend in `WidgetView.vue` test tab. The embeddable widget (`web-widget/ai-chat-widget.js`) performs a runtime enabled check via `GET /widget/status` (public, no auth) — if the instance is disabled, the widget icon won't render on the site. When embedded in the admin panel, the widget auto-attaches JWT from `localStorage('admin_token')` for authenticated chat. Dynamic widget script served via `GET /widget.js?instance=widget_id`.
+
+**Public widget endpoints** (no authentication, in `orchestrator.py`): 3 endpoints for embedded widget chat without admin JWT:
+- `POST /widget/chat/session` — Create widget session (body: `source_id`)
+- `GET /widget/chat/session/{id}` — Retrieve session with message history (source="widget" only)
+- `POST /widget/chat/session/{id}/stream` — Send message & get SSE streaming response (supports per-instance rate limiting via `rate_limit_count`/`rate_limit_hours` from widget config, LLM backend override, Wiki RAG context injection)
 
 **Widget session persistence** (Replain-style): The widget preserves chat history across page navigations. Session ID is stored in both a cookie (`SameSite=None; Secure`, 30-day TTL) and `localStorage` (cookie-first, localStorage fallback). On page load, `preloadHistory()` fetches the session via `GET /widget/chat/session/{id}` (public, no auth, `source="widget"` only). The open/closed state is tracked in `sessionStorage` — if the chat was open before navigation, it auto-opens and renders history on the next page. `clearSession()` wipes cookie + localStorage + sessionStorage.
 
 **Chat branching** (OpenWebUI-style): Non-destructive message editing and response regeneration. `ChatMessage` has `parent_id` (self-referential FK) and `is_active` (boolean) fields. Editing a message creates a new sibling branch; regenerating creates a new assistant child. Old versions preserved with `is_active=False`. `ChatRepository` methods: `edit_message()` (non-destructive), `branch_regenerate()`, `get_branch_tree()`, `get_sibling_info()`, `switch_branch()`, `get_active_messages()`. API endpoints: `GET /sessions/{id}/branches` (tree structure), `POST /sessions/{id}/branches/switch` (change active path). Frontend: `BranchTree.vue` + `BranchTreeNode.vue` — recursive tree panel on right side of chat. Messages with siblings show inline version navigation `< 1/3 >`. Migration: `scripts/migrate_chat_branches.py`.
+
+**System prompt priority** (`app/routers/chat.py`): System prompts are resolved in priority order:
+1. **Explicit override** — `llm_override.system_prompt` from API call, or `widget.system_prompt` if `widget_instance_id` provided
+2. **Channel-specific** — `widget.system_prompt`, `bot.system_prompt`, `whatsapp.system_prompt`, or `session.system_prompt`
+3. **Persona** — active LLM preset from DB (`llm_presets` table) → falls back to hardcoded `SECRETARY_PERSONAS` dict in `vllm_llm_service.py`
+4. **RAG context** — always appended: Wiki RAG retrieves top-k relevant documents and appends them as `\n\n[Документация по теме:]\n...`
+Default RAG prompt (when no other prompt set): `_DEFAULT_RAG_PROMPT` in `chat.py` — "Ты — ИИ-секретарь. Отвечай на вопросы пользователя кратко и по делу, используя предоставленную документацию."
 
 **Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD), `github_webhook.py` (GitHub CI/CD webhook handler).
 
@@ -291,19 +312,36 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 ## Key Environment Variables
 
 ```bash
+# Core
 LLM_BACKEND=vllm                    # "vllm" or "cloud:{provider_id}" (legacy "gemini" auto-migrates)
 VLLM_API_URL=http://localhost:11434 # Auto-normalized: trailing /v1 is stripped
 SECRETARY_PERSONA=anna             # "anna" or "marina"
 ORCHESTRATOR_PORT=8002
+DEPLOYMENT_MODE=full                # "full", "cloud", or "local" — controls service loading
+DEV_MODE=1                          # Makes backend proxy to Vite dev server (:5173)
+
+# Auth
 ADMIN_JWT_SECRET=...                # Auto-generated if empty
 ADMIN_USERNAME=admin                # Legacy fallback when users table is empty
 ADMIN_PASSWORD_HASH=...             # Legacy fallback (SHA-256 of password)
+AUTH_ENABLED=true                   # Enable JWT authentication
+
+# Infrastructure
 REDIS_URL=redis://localhost:6379/0  # Optional, graceful fallback if unavailable
-DEPLOYMENT_MODE=full                # "full", "cloud", or "local" — controls service loading
-DEV_MODE=1                          # Makes backend proxy to Vite dev server (:5173)
 AMOCRM_PROXY=http://host:8888      # Optional, for Docker/VPN environments
-RATE_LIMIT_ENABLED=true             # Global rate limiting (slowapi)
+CORS_ORIGINS=https://example.com   # Static CORS origins (comma-separated); widget domains added dynamically
+
+# Rate limiting (slowapi)
+RATE_LIMIT_ENABLED=true             # Global rate limiting toggle
 RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
+RATE_LIMIT_AUTH=10/minute           # Auth endpoints (login, register)
+RATE_LIMIT_CHAT=30/minute           # Chat streaming endpoints
+RATE_LIMIT_TTS=20/minute            # TTS synthesis endpoints
+RATE_LIMIT_STT=20/minute            # STT transcription endpoints
+
+# Security headers
+SECURITY_HEADERS_ENABLED=true       # Add security headers to all responses
+X_FRAME_OPTIONS=DENY                # X-Frame-Options header value (DENY or SAMEORIGIN)
 ```
 
 ## Codebase Conventions
@@ -314,7 +352,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
 - **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete. Domain repos extend with custom queries.
-- **Admin panel**: Vue 3 + Composition API + TypeScript + Pinia (with `pinia-plugin-persistedstate`) + vue-i18n + TailwindCSS + radix-vue (headless UI) + @tanstack/vue-query (server state) + lucide-vue-next (icons) + chart.js/vue-chartjs. Path alias `@` → `admin/src/`. API layer: `admin/src/api/client.ts` provides shared `api.get/post/put/delete/upload` + `createSSE` helper (auto-injects JWT from `localStorage('admin_token')`); domain-specific files (`chat.ts`, `telegram.ts`, etc.) build on it. Composables in `admin/src/composables/` (`useSSE`, `useResponsive`, `useExportImport`, etc.).
+- **Admin panel**: Vue 3 + Composition API + TypeScript + Pinia (with `pinia-plugin-persistedstate`) + vue-i18n + TailwindCSS + radix-vue (headless UI) + @tanstack/vue-query (server state) + lucide-vue-next (icons) + chart.js/vue-chartjs. Path alias `@` → `admin/src/`. API layer: `admin/src/api/client.ts` provides shared `api.get/post/put/delete/upload` + `createSSE` helper (auto-injects JWT from `localStorage('admin_token')`); 21 domain-specific API files (`chat.ts`, `telegram.ts`, `whatsapp.ts`, `widget.ts`, `llm.ts`, `tts.ts`, `stt.ts`, `faq.ts`, `services.ts`, `monitor.ts`, `models.ts`, `finetune.ts`, `ttsFinetune.ts`, `audit.ts`, `usage.ts`, `amocrm.ts`, `gsm.ts`, `bot-sales.ts`, `wikiRag.ts`, `index.ts`). Composables in `admin/src/composables/` (`useSSE`, `useResponsive`, `useExportImport`, `useGpuStats`, `useRealtimeMetrics`). Pinia stores (11): `auth.ts` (user/role/deployment mode), `llm.ts` (LLM backend/model/persona), `tts.ts` (voice/preset/params), `services.ts` (service status), `settings.ts` (UI prefs, sidebar, refresh interval), `theme.ts` (light/dark/system/night-eyes), `toast.ts` (notifications), `confirm.ts` (modal dialogs), `search.ts` (global search), `audit.ts` (audit log).
 - **Vite base path** — Production: `/admin/` (served by FastAPI). Demo builds and server deploy: `/` (overridden via `VITE_BASE_PATH` env or `.env.production.local`). Demo mode: `npm run build -- --mode demo` loads `.env.demo` (`VITE_DEMO_MODE=true`).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.
