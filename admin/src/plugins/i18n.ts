@@ -13,7 +13,7 @@ const messages = {
       finetune: 'Обучение',
       monitoring: 'Мониторинг',
       models: 'Модели',
-      widget: 'Виджет',
+      widget: 'Чат-виджет',
       telegram: 'Telegram',
       whatsapp: 'WhatsApp',
       gsm: 'Телефония',
@@ -259,7 +259,7 @@ const messages = {
       groups: {
         admin: 'Админ-панель',
         telegram: 'Telegram',
-        widget: 'Виджет',
+        widget: 'Чат-виджет',
         unknown: 'Другие'
       },
       selectLlm: 'Выбрать LLM провайдер',
@@ -838,7 +838,7 @@ const messages = {
       finetune: 'Fine-tune',
       monitoring: 'Monitoring',
       models: 'Models',
-      widget: 'Widget',
+      widget: 'Chat Widget',
       telegram: 'Telegram',
       whatsapp: 'WhatsApp',
       gsm: 'Telephony',
@@ -1084,7 +1084,7 @@ const messages = {
       groups: {
         admin: 'Admin Panel',
         telegram: 'Telegram',
-        widget: 'Widget',
+        widget: 'Chat Widget',
         unknown: 'Other'
       },
       selectLlm: 'Select LLM provider',

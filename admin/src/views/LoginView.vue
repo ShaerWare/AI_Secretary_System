@@ -677,7 +677,7 @@ async function handleSubmit() {
                     <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
                   </svg>
                 </div>
-                <h3 class="text-base font-semibold text-white">Виджет для сайта</h3>
+                <h3 class="text-base font-semibold text-white">Чат-виджет для сайта</h3>
               </div>
               <p class="text-sm text-gray-400 leading-relaxed">
                 Встраиваемый чат-виджет для любого сайта. Мультиинстансность &mdash;
