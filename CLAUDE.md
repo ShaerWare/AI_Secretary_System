@@ -69,6 +69,11 @@ python scripts/migrate_whatsapp.py               # WhatsApp bot instances table
 python scripts/migrate_chat_branches.py          # Chat message branching (parent_id, is_active)
 python scripts/seed_tz_generator.py          # Seed TZ generator bot data
 python scripts/seed_tz_widget.py             # Seed TZ widget data
+
+# Alembic (structured migrations — set up but not yet primary workflow)
+alembic upgrade head                         # Apply all pending migrations
+alembic revision -m "description"            # Create new migration
+alembic history                              # Show migration history
 ```
 
 ### Lint & Format
@@ -158,18 +163,62 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (21 routers, ~371 endpoints) │
+│  orchestrator.py + app/routers/ (21 routers, ~373 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (20 views, PWA)                │  │
 │  │                admin/dist/                              │  │
 │  └────────────────────────────────────────────────────────┘  │
-└────────────┬──────────────┬──────────────┬───────────────────┘
-             │              │              │
-     ┌───────┴──┐    ┌──────┴───┐   ┌─────┴─────┐
-     │ LLM      │    │ TTS      │   │ STT       │
-     │ vLLM /   │    │ XTTS v2 /│   │ Vosk /    │
-     │ Cloud    │    │ Piper    │   │ Whisper   │
-     └──────────┘    └──────────┘   └───────────┘
+└────┬──────────┬──────────────┬──────────────┬────────────────┘
+     │          │              │              │
+┌────┴─────┐ ┌─┴────────┐ ┌──┴──────┐ ┌─────┴─────┐
+│ Claude   │ │ LLM      │ │ TTS     │ │ STT       │
+│ Bridge   │ │ vLLM /   │ │ XTTS v2/│ │ Vosk /    │
+│ service/ │ │ Cloud    │ │ Piper   │ │ Whisper   │
+│ bridge   │ └──────────┘ └─────────┘ └───────────┘
+└──────────┘
+```
+
+### Directory Structure
+
+```
+/
+├── orchestrator.py              # FastAPI entry point (~3650 lines, 109 endpoints)
+├── app/
+│   ├── routers/                 # 21 API routers (~264 endpoints)
+│   ├── services/                # 8 domain-specific services
+│   └── dependencies.py          # ServiceContainer (DI)
+├── db/
+│   ├── database.py              # Async SQLAlchemy engine
+│   ├── models.py                # 40+ SQLAlchemy models
+│   ├── integration.py           # 15+ manager wrappers
+│   ├── redis_client.py          # Optional Redis
+│   └── repositories/            # 31 repository classes
+├── admin/                       # Vue 3 + TypeScript admin panel
+│   └── src/
+│       ├── views/               # 20 view components
+│       ├── components/          # 8 UI + 3 chart components
+│       ├── api/                 # 21 API modules + 22 demo mocks
+│       ├── stores/              # 11 Pinia stores
+│       ├── composables/         # 5 composables
+│       └── plugins/             # i18n (ru/en)
+├── telegram_bot/                # Aiogram 3.x Telegram bot
+│   ├── handlers/sales/          # 7 sales funnel handlers
+│   ├── sales/                   # Keyboards, texts, segments
+│   └── services/                # LLM router, session store
+├── whatsapp_bot/                # WhatsApp Cloud API bot
+│   ├── handlers/sales/          # 6 sales funnel handlers
+│   ├── sales/                   # WhatsApp-specific keyboards/texts
+│   └── services/                # WhatsApp client, LLM router
+├── services/bridge/             # Claude Code CLI bridge microservice
+│   └── src/                     # Providers, server, utils
+├── web-widget/                  # Embeddable chat widget JS
+├── wiki-pages/                  # 34 markdown knowledge base pages
+├── landing/                     # Static marketing landing page
+├── scripts/                     # 19 migration + 2 seed + utilities
+├── alembic/                     # Alembic migration infrastructure
+├── docs/                        # Internal architecture documents
+├── *.py (root)                  # ~25 service modules (LLM, TTS, STT, etc.)
+└── .github/workflows/ci.yml    # CI: lint-backend, lint-frontend, security
 ```
 
 **GPU mode (RTX 3060 12GB):** vLLM ~6GB (50% GPU) + XTTS v2 ~5GB
@@ -187,7 +236,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 ### Key Architectural Decisions
 
-**Global state in orchestrator.py** (~3500 lines, ~106 endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
+**Global state in orchestrator.py** (~3650 lines, ~109 endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
 
 **ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
 
@@ -244,6 +293,14 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD), `github_webhook.py` (GitHub CI/CD webhook handler).
 
+**Landing page**: `landing/` directory contains a static marketing landing page (`index.html`, `favicon.svg`, `sw.js`) with Matrix rain animation. Deployed to `https://ai-sekretar24.ru`.
+
+**Wiki knowledge base**: `wiki-pages/` contains 34 markdown documentation pages covering all features (Installation, Chat, Dashboard, FAQ, Cloud LLM, CRM, Payments, GSM, Sales, Widget, etc.). Used by Wiki RAG service for semantic search and BM25 fallback.
+
+**Internal docs**: `docs/` directory contains internal architecture documents (`BOT_SYNC_ARCHITECTURE.md`, `WORKFLOW.md`, `IMPROVEMENT_PLAN.md`, etc.) — not user-facing.
+
+**Claude Code bridge**: `services/bridge/` is a standalone FastAPI microservice providing OpenAI-compatible API wrapping Claude CLI. Structure: `src/config/` (settings), `src/providers/` (Claude/Gemini/GPT provider classes with `BaseLLMProvider` + factory), `src/server/` (routes for chat/files/models, auth/logging/rate-limit middleware), `src/utils/` (12 modules: cache, content, files, health, metrics, queue, retry, sessions, subprocess, summarize, tokens, tools).
+
 ## Code Patterns
 
 **Adding a new API endpoint:**
@@ -278,7 +335,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to both `ru` and `en` message objects
 
-**Database migrations:** Manual scripts in `scripts/migrate_*.py` (no Alembic). New tables auto-created by `Base.metadata.create_all` on startup; schema changes to existing tables need migration scripts.
+**Database migrations:** Two systems coexist: (1) Manual scripts in `scripts/migrate_*.py` for legacy and ad-hoc migrations — still the primary method used in production. (2) Alembic infrastructure (`alembic.ini` + `alembic/` directory) with an initial schema migration (`20260126_0001_initial_schema.py`) — set up for future structured migrations but not yet the default workflow. New tables auto-created by `Base.metadata.create_all` on startup; schema changes to existing tables need migration scripts.
 
 **API URL patterns:**
 - `GET/POST /admin/{resource}` — List/create
@@ -314,7 +371,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
 - **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete. Domain repos extend with custom queries.
-- **Admin panel**: Vue 3 + Composition API + TypeScript + Pinia (with `pinia-plugin-persistedstate`) + vue-i18n + TailwindCSS + radix-vue (headless UI) + @tanstack/vue-query (server state) + lucide-vue-next (icons) + chart.js/vue-chartjs. Path alias `@` → `admin/src/`. API layer: `admin/src/api/client.ts` provides shared `api.get/post/put/delete/upload` + `createSSE` helper (auto-injects JWT from `localStorage('admin_token')`); domain-specific files (`chat.ts`, `telegram.ts`, etc.) build on it. Composables in `admin/src/composables/` (`useSSE`, `useResponsive`, `useExportImport`, etc.).
+- **Admin panel**: Vue 3 + Composition API + TypeScript + Pinia (with `pinia-plugin-persistedstate`) + vue-i18n + TailwindCSS + radix-vue (headless UI) + @tanstack/vue-query (server state) + @vueuse/core (reactive utilities) + lucide-vue-next (icons) + chart.js/vue-chartjs. Path alias `@` → `admin/src/`. API layer: `admin/src/api/client.ts` provides shared `api.get/post/put/delete/upload` + `createSSE` helper (auto-injects JWT from `localStorage('admin_token')`); domain-specific files (`chat.ts`, `telegram.ts`, etc.) build on it. Composables in `admin/src/composables/` (`useSSE`, `useGpuStats`, `useRealtimeMetrics`, `useResponsive`, `useExportImport`). Components: 8 UI components + 3 chart components in `charts/` subdirectory (`GpuChart`, `MetricsChart`, `SparklineChart`). Stores (11 Pinia stores): `auth`, `theme`, `settings`, `services`, `tts`, `llm`, `toast`, `confirm`, `search`, `audit`.
 - **Vite base path** — Production: `/admin/` (served by FastAPI). Demo builds and server deploy: `/` (overridden via `VITE_BASE_PATH` env or `.env.production.local`). Demo mode: `npm run build -- --mode demo` loads `.env.demo` (`VITE_DEMO_MODE=true`).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.
@@ -340,7 +397,7 @@ Systemd services:
 
 Static sites:
     /var/www/admin-ai-sekretar24/   ← admin panel (rsync from admin/dist/)
-    /var/www/ai-sekretar24/         ← landing page (static)
+    /var/www/ai-sekretar24/         ← landing page (from landing/ directory)
     /var/www/demo-ai-sekretar24/    ← demo builds (full/ + cloud/ subdirs)
 ```
 
