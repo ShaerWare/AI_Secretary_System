@@ -44,6 +44,7 @@
 ### Справка
 * [[Installation]]
 * [[Cloud-AI-Training]]
+* [[Response-Pipeline]]
 * [[API-Reference]]
 * [[Troubleshooting]]
 
