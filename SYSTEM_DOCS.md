@@ -388,8 +388,9 @@ Vue 3 PWA с 20 вкладками:
 - Deployment mode: `VITE_DEMO_DEPLOYMENT_MODE=full` или `cloud`
 
 ```bash
-npm run build -- --mode demo      # Admin demo (role=admin, full mode)
-npm run build -- --mode demo-web  # Web demo (role=web, cloud mode)
+npm run build -- --mode demo      # Full demo (role=admin, full mode) → /full/
+npm run build -- --mode demo-web  # Cloud demo (role=web, cloud mode) → /cloud/
+# Both deployed by: bash /root/deploy-demo.sh
 ```
 
 ## API (21 роутер, ~371 endpoint)

@@ -340,8 +340,8 @@ Systemd services:
 
 Static sites:
     /var/www/admin-ai-sekretar24/   ← admin panel (rsync from admin/dist/)
-    /var/www/ai-sekretar24/         ← admin demo (demo build, role=admin)
-    /var/www/demo-ai-sekretar24/    ← web demo (demo-web build, role=web)
+    /var/www/ai-sekretar24/         ← landing page (static)
+    /var/www/demo-ai-sekretar24/    ← demo builds (full/ + cloud/ subdirs)
 ```
 
 **Local-only files** (not in git, backed up by deploy.sh): `.env`, `apply_patches.py`, `deploy.sh`, `webhook_server.py`, `admin/.env.production.local`
@@ -382,27 +382,32 @@ bash deploy.sh                               # deploy to production
 Fully offline demo builds of the admin panel — no backend needed, mock data only.
 
 ```bash
-bash /root/deploy-demo.sh       # pull → build --mode demo → deploy to /var/www/ai-sekretar24/
-bash /root/deploy-demo-web.sh   # pull → build --mode demo-web → deploy to /var/www/demo-ai-sekretar24/
+bash /root/deploy-demo.sh       # pull → build both demos → deploy to /var/www/demo-ai-sekretar24/
 ```
 
-**Admin demo** (ai-sekretar24.ru) — full admin panel:
-- **URL**: https://ai-sekretar24.ru (login: admin/admin)
-- **Build**: `npm run build -- --mode demo` (loads `.env.demo`: `VITE_DEMO_ROLE=admin`, `VITE_DEMO_DEPLOYMENT_MODE=full`)
-- **Auto-deploy**: GitHub webhook → `demo-webhook.service` (port 9876) → `/root/deploy-demo.sh` on push to main
+Both demos live on `demo.ai-sekretar24.ru` with path-based routing. Single script `deploy-demo.sh` builds and deploys both.
 
-**Web demo** (demo.ai-sekretar24.ru) — customer-facing view (web role):
-- **URL**: https://demo.ai-sekretar24.ru (login: admin/admin or demo/demo)
+**Full demo** (`/full/`) — admin role, all features:
+- **URL**: https://demo.ai-sekretar24.ru/full/ (auto-login as admin)
+- **Build**: `npm run build -- --mode demo` (loads `.env.demo`: `VITE_DEMO_ROLE=admin`, `VITE_DEMO_DEPLOYMENT_MODE=full`)
+- **All tabs visible**
+
+**Cloud demo** (`/cloud/`) — web role, customer-facing:
+- **URL**: https://demo.ai-sekretar24.ru/cloud/ (auto-login as web)
 - **Build**: `npm run build -- --mode demo-web` (loads `.env.demo-web`: `VITE_DEMO_ROLE=web`, `VITE_DEMO_DEPLOYMENT_MODE=cloud`)
 - **Hidden tabs**: Dashboard, Services, TTS, Monitoring, Models, GSM
-- **Visible tabs**: Chat, Telegram, WhatsApp, Widget, FAQ, LLM, Fine-tune (Cloud AI), CRM
+
+**Auto-deploy**: GitHub webhook → `demo-webhook.service` (port 9876) → `/root/deploy-demo.sh` on push to main
+
+**Landing page**: https://ai-sekretar24.ru — static site in `/var/www/ai-sekretar24/` (not a demo)
 
 **Shared architecture:**
 - **How it works**: monkey-patches `window.fetch` in `demo/index.ts` to intercept all API calls with mock data
 - **SSE**: polling (3s interval) instead of real EventSource
 - **Mock data**: 22 files in `admin/src/api/demo/`, in-memory store for session-persistent mutations
 - **Role config**: `VITE_DEMO_ROLE` and `VITE_DEMO_DEPLOYMENT_MODE` env vars control role in JWT and deployment mode mock
-- **Nginx**: hash history, no server-side routing needed
+- **Auto-login**: inline `<script>` in `index.html` injects JWT with correct role before Vue app loads
+- **Nginx**: path-based routing (`/full/`, `/cloud/`), root `/` redirects to `/full/`
 
 ## Parallel Development (Two Claude Code Instances)
 
