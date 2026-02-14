@@ -6,7 +6,9 @@
 
 | Ресурс | Ссылка |
 |--------|--------|
-| **Админ-панель** (демо) | [ai-sekretar24.ru](https://ai-sekretar24.ru/) |
+| **Демо** (полный режим) | [demo.ai-sekretar24.ru/full/](https://demo.ai-sekretar24.ru/full/) |
+| **Демо** (облачный режим) | [demo.ai-sekretar24.ru/cloud/](https://demo.ai-sekretar24.ru/cloud/) |
+| **Сайт проекта** | [ai-sekretar24.ru](https://ai-sekretar24.ru/) |
 | **Чат-бот техподдержки** | [@shaerware_digital_bot](https://t.me/shaerware_digital_bot) |
 
 ## Возможности системы
