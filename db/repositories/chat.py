@@ -41,7 +41,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         query = (
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
-            .order_by(ChatSession.updated.desc())
+            .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
         if owner_id is not None:
             query = query.where(
@@ -123,8 +123,9 @@ class ChatRepository(BaseRepository[ChatSession]):
         session_id: str,
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        pinned: Optional[bool] = None,
     ) -> Optional[dict]:
-        """Update session title or system prompt."""
+        """Update session title, system prompt, or pinned status."""
         result = await self.session.execute(
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
@@ -139,6 +140,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.title = title
         if system_prompt is not None:
             session.system_prompt = system_prompt
+        if pinned is not None:
+            session.pinned = pinned
         session.updated = datetime.utcnow()
 
         await self.session.commit()
@@ -185,7 +188,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         query = (
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
-            .order_by(ChatSession.updated.desc())
+            .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
         if owner_id is not None:
             query = query.where(

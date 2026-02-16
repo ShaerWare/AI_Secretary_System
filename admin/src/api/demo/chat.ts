@@ -6,6 +6,7 @@ const defaultSessions: ChatSessionData[] = [
   {
     id: 'session-admin-1',
     title: 'Тест админки',
+    pinned: true,
     source: 'admin',
     source_id: undefined,
     created: daysAgo(2),
@@ -20,6 +21,7 @@ const defaultSessions: ChatSessionData[] = [
   {
     id: 'session-tg-1',
     title: 'Клиент Telegram: Алексей',
+    pinned: false,
     source: 'telegram',
     source_id: '123456789',
     created: daysAgo(1),
@@ -34,6 +36,7 @@ const defaultSessions: ChatSessionData[] = [
   {
     id: 'session-widget-1',
     title: 'Посетитель сайта',
+    pinned: false,
     source: 'widget',
     source_id: 'widget-main',
     created: daysAgo(0),
@@ -58,6 +61,7 @@ function sessionToSummary(s: ChatSessionData) {
   return {
     id: s.id,
     title: s.title,
+    pinned: s.pinned,
     message_count: s.messages.length,
     last_message: s.messages[s.messages.length - 1]?.content?.slice(0, 100),
     source: s.source,
@@ -67,6 +71,14 @@ function sessionToSummary(s: ChatSessionData) {
   }
 }
 
+function sortByPinned<T extends { pinned?: boolean; updated?: string }>(arr: T[]): T[] {
+  return [...arr].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    return (b.updated || '').localeCompare(a.updated || '')
+  })
+}
+
 export const chatRoutes: DemoRoute[] = [
   {
     method: 'GET',
@@ -74,15 +86,16 @@ export const chatRoutes: DemoRoute[] = [
     handler: ({ searchParams }) => {
       initChatData()
       const store = getStore()
+      const sorted = sortByPinned(store.chatSessions)
       if (searchParams.get('group_by') === 'source') {
         const grouped = { admin: [] as unknown[], telegram: [] as unknown[], widget: [] as unknown[], unknown: [] as unknown[] }
-        for (const s of store.chatSessions) {
+        for (const s of sorted) {
           const key = s.source && s.source in grouped ? s.source : 'unknown'
           grouped[key as keyof typeof grouped].push(sessionToSummary(s))
         }
         return { sessions: grouped, grouped: true }
       }
-      return { sessions: store.chatSessions.map(sessionToSummary) }
+      return { sessions: sorted.map(sessionToSummary) }
     },
   },
   {
@@ -176,6 +189,7 @@ export const chatRoutes: DemoRoute[] = [
         title: data.title || 'Новая сессия',
         messages: [],
         system_prompt: data.system_prompt,
+        pinned: false,
         source: (data.source as 'admin') || 'admin',
         created: nowISO(),
         updated: nowISO(),

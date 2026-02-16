@@ -29,10 +29,22 @@ router = APIRouter(prefix="/admin/chat", tags=["chat"])
 # Default system prompt for RAG-augmented conversations (when no custom prompt is set)
 _DEFAULT_RAG_PROMPT = (
     "Ты — ИИ-секретарь. Отвечай на вопросы пользователя кратко и по делу, "
-    "используя предоставленную документацию. Отвечай на языке пользователя. "
-    "Не используй function_calls, tools или code blocks для ответа — "
-    "отвечай обычным текстом."
+    "используя предоставленную документацию. Отвечай на языке пользователя."
 )
+
+# Anti-hallucination suffix — prevents Claude from generating fake tool calls as text
+_NO_TOOLS_SUFFIX = (
+    "\n\nВАЖНО: Ты — чат-бот без доступа к инструментам, файлам и командам. "
+    "НИКОГДА не генерируй вызовы функций, tool_use, function_calls, "
+    "filesystem, code execution или любые блоки вида `command { ... }`. "
+    "Отвечай только обычным текстом. Используй markdown для форматирования."
+)
+
+
+def _finalize_prompt(prompt: str | None) -> str:
+    """Add anti-tool-call suffix to any system prompt before sending to LLM."""
+    base = prompt or _DEFAULT_RAG_PROMPT
+    return base + _NO_TOOLS_SUFFIX
 
 
 # ============== Pydantic Models ==============
@@ -52,6 +64,7 @@ class BulkDeleteRequest(BaseModel):
 class UpdateSessionRequest(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    pinned: Optional[bool] = None
 
 
 class LLMOverrideConfig(BaseModel):
@@ -145,7 +158,7 @@ async def admin_update_chat_session(
 ):
     """Обновить чат-сессию"""
     session = await async_chat_manager.update_session(
-        session_id, request.title, request.system_prompt
+        session_id, request.title, request.system_prompt, pinned=request.pinned
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -199,7 +212,7 @@ async def admin_send_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
+    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
 
     # Генерируем ответ
     try:
@@ -344,7 +357,7 @@ async def admin_stream_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
+    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
 
     async def generate_stream():
         full_response = []
@@ -425,7 +438,7 @@ async def admin_edit_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
+    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
 
     try:
         response_text = llm_service.generate_response_from_messages(messages, stream=False)
@@ -512,7 +525,7 @@ async def admin_regenerate_chat_response(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    llm_messages = await async_chat_manager.get_messages_for_llm(session_id, default_prompt)
+    llm_messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
 
     try:
         response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
