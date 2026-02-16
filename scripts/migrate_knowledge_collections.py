@@ -76,9 +76,7 @@ def migrate():
             print("ℹ️ collection_id column already exists")
 
         # 4. Seed default collection
-        cursor.execute(
-            "SELECT id FROM knowledge_collections WHERE slug = ?", ("default",)
-        )
+        cursor.execute("SELECT id FROM knowledge_collections WHERE slug = ?", ("default",))
         row = cursor.fetchone()
 
         if row:

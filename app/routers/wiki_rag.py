@@ -61,11 +61,39 @@ def _slugify(text: str) -> str:
     """Generate a URL-safe slug from text."""
     # Transliterate Cyrillic
     translit_map = {
-        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
-        "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
-        "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
-        "ф": "f", "х": "kh", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "shch",
-        "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "е": "e",
+        "ё": "yo",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "й": "y",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "kh",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "shch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "yu",
+        "я": "ya",
     }
     text = text.lower()
     result = []
@@ -166,7 +194,9 @@ async def create_collection(
     # Check for duplicate name
     existing_name = await async_knowledge_collection_manager.get_by_slug(slug)
     if existing_name:
-        raise HTTPException(status_code=409, detail=f"Коллекция с именем '{request.name}' уже существует")
+        raise HTTPException(
+            status_code=409, detail=f"Коллекция с именем '{request.name}' уже существует"
+        )
 
     collection = await async_knowledge_collection_manager.create(
         name=request.name,

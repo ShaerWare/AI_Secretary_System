@@ -565,9 +565,7 @@ async def _load_collection_indexes(wiki_rag):
         collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
         loaded = 0
         for col in collections:
-            filenames = await async_knowledge_collection_manager.get_document_filenames(
-                col["id"]
-            )
+            filenames = await async_knowledge_collection_manager.get_document_filenames(col["id"])
             if filenames:
                 wiki_rag.load_collection(col["id"], filenames, Path("wiki-pages"))
                 loaded += 1

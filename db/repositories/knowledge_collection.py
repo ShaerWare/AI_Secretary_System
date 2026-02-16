@@ -129,9 +129,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
 
         # Orphan documents
         result = await self.session.execute(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.collection_id == collection_id
-            )
+            select(KnowledgeDocument).where(KnowledgeDocument.collection_id == collection_id)
         )
         for doc in result.scalars().all():
             doc.collection_id = None

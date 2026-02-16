@@ -1183,9 +1183,9 @@ class AsyncKnowledgeCollectionManager:
             from db.models import KnowledgeDocument
 
             result = await session.execute(
-                sa_select(func.count()).select_from(KnowledgeDocument).where(
-                    KnowledgeDocument.collection_id == collection_id
-                )
+                sa_select(func.count())
+                .select_from(KnowledgeDocument)
+                .where(KnowledgeDocument.collection_id == collection_id)
             )
             d["document_count"] = result.scalar() or 0
             return d
@@ -1204,9 +1204,9 @@ class AsyncKnowledgeCollectionManager:
             from db.models import KnowledgeDocument
 
             result = await session.execute(
-                sa_select(func.count()).select_from(KnowledgeDocument).where(
-                    KnowledgeDocument.collection_id == col.id
-                )
+                sa_select(func.count())
+                .select_from(KnowledgeDocument)
+                .where(KnowledgeDocument.collection_id == col.id)
             )
             d["document_count"] = result.scalar() or 0
             return d
@@ -1240,9 +1240,7 @@ class AsyncKnowledgeCollectionManager:
         """Update collection metadata."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            return await repo.update_collection(
-                collection_id, name, slug, description, enabled
-            )
+            return await repo.update_collection(collection_id, name, slug, description, enabled)
 
     async def delete(self, collection_id: int) -> bool:
         """Delete collection (orphans documents)."""

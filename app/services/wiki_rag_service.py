@@ -630,9 +630,7 @@ class WikiRAGService:
             result["embeddings"] = emb_result
         return result
 
-    def search(
-        self, query: str, top_k: int = 3, collection_id: Optional[int] = None
-    ) -> list[dict]:
+    def search(self, query: str, top_k: int = 3, collection_id: Optional[int] = None) -> list[dict]:
         """Structured search results with scores (for API/UI).
 
         When collection_id is given and loaded, searches that collection's index.
