@@ -125,6 +125,9 @@ class ChatSession(Base):
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )
 
+    # Pinned chat (stays at top of list)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     # Source tracking (admin, telegram, widget)
     source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -142,6 +145,7 @@ class ChatSession(Base):
             "id": self.id,
             "title": self.title,
             "system_prompt": self.system_prompt,
+            "pinned": self.pinned,
             "source": self.source,
             "source_id": self.source_id,
             "created": self.created.isoformat() if self.created else None,
@@ -158,6 +162,7 @@ class ChatSession(Base):
         return {
             "id": self.id,
             "title": self.title,
+            "pinned": self.pinned,
             "message_count": len(messages),
             "last_message": last_msg,
             "source": self.source,

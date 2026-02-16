@@ -2,6 +2,8 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { chatApi, ttsApi, llmApi, sttApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import { useConfirmStore } from '@/stores/confirm'
@@ -34,8 +36,15 @@ import {
   CheckSquare,
   ListChecks,
   Brain,
-  GitBranch
+  GitBranch,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  Paperclip
 } from 'lucide-vue-next'
+import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
+import { getChatEmoji } from '@/utils/chatEmoji'
 
 const { t } = useI18n()
 const confirmStore = useConfirmStore()
@@ -56,6 +65,33 @@ const editingDefaultPrompt = ref('')
 const isEditingDefault = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 const showSidebar = ref(true)
+
+// Sidebar collapse (desktop)
+const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSidebarCollapse('chat-sidebar-collapsed')
+
+// Markdown renderer
+marked.use({
+  breaks: true,
+  gfm: true,
+  renderer: {
+    link({ href, title, text }) {
+      const t = title ? ` title="${title}"` : ''
+      return `<a href="${href}"${t} target="_blank" rel="noopener noreferrer">${text}</a>`
+    }
+  }
+})
+
+function renderMarkdown(content: string): string {
+  if (!content) return ''
+  return DOMPurify.sanitize(marked.parse(content) as string)
+}
+
+// Branch tree toggle
+const showBranchTree = ref(false)
+
+// File attachment state
+const attachedFiles = ref<{ name: string; content: string }[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // Selection mode state
 const selectionMode = ref(false)
@@ -149,18 +185,6 @@ const defaultPrompt = computed(() => defaultPromptData.value?.prompt || '')
 const branchTree = computed(() => branchData.value?.branches || [])
 const siblingInfo = computed(() => currentSession.value?.sibling_info || {})
 
-// Check if session has any branches
-const hasBranches = computed(() => {
-  function checkBranching(nodes: BranchNode[]): boolean {
-    if (nodes.length > 1) return true
-    for (const node of nodes) {
-      if (checkBranching(node.children)) return true
-    }
-    return false
-  }
-  return branchTree.value.length > 0 && checkBranching(branchTree.value)
-})
-
 // Available LLM options for dropdown
 interface LlmOption {
   value: string
@@ -200,11 +224,12 @@ const currentLlmLabel = computed(() => {
   return option?.label || backend
 })
 
-// Watch for session change to load custom prompt
+// Watch for session change to load custom prompt and reset state
 watch(currentSession, (session) => {
   if (session) {
     customPrompt.value = session.system_prompt || ''
   }
+  attachedFiles.value = []
 })
 
 // Mutations
@@ -247,7 +272,7 @@ const bulkDeleteMutation = useMutation({
 })
 
 const updateSessionMutation = useMutation({
-  mutationFn: ({ sessionId, data }: { sessionId: string; data: { title?: string; system_prompt?: string } }) =>
+  mutationFn: ({ sessionId, data }: { sessionId: string; data: { title?: string; system_prompt?: string; pinned?: boolean } }) =>
     chatApi.updateSession(sessionId, data),
   onSuccess: () => {
     refetchSession()
@@ -255,6 +280,13 @@ const updateSessionMutation = useMutation({
     refetchGrouped()
   },
 })
+
+function togglePin(sessionId: string, currentPinned?: boolean) {
+  updateSessionMutation.mutate({
+    sessionId,
+    data: { pinned: !currentPinned },
+  })
+}
 
 const sendMessageMutation = useMutation({
   mutationFn: ({ sessionId, content }: { sessionId: string; content: string }) =>
@@ -270,10 +302,15 @@ const editMessageMutation = useMutation({
   mutationFn: ({ sessionId, messageId, content }: { sessionId: string; messageId: string; content: string }) =>
     chatApi.editMessage(sessionId, messageId, content),
   onSuccess: () => {
-    editingMessageId.value = null
+    isStreaming.value = false
+    streamingContent.value = ''
     refetchSession()
     refetchBranches()
     scrollToBottom()
+  },
+  onError: () => {
+    isStreaming.value = false
+    streamingContent.value = ''
   },
 })
 
@@ -281,9 +318,15 @@ const regenerateMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
     chatApi.regenerateResponse(sessionId, messageId),
   onSuccess: () => {
+    isStreaming.value = false
+    streamingContent.value = ''
     refetchSession()
     refetchBranches()
     scrollToBottom()
+  },
+  onError: () => {
+    isStreaming.value = false
+    streamingContent.value = ''
   },
 })
 
@@ -495,15 +538,42 @@ function cancelEditing() {
 
 function saveEdit() {
   if (!currentSessionId.value || !editingMessageId.value) return
-  editMessageMutation.mutate({
-    sessionId: currentSessionId.value,
-    messageId: editingMessageId.value,
-    content: editingContent.value,
+  const sessionId = currentSessionId.value
+  const messageId = editingMessageId.value
+  const content = editingContent.value
+
+  // Close edit form immediately
+  editingMessageId.value = null
+  editingContent.value = ''
+
+  // Optimistic update: show edited question text immediately
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient.setQueryData(['chat-session', sessionId], (old: any) => {
+    if (!old?.session?.messages) return old
+    return {
+      ...old,
+      session: {
+        ...old.session,
+        messages: old.session.messages.map((m: ChatMessage) =>
+          m.id === messageId ? { ...m, content, edited: true } : m
+        )
+      }
+    }
   })
+
+  // Show loading for assistant response
+  isStreaming.value = true
+  streamingContent.value = ''
+  scrollToBottom()
+
+  editMessageMutation.mutate({ sessionId, messageId, content })
 }
 
 function regenerateResponse(messageId: string) {
   if (!currentSessionId.value) return
+  isStreaming.value = true
+  streamingContent.value = ''
+  scrollToBottom()
   regenerateMutation.mutate({
     sessionId: currentSessionId.value,
     messageId,
@@ -512,6 +582,9 @@ function regenerateResponse(messageId: string) {
 
 function regenerateAssistantResponse(assistantMessageId: string) {
   if (!currentSessionId.value) return
+  isStreaming.value = true
+  streamingContent.value = ''
+  scrollToBottom()
   regenerateMutation.mutate({
     sessionId: currentSessionId.value,
     messageId: assistantMessageId,
@@ -546,6 +619,36 @@ function deleteMessage(messageId: string) {
       messageId,
     })
   }
+}
+
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files) return
+
+  for (const file of files) {
+    if (!file.name.endsWith('.txt') && !file.name.endsWith('.md')) continue
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const content = reader.result as string
+      attachedFiles.value.push({ name: file.name, content })
+      // Append to prompt textarea
+      const separator = customPrompt.value.trim() ? '\n\n' : ''
+      customPrompt.value += `${separator}# ${file.name}\n${content}`
+    }
+    reader.readAsText(file)
+  }
+  // Reset input so the same file can be re-selected
+  input.value = ''
+}
+
+function removeAttachedFile(index: number) {
+  attachedFiles.value.splice(index, 1)
 }
 
 function saveSettings() {
@@ -744,9 +847,50 @@ watch(sessions, (newSessions) => {
         'border-r border-border bg-card flex flex-col transition-all',
         showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         'fixed md:relative inset-y-0 left-0 z-40 md:z-0',
-        'w-full md:w-72'
+        sidebarCollapsed ? 'w-full md:w-14' : 'w-full md:w-72'
       ]"
     >
+      <!-- Collapsed mode (desktop only) -->
+      <template v-if="sidebarCollapsed">
+        <!-- Collapsed header: expand + new chat -->
+        <div class="hidden md:flex flex-col items-center gap-1 p-2 border-b border-border">
+          <button class="p-2 rounded-lg text-muted-foreground hover:bg-secondary/50" :title="t('chatView.expandSidebar')" @click="toggleSidebarCollapse">
+            <PanelLeftOpen class="w-4 h-4" />
+          </button>
+          <button
+            :disabled="createSessionMutation.isPending.value"
+            class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            :title="t('chatView.newChat')"
+            @click="createNewChat"
+          >
+            <Plus class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Collapsed items list -->
+        <div class="hidden md:block flex-1 overflow-y-auto">
+          <button
+            v-for="session in sessions"
+            :key="session.id"
+            :title="session.title"
+            :class="[
+              'w-full flex items-center justify-center py-2 transition-colors relative',
+              currentSessionId === session.id
+                ? 'bg-primary/10 border-l-2 border-l-primary'
+                : 'hover:bg-secondary/50'
+            ]"
+            @click="selectSession(session.id)"
+          >
+            <div v-if="session.pinned" class="absolute top-1 left-1 w-2 h-2 rounded-full bg-primary" />
+            <div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-base shrink-0">
+              {{ getChatEmoji(session.title) }}
+            </div>
+          </button>
+        </div>
+      </template>
+
+      <!-- Expanded mode -->
+      <template v-else>
       <!-- Header -->
       <div class="p-4 border-b border-border flex items-center justify-between">
         <h2 class="font-semibold flex items-center gap-2">
@@ -754,6 +898,13 @@ watch(sessions, (newSessions) => {
           {{ t('chatView.title') }}
         </h2>
         <div class="flex items-center gap-1">
+          <button
+            class="hidden md:inline-flex p-2 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+            :title="t('chatView.collapseSidebar')"
+            @click="toggleSidebarCollapse"
+          >
+            <PanelLeftClose class="w-4 h-4" />
+          </button>
           <button
             :class="[
               'p-2 rounded-lg transition-colors',
@@ -842,9 +993,10 @@ watch(sessions, (newSessions) => {
                     </template>
                     <template v-else>
                       <p
-                        class="font-medium text-sm truncate"
+                        class="font-medium text-sm truncate flex items-center gap-1"
                         @dblclick="startRename(session, $event)"
                       >
+                        <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
                         {{ session.title }}
                       </p>
                     </template>
@@ -859,6 +1011,14 @@ watch(sessions, (newSessions) => {
 
                   <!-- Action buttons (on hover, not in selection mode) -->
                   <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                    <button
+                      class="p-1 rounded hover:bg-background text-muted-foreground"
+                      :title="session.pinned ? 'Unpin' : 'Pin'"
+                      @click.stop="togglePin(session.id, session.pinned)"
+                    >
+                      <PinOff v-if="session.pinned" class="w-3 h-3" />
+                      <Pin v-else class="w-3 h-3" />
+                    </button>
                     <button
                       class="p-1 rounded hover:bg-background text-muted-foreground"
                       :title="t('chatView.rename')"
@@ -928,9 +1088,10 @@ watch(sessions, (newSessions) => {
               </template>
               <template v-else>
                 <p
-                  class="font-medium text-sm truncate"
+                  class="font-medium text-sm truncate flex items-center gap-1"
                   @dblclick="startRename(session, $event)"
                 >
+                  <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
                   {{ session.title }}
                 </p>
               </template>
@@ -945,6 +1106,14 @@ watch(sessions, (newSessions) => {
 
             <!-- Action buttons (on hover, not in selection mode) -->
             <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
+              <button
+                class="p-1 rounded hover:bg-background text-muted-foreground"
+                :title="session.pinned ? 'Unpin' : 'Pin'"
+                @click.stop="togglePin(session.id, session.pinned)"
+              >
+                <PinOff v-if="session.pinned" class="w-3 h-3" />
+                <Pin v-else class="w-3 h-3" />
+              </button>
               <button
                 class="p-1 rounded hover:bg-background text-muted-foreground"
                 :title="t('chatView.rename')"
@@ -973,6 +1142,7 @@ watch(sessions, (newSessions) => {
           </button>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- Mobile sidebar backdrop -->
@@ -994,8 +1164,6 @@ watch(sessions, (newSessions) => {
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Chat Header -->
       <div v-if="currentSession" class="p-4 border-b border-border flex items-center justify-between bg-card">
-        <!-- Branch indicator -->
-        <GitBranch v-if="hasBranches" class="w-4 h-4 text-muted-foreground mr-2 flex-shrink-0" />
         <div class="flex-1 min-w-0">
           <h2 class="font-semibold truncate">{{ currentSession.title }}</h2>
           <p class="text-xs text-muted-foreground">
@@ -1033,11 +1201,25 @@ watch(sessions, (newSessions) => {
             <VolumeX v-else class="w-4 h-4" />
           </button>
           <button
-            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              showSettings ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
             title="Chat settings"
-            @click="showSettings = true"
+            @click="showSettings = !showSettings"
           >
             <Settings2 class="w-4 h-4" />
+          </button>
+          <!-- Branch tree toggle -->
+          <button
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              showBranchTree ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
+            :title="t('chatView.branchTree')"
+            @click="showBranchTree = !showBranchTree"
+          >
+            <GitBranch class="w-4 h-4" />
           </button>
           <button
             class="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
@@ -1118,7 +1300,7 @@ watch(sessions, (newSessions) => {
 
               <!-- Normal mode -->
               <template v-else>
-                <p class="whitespace-pre-wrap break-words">{{ message.content }}</p>
+                <div class="chat-markdown break-words" v-html="renderMarkdown(message.content)"></div>
                 <div class="flex items-center gap-2 mt-2 text-xs opacity-60">
                   <span>{{ formatTime(message.timestamp) }}</span>
                   <span v-if="message.edited" class="italic">(edited)</span>
@@ -1219,7 +1401,7 @@ watch(sessions, (newSessions) => {
               <Bot class="w-4 h-4 text-primary" />
             </div>
             <div class="max-w-[80%] rounded-lg p-3 bg-secondary">
-              <p class="whitespace-pre-wrap break-words">{{ streamingContent }}</p>
+              <div class="chat-markdown break-words" v-html="renderMarkdown(streamingContent)"></div>
               <Loader2 class="w-4 h-4 animate-spin mt-2 text-muted-foreground" />
             </div>
           </div>
@@ -1238,11 +1420,205 @@ watch(sessions, (newSessions) => {
 
       <!-- Branch Tree Panel -->
       <BranchTree
-        v-if="hasBranches"
+        v-if="showBranchTree"
         :branches="branchTree"
         :session-id="currentSessionId || ''"
         @switch="onBranchSwitch"
+        @close="showBranchTree = false"
       />
+
+      <!-- Settings Panel (slide-out right) -->
+      <div
+        v-if="showSettings"
+        class="border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden"
+        :class="showBranchTree ? 'w-[50%]' : 'w-[60%]'"
+      >
+        <!-- Panel header -->
+        <div class="p-3 border-b border-border flex items-center justify-between">
+          <h3 class="text-sm font-semibold flex items-center gap-2">
+            <Settings2 class="w-4 h-4" />
+            Chat Settings
+          </h3>
+          <button
+            class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+            @click="showSettings = false"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 px-3 pt-2 border-b border-border">
+          <button
+            :class="[
+              'px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+              settingsTab === 'session'
+                ? 'border-primary text-primary'
+                : 'border-transparent hover:text-foreground text-muted-foreground'
+            ]"
+            @click="settingsTab = 'session'"
+          >
+            <FileText class="w-3.5 h-3.5 inline mr-1" />
+            Session Prompt
+          </button>
+          <button
+            :class="[
+              'px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+              settingsTab === 'default'
+                ? 'border-primary text-primary'
+                : 'border-transparent hover:text-foreground text-muted-foreground'
+            ]"
+            @click="settingsTab = 'default'"
+          >
+            <Sparkles class="w-3.5 h-3.5 inline mr-1" />
+            Default Prompt
+          </button>
+        </div>
+
+        <!-- Panel content (scrollable, fills remaining height) -->
+        <div class="flex-1 overflow-y-auto p-3 flex flex-col">
+          <!-- Session Prompt Tab -->
+          <div v-if="settingsTab === 'session'" class="flex flex-col flex-1 gap-3">
+            <p class="text-xs text-muted-foreground">
+              Leave empty to use the default persona prompt
+            </p>
+
+            <!-- File attachment -->
+            <div>
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".txt,.md"
+                multiple
+                class="hidden"
+                @change="handleFileUpload"
+              />
+              <button
+                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="triggerFileUpload"
+              >
+                <Paperclip class="w-3.5 h-3.5" />
+                Прикрепить .txt / .md
+              </button>
+              <div v-if="attachedFiles.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+                <span
+                  v-for="(file, idx) in attachedFiles"
+                  :key="idx"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full"
+                >
+                  <FileText class="w-3 h-3" />
+                  {{ file.name }}
+                  <button class="hover:text-red-500 ml-0.5" @click="removeAttachedFile(idx)">
+                    <X class="w-3 h-3" />
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            <!-- Textarea fills remaining space -->
+            <textarea
+              v-model="customPrompt"
+              class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm font-mono"
+              placeholder="Enter custom system prompt..."
+            />
+
+            <div class="p-2 bg-secondary/50 rounded-lg">
+              <p class="text-xs font-medium mb-1">Default ({{ defaultPromptData?.persona }}):</p>
+              <p class="text-xs text-muted-foreground whitespace-pre-wrap max-h-20 overflow-y-auto">
+                {{ defaultPrompt || 'Loading...' }}
+              </p>
+            </div>
+
+            <div class="flex justify-end gap-2">
+              <button
+                class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="showSettings = false"
+              >
+                Cancel
+              </button>
+              <button
+                :disabled="updateSessionMutation.isPending.value"
+                class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                @click="saveSettings"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <!-- Default Prompt Tab -->
+          <div v-if="settingsTab === 'default'" class="flex flex-col flex-1 gap-3">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium">
+                Persona: {{ defaultPromptData?.persona }}
+              </label>
+              <div class="flex gap-1.5">
+                <button
+                  v-if="!isEditingDefault"
+                  class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors"
+                  @click="startEditingDefault"
+                >
+                  <Edit3 class="w-3 h-3 inline mr-1" />
+                  Edit
+                </button>
+                <button
+                  v-if="!isEditingDefault"
+                  :disabled="resetDefaultPromptMutation.isPending.value"
+                  class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors text-orange-500"
+                  @click="resetDefaultPrompt"
+                >
+                  <RotateCw class="w-3 h-3 inline mr-1" />
+                  Reset
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              Used for all chats without a custom prompt
+            </p>
+
+            <!-- View mode -->
+            <div v-if="!isEditingDefault" class="flex-1 p-3 bg-secondary rounded-lg overflow-y-auto">
+              <p class="text-sm whitespace-pre-wrap">
+                {{ defaultPrompt || 'Loading...' }}
+              </p>
+            </div>
+
+            <!-- Edit mode -->
+            <template v-else>
+              <textarea
+                v-model="editingDefaultPrompt"
+                class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
+                placeholder="Enter default system prompt..."
+              />
+              <div class="flex justify-end gap-2">
+                <button
+                  class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                  @click="cancelEditingDefault"
+                >
+                  Cancel
+                </button>
+                <button
+                  :disabled="saveDefaultPromptMutation.isPending.value"
+                  class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  @click="saveDefaultPrompt"
+                >
+                  <Loader2 v-if="saveDefaultPromptMutation.isPending.value" class="w-4 h-4 inline mr-1 animate-spin" />
+                  Save Default
+                </button>
+              </div>
+            </template>
+
+            <div v-if="!isEditingDefault" class="flex justify-end">
+              <button
+                class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="showSettings = false"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       </div><!-- end Messages + Branch Tree row -->
 
       <!-- Input Area -->
@@ -1290,160 +1666,5 @@ watch(sessions, (newSessions) => {
       </div>
     </div>
 
-    <!-- Settings Modal -->
-    <div
-      v-if="showSettings"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="showSettings = false"
-    >
-      <div class="bg-card border border-border rounded-lg w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto">
-        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Settings2 class="w-5 h-5" />
-          Chat Settings
-        </h3>
-
-        <!-- Tabs -->
-        <div class="flex gap-2 mb-4 border-b border-border">
-          <button
-            :class="[
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              settingsTab === 'session'
-                ? 'border-primary text-primary'
-                : 'border-transparent hover:text-foreground text-muted-foreground'
-            ]"
-            @click="settingsTab = 'session'"
-          >
-            <FileText class="w-4 h-4 inline mr-2" />
-            Session Prompt
-          </button>
-          <button
-            :class="[
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              settingsTab === 'default'
-                ? 'border-primary text-primary'
-                : 'border-transparent hover:text-foreground text-muted-foreground'
-            ]"
-            @click="settingsTab = 'default'"
-          >
-            <Sparkles class="w-4 h-4 inline mr-2" />
-            Default Prompt
-          </button>
-        </div>
-
-        <!-- Session Prompt Tab -->
-        <div v-if="settingsTab === 'session'" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium mb-2">Custom System Prompt for This Chat</label>
-            <p class="text-xs text-muted-foreground mb-2">
-              Leave empty to use the default persona prompt
-            </p>
-            <textarea
-              v-model="customPrompt"
-              rows="8"
-              class="w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-              placeholder="Enter custom system prompt..."
-            />
-          </div>
-
-          <div class="p-3 bg-secondary/50 rounded-lg">
-            <p class="text-xs font-medium mb-1">Current default ({{ defaultPromptData?.persona }}):</p>
-            <p class="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">
-              {{ defaultPrompt || 'Loading...' }}
-            </p>
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <button
-              class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-              @click="showSettings = false"
-            >
-              Cancel
-            </button>
-            <button
-              :disabled="updateSessionMutation.isPending.value"
-              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              @click="saveSettings"
-            >
-              Save Session Prompt
-            </button>
-          </div>
-        </div>
-
-        <!-- Default Prompt Tab -->
-        <div v-if="settingsTab === 'default'" class="space-y-4">
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <label class="block text-sm font-medium">
-                Default Persona Prompt ({{ defaultPromptData?.persona }})
-              </label>
-              <div class="flex gap-2">
-                <button
-                  v-if="!isEditingDefault"
-                  class="px-3 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors"
-                  @click="startEditingDefault"
-                >
-                  <Edit3 class="w-3 h-3 inline mr-1" />
-                  Edit
-                </button>
-                <button
-                  v-if="!isEditingDefault"
-                  :disabled="resetDefaultPromptMutation.isPending.value"
-                  class="px-3 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors text-orange-500"
-                  @click="resetDefaultPrompt"
-                >
-                  <RotateCw class="w-3 h-3 inline mr-1" />
-                  Reset
-                </button>
-              </div>
-            </div>
-            <p class="text-xs text-muted-foreground mb-2">
-              This prompt is used for all chats that don't have a custom prompt
-            </p>
-
-            <!-- View mode -->
-            <div v-if="!isEditingDefault" class="p-3 bg-secondary rounded-lg">
-              <p class="text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
-                {{ defaultPrompt || 'Loading...' }}
-              </p>
-            </div>
-
-            <!-- Edit mode -->
-            <div v-else class="space-y-3">
-              <textarea
-                v-model="editingDefaultPrompt"
-                rows="12"
-                class="w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
-                placeholder="Enter default system prompt..."
-              />
-              <div class="flex justify-end gap-2">
-                <button
-                  class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-                  @click="cancelEditingDefault"
-                >
-                  Cancel
-                </button>
-                <button
-                  :disabled="saveDefaultPromptMutation.isPending.value"
-                  class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                  @click="saveDefaultPrompt"
-                >
-                  <Loader2 v-if="saveDefaultPromptMutation.isPending.value" class="w-4 h-4 inline mr-1 animate-spin" />
-                  Save Default Prompt
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="!isEditingDefault" class="flex justify-end">
-            <button
-              class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-              @click="showSettings = false"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>

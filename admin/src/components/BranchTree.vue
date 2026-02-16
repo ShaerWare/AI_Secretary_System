@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GitBranch } from 'lucide-vue-next'
+import { GitBranch, X } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
 import BranchTreeNode from '@/components/BranchTreeNode.vue'
 
@@ -12,20 +11,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   switch: [messageId: string]
+  close: []
 }>()
 
 const { t } = useI18n()
-
-const hasBranching = computed(() => {
-  function check(nodes: BranchNode[]): boolean {
-    if (nodes.length > 1) return true
-    for (const node of nodes) {
-      if (check(node.children)) return true
-    }
-    return false
-  }
-  return check(props.branches)
-})
 
 function handleClick(messageId: string) {
   emit('switch', messageId)
@@ -33,18 +22,21 @@ function handleClick(messageId: string) {
 </script>
 
 <template>
-  <div
-    v-if="hasBranching"
-    class="w-52 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0"
-  >
-    <div class="p-3 border-b border-border">
+  <div class="w-52 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0">
+    <div class="p-3 border-b border-border flex items-center justify-between">
       <h3 class="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
         <GitBranch class="w-3.5 h-3.5" />
         {{ t('chatView.branchTree') }}
       </h3>
+      <button
+        class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+        @click="emit('close')"
+      >
+        <X class="w-3.5 h-3.5" />
+      </button>
     </div>
 
-    <div class="p-2">
+    <div v-if="branches.length > 0" class="p-2">
       <BranchTreeNode
         v-for="root in branches"
         :key="root.id"
@@ -52,6 +44,9 @@ function handleClick(messageId: string) {
         :depth="0"
         @click-node="handleClick"
       />
+    </div>
+    <div v-else class="p-4 text-center text-xs text-muted-foreground">
+      {{ t('chatView.noBranches') }}
     </div>
   </div>
 </template>

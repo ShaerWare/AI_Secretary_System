@@ -48,6 +48,7 @@ export interface ChatSessionData {
   title: string
   messages: ChatMessageData[]
   system_prompt?: string
+  pinned: boolean
   source: 'admin' | 'telegram' | 'widget' | null
   source_id?: string
   created: string

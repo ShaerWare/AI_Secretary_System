@@ -230,7 +230,15 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Widget session persistence** (Replain-style): The widget preserves chat history across page navigations. Session ID is stored in both a cookie (`SameSite=None; Secure`, 30-day TTL) and `localStorage` (cookie-first, localStorage fallback). On page load, `preloadHistory()` fetches the session via `GET /widget/chat/session/{id}` (public, no auth, `source="widget"` only). The open/closed state is tracked in `sessionStorage` — if the chat was open before navigation, it auto-opens and renders history on the next page. `clearSession()` wipes cookie + localStorage + sessionStorage.
 
-**Chat branching** (OpenWebUI-style): Non-destructive message editing and response regeneration. `ChatMessage` has `parent_id` (self-referential FK) and `is_active` (boolean) fields. Editing a message creates a new sibling branch; regenerating creates a new assistant child. Old versions preserved with `is_active=False`. `ChatRepository` methods: `edit_message()` (non-destructive), `branch_regenerate()`, `get_branch_tree()`, `get_sibling_info()`, `switch_branch()`, `get_active_messages()`. API endpoints: `GET /sessions/{id}/branches` (tree structure), `POST /sessions/{id}/branches/switch` (change active path). Frontend: `BranchTree.vue` + `BranchTreeNode.vue` — recursive tree panel on right side of chat. Messages with siblings show inline version navigation `< 1/3 >`. Migration: `scripts/migrate_chat_branches.py`.
+**Chat branching** (OpenWebUI-style): Non-destructive message editing and response regeneration. `ChatMessage` has `parent_id` (self-referential FK) and `is_active` (boolean) fields. Editing a message creates a new sibling branch; regenerating creates a new assistant child. Old versions preserved with `is_active=False`. `ChatRepository` methods: `edit_message()` (non-destructive), `branch_regenerate()`, `get_branch_tree()`, `get_sibling_info()`, `switch_branch()`, `get_active_messages()`. API endpoints: `GET /sessions/{id}/branches` (tree structure), `POST /sessions/{id}/branches/switch` (change active path). Frontend: `BranchTree.vue` + `BranchTreeNode.vue` — recursive tree panel, toggled via GitBranch button in chat header (works on empty chats too). Close button and empty state in `BranchTree.vue`. Messages with siblings show inline version navigation `< 1/3 >`. Migration: `scripts/migrate_chat_branches.py`.
+
+**Chat markdown rendering**: Assistant and user messages render markdown via `marked` + `DOMPurify`. Custom `.chat-markdown` CSS in `main.css` styles headings, code blocks, lists, tables, blockquotes, links using HSL theme variables. User message code blocks get special overrides (`.bg-primary .chat-markdown`).
+
+**Chat settings panel**: Slide-out panel from right side (not a modal), toggled via Settings2 button in chat header. Two tabs: Session Prompt (custom per-chat prompt + file attachments) and Default Prompt (persona prompt view/edit/reset). File attachments: `.txt/.md` files read client-side via FileReader, content appended to prompt textarea with `# filename` separator. Panel uses `flex-1` textarea to maximize editing space.
+
+**Chat pinning**: Sessions support `pinned` boolean field. Pinned chats show Pin icon in sidebar and sorted to top. Toggle via hover action button in session list. Migration: `alembic/versions/20260216_0001_add_chat_pinned.py`.
+
+**Anti-tool-call prompt injection**: `_finalize_prompt()` in `app/routers/chat.py` appends `_NO_TOOLS_SUFFIX` to every system prompt before sending to LLM. Prevents Claude bridge from hallucinating fake tool calls (`filesystem read_file`, `function_calls`) as text, which caused chat responses to hang. Applied to all 4 chat endpoints (send, stream, edit, regenerate).
 
 **Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler).
 
@@ -310,7 +318,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 
 ## Frontend Architecture
 
-**Tech stack**: Vue 3 + Composition API + TypeScript, Vite, Pinia (persisted state), Vue Router (hash history), TanStack Vue Query, vue-i18n (ru/en), TailwindCSS + radix-vue, lucide-vue-next, chart.js/vue-chartjs. Path alias `@` → `admin/src/`.
+**Tech stack**: Vue 3 + Composition API + TypeScript, Vite, Pinia (persisted state), Vue Router (hash history), TanStack Vue Query, vue-i18n (ru/en), TailwindCSS + radix-vue, lucide-vue-next, chart.js/vue-chartjs, marked + DOMPurify (markdown rendering). Path alias `@` → `admin/src/`.
 
 **Routing** (`admin/src/router.ts`): Single flat router with `createWebHashHistory`. Routes use rich `meta` fields for access control:
 - `meta.public` — bypass auth guard (only `/login`)
@@ -327,7 +335,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 
 **Components** (`admin/src/components/`): Flat structure, no `ui/` subdirectory. UI state components (`ConfirmDialog`, `SearchPalette`, `ToastContainer`, `ThemeToggle`) driven by dedicated Pinia stores. `BranchTree.vue` / `BranchTreeNode.vue` for chat branching. `charts/` for Chart.js wrappers.
 
-**Composables** (`admin/src/composables/`): `useSSE`, `useResponsive`, `useExportImport`, etc.
+**Composables** (`admin/src/composables/`): `useSSE`, `useResponsive`, `useExportImport`, `useSidebarCollapse`, etc.
 
 **i18n** (`admin/src/plugins/i18n.ts`): Single file with `ru` and `en` message objects. Add keys to both when adding translations.
 
