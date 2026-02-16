@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { finetuneApi, ttsFinetune, wikiRagApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult } from '@/api'
+import { finetuneApi, ttsFinetune, wikiRagApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult, type KnowledgeCollection } from '@/api'
 import {
   Sparkles,
   Upload,
@@ -33,7 +33,9 @@ import {
   Cloud,
   Search,
   FileUp,
-  BookOpenCheck
+  BookOpenCheck,
+  Plus,
+  FolderClosed
 } from 'lucide-vue-next'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
@@ -53,6 +55,12 @@ const searchQuery = ref('')
 const searchTopK = ref(3)
 const searchResults = ref<WikiSearchResult[]>([])
 const uploadingKnowledgeDoc = ref<File | null>(null)
+
+// ============== Collections State ==============
+const selectedCollectionId = ref<number | null>(null)
+const showCreateCollectionDialog = ref(false)
+const newCollectionName = ref('')
+const newCollectionDescription = ref('')
 
 // ============== LLM Training State ==============
 const uploadingFile = ref<File | null>(null)
@@ -135,8 +143,14 @@ const { data: wikiStatsData, refetch: refetchWikiStats } = useQuery({
 })
 
 const { data: wikiDocsData, refetch: refetchWikiDocs } = useQuery({
-  queryKey: ['wiki-rag-documents'],
-  queryFn: () => wikiRagApi.getDocuments(),
+  queryKey: computed(() => ['wiki-rag-documents', selectedCollectionId.value]),
+  queryFn: () => wikiRagApi.getDocuments(selectedCollectionId.value ?? undefined),
+  enabled: computed(() => activeTab.value === 'llm' && llmMode.value === 'cloud'),
+})
+
+const { data: collectionsData, refetch: refetchCollections } = useQuery({
+  queryKey: ['wiki-rag-collections'],
+  queryFn: () => wikiRagApi.getCollections(),
   enabled: computed(() => activeTab.value === 'llm' && llmMode.value === 'cloud'),
 })
 
@@ -257,17 +271,18 @@ const reloadWikiMutation = useMutation({
 })
 
 const searchWikiMutation = useMutation({
-  mutationFn: ({ query, topK }: { query: string; topK: number }) => wikiRagApi.search(query, topK),
+  mutationFn: ({ query, topK }: { query: string; topK: number }) => wikiRagApi.search(query, topK, selectedCollectionId.value ?? undefined),
   onSuccess: (data) => {
     searchResults.value = data.results
   },
 })
 
 const uploadDocMutation = useMutation({
-  mutationFn: (file: File) => wikiRagApi.uploadDocument(file),
+  mutationFn: (file: File) => wikiRagApi.uploadDocument(file, selectedCollectionId.value ?? undefined),
   onSuccess: () => {
     refetchWikiDocs()
     refetchWikiStats()
+    refetchCollections()
     uploadingKnowledgeDoc.value = null
   },
 })
@@ -277,6 +292,28 @@ const deleteDocMutation = useMutation({
   onSuccess: () => {
     refetchWikiDocs()
     refetchWikiStats()
+    refetchCollections()
+  },
+})
+
+const createCollectionMutation = useMutation({
+  mutationFn: (data: { name: string; description?: string }) => wikiRagApi.createCollection(data),
+  onSuccess: () => {
+    refetchCollections()
+    showCreateCollectionDialog.value = false
+    newCollectionName.value = ''
+    newCollectionDescription.value = ''
+  },
+})
+
+const deleteCollectionMutation = useMutation({
+  mutationFn: (id: number) => wikiRagApi.deleteCollection(id),
+  onSuccess: () => {
+    if (selectedCollectionId.value === deleteCollectionMutation.variables.value) {
+      selectedCollectionId.value = null
+    }
+    refetchCollections()
+    refetchWikiDocs()
   },
 })
 
@@ -349,6 +386,7 @@ const formattedEta = computed(() => {
 const wikiStats = computed(() => wikiStatsData.value?.stats)
 const wikiSourceFiles = computed(() => wikiStatsData.value?.source_files || [])
 const wikiDocuments = computed(() => wikiDocsData.value?.documents || [])
+const collections = computed(() => collectionsData.value?.collections || [])
 
 // ============== TTS Computed ==============
 const ttsSamples = computed(() => ttsSamplesData.value?.samples || [])
@@ -437,6 +475,25 @@ function uploadKnowledgeDoc() {
 function runWikiSearch() {
   if (searchQuery.value.trim()) {
     searchWikiMutation.mutate({ query: searchQuery.value, topK: searchTopK.value })
+  }
+}
+
+function selectCollection(id: number | null) {
+  selectedCollectionId.value = id
+}
+
+function submitCreateCollection() {
+  if (newCollectionName.value.trim()) {
+    createCollectionMutation.mutate({
+      name: newCollectionName.value.trim(),
+      description: newCollectionDescription.value.trim() || undefined,
+    })
+  }
+}
+
+function confirmDeleteCollection(col: KnowledgeCollection) {
+  if (confirm(`Удалить коллекцию "${col.name}"? Документы останутся, но будут откреплены.`)) {
+    deleteCollectionMutation.mutate(col.id)
   }
 }
 
@@ -1027,12 +1084,116 @@ v-if="!adapter.active" :disabled="deleteAdapterMutation.isPending.value" class="
           </div>
         </div>
 
+        <!-- Collections -->
+        <div class="bg-card rounded-lg border border-border">
+          <div class="p-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <FolderClosed class="w-5 h-5" />
+                Коллекции
+              </h2>
+              <p class="text-sm text-muted-foreground mt-1">
+                Группы документов для раздельного поиска и индексации
+              </p>
+            </div>
+          </div>
+
+          <div class="p-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- "All" pill -->
+              <button
+                class="px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                :class="selectedCollectionId === null ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-secondary/80'"
+                @click="selectCollection(null)"
+              >
+                Все
+              </button>
+
+              <!-- Collection pills -->
+              <button
+                v-for="col in collections"
+                :key="col.id"
+                class="group px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5"
+                :class="selectedCollectionId === col.id ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-secondary/80'"
+                @click="selectCollection(col.id)"
+              >
+                {{ col.name }}
+                <span class="text-xs opacity-70">({{ col.document_count }})</span>
+                <button
+                  v-if="col.slug !== 'default'"
+                  class="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                  @click.stop="confirmDeleteCollection(col)"
+                >
+                  <X class="w-3 h-3" />
+                </button>
+              </button>
+
+              <!-- Create button -->
+              <button
+                class="px-3 py-1.5 rounded-full text-sm font-medium bg-secondary hover:bg-secondary/80 transition-colors flex items-center gap-1"
+                @click="showCreateCollectionDialog = true"
+              >
+                <Plus class="w-3.5 h-3.5" />
+                Новая
+              </button>
+            </div>
+
+            <!-- Create collection inline form -->
+            <div v-if="showCreateCollectionDialog" class="mt-3 p-3 bg-secondary/50 rounded-lg border border-border">
+              <div class="flex items-end gap-3">
+                <div class="flex-1">
+                  <label class="text-xs text-muted-foreground mb-1 block">Название</label>
+                  <input
+                    v-model="newCollectionName"
+                    type="text"
+                    placeholder="Напр. FAQ, Продукт, Поддержка..."
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                    @keydown.enter="submitCreateCollection"
+                    @keydown.escape="showCreateCollectionDialog = false"
+                  />
+                </div>
+                <div class="flex-1">
+                  <label class="text-xs text-muted-foreground mb-1 block">Описание (необязательно)</label>
+                  <input
+                    v-model="newCollectionDescription"
+                    type="text"
+                    placeholder="Краткое описание..."
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                    @keydown.enter="submitCreateCollection"
+                    @keydown.escape="showCreateCollectionDialog = false"
+                  />
+                </div>
+                <button
+                  :disabled="!newCollectionName.trim() || createCollectionMutation.isPending.value"
+                  class="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors text-sm flex items-center gap-1"
+                  @click="submitCreateCollection"
+                >
+                  <Loader2 v-if="createCollectionMutation.isPending.value" class="w-3.5 h-3.5 animate-spin" />
+                  Создать
+                </button>
+                <button
+                  class="px-3 py-1.5 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors text-sm"
+                  @click="showCreateCollectionDialog = false"
+                >
+                  Отмена
+                </button>
+              </div>
+              <div v-if="createCollectionMutation.error.value" class="mt-2 text-red-500 text-xs">
+                {{ createCollectionMutation.error.value }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Knowledge Base Documents -->
         <div class="bg-card rounded-lg border border-border">
           <div class="p-4 border-b border-border">
             <h2 class="text-lg font-semibold flex items-center gap-2">
               <FileUp class="w-5 h-5" />
               Документы базы знаний
+              <span v-if="selectedCollectionId !== null" class="text-sm font-normal text-muted-foreground">
+                — {{ collections.find(c => c.id === selectedCollectionId)?.name }}
+              </span>
             </h2>
             <p class="text-sm text-muted-foreground mt-1">
               Загрузка .md / .txt файлов в wiki-pages/ для индексации

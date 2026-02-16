@@ -31,6 +31,24 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         )
         return [doc.to_dict() for doc in result.scalars().all()]
 
+    async def get_by_collection(self, collection_id: int) -> List[dict]:
+        """Get all documents in a specific collection."""
+        result = await self.session.execute(
+            select(KnowledgeDocument)
+            .where(KnowledgeDocument.collection_id == collection_id)
+            .order_by(KnowledgeDocument.title)
+        )
+        return [doc.to_dict() for doc in result.scalars().all()]
+
+    async def get_filenames_by_collection(self, collection_id: int) -> List[str]:
+        """Get filenames of all documents in a collection."""
+        result = await self.session.execute(
+            select(KnowledgeDocument.filename).where(
+                KnowledgeDocument.collection_id == collection_id
+            )
+        )
+        return [row[0] for row in result.all()]
+
     async def create_document(
         self,
         filename: str,
@@ -39,6 +57,7 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         file_size_bytes: int = 0,
         section_count: int = 0,
         owner_id: Optional[int] = None,
+        collection_id: Optional[int] = None,
     ) -> dict:
         """Create a new document record."""
         doc = KnowledgeDocument(
@@ -48,6 +67,7 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
             file_size_bytes=file_size_bytes,
             section_count=section_count,
             owner_id=owner_id,
+            collection_id=collection_id,
         )
         self.session.add(doc)
         await self.session.commit()
@@ -60,6 +80,7 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         title: Optional[str] = None,
         file_size_bytes: Optional[int] = None,
         section_count: Optional[int] = None,
+        collection_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Update document metadata."""
         doc = await self.session.get(KnowledgeDocument, doc_id)
@@ -72,6 +93,8 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
             doc.file_size_bytes = file_size_bytes
         if section_count is not None:
             doc.section_count = section_count
+        if collection_id is not None:
+            doc.collection_id = collection_id
 
         await self.session.commit()
         await self.session.refresh(doc)

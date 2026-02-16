@@ -24,6 +24,7 @@ from db.repositories import (
     FAQRepository,
     GSMCallLogRepository,
     GSMSMSLogRepository,
+    KnowledgeCollectionRepository,
     KnowledgeDocumentRepository,
     PaymentRepository,
     PresetRepository,
@@ -1104,6 +1105,12 @@ class AsyncKnowledgeDocManager:
             doc = await repo.get_by_filename(filename)
             return doc.to_dict() if doc else None
 
+    async def get_by_collection(self, collection_id: int) -> List[dict]:
+        """Get all documents in a specific collection."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeDocumentRepository(session)
+            return await repo.get_by_collection(collection_id)
+
     async def create(
         self,
         filename: str,
@@ -1112,6 +1119,7 @@ class AsyncKnowledgeDocManager:
         file_size_bytes: int = 0,
         section_count: int = 0,
         owner_id: Optional[int] = None,
+        collection_id: Optional[int] = None,
     ) -> dict:
         """Create a knowledge document record."""
         async with AsyncSessionLocal() as session:
@@ -1123,6 +1131,7 @@ class AsyncKnowledgeDocManager:
                 file_size_bytes=file_size_bytes,
                 section_count=section_count,
                 owner_id=owner_id,
+                collection_id=collection_id,
             )
 
     async def update(
@@ -1131,17 +1140,131 @@ class AsyncKnowledgeDocManager:
         title: Optional[str] = None,
         file_size_bytes: Optional[int] = None,
         section_count: Optional[int] = None,
+        collection_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Update document metadata."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.update_document(doc_id, title, file_size_bytes, section_count)
+            return await repo.update_document(
+                doc_id, title, file_size_bytes, section_count, collection_id
+            )
 
     async def delete(self, doc_id: int) -> bool:
         """Delete document record."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
             return await repo.delete_document(doc_id)
+
+
+# ============== Knowledge Collection Manager ==============
+
+
+class AsyncKnowledgeCollectionManager:
+    """Async wrapper for KnowledgeCollectionRepository."""
+
+    async def get_all(self, enabled_only: bool = False) -> List[dict]:
+        """Get all collections."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            return await repo.get_all_collections(enabled_only=enabled_only)
+
+    async def get_by_id(self, collection_id: int) -> Optional[dict]:
+        """Get collection by ID with document count."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            col = await repo.get_by_id(collection_id)
+            if not col:
+                return None
+            d = col.to_dict()
+            # Add document count
+            from sqlalchemy import func
+            from sqlalchemy import select as sa_select
+
+            from db.models import KnowledgeDocument
+
+            result = await session.execute(
+                sa_select(func.count())
+                .select_from(KnowledgeDocument)
+                .where(KnowledgeDocument.collection_id == collection_id)
+            )
+            d["document_count"] = result.scalar() or 0
+            return d
+
+    async def get_by_slug(self, slug: str) -> Optional[dict]:
+        """Get collection by slug with document count."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            col = await repo.get_by_slug(slug)
+            if not col:
+                return None
+            d = col.to_dict()
+            from sqlalchemy import func
+            from sqlalchemy import select as sa_select
+
+            from db.models import KnowledgeDocument
+
+            result = await session.execute(
+                sa_select(func.count())
+                .select_from(KnowledgeDocument)
+                .where(KnowledgeDocument.collection_id == col.id)
+            )
+            d["document_count"] = result.scalar() or 0
+            return d
+
+    async def get_default(self) -> Optional[dict]:
+        """Get the default collection."""
+        return await self.get_by_slug("default")
+
+    async def create(
+        self,
+        name: str,
+        slug: str,
+        description: Optional[str] = None,
+        enabled: bool = True,
+    ) -> dict:
+        """Create a collection."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            return await repo.create_collection(
+                name=name, slug=slug, description=description, enabled=enabled
+            )
+
+    async def update(
+        self,
+        collection_id: int,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        enabled: Optional[bool] = None,
+    ) -> Optional[dict]:
+        """Update collection metadata."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            return await repo.update_collection(collection_id, name, slug, description, enabled)
+
+    async def delete(self, collection_id: int) -> bool:
+        """Delete collection (orphans documents)."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            return await repo.delete_collection(collection_id)
+
+    async def get_document_filenames(self, collection_id: int) -> List[str]:
+        """Get filenames of all documents in a collection."""
+        async with AsyncSessionLocal() as session:
+            repo = KnowledgeCollectionRepository(session)
+            return await repo.get_document_filenames(collection_id)
+
+    async def ensure_default_exists(self) -> dict:
+        """Create default collection if it doesn't exist."""
+        default = await self.get_default()
+        if default:
+            return default
+        return await self.create(
+            name="Default",
+            slug="default",
+            description="Коллекция по умолчанию",
+            enabled=True,
+        )
 
 
 # ============== Global Instances ==============
@@ -1162,6 +1285,7 @@ async_amocrm_manager = AsyncAmoCRMManager()
 async_gsm_manager = AsyncGSMManager()
 async_user_manager = AsyncUserManager()
 async_knowledge_doc_manager = AsyncKnowledgeDocManager()
+async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
 
 
 # ============== Initialization Function ==============
