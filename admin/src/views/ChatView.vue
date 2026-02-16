@@ -330,12 +330,19 @@ const regenerateMutation = useMutation({
   },
 })
 
+// Track which message to scroll to after branch switch
+const pendingScrollMessageId = ref<string | null>(null)
+
 const switchBranchMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
     chatApi.switchBranch(sessionId, messageId),
-  onSuccess: () => {
-    refetchSession()
-    refetchBranches()
+  onSuccess: async () => {
+    await refetchSession()
+    await refetchBranches()
+    if (pendingScrollMessageId.value) {
+      scrollToMessage(pendingScrollMessageId.value)
+      pendingScrollMessageId.value = null
+    }
   },
 })
 
@@ -369,6 +376,20 @@ function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
+}
+
+function scrollToMessage(messageId: string) {
+  nextTick(() => {
+    const el = document.getElementById(`msg-${messageId}`)
+    if (el && messagesContainer.value) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // Brief highlight flash
+      el.classList.add('ring-2', 'ring-primary', 'ring-offset-1', 'ring-offset-background')
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-primary', 'ring-offset-1', 'ring-offset-background')
+      }, 1500)
     }
   })
 }
@@ -593,10 +614,15 @@ function regenerateAssistantResponse(assistantMessageId: string) {
 
 function onBranchSwitch(messageId: string) {
   if (!currentSessionId.value) return
+  pendingScrollMessageId.value = messageId
   switchBranchMutation.mutate({
     sessionId: currentSessionId.value,
     messageId,
   })
+}
+
+function onBranchScrollTo(messageId: string) {
+  scrollToMessage(messageId)
 }
 
 function switchToSibling(messageId: string) {
@@ -1249,9 +1275,10 @@ watch(sessions, (newSessions) => {
           <!-- Messages -->
           <div
             v-for="message in messages"
+            :id="`msg-${message.id}`"
             :key="message.id"
             :class="[
-              'flex gap-3',
+              'flex gap-3 rounded-lg transition-shadow duration-500',
               message.role === 'user' ? 'justify-end' : 'justify-start'
             ]"
           >
@@ -1424,6 +1451,7 @@ watch(sessions, (newSessions) => {
         :branches="branchTree"
         :session-id="currentSessionId || ''"
         @switch="onBranchSwitch"
+        @scroll-to="onBranchScrollTo"
         @close="showBranchTree = false"
       />
 

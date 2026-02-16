@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'click-node': [messageId: string]
+  'scroll-to': [messageId: string]
 }>()
 
 function roleColor(role: string, isActive: boolean): string {
@@ -21,13 +22,19 @@ function roleColor(role: string, isActive: boolean): string {
 }
 
 function onClick() {
-  if (!props.node.is_active) {
+  if (props.node.is_active) {
+    emit('scroll-to', props.node.id)
+  } else {
     emit('click-node', props.node.id)
   }
 }
 
 function onChildClick(messageId: string) {
   emit('click-node', messageId)
+}
+
+function onChildScrollTo(messageId: string) {
+  emit('scroll-to', messageId)
 }
 </script>
 
@@ -64,6 +71,7 @@ function onChildClick(messageId: string) {
         :node="child"
         :depth="node.children.length > 1 ? depth + 1 : depth"
         @click-node="onChildClick"
+        @scroll-to="onChildScrollTo"
       />
     </div>
   </div>

@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   switch: [messageId: string]
+  'scroll-to': [messageId: string]
   close: []
 }>()
 
@@ -18,6 +19,10 @@ const { t } = useI18n()
 
 function handleClick(messageId: string) {
   emit('switch', messageId)
+}
+
+function handleScrollTo(messageId: string) {
+  emit('scroll-to', messageId)
 }
 </script>
 
@@ -43,6 +48,7 @@ function handleClick(messageId: string) {
         :node="root"
         :depth="0"
         @click-node="handleClick"
+        @scroll-to="handleScrollTo"
       />
     </div>
     <div v-else class="p-4 text-center text-xs text-muted-foreground">
