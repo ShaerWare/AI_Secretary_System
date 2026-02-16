@@ -27,6 +27,7 @@ from db.repositories.config import ConfigRepository
 from db.repositories.consent import ConsentRepository
 from db.repositories.faq import FAQRepository
 from db.repositories.gsm import GSMCallLogRepository, GSMSMSLogRepository
+from db.repositories.knowledge_collection import KnowledgeCollectionRepository
 from db.repositories.knowledge_document import KnowledgeDocumentRepository
 from db.repositories.payment import PaymentRepository
 from db.repositories.preset import PresetRepository
@@ -63,6 +64,7 @@ __all__ = [
     "FAQRepository",
     "GSMCallLogRepository",
     "GSMSMSLogRepository",
+    "KnowledgeCollectionRepository",
     "KnowledgeDocumentRepository",
     "PaymentRepository",
     "PresetRepository",

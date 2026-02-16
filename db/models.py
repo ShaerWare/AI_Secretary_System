@@ -14,6 +14,7 @@ Tables:
 - widget_instances: Website widget instances with individual configs
 - whatsapp_instances: WhatsApp bot instances with individual configs
 - cloud_llm_providers: Cloud LLM provider configurations (Gemini, Kimi, OpenAI, etc.)
+- knowledge_collections: Knowledge base collections (document containers)
 - knowledge_documents: Knowledge base document tracking (wiki-pages/)
 
 amoCRM tables:
@@ -2116,6 +2117,42 @@ class GSMSMSLog(Base):
 # ============== Knowledge Base ==============
 
 
+class KnowledgeCollection(Base):
+    """Knowledge base collection (container for documents)."""
+
+    __tablename__ = "knowledge_collections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    documents: Mapped[list["KnowledgeDocument"]] = relationship(
+        "KnowledgeDocument", back_populates="collection", lazy="noload"
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slug": self.slug,
+            "description": self.description,
+            "enabled": self.enabled,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
 class KnowledgeDocument(Base):
     """Knowledge base document tracked in wiki-pages/."""
 
@@ -2127,6 +2164,9 @@ class KnowledgeDocument(Base):
     source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, import, wiki
     file_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     section_count: Mapped[int] = mapped_column(Integer, default=0)
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True, index=True
+    )
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )
@@ -2140,6 +2180,10 @@ class KnowledgeDocument(Base):
         server_default=text("CURRENT_TIMESTAMP"),
     )
 
+    collection: Mapped[Optional["KnowledgeCollection"]] = relationship(
+        "KnowledgeCollection", back_populates="documents"
+    )
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -2148,6 +2192,7 @@ class KnowledgeDocument(Base):
             "source_type": self.source_type,
             "file_size_bytes": self.file_size_bytes,
             "section_count": self.section_count,
+            "collection_id": self.collection_id,
             "owner_id": self.owner_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,

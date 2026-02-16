@@ -147,6 +147,18 @@ class WikiSection:
     tokens: Counter = field(default_factory=Counter)
 
 
+@dataclass
+class CollectionIndex:
+    """BM25 index for a single knowledge collection."""
+
+    collection_id: int
+    sections: list[WikiSection]
+    doc_freqs: Counter
+    avg_dl: float
+    total_docs: int
+    files_indexed: int
+
+
 class WikiRAGService:
     """Retrieves relevant wiki sections via embeddings (primary) or BM25 (fallback)."""
 
@@ -156,6 +168,9 @@ class WikiRAGService:
         self.avg_dl: float = 0.0
         self.total_docs: int = 0
         self._files_indexed: int = 0
+
+        # Per-collection indexes (collection_id → CollectionIndex)
+        self._collection_indexes: dict[int, CollectionIndex] = {}
 
         # Embedding search state
         self._embedding_provider: Optional[BaseEmbeddingProvider] = None
@@ -261,6 +276,107 @@ class WikiRAGService:
             idf = math.log((self.total_docs - df + 0.5) / (df + 0.5) + 1.0)
             tf_norm = (tf * (BM25_K1 + 1)) / (
                 tf + BM25_K1 * (1 - BM25_B + BM25_B * doc_len / self.avg_dl)
+            )
+            score += idf * tf_norm
+        return score
+
+    # ---- Collection index methods ----
+
+    def load_collection(
+        self, collection_id: int, filenames: list[str], wiki_dir: Path
+    ) -> CollectionIndex:
+        """Build BM25 index for a specific collection's files."""
+        sections: list[WikiSection] = []
+        doc_freqs: Counter = Counter()
+        total_tokens = 0
+        files_processed = 0
+
+        for fname in filenames:
+            md_file = wiki_dir / fname
+            if not md_file.exists() or md_file.name.startswith("_"):
+                continue
+
+            try:
+                content = md_file.read_text(encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Wiki RAG collection {collection_id}: can't read {fname}: {e}")
+                continue
+
+            raw_sections = self._split_md_by_headers(content)
+            files_processed += 1
+
+            for title, body in raw_sections:
+                body_stripped = body.strip()
+                if len(body_stripped) < 50:
+                    continue
+
+                text = f"{title} {title} {title} {title} {body_stripped}"
+                tokens = Counter(self._tokenize(text))
+
+                section = WikiSection(
+                    title=title,
+                    body=body_stripped,
+                    source_file=md_file.stem,
+                    tokens=tokens,
+                )
+                sections.append(section)
+
+                for token in tokens:
+                    doc_freqs[token] += 1
+                total_tokens += sum(tokens.values())
+
+        total_docs = len(sections)
+        avg_dl = total_tokens / total_docs if total_docs > 0 else 1.0
+
+        idx = CollectionIndex(
+            collection_id=collection_id,
+            sections=sections,
+            doc_freqs=doc_freqs,
+            avg_dl=avg_dl,
+            total_docs=total_docs,
+            files_indexed=files_processed,
+        )
+        self._collection_indexes[collection_id] = idx
+
+        logger.info(
+            f"📚 Wiki RAG collection {collection_id}: "
+            f"{total_docs} секций из {files_processed} файлов"
+        )
+        return idx
+
+    def unload_collection(self, collection_id: int) -> bool:
+        """Remove a collection index from memory."""
+        if collection_id in self._collection_indexes:
+            del self._collection_indexes[collection_id]
+            return True
+        return False
+
+    def reload_collection(
+        self, collection_id: int, filenames: list[str], wiki_dir: Path
+    ) -> CollectionIndex:
+        """Re-index a specific collection."""
+        self.unload_collection(collection_id)
+        return self.load_collection(collection_id, filenames, wiki_dir)
+
+    def _bm25_score_with_index(
+        self,
+        query_tokens: list[str],
+        section: WikiSection,
+        doc_freqs: Counter,
+        total_docs: int,
+        avg_dl: float,
+    ) -> float:
+        """Compute BM25 Okapi score using a specific index's stats."""
+        score = 0.0
+        doc_len = sum(section.tokens.values())
+        for token in query_tokens:
+            if token not in section.tokens:
+                continue
+            tf = section.tokens[token]
+            df = doc_freqs.get(token, 0)
+            idf = math.log((total_docs - df + 0.5) / (df + 0.5) + 1.0)
+            tf_norm = (tf * (BM25_K1 + 1)) / (
+                tf + BM25_K1 * (1 - BM25_B + BM25_B * doc_len / avg_dl)
             )
             score += idf * tf_norm
         return score
@@ -419,18 +535,42 @@ class WikiRAGService:
         """True if we have both a provider and cached embeddings."""
         return bool(self._embedding_provider and self._embeddings)
 
-    def retrieve(self, query: str, top_k: int = 3, max_chars: int = 2500) -> str:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 3,
+        max_chars: int = 2500,
+        collection_id: Optional[int] = None,
+    ) -> str:
         """
         Find top_k relevant sections for query.
+
+        When collection_id is given and loaded, searches that collection's index.
+        Otherwise searches the global index (backward compatible).
 
         Tries embedding search first, falls back to BM25.
         Returns formatted markdown context string, or empty string if no match.
         """
-        if not self.sections or not query.strip():
+        # Determine which sections/index to search
+        if collection_id is not None and collection_id in self._collection_indexes:
+            cidx = self._collection_indexes[collection_id]
+            sections = cidx.sections
+            doc_freqs = cidx.doc_freqs
+            total_docs = cidx.total_docs
+            avg_dl = cidx.avg_dl
+        else:
+            sections = self.sections
+            doc_freqs = self.doc_freqs
+            total_docs = self.total_docs
+            avg_dl = self.avg_dl
+
+        if not sections or not query.strip():
             return ""
 
-        # Try embedding search first
-        top_sections = self._embedding_search(query, top_k) if self.embeddings_available else []
+        # Try embedding search first (global index only — collection embeddings not implemented)
+        top_sections: list[tuple[float, WikiSection]] = []
+        if collection_id is None and self.embeddings_available:
+            top_sections = self._embedding_search(query, top_k)
 
         # Fallback to BM25
         if not top_sections:
@@ -439,8 +579,10 @@ class WikiRAGService:
                 return ""
 
             scored: list[tuple[float, WikiSection]] = []
-            for section in self.sections:
-                score = self._bm25_score(query_tokens, section)
+            for section in sections:
+                score = self._bm25_score_with_index(
+                    query_tokens, section, doc_freqs, total_docs, avg_dl
+                )
                 if score >= MIN_SCORE:
                     scored.append((score, section))
 
@@ -488,16 +630,34 @@ class WikiRAGService:
             result["embeddings"] = emb_result
         return result
 
-    def search(self, query: str, top_k: int = 3) -> list[dict]:
+    def search(
+        self, query: str, top_k: int = 3, collection_id: Optional[int] = None
+    ) -> list[dict]:
         """Structured search results with scores (for API/UI).
 
+        When collection_id is given and loaded, searches that collection's index.
         Tries embedding search first, falls back to BM25.
         """
-        if not self.sections or not query.strip():
+        # Determine which sections/index to search
+        if collection_id is not None and collection_id in self._collection_indexes:
+            cidx = self._collection_indexes[collection_id]
+            sections = cidx.sections
+            doc_freqs = cidx.doc_freqs
+            total_docs = cidx.total_docs
+            avg_dl = cidx.avg_dl
+        else:
+            sections = self.sections
+            doc_freqs = self.doc_freqs
+            total_docs = self.total_docs
+            avg_dl = self.avg_dl
+
+        if not sections or not query.strip():
             return []
 
-        # Try embedding search first
-        scored = self._embedding_search(query, top_k) if self.embeddings_available else []
+        # Try embedding search first (global index only)
+        scored: list[tuple[float, WikiSection]] = []
+        if collection_id is None and self.embeddings_available:
+            scored = self._embedding_search(query, top_k)
         search_engine = "embeddings" if scored else "bm25"
 
         # Fallback to BM25
@@ -506,8 +666,10 @@ class WikiRAGService:
             if not query_tokens:
                 return []
 
-            for section in self.sections:
-                score = self._bm25_score(query_tokens, section)
+            for section in sections:
+                score = self._bm25_score_with_index(
+                    query_tokens, section, doc_freqs, total_docs, avg_dl
+                )
                 if score >= MIN_SCORE:
                     scored.append((score, section))
 
@@ -539,6 +701,15 @@ class WikiRAGService:
         embedding_engine = None
         if self._embedding_provider:
             embedding_engine = self._embedding_provider.provider_name()
+
+        collection_stats = {}
+        for cid, cidx in self._collection_indexes.items():
+            collection_stats[str(cid)] = {
+                "sections_indexed": cidx.total_docs,
+                "files_indexed": cidx.files_indexed,
+                "unique_tokens": len(cidx.doc_freqs),
+            }
+
         return {
             "engine": "embeddings+bm25" if self._embeddings else "bm25",
             "embedding_engine": embedding_engine,
@@ -548,4 +719,5 @@ class WikiRAGService:
             "unique_tokens": len(self.doc_freqs),
             "avg_doc_length": round(self.avg_dl, 1),
             "available": len(self.sections) > 0,
+            "collections": collection_stats,
         }

@@ -50,25 +50,13 @@ python scripts/manage_users.py delete <user>                 # Delete user
 
 ### Database Migrations
 
+Manual scripts in `scripts/migrate_*.py` (no Alembic). New tables are auto-created by `Base.metadata.create_all` on startup; **schema changes to existing tables need migration scripts**. Seed scripts: `scripts/seed_*.py`.
+
 ```bash
-python scripts/migrate_json_to_db.py         # Initial JSON → SQLite migration
-python scripts/migrate_to_instances.py       # Multi-instance bot/widget architecture
-python scripts/migrate_users.py              # Create users table, seed admin + demo
-python scripts/migrate_user_ownership.py     # Add owner_id to resource tables
-python scripts/migrate_persona_rename.py     # Persona name migration (Гуля→Анна, Лидия→Марина)
-python scripts/migrate_gsm_tables.py         # GSM call/SMS log tables
-python scripts/migrate_amocrm.py             # amoCRM config tables
-python scripts/migrate_sales_bot.py          # Sales funnel tables
-python scripts/migrate_add_payment_fields.py # Payment fields for sales
-python scripts/migrate_legal_compliance.py   # Legal compliance tables
-python scripts/migrate_gemini_to_cloud.py    # Migrate standalone gemini backend to cloud provider
-python scripts/migrate_knowledge_base.py     # Knowledge base documents table (wiki-pages/ tracking)
-python scripts/migrate_widget_placeholder_style.py  # Widget placeholder style migration
-python scripts/migrate_rate_limit.py             # Per-instance rate limiting for bots/widgets
-python scripts/migrate_whatsapp.py               # WhatsApp bot instances table
-python scripts/migrate_chat_branches.py          # Chat message branching (parent_id, is_active)
-python scripts/seed_tz_generator.py          # Seed TZ generator bot data
-python scripts/seed_tz_widget.py             # Seed TZ widget data
+ls scripts/migrate_*.py                     # List all available migrations
+python scripts/migrate_json_to_db.py        # Initial JSON → SQLite migration (first-time)
+python scripts/migrate_<feature>.py         # Run specific migration after adding new columns/tables
+python scripts/seed_tz_generator.py         # Seed TZ generator bot data
 ```
 
 ### Lint & Format
@@ -201,7 +189,9 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Cloud LLM routing**: `cloud_llm_service.py` (project root) has `CloudLLMService` with a factory pattern. OpenAI-compatible providers use `OpenAICompatibleProvider` automatically. Custom SDKs (Gemini) get their own provider class inheriting `BaseLLMProvider`. Provider types defined in `PROVIDER_TYPES` dict in `db/models.py`. The standalone `gemini` backend (`llm_service.py`) is deprecated — all cloud LLM is now routed via `CloudLLMService`. Legacy `LLM_BACKEND=gemini` is auto-migrated to `cloud:{provider_id}` on startup (auto-creates a Gemini provider from `GEMINI_API_KEY` env if needed). Migration script: `scripts/migrate_gemini_to_cloud.py`.
 
-**Wiki RAG & Knowledge Base**: `app/services/wiki_rag_service.py` — tiered search over `wiki-pages/*.md`: (1) semantic embeddings via `app/services/embedding_provider.py` (Gemini, OpenAI-compatible, or local `sentence-transformers`) with cosine similarity, (2) BM25 Okapi with Russian/English stemming (`snowballstemmer`) as fallback. Embedding provider is auto-selected on startup: local (DEPLOYMENT_MODE=full + sentence-transformers installed) → cloud (from active LLM provider's API key) → BM25-only. Embeddings cached in `data/wiki_embeddings.json`. BM25 parameters: k1=1.5, b=0.75, MIN_SCORE=0.5. Title boost 4x. Initialized in `orchestrator.py` startup, stored in `ServiceContainer.wiki_rag_service`. `app/routers/wiki_rag.py` exposes admin API: stats, reload, search, reindex-embeddings, and Knowledge Base document CRUD (upload/edit/delete `.md`/`.txt` files). Documents tracked in `knowledge_documents` table (`KnowledgeDocument` model), managed via `AsyncKnowledgeDocManager` in `db/integration.py`. Existing `wiki-pages/*.md` auto-synced to DB on first request. Admin UI: Finetune → LLM → Cloud AI toggle (wiki stats, knowledge base table, test search). Migration: `scripts/migrate_knowledge_base.py`.
+**Wiki RAG & Knowledge Base**: `app/services/wiki_rag_service.py` — tiered search over `wiki-pages/*.md`: (1) semantic embeddings via `app/services/embedding_provider.py` (Gemini, OpenAI-compatible, or local `sentence-transformers`) with cosine similarity, (2) BM25 Okapi with Russian/English stemming (`snowballstemmer`) as fallback. Embedding provider is auto-selected on startup: local (DEPLOYMENT_MODE=full + sentence-transformers installed) → cloud (from active LLM provider's API key) → BM25-only. Embeddings cached in `data/wiki_embeddings.json`. BM25 parameters: k1=1.5, b=0.75, MIN_SCORE=0.5. Title boost 4x. Initialized in `orchestrator.py` startup, stored in `ServiceContainer.wiki_rag_service`. `app/routers/wiki_rag.py` exposes admin API: stats, reload, search, reindex-embeddings, Knowledge Base document CRUD, and collection management. Documents tracked in `knowledge_documents` table (`KnowledgeDocument` model), managed via `AsyncKnowledgeDocManager` in `db/integration.py`. Existing `wiki-pages/*.md` auto-synced to DB on first request. Admin UI: Finetune → LLM → Cloud AI toggle (wiki stats, collections panel, knowledge base table, test search). Migrations: `scripts/migrate_knowledge_base.py`, `scripts/migrate_knowledge_collections.py`.
+
+**Knowledge Collections** (Phase 1): Multiple knowledge base containers for grouping documents. `KnowledgeCollection` model (`knowledge_collections` table) with name, slug, description, enabled fields. Each `KnowledgeDocument` has an optional `collection_id` FK. A "Default" collection is auto-created and all existing docs are assigned to it. `KnowledgeCollectionRepository` in `db/repositories/knowledge_collection.py`, `AsyncKnowledgeCollectionManager` in `db/integration.py`. `WikiRAGService` maintains per-collection BM25 indexes (`CollectionIndex` dataclass, `_collection_indexes` dict) loaded at startup via `_load_collection_indexes()` in `orchestrator.py`. `retrieve()` and `search()` accept optional `collection_id` — when given, searches the collection's index; when `None`, searches the global index (backward compatible). API: 6 collection endpoints (`GET/POST/GET/{id}/PUT/{id}/DELETE/{id}/POST/{id}/reload` under `/admin/wiki-rag/collections`), plus `collection_id` query/form param on existing document and search endpoints. Default collection cannot be deleted. Frontend: pill-shaped collection selector in Finetune → Cloud AI, inline create form, documents table filtered by selected collection. Phase 2 (future): link `collection_id` to BotInstance/WidgetInstance/LLMPreset for per-context RAG.
 
 **amoCRM integration**: `app/services/amocrm_service.py` is a pure async HTTP client (no DB) with optional proxy support (`AMOCRM_PROXY` env var for Docker/VPN environments). `app/routers/amocrm.py` handles OAuth2 flow, token auto-refresh, and proxies API calls. Config/tokens stored via `AsyncAmoCRMManager` in `db/integration.py`. Webhook at `POST /webhooks/amocrm`. For private amoCRM integrations, auth codes are obtained from the integration settings (not OAuth redirect). If Docker can't reach amoCRM (VPN on host), run `scripts/amocrm_proxy.py` on the host.
 
@@ -242,7 +232,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Chat branching** (OpenWebUI-style): Non-destructive message editing and response regeneration. `ChatMessage` has `parent_id` (self-referential FK) and `is_active` (boolean) fields. Editing a message creates a new sibling branch; regenerating creates a new assistant child. Old versions preserved with `is_active=False`. `ChatRepository` methods: `edit_message()` (non-destructive), `branch_regenerate()`, `get_branch_tree()`, `get_sibling_info()`, `switch_branch()`, `get_active_messages()`. API endpoints: `GET /sessions/{id}/branches` (tree structure), `POST /sessions/{id}/branches/switch` (change active path). Frontend: `BranchTree.vue` + `BranchTreeNode.vue` — recursive tree panel on right side of chat. Messages with siblings show inline version navigation `< 1/3 >`. Migration: `scripts/migrate_chat_branches.py`.
 
-**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD), `github_webhook.py` (GitHub CI/CD webhook handler).
+**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler).
 
 ## Code Patterns
 
@@ -314,10 +304,34 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
 - **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete. Domain repos extend with custom queries.
-- **Admin panel**: Vue 3 + Composition API + TypeScript + Pinia (with `pinia-plugin-persistedstate`) + vue-i18n + TailwindCSS + radix-vue (headless UI) + @tanstack/vue-query (server state) + lucide-vue-next (icons) + chart.js/vue-chartjs. Path alias `@` → `admin/src/`. API layer: `admin/src/api/client.ts` provides shared `api.get/post/put/delete/upload` + `createSSE` helper (auto-injects JWT from `localStorage('admin_token')`); domain-specific files (`chat.ts`, `telegram.ts`, etc.) build on it. Composables in `admin/src/composables/` (`useSSE`, `useResponsive`, `useExportImport`, etc.).
-- **Vite base path** — Production: `/admin/` (served by FastAPI). Demo builds and server deploy: `/` (overridden via `VITE_BASE_PATH` env or `.env.production.local`). Demo mode: `npm run build -- --mode demo` loads `.env.demo` (`VITE_DEMO_MODE=true`).
+- **Admin panel** — See **Frontend Architecture** section below for full details (routing, stores, API layer, demo mode, components).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.
+
+## Frontend Architecture
+
+**Tech stack**: Vue 3 + Composition API + TypeScript, Vite, Pinia (persisted state), Vue Router (hash history), TanStack Vue Query, vue-i18n (ru/en), TailwindCSS + radix-vue, lucide-vue-next, chart.js/vue-chartjs. Path alias `@` → `admin/src/`.
+
+**Routing** (`admin/src/router.ts`): Single flat router with `createWebHashHistory`. Routes use rich `meta` fields for access control:
+- `meta.public` — bypass auth guard (only `/login`)
+- `meta.localOnly` — hidden in `DEPLOYMENT_MODE=cloud` (Dashboard, Services, TTS, Monitoring, Models, GSM)
+- `meta.excludeRoles` — per-role hiding (e.g. `['web']` hides Dashboard, Services, TTS, Audit, Usage from `web` role)
+- `meta.minRole` — minimum role required (`'user'` or `'admin'`)
+- Navigation guard redirects unauthorized users to `/chat` or `/login`
+
+**Stores** (`admin/src/stores/`): Pinia stores re-exported from `stores/index.ts`. Key store: `auth.ts` holds JWT token, decoded user (id, username, role), `deploymentMode` (`full|cloud|local`). Exposes `isAdmin`, `isWeb`, `isCloudMode`, `hasPermission()`, `can()`. UI state stores: `toast`, `confirm`, `search`, `theme` — decouple trigger sites from rendering.
+
+**API layer** (`admin/src/api/`): `client.ts` provides `api.get/post/put/delete/upload` + `createSSE()` helper (auto-injects JWT from `localStorage('admin_token')`). Domain-specific files (`chat.ts`, `telegram.ts`, `llm.ts`, etc.) build on it. All re-exported from `api/index.ts`. In demo mode, `client.ts` awaits `demoReady` promise before any API call.
+
+**Demo mode** (`admin/src/api/demo/`): Activated via `VITE_DEMO_MODE=true`. `setupDemoInterceptor()` monkey-patches `window.fetch` globally to intercept all `/admin/`, `/v1/`, `/health` requests. Routes through `matchDemoRoute()` — regex pattern matcher across 22 domain route files (each exports `DemoRoute[]`). Handlers return JSON data, `'__BLOB__'` (minimal WAV audio), or `'__STREAM__'` (SSE chunks). Adds 100–300ms artificial delay. Config: `VITE_DEMO_ROLE`, `VITE_DEMO_DEPLOYMENT_MODE` env vars.
+
+**Components** (`admin/src/components/`): Flat structure, no `ui/` subdirectory. UI state components (`ConfirmDialog`, `SearchPalette`, `ToastContainer`, `ThemeToggle`) driven by dedicated Pinia stores. `BranchTree.vue` / `BranchTreeNode.vue` for chat branching. `charts/` for Chart.js wrappers.
+
+**Composables** (`admin/src/composables/`): `useSSE`, `useResponsive`, `useExportImport`, etc.
+
+**i18n** (`admin/src/plugins/i18n.ts`): Single file with `ru` and `en` message objects. Add keys to both when adding translations.
+
+**Vite base path**: Production: `/admin/` (served by FastAPI). Demo builds and server deploy: `/` (overridden via `VITE_BASE_PATH` env or `.env.production.local`). Demo mode: `npm run build -- --mode demo` loads `.env.demo`.
 
 ## Server Deployment
 

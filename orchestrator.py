@@ -557,6 +557,26 @@ async def _build_wiki_embeddings(wiki_rag):
         logger.warning(f"⚠️ Wiki RAG embeddings build failed: {e}")
 
 
+async def _load_collection_indexes(wiki_rag):
+    """Background task: load per-collection BM25 indexes."""
+    try:
+        from db.integration import async_knowledge_collection_manager
+
+        collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
+        loaded = 0
+        for col in collections:
+            filenames = await async_knowledge_collection_manager.get_document_filenames(
+                col["id"]
+            )
+            if filenames:
+                wiki_rag.load_collection(col["id"], filenames, Path("wiki-pages"))
+                loaded += 1
+        if loaded:
+            logger.info(f"📚 Wiki RAG: загружено {loaded} коллекционных индексов")
+    except Exception as e:
+        logger.warning(f"⚠️ Wiki RAG collection indexes load failed: {e}")
+
+
 async def _auto_start_telegram_bots():
     """Auto-start Telegram bots that have auto_start=True."""
     from db.integration import async_bot_instance_manager
@@ -936,6 +956,9 @@ async def startup_event():
                 asyncio.get_event_loop().create_task(_build_wiki_embeddings(wiki_rag))
             else:
                 logger.info("📚 Wiki RAG: BM25 only (no embedding provider)")
+
+            # Load per-collection indexes in background
+            asyncio.get_event_loop().create_task(_load_collection_indexes(wiki_rag))
 
         except Exception as wiki_err:
             logger.warning(f"⚠️ Wiki RAG service not available: {wiki_err}")
