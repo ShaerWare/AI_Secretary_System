@@ -212,7 +212,9 @@ async def admin_send_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await async_chat_manager.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt)
+    )
 
     # Генерируем ответ
     try:
@@ -357,7 +359,9 @@ async def admin_stream_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await async_chat_manager.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt)
+    )
 
     async def generate_stream():
         full_response = []
@@ -438,7 +442,9 @@ async def admin_edit_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await async_chat_manager.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt)
+    )
 
     try:
         response_text = llm_service.generate_response_from_messages(messages, stream=False)
@@ -525,7 +531,9 @@ async def admin_regenerate_chat_response(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
-    llm_messages = await async_chat_manager.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    llm_messages = await async_chat_manager.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt)
+    )
 
     try:
         response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
