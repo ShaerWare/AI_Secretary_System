@@ -56,6 +56,7 @@ const currentSessionId = ref<string | null>(null)
 const inputMessage = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
+const pendingUserContent = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const showSettings = ref(false)
@@ -538,9 +539,11 @@ function sendMessage() {
   const content = inputMessage.value.trim()
   inputMessage.value = ''
 
-  // Use streaming
+  // Show user message immediately (optimistic)
+  pendingUserContent.value = content
   isStreaming.value = true
   streamingContent.value = ''
+  scrollToBottom()
 
   let fullContent = ''
   // Build LLM override if a specific backend is selected
@@ -553,6 +556,7 @@ function sendMessage() {
       scrollToBottom()
     } else if (data.type === 'done' || data.type === 'assistant_message') {
       isStreaming.value = false
+      pendingUserContent.value = null
       const responseText = fullContent || streamingContent.value
       streamingContent.value = ''
       refetchSession()
@@ -569,6 +573,7 @@ function sendMessage() {
       }
     } else if (data.type === 'error') {
       isStreaming.value = false
+      pendingUserContent.value = null
       streamingContent.value = ''
       console.error('Stream error:', data.content)
     }
@@ -1395,7 +1400,7 @@ watch(sessions, (newSessions) => {
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
           <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          Recording... Click mic to stop
+          {{ t('chatView.recording') }}
         </div>
       </div>
 
@@ -1409,7 +1414,7 @@ watch(sessions, (newSessions) => {
         <div v-if="!currentSession" class="h-full flex items-center justify-center text-muted-foreground">
           <div class="text-center">
             <MessageSquare class="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Select a chat or create a new one</p>
+            <p>{{ t('chatView.selectOrCreate') }}</p>
           </div>
         </div>
 
@@ -1564,6 +1569,16 @@ watch(sessions, (newSessions) => {
             </div>
           </div>
 
+          <!-- Optimistic user message (shown immediately before server confirms) -->
+          <div v-if="pendingUserContent" class="flex gap-3 justify-end">
+            <div class="max-w-[80%] rounded-lg p-3 bg-primary text-primary-foreground">
+              <div class="chat-markdown break-words" v-html="renderMarkdown(pendingUserContent)"></div>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+              <User class="w-4 h-4 text-primary-foreground" />
+            </div>
+          </div>
+
           <!-- Streaming response -->
           <div v-if="isStreaming && streamingContent" class="flex gap-3 justify-start">
             <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
@@ -1571,17 +1586,18 @@ watch(sessions, (newSessions) => {
             </div>
             <div class="max-w-[80%] rounded-lg p-3 bg-secondary">
               <div class="chat-markdown break-words" v-html="renderMarkdown(streamingContent)"></div>
-              <Loader2 class="w-4 h-4 animate-spin mt-2 text-muted-foreground" />
             </div>
           </div>
 
-          <!-- Loading indicator -->
+          <!-- Thinking indicator (waiting for first chunk) -->
           <div v-if="isStreaming && !streamingContent" class="flex gap-3 justify-start">
             <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
               <Bot class="w-4 h-4 text-primary" />
             </div>
-            <div class="rounded-lg p-3 bg-secondary">
-              <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
+            <div class="rounded-lg p-3 bg-secondary flex items-center gap-1.5">
+              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:0ms]"></span>
+              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:150ms]"></span>
+              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
             </div>
           </div>
         </template>
@@ -1618,7 +1634,7 @@ watch(sessions, (newSessions) => {
         <div class="p-3 border-b border-border flex items-center justify-between">
           <h3 class="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
             <Settings2 class="w-3.5 h-3.5" />
-            Настройки чата
+            {{ t('chatView.chatSettings') }}
           </h3>
           <button
             class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
@@ -1640,7 +1656,7 @@ watch(sessions, (newSessions) => {
             @click="settingsTab = 'session'"
           >
             <FileText class="w-3.5 h-3.5 inline mr-1" />
-            Промпт сессии
+            {{ t('chatView.sessionPrompt') }}
           </button>
           <button
             :class="[
@@ -1652,7 +1668,7 @@ watch(sessions, (newSessions) => {
             @click="settingsTab = 'files'"
           >
             <Paperclip class="w-3.5 h-3.5 inline mr-1" />
-            Файлы контекста
+            {{ t('chatView.contextFiles') }}
             <span v-if="contextFiles.length" class="ml-1 text-[10px] bg-primary/20 px-1 rounded-full">
               {{ contextFiles.length }}
             </span>
@@ -1664,7 +1680,7 @@ watch(sessions, (newSessions) => {
           <!-- Session Prompt Tab -->
           <div v-if="settingsTab === 'session'" class="flex flex-col flex-1 gap-3">
             <p class="text-xs text-muted-foreground">
-              Оставьте пустым, чтобы использовать промпт по умолчанию
+              {{ t('chatView.promptHint') }}
             </p>
 
             <!-- File attachment -->
@@ -1682,7 +1698,7 @@ watch(sessions, (newSessions) => {
                 @click="triggerFileUpload"
               >
                 <Paperclip class="w-3.5 h-3.5" />
-                Прикрепить .txt / .md
+                {{ t('chatView.attachTxtMd') }}
               </button>
               <div v-if="attachedFiles.length > 0" class="flex flex-wrap gap-1.5 mt-2">
                 <span
@@ -1703,7 +1719,7 @@ watch(sessions, (newSessions) => {
             <textarea
               v-model="customPrompt"
               class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm font-mono"
-              placeholder="Введите системный промпт..."
+              :placeholder="t('chatView.promptPlaceholder')"
             />
 
             <div class="flex justify-end gap-2">
@@ -1711,14 +1727,14 @@ watch(sessions, (newSessions) => {
                 class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                 @click="showSettings = false"
               >
-                Отмена
+                {{ t('chatView.cancel') }}
               </button>
               <button
                 :disabled="updateSessionMutation.isPending.value"
                 class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 @click="saveSettings"
               >
-                Сохранить
+                {{ t('chatView.save') }}
               </button>
             </div>
           </div>
@@ -1726,7 +1742,7 @@ watch(sessions, (newSessions) => {
           <!-- Context Files Tab -->
           <div v-if="settingsTab === 'files'" class="flex flex-col flex-1 gap-3">
             <p class="text-xs text-muted-foreground">
-              Содержимое файлов будет добавлено в системный промпт при каждом запросе к LLM
+              {{ t('chatView.contextFilesHint') }}
             </p>
 
             <!-- Hidden file input -->
@@ -1742,7 +1758,7 @@ watch(sessions, (newSessions) => {
             <!-- File list -->
             <div class="flex-1 overflow-y-auto space-y-2">
               <div v-if="contextFiles.length === 0" class="text-center py-8 text-muted-foreground text-sm">
-                Нет прикреплённых файлов
+                {{ t('chatView.noContextFiles') }}
               </div>
 
               <div
@@ -1755,19 +1771,19 @@ watch(sessions, (newSessions) => {
                   <input
                     v-model="editingFileName"
                     class="w-full px-2 py-1 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary mb-2"
-                    placeholder="Имя файла"
+                    :placeholder="t('chatView.fileName')"
                   />
                   <textarea
                     v-model="editingFileContent"
                     class="w-full min-h-[100px] p-2 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono"
-                    placeholder="Содержимое файла..."
+                    :placeholder="t('chatView.fileContent')"
                   />
                   <div class="flex justify-end gap-1.5 mt-2">
                     <button
                       class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors"
                       @click="cancelContextFileEdit"
                     >
-                      Отмена
+                      {{ t('chatView.cancel') }}
                     </button>
                     <button
                       class="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
@@ -1815,14 +1831,14 @@ watch(sessions, (newSessions) => {
                 @click="triggerContextFileUpload"
               >
                 <Paperclip class="w-3.5 h-3.5" />
-                Загрузить файл
+                {{ t('chatView.uploadFile') }}
               </button>
               <button
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                 @click="addEmptyContextFile"
               >
                 <Plus class="w-3.5 h-3.5" />
-                Пустой файл
+                {{ t('chatView.emptyFile') }}
               </button>
             </div>
 
@@ -1831,7 +1847,7 @@ watch(sessions, (newSessions) => {
                 class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                 @click="showSettings = false"
               >
-                Закрыть
+                {{ t('chatView.close') }}
               </button>
               <button
                 :disabled="saveContextFilesMutation.isPending.value"
@@ -1839,7 +1855,7 @@ watch(sessions, (newSessions) => {
                 @click="saveContextFiles"
               >
                 <Loader2 v-if="saveContextFilesMutation.isPending.value" class="w-4 h-4 inline mr-1 animate-spin" />
-                Сохранить
+                {{ t('chatView.save') }}
               </button>
             </div>
           </div>
