@@ -286,7 +286,9 @@ async def admin_get_chat_session(session_id: str, user: User = Depends(get_curre
     # Token usage info
     llm_service = get_container().llm_service
     model = _get_model_name(llm_service) if llm_service else "claude"
-    llm_messages = [{"role": m["role"], "content": m["content"]} for m in session.get("messages", [])]
+    llm_messages = [
+        {"role": m["role"], "content": m["content"]} for m in session.get("messages", [])
+    ]
     session["token_usage"] = _build_token_usage(llm_messages, model)
 
     return {"session": session}
