@@ -131,6 +131,13 @@ export const chatRoutes: DemoRoute[] = [
   },
   {
     method: 'POST',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/messages\/([^/]+)\/summarize$/,
+    handler: () => ({
+      summary: '# Итоги диалога\n\n## Основные темы\n- Обсуждение функциональности системы\n\n## Ключевые решения\n- Принято решение о реализации\n\n## Выводы\n- Задача выполнена успешно\n\n## Открытые вопросы\n- Нет',
+    }),
+  },
+  {
+    method: 'POST',
     pattern: /^\/admin\/chat\/sessions\/([^/]+)\/stream$/,
     handler: () => '__STREAM__',
   },

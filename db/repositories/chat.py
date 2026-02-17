@@ -592,6 +592,26 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         return messages
 
+    async def get_branch_path(self, session_id: str, message_id: str) -> List[dict]:
+        """Get ordered message path from root to a specific message (ancestor chain)."""
+        result = await self.session.execute(
+            select(ChatMessage).where(ChatMessage.session_id == session_id)
+        )
+        all_messages = result.scalars().all()
+        msg_map = {m.id: m for m in all_messages}
+
+        path = []
+        current_id: Optional[str] = message_id
+        while current_id:
+            msg = msg_map.get(current_id)
+            if not msg:
+                break
+            path.append(msg)
+            current_id = msg.parent_id
+
+        path.reverse()
+        return [{"role": m.role, "content": m.content} for m in path]
+
     async def get_session_count(self) -> int:
         """Get total number of sessions."""
         return await self.count()

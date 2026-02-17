@@ -57,6 +57,7 @@ const inputMessage = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const pendingUserContent = ref<string | null>(null)
+const summarizingMessageId = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const showSettings = ref(false)
@@ -367,6 +368,25 @@ const saveContextFilesMutation = useMutation({
     chatApi.updateSession(sessionId, { context_files: files }),
   onSuccess: () => {
     refetchSession()
+  },
+})
+
+const summarizeBranchMutation = useMutation({
+  mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
+    chatApi.summarizeBranch(sessionId, messageId),
+  onSuccess: (data) => {
+    const ts = new Date().toISOString().slice(0, 16).replace('T', '_')
+    contextFiles.value.push({ name: `summary_${ts}.md`, content: data.summary })
+    if (currentSessionId.value) {
+      saveContextFilesMutation.mutate({
+        sessionId: currentSessionId.value,
+        files: contextFiles.value,
+      })
+    }
+    summarizingMessageId.value = null
+  },
+  onError: () => {
+    summarizingMessageId.value = null
   },
 })
 
@@ -792,6 +812,15 @@ function saveContextFiles() {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
+}
+
+function summarizeBranch(messageId: string) {
+  if (!currentSessionId.value || summarizingMessageId.value) return
+  summarizingMessageId.value = messageId
+  summarizeBranchMutation.mutate({
+    sessionId: currentSessionId.value,
+    messageId,
+  })
 }
 
 // TTS functions
@@ -1531,6 +1560,15 @@ watch(sessions, (newSessions) => {
                     @click="copyToClipboard(message.content)"
                   >
                     <Copy class="w-3 h-3" />
+                  </button>
+                  <button
+                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    :title="t('chatView.summarizeBranch')"
+                    :disabled="summarizingMessageId !== null"
+                    @click.stop="summarizeBranch(message.id)"
+                  >
+                    <Loader2 v-if="summarizingMessageId === message.id" class="w-3 h-3 animate-spin" />
+                    <ListChecks v-else class="w-3 h-3" />
                   </button>
                   <button
                     v-if="message.role === 'user'"

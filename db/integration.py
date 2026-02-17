@@ -172,6 +172,12 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.list_sessions_grouped(owner_id=owner_id)
 
+    async def get_branch_path(self, session_id: str, message_id: str) -> List[dict]:
+        """Get ordered message path from root to a specific message."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.get_branch_path(session_id, message_id)
+
     async def add_message(
         self,
         session_id: str,

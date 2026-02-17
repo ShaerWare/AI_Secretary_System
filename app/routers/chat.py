@@ -577,6 +577,53 @@ async def admin_regenerate_chat_response(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== Summarize Endpoint ==============
+
+
+@router.post("/sessions/{session_id}/messages/{message_id}/summarize")
+async def admin_summarize_branch(
+    session_id: str, message_id: str, user: User = Depends(get_current_user)
+):
+    """Сгенерировать итоги ветки диалога и вернуть как markdown."""
+    container = get_container()
+    owner_id = None if user.role == "admin" else user.id
+    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    llm_service = container.llm_service
+    if not llm_service:
+        raise HTTPException(status_code=503, detail="LLM service not available")
+
+    # Get branch path from root to this message
+    branch_messages = await async_chat_manager.get_branch_path(session_id, message_id)
+    if not branch_messages:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Build LLM request with summarize instruction
+    summarize_prompt = (
+        "Проанализируй следующий диалог и создай структурированный markdown-документ с итогами. "
+        "Включи: основные темы, ключевые решения, выводы и открытые вопросы. "
+        "Пиши на языке диалога. Отвечай ТОЛЬКО markdown-документом без пояснений."
+    )
+    dialog_text = "\n\n".join(
+        f"**{m['role']}**: {m['content']}" for m in branch_messages
+    )
+    messages = [
+        {"role": "system", "content": _finalize_prompt(summarize_prompt)},
+        {"role": "user", "content": dialog_text},
+    ]
+
+    try:
+        response_text = llm_service.generate_response_from_messages(messages, stream=False)
+        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+            response_text = "".join(response_text)
+        return {"summary": response_text}
+    except Exception as e:
+        logger.error(f"❌ Summarize error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============== Branch Endpoints ==============
 
 

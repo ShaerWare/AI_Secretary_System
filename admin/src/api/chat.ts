@@ -111,6 +111,11 @@ export const chatApi = {
       `/admin/chat/sessions/${sessionId}/messages/${messageId}/regenerate`
     ),
 
+  summarizeBranch: (sessionId: string, messageId: string) =>
+    api.post<{ summary: string }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}/summarize`
+    ),
+
   // Branches
   getBranches: (sessionId: string) =>
     api.get<{ branches: BranchNode[] }>(`/admin/chat/sessions/${sessionId}/branches`),
