@@ -21,6 +21,7 @@ import {
   Phone,
 } from 'lucide-vue-next'
 import { whatsappInstancesApi, type WhatsAppInstance } from '@/api'
+import { wikiRagApi } from '@/api/wikiRag'
 import { useToastStore } from '@/stores/toast'
 
 const { t } = useI18n()
@@ -50,6 +51,8 @@ const formData = ref<Partial<WhatsAppInstance>>({
   webhook_port: 8003,
   llm_backend: 'vllm',
   system_prompt: '',
+  rag_mode: 'all',
+  knowledge_collection_id: null,
   tts_enabled: false,
   tts_engine: 'xtts',
   tts_voice: 'anna',
@@ -85,6 +88,12 @@ const { data: statusData } = useQuery({
 })
 
 const instanceStatus = computed(() => statusData.value?.status)
+
+const { data: collectionsData } = useQuery({
+  queryKey: ['knowledge-collections'],
+  queryFn: () => wikiRagApi.getCollections(),
+})
+const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
 
 const { data: logsData, refetch: refetchLogs } = useQuery({
   queryKey: ['whatsapp-logs', selectedInstanceId],
@@ -172,6 +181,8 @@ function openCreate() {
     webhook_port: 8003,
     llm_backend: 'vllm',
     system_prompt: '',
+    rag_mode: 'all',
+    knowledge_collection_id: null,
     tts_enabled: false,
     tts_engine: 'xtts',
     tts_voice: 'anna',
@@ -473,6 +484,15 @@ watch(instances, (val) => {
               <div class="text-sm bg-secondary/50 px-3 py-2 rounded-lg">{{ selectedInstance.llm_backend }}</div>
             </div>
             <div>
+              <label class="block text-sm font-medium mb-1">{{ t('whatsapp.ragMode') }}</label>
+              <div class="text-sm bg-secondary/50 px-3 py-2 rounded-lg">
+                {{ selectedInstance.rag_mode === 'none' ? t('whatsapp.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('whatsapp.ragModeCollection') : t('whatsapp.ragModeAll') }}
+                <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id">
+                  ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
+                </span>
+              </div>
+            </div>
+            <div>
               <label class="block text-sm font-medium mb-1">{{ t('whatsapp.systemPrompt') }}</label>
               <div class="text-sm bg-secondary/50 px-3 py-2 rounded-lg whitespace-pre-wrap min-h-[60px]">
                 {{ selectedInstance.system_prompt || t('whatsapp.systemPromptDefault') }}
@@ -613,6 +633,24 @@ watch(instances, (val) => {
               <div>
                 <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.llmBackend') }}</label>
                 <input v-model="formData.llm_backend" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" placeholder="vllm" />
+              </div>
+              <!-- RAG config -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.ragMode') }}</label>
+                  <select v-model="formData.rag_mode" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                    <option value="all">{{ t('whatsapp.ragModeAll') }}</option>
+                    <option value="collection">{{ t('whatsapp.ragModeCollection') }}</option>
+                    <option value="none">{{ t('whatsapp.ragModeNone') }}</option>
+                  </select>
+                </div>
+                <div v-if="formData.rag_mode === 'collection'">
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.ragCollection') }}</label>
+                  <select v-model="formData.knowledge_collection_id" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                    <option :value="null">—</option>
+                    <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
+                  </select>
+                </div>
               </div>
               <div class="mt-2">
                 <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.systemPrompt') }}</label>
