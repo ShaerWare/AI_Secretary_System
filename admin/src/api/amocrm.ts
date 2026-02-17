@@ -75,6 +75,39 @@ export interface AmoCRMLead {
   price: number
   pipeline_id: number
   status_id: number
+  responsible_user_id?: number
+  created_at?: number
+  updated_at?: number
+  closest_task_at?: number | null
+  _embedded?: {
+    contacts?: AmoCRMContact[]
+    tags?: { id: number; name: string }[]
+  }
+}
+
+export interface AmoCRMEvent {
+  id: string
+  type: string
+  entity_id: number
+  entity_type: string
+  created_at: number
+  value_after: unknown[]
+  value_before: unknown[]
+  account_id: number
+}
+
+export interface AmoCRMChat {
+  id: string
+  contact_id: number
+  created_at: number
+}
+
+export interface AmoCRMChatMessage {
+  id: string
+  timestamp: number
+  sender: { id: string; name: string }
+  receiver: { id: string; name: string }
+  message: { type: string; text?: string }
 }
 
 // ============== API ==============
@@ -87,18 +120,7 @@ export const amocrmApi = {
   getConfig: () =>
     api.get<{ config: AmoCRMConfig }>('/admin/crm/config'),
 
-  saveConfig: (data: {
-    subdomain?: string
-    client_id?: string
-    client_secret?: string
-    redirect_uri?: string
-    sync_contacts?: boolean
-    sync_leads?: boolean
-    sync_tasks?: boolean
-    auto_create_lead?: boolean
-    lead_pipeline_id?: number | null
-    lead_status_id?: number | null
-  }) =>
+  saveConfig: (data: Record<string, unknown>) =>
     api.post<{ status: string; config: AmoCRMConfig }>('/admin/crm/config', data),
 
   // OAuth
@@ -131,6 +153,15 @@ export const amocrmApi = {
     return api.get<{ _embedded: { leads: AmoCRMLead[] } }>(`/admin/crm/leads?${params}`)
   },
 
+  getLead: (id: number) =>
+    api.get<AmoCRMLead>(`/admin/crm/leads/${id}`),
+
+  updateLead: (id: number, data: Partial<AmoCRMLead>) =>
+    api.patch<AmoCRMLead>(`/admin/crm/leads/${id}`, data),
+
+  getLeadsByPipeline: (pipelineId: number) =>
+    api.get<{ _embedded: { leads: AmoCRMLead[] } }>(`/admin/crm/leads/by-pipeline/${pipelineId}`),
+
   createLead: (data: {
     name: string
     pipeline_id?: number
@@ -145,6 +176,26 @@ export const amocrmApi = {
   // Pipelines
   getPipelines: () =>
     api.get<{ _embedded: { pipelines: AmoCRMPipeline[] } }>('/admin/crm/pipelines'),
+
+  // Events
+  getEvents: (page = 1, limit = 50, types?: string) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (types) params.set('types', types)
+    return api.get<{ _embedded: { events: AmoCRMEvent[] } }>(`/admin/crm/events?${params}`)
+  },
+
+  // Contact chats
+  getContactChats: (contactId: number) =>
+    api.get<{ _embedded: { chats: AmoCRMChat[] } }>(`/admin/crm/contacts/${contactId}/chats`),
+
+  // Chat messaging (amojo)
+  getChatHistory: (chatId: string, limit = 50, offset = 0) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    return api.get<{ messages: AmoCRMChatMessage[] }>(`/admin/crm/chats/${chatId}/history?${params}`)
+  },
+
+  sendChatMessage: (chatId: string, text: string) =>
+    api.post<{ status: string }>(`/admin/crm/chats/${chatId}/messages`, { text }),
 
   // Sync
   sync: () =>

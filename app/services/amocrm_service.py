@@ -288,3 +288,197 @@ async def add_note_to_lead(
 async def get_pipelines(subdomain: str, access_token: str) -> dict:
     """Get sales pipelines with their statuses."""
     return await _api_request(subdomain, access_token, "GET", "leads/pipelines")
+
+
+async def get_lead(
+    subdomain: str,
+    access_token: str,
+    lead_id: int,
+    with_contacts: bool = False,
+) -> dict:
+    """Get single lead detail, optionally with embedded contacts."""
+    params: dict[str, Any] = {}
+    if with_contacts:
+        params["with"] = "contacts"
+    return await _api_request(
+        subdomain, access_token, "GET", f"leads/{lead_id}", params=params or None
+    )
+
+
+async def update_lead(
+    subdomain: str,
+    access_token: str,
+    lead_id: int,
+    data: dict,
+) -> dict:
+    """Update a lead (status_id, pipeline_id, name, price, etc.)."""
+    return await _api_request(subdomain, access_token, "PATCH", f"leads/{lead_id}", json_data=data)
+
+
+async def get_leads_by_pipeline(
+    subdomain: str,
+    access_token: str,
+    pipeline_id: int,
+    limit: int = 250,
+) -> dict:
+    """Get all leads in a specific pipeline (for kanban board)."""
+    params: dict[str, Any] = {
+        "filter[pipe]": pipeline_id,
+        "limit": limit,
+        "with": "contacts",
+    }
+    return await _api_request(subdomain, access_token, "GET", "leads", params=params)
+
+
+async def get_events(
+    subdomain: str,
+    access_token: str,
+    page: int = 1,
+    limit: int = 50,
+    event_types: Optional[str] = None,
+) -> dict:
+    """Get events feed (chat messages, lead changes, etc.)."""
+    params: dict[str, Any] = {"page": page, "limit": limit}
+    if event_types:
+        params["filter[type]"] = event_types
+    return await _api_request(subdomain, access_token, "GET", "events", params=params)
+
+
+async def get_contact_chats(
+    subdomain: str,
+    access_token: str,
+    contact_id: int,
+) -> dict:
+    """Get chats linked to a contact."""
+    return await _api_request(subdomain, access_token, "GET", f"contacts/{contact_id}/chats")
+
+
+# ============== Amojo (Chat Messaging) API ==============
+
+
+def _amojo_sign(
+    method: str,
+    content_type: str,
+    content_md5: str,
+    date_str: str,
+    path: str,
+    secret: str,
+) -> str:
+    """Create HMAC-SHA1 signature for amojo API requests."""
+    import hashlib
+    import hmac
+
+    string_to_sign = "\n".join([method.upper(), content_type, content_md5, date_str, path])
+    signature = hmac.new(
+        secret.encode("utf-8"),
+        string_to_sign.encode("utf-8"),
+        hashlib.sha1,
+    ).hexdigest()
+    return signature
+
+
+async def _amojo_request(
+    amojo_base_url: str,
+    scope_id: str,
+    channel_secret: str,
+    method: str,
+    path: str,
+    json_data: Optional[Any] = None,
+    params: Optional[dict] = None,
+) -> Any:
+    """Make a signed request to amojo API."""
+    import hashlib
+    import json
+    from email.utils import formatdate
+
+    url = f"{amojo_base_url.rstrip('/')}{path}"
+    date_str = formatdate(usegmt=True)
+
+    body_bytes = b""
+    content_type = ""
+    if json_data is not None:
+        body_bytes = json.dumps(json_data).encode("utf-8")
+        content_type = "application/json"
+
+    content_md5 = hashlib.md5(body_bytes).hexdigest() if body_bytes else ""
+
+    signature = _amojo_sign(
+        method.upper(), content_type, content_md5, date_str, path, channel_secret
+    )
+
+    headers = {
+        "Date": date_str,
+        "Content-Type": content_type or "application/json",
+        "X-Signature": signature,
+    }
+    if content_md5:
+        headers["Content-MD5"] = content_md5
+
+    async with _http_client(timeout=30.0) as client:
+        resp = await client.request(
+            method,
+            url,
+            headers=headers,
+            content=body_bytes if body_bytes else None,
+            params=params,
+        )
+
+    if resp.status_code >= 400:
+        logger.error(f"Amojo API error: {resp.status_code} {resp.text}")
+        raise AmoCRMAPIError(resp.status_code, resp.text)
+
+    if resp.status_code == 204:
+        return None
+
+    return resp.json()
+
+
+async def get_chat_history(
+    amojo_base_url: str,
+    scope_id: str,
+    channel_secret: str,
+    chat_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """Get chat message history via amojo API."""
+    path = f"/v2/origin/custom/{scope_id}/chats/{chat_id}/history"
+    params = {"limit": limit, "offset": offset}
+    return await _amojo_request(
+        amojo_base_url, scope_id, channel_secret, "GET", path, params=params
+    )
+
+
+async def send_chat_message(
+    amojo_base_url: str,
+    scope_id: str,
+    channel_secret: str,
+    chat_id: str,
+    sender_id: str,
+    sender_name: str,
+    text: str,
+) -> dict:
+    """Send a chat message via amojo API."""
+    import time
+    import uuid
+
+    path = f"/v2/origin/custom/{scope_id}"
+    payload = {
+        "event_type": "new_message",
+        "payload": {
+            "timestamp": int(time.time()),
+            "msgid": str(uuid.uuid4()),
+            "conversation_id": chat_id,
+            "sender": {
+                "id": sender_id,
+                "name": sender_name,
+            },
+            "message": {
+                "type": "text",
+                "text": text,
+            },
+        },
+    }
+    return await _amojo_request(
+        amojo_base_url, scope_id, channel_secret, "POST", path, json_data=payload
+    )

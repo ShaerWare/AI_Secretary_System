@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import {
@@ -14,13 +14,36 @@ import {
   X as XIcon,
   Save,
   ArrowDownUp,
-  Clock
+  Clock,
+  LayoutDashboard,
+  Table2,
+  MessageSquare,
 } from 'lucide-vue-next'
 import { amocrmApi } from '@/api/amocrm'
 import type { AmoCRMSyncLogEntry } from '@/api/amocrm'
+import CrmKanban from '@/components/CrmKanban.vue'
+import CrmDeals from '@/components/CrmDeals.vue'
+import CrmInbox from '@/components/CrmInbox.vue'
 
 const { t } = useI18n()
 const route = useRoute()
+
+// Tab management
+const activeTab = ref('settings')
+
+const tabs = computed(() => {
+  const list = [
+    { id: 'settings', label: t('crm.tabs.settings'), icon: Settings2 },
+  ]
+  if (isConnected.value) {
+    list.push(
+      { id: 'kanban', label: t('crm.tabs.kanban'), icon: LayoutDashboard },
+      { id: 'deals', label: t('crm.tabs.deals'), icon: Table2 },
+      { id: 'inbox', label: t('crm.tabs.inbox'), icon: MessageSquare },
+    )
+  }
+  return list
+})
 
 // amoCRM integration state
 const isConnected = ref(false)
@@ -40,7 +63,10 @@ const settings = ref({
   syncTasks: false,
   autoCreateLead: true,
   leadPipelineId: '',
-  leadStatusId: ''
+  leadStatusId: '',
+  amojoBaseUrl: 'https://amojo.amocrm.ru',
+  amojoScopeId: '',
+  amojoChannelSecret: '',
 })
 
 // Stats
@@ -68,22 +94,24 @@ const clientSecretSaved = ref(false)
 async function loadConfig() {
   try {
     const resp = await amocrmApi.getConfig()
-    const config = resp.config
+    const config = resp.config as unknown as Record<string, unknown>
     if (config && config.subdomain) {
-      settings.value.subdomain = config.subdomain || ''
-      settings.value.clientId = config.client_id || ''
-      settings.value.redirectUri = config.redirect_uri || window.location.origin + '/admin/crm/oauth-redirect'
-      settings.value.syncContacts = config.sync_contacts ?? true
-      settings.value.syncLeads = config.sync_leads ?? true
-      settings.value.syncTasks = config.sync_tasks ?? false
-      settings.value.autoCreateLead = config.auto_create_lead ?? true
+      settings.value.subdomain = (config.subdomain as string) || ''
+      settings.value.clientId = (config.client_id as string) || ''
+      settings.value.redirectUri = (config.redirect_uri as string) || window.location.origin + '/admin/crm/oauth-redirect'
+      settings.value.syncContacts = (config.sync_contacts as boolean) ?? true
+      settings.value.syncLeads = (config.sync_leads as boolean) ?? true
+      settings.value.syncTasks = (config.sync_tasks as boolean) ?? false
+      settings.value.autoCreateLead = (config.auto_create_lead as boolean) ?? true
       settings.value.leadPipelineId = config.lead_pipeline_id ? String(config.lead_pipeline_id) : ''
       settings.value.leadStatusId = config.lead_status_id ? String(config.lead_status_id) : ''
-      isConnected.value = config.is_connected || false
-      stats.value.contacts = config.contacts_count || 0
-      stats.value.leads = config.leads_count || 0
-      stats.value.lastSync = config.last_sync_at || null
-      accountInfo.value = config.account_info || {}
+      settings.value.amojoBaseUrl = (config.amojo_base_url as string) || 'https://amojo.amocrm.ru'
+      settings.value.amojoScopeId = (config.amojo_scope_id as string) || ''
+      isConnected.value = (config.is_connected as boolean) || false
+      stats.value.contacts = (config.contacts_count as number) || 0
+      stats.value.leads = (config.leads_count as number) || 0
+      stats.value.lastSync = (config.last_sync_at as string) || null
+      accountInfo.value = (config.account_info as Record<string, unknown>) || {}
       clientSecretSaved.value = !!config.client_secret_masked
     }
   } catch {
@@ -121,6 +149,7 @@ async function disconnectAmoCRM() {
     isConnected.value = false
     stats.value = { contacts: 0, leads: 0, lastSync: null }
     accountInfo.value = {}
+    activeTab.value = 'settings'
   } catch {
     showToast(t('crm.connectionFail'), 'error')
   }
@@ -154,10 +183,15 @@ async function saveSettings() {
       auto_create_lead: settings.value.autoCreateLead,
       lead_pipeline_id: settings.value.leadPipelineId ? Number(settings.value.leadPipelineId) : null,
       lead_status_id: settings.value.leadStatusId ? Number(settings.value.leadStatusId) : null,
+      amojo_base_url: settings.value.amojoBaseUrl,
+      amojo_scope_id: settings.value.amojoScopeId || null,
     }
-    // Only send secret if user entered a new one
+    // Only send secrets if user entered new ones
     if (settings.value.clientSecret) {
       data.client_secret = settings.value.clientSecret
+    }
+    if (settings.value.amojoChannelSecret) {
+      data.amojo_channel_secret = settings.value.amojoChannelSecret
     }
     await amocrmApi.saveConfig(data)
     showToast(t('crm.settingsSaved'))
@@ -211,6 +245,11 @@ onMounted(async () => {
   } else if (query.error) {
     showToast(String(query.error), 'error')
   }
+
+  // Default to kanban tab if connected
+  if (isConnected.value) {
+    activeTab.value = 'kanban'
+  }
 })
 </script>
 
@@ -242,261 +281,331 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Connection Status Card -->
-    <div class="card p-6">
-      <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
-          <Building2 class="w-8 h-8 text-blue-500" />
-          <div>
-            <h2 class="text-lg font-semibold">amoCRM</h2>
-            <p class="text-sm text-muted-foreground">{{ t('crm.amoDescription') }}</p>
+    <!-- Tab Bar -->
+    <div class="flex gap-1 border-b border-border">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        :class="[
+          'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
+          activeTab === tab.id
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+        ]"
+        @click="activeTab = tab.id"
+      >
+        <component :is="tab.icon" class="w-4 h-4" />
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- Tab Content: Settings -->
+    <div v-if="activeTab === 'settings'">
+      <!-- Connection Status Card -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <Building2 class="w-8 h-8 text-blue-500" />
+            <div>
+              <h2 class="text-lg font-semibold">amoCRM</h2>
+              <p class="text-sm text-muted-foreground">{{ t('crm.amoDescription') }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span
+              :class="[
+                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
+                isConnected
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-yellow-500/20 text-yellow-400'
+              ]"
+            >
+              <span :class="['w-2 h-2 rounded-full', isConnected ? 'bg-green-400' : 'bg-yellow-400']" />
+              {{ isConnected ? t('crm.connected') : t('crm.notConnected') }}
+            </span>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span
-            :class="[
-              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
-              isConnected
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-yellow-500/20 text-yellow-400'
-            ]"
-          >
-            <span :class="['w-2 h-2 rounded-full', isConnected ? 'bg-green-400' : 'bg-yellow-400']" />
-            {{ isConnected ? t('crm.connected') : t('crm.notConnected') }}
-          </span>
-        </div>
-      </div>
 
-      <!-- Setup hint (only when not connected) -->
-      <div v-if="!isConnected" class="p-4 rounded-lg bg-secondary/50 border border-border mb-6">
-        <div class="flex gap-3">
-          <AlertCircle class="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-          <div>
-            <p class="text-sm font-medium">{{ t('crm.setupRequired') }}</p>
-            <p class="text-sm text-muted-foreground mt-1">{{ t('crm.setupDescription') }}</p>
+        <!-- Setup hint (only when not connected) -->
+        <div v-if="!isConnected" class="p-4 rounded-lg bg-secondary/50 border border-border mb-6">
+          <div class="flex gap-3">
+            <AlertCircle class="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+            <div>
+              <p class="text-sm font-medium">{{ t('crm.setupRequired') }}</p>
+              <p class="text-sm text-muted-foreground mt-1">{{ t('crm.setupDescription') }}</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Account Info (when connected) -->
-      <div v-if="isConnected && accountInfo.name" class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-4">
-        <div class="text-sm">
-          <span class="text-muted-foreground">{{ t('crm.accountName') }}:</span>
-          <span class="ml-2 font-medium">{{ accountInfo.name }}</span>
+        <!-- Account Info (when connected) -->
+        <div v-if="isConnected && accountInfo.name" class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-4">
+          <div class="text-sm">
+            <span class="text-muted-foreground">{{ t('crm.accountName') }}:</span>
+            <span class="ml-2 font-medium">{{ accountInfo.name }}</span>
+          </div>
         </div>
-      </div>
 
-      <!-- Stats (when connected) -->
-      <div v-if="isConnected" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="p-4 rounded-lg bg-secondary/50">
-          <div class="text-2xl font-bold">{{ stats.contacts }}</div>
-          <div class="text-sm text-muted-foreground">{{ t('crm.contacts') }}</div>
+        <!-- Stats (when connected) -->
+        <div v-if="isConnected" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div class="p-4 rounded-lg bg-secondary/50">
+            <div class="text-2xl font-bold">{{ stats.contacts }}</div>
+            <div class="text-sm text-muted-foreground">{{ t('crm.contacts') }}</div>
+          </div>
+          <div class="p-4 rounded-lg bg-secondary/50">
+            <div class="text-2xl font-bold">{{ stats.leads }}</div>
+            <div class="text-sm text-muted-foreground">{{ t('crm.leads') }}</div>
+          </div>
+          <div class="p-4 rounded-lg bg-secondary/50">
+            <div class="text-sm text-muted-foreground">{{ t('crm.lastSync') }}</div>
+            <div class="text-sm font-medium">{{ stats.lastSync ? formatDate(stats.lastSync) : t('crm.never') }}</div>
+          </div>
         </div>
-        <div class="p-4 rounded-lg bg-secondary/50">
-          <div class="text-2xl font-bold">{{ stats.leads }}</div>
-          <div class="text-sm text-muted-foreground">{{ t('crm.leads') }}</div>
-        </div>
-        <div class="p-4 rounded-lg bg-secondary/50">
-          <div class="text-sm text-muted-foreground">{{ t('crm.lastSync') }}</div>
-          <div class="text-sm font-medium">{{ stats.lastSync ? formatDate(stats.lastSync) : t('crm.never') }}</div>
-        </div>
-      </div>
 
-      <!-- Credentials Form (always visible) -->
-      <div class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium mb-1.5">{{ t('crm.subdomain') }}</label>
-            <div class="flex">
+        <!-- Credentials Form (always visible) -->
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1.5">{{ t('crm.subdomain') }}</label>
+              <div class="flex">
+                <input
+                  v-model="settings.subdomain"
+                  type="text"
+                  placeholder="your-company"
+                  class="input rounded-r-none flex-1"
+                />
+                <span class="inline-flex items-center px-3 bg-secondary border border-l-0 border-border rounded-r-lg text-sm text-muted-foreground">
+                  .amocrm.ru
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-1.5">{{ t('crm.clientId') }}</label>
               <input
-                v-model="settings.subdomain"
+                v-model="settings.clientId"
                 type="text"
-                placeholder="your-company"
-                class="input rounded-r-none flex-1"
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                class="input w-full"
               />
-              <span class="inline-flex items-center px-3 bg-secondary border border-l-0 border-border rounded-r-lg text-sm text-muted-foreground">
-                .amocrm.ru
-              </span>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-1.5">{{ t('crm.clientSecret') }}</label>
+              <input
+                v-model="settings.clientSecret"
+                type="password"
+                :placeholder="clientSecretSaved ? '••••••• (saved)' : '...'"
+                class="input w-full"
+              />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-1.5">{{ t('crm.redirectUri') }}</label>
+              <input
+                v-model="settings.redirectUri"
+                type="text"
+                readonly
+                class="input w-full bg-secondary/50 cursor-not-allowed"
+              />
             </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium mb-1.5">{{ t('crm.clientId') }}</label>
-            <input
-              v-model="settings.clientId"
-              type="text"
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              class="input w-full"
-            />
+          <!-- Sync Settings -->
+          <div v-if="isConnected" class="pt-4 border-t border-border">
+            <h3 class="font-medium flex items-center gap-2 mb-3">
+              <Settings2 class="w-4 h-4" />
+              {{ t('crm.syncSettings') }}
+            </h3>
+
+            <div class="space-y-3">
+              <label class="flex items-center gap-3">
+                <input v-model="settings.syncContacts" type="checkbox" class="checkbox" />
+                <span>{{ t('crm.syncContactsLabel') }}</span>
+              </label>
+              <label class="flex items-center gap-3">
+                <input v-model="settings.syncLeads" type="checkbox" class="checkbox" />
+                <span>{{ t('crm.syncLeadsLabel') }}</span>
+              </label>
+              <label class="flex items-center gap-3">
+                <input v-model="settings.autoCreateLead" type="checkbox" class="checkbox" />
+                <span>{{ t('crm.autoCreateLeadLabel') }}</span>
+              </label>
+            </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium mb-1.5">{{ t('crm.clientSecret') }}</label>
-            <input
-              v-model="settings.clientSecret"
-              type="password"
-              :placeholder="clientSecretSaved ? '••••••• (saved)' : '...'"
-              class="input w-full"
-            />
+          <!-- Amojo (Inbox) Settings -->
+          <div v-if="isConnected" class="pt-4 border-t border-border">
+            <h3 class="font-medium flex items-center gap-2 mb-3">
+              <MessageSquare class="w-4 h-4" />
+              {{ t('crm.inbox.settingsTitle') }}
+            </h3>
+            <p class="text-sm text-muted-foreground mb-3">{{ t('crm.inbox.settingsHint') }}</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Amojo Base URL</label>
+                <input
+                  v-model="settings.amojoBaseUrl"
+                  type="text"
+                  placeholder="https://amojo.amocrm.ru"
+                  class="input w-full"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5">Scope ID</label>
+                <input
+                  v-model="settings.amojoScopeId"
+                  type="text"
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  class="input w-full"
+                />
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium mb-1.5">Channel Secret</label>
+                <input
+                  v-model="settings.amojoChannelSecret"
+                  type="password"
+                  placeholder="Channel secret key..."
+                  class="input w-full"
+                />
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium mb-1.5">{{ t('crm.redirectUri') }}</label>
-            <input
-              v-model="settings.redirectUri"
-              type="text"
-              readonly
-              class="input w-full bg-secondary/50 cursor-not-allowed"
-            />
+          <!-- Save / Connect buttons -->
+          <div class="flex justify-end gap-2 pt-4">
+            <button :disabled="isSaving" class="btn btn-secondary" @click="saveSettings">
+              <Save v-if="!isSaving" class="w-4 h-4 mr-2" />
+              <RefreshCw v-else class="w-4 h-4 mr-2 animate-spin" />
+              {{ t('crm.saveSettings') }}
+            </button>
+            <button
+              v-if="!isConnected"
+              :disabled="!settings.subdomain || !settings.clientId || (!settings.clientSecret && !clientSecretSaved) || isLoading"
+              class="btn btn-primary"
+              @click="connectAmoCRM"
+            >
+              <Link2 v-if="!isLoading" class="w-4 h-4 mr-2" />
+              <RefreshCw v-else class="w-4 h-4 mr-2 animate-spin" />
+              {{ t('crm.connect') }}
+            </button>
           </div>
         </div>
 
-        <!-- Sync Settings -->
-        <div v-if="isConnected" class="pt-4 border-t border-border">
-          <h3 class="font-medium flex items-center gap-2 mb-3">
-            <Settings2 class="w-4 h-4" />
-            {{ t('crm.syncSettings') }}
-          </h3>
-
-          <div class="space-y-3">
-            <label class="flex items-center gap-3">
-              <input v-model="settings.syncContacts" type="checkbox" class="checkbox" />
-              <span>{{ t('crm.syncContactsLabel') }}</span>
-            </label>
-            <label class="flex items-center gap-3">
-              <input v-model="settings.syncLeads" type="checkbox" class="checkbox" />
-              <span>{{ t('crm.syncLeadsLabel') }}</span>
-            </label>
-            <label class="flex items-center gap-3">
-              <input v-model="settings.autoCreateLead" type="checkbox" class="checkbox" />
-              <span>{{ t('crm.autoCreateLeadLabel') }}</span>
-            </label>
+        <!-- Actions (when connected) -->
+        <div v-if="isConnected" class="flex justify-between pt-6 border-t border-border mt-6">
+          <button class="btn btn-ghost text-red-400 hover:bg-red-500/10" @click="disconnectAmoCRM">
+            <XIcon class="w-4 h-4 mr-2" />
+            {{ t('crm.disconnect') }}
+          </button>
+          <div class="flex gap-2">
+            <button :disabled="isSyncing" class="btn btn-secondary" @click="syncNow">
+              <ArrowDownUp :class="['w-4 h-4 mr-2', isSyncing && 'animate-spin']" />
+              {{ isSyncing ? t('crm.syncing') : t('crm.syncNow') }}
+            </button>
+            <button :disabled="isLoading" class="btn btn-secondary" @click="testConnection">
+              <RefreshCw :class="['w-4 h-4 mr-2', isLoading && 'animate-spin']" />
+              {{ t('crm.testConnection') }}
+            </button>
+            <a
+              :href="`https://${settings.subdomain}.amocrm.ru`"
+              target="_blank"
+              class="btn btn-primary"
+            >
+              <ExternalLink class="w-4 h-4 mr-2" />
+              {{ t('crm.openAmoCRM') }}
+            </a>
           </div>
-        </div>
-
-        <!-- Save / Connect buttons -->
-        <div class="flex justify-end gap-2 pt-4">
-          <button :disabled="isSaving" class="btn btn-secondary" @click="saveSettings">
-            <Save v-if="!isSaving" class="w-4 h-4 mr-2" />
-            <RefreshCw v-else class="w-4 h-4 mr-2 animate-spin" />
-            {{ t('crm.saveSettings') }}
-          </button>
-          <button
-            v-if="!isConnected"
-            :disabled="!settings.subdomain || !settings.clientId || (!settings.clientSecret && !clientSecretSaved) || isLoading"
-            class="btn btn-primary"
-            @click="connectAmoCRM"
-          >
-            <Link2 v-if="!isLoading" class="w-4 h-4 mr-2" />
-            <RefreshCw v-else class="w-4 h-4 mr-2 animate-spin" />
-            {{ t('crm.connect') }}
-          </button>
         </div>
       </div>
 
-      <!-- Actions (when connected) -->
-      <div v-if="isConnected" class="flex justify-between pt-6 border-t border-border mt-6">
-        <button class="btn btn-ghost text-red-400 hover:bg-red-500/10" @click="disconnectAmoCRM">
-          <XIcon class="w-4 h-4 mr-2" />
-          {{ t('crm.disconnect') }}
+      <!-- Sync Log -->
+      <div class="card p-6 mt-6">
+        <button class="flex items-center gap-2 font-semibold w-full text-left" @click="loadSyncLog">
+          <Clock class="w-5 h-5" />
+          {{ t('crm.syncLog') }}
+          <span class="text-muted-foreground text-sm ml-auto">{{ showSyncLog ? '▲' : '▼' }}</span>
         </button>
-        <div class="flex gap-2">
-          <button :disabled="isSyncing" class="btn btn-secondary" @click="syncNow">
-            <ArrowDownUp :class="['w-4 h-4 mr-2', isSyncing && 'animate-spin']" />
-            {{ isSyncing ? t('crm.syncing') : t('crm.syncNow') }}
-          </button>
-          <button :disabled="isLoading" class="btn btn-secondary" @click="testConnection">
-            <RefreshCw :class="['w-4 h-4 mr-2', isLoading && 'animate-spin']" />
-            {{ t('crm.testConnection') }}
-          </button>
-          <a
-            :href="`https://${settings.subdomain}.amocrm.ru`"
-            target="_blank"
-            class="btn btn-primary"
-          >
-            <ExternalLink class="w-4 h-4 mr-2" />
-            {{ t('crm.openAmoCRM') }}
-          </a>
+
+        <div v-if="showSyncLog" class="mt-4">
+          <div v-if="syncLogs.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+            {{ t('crm.never') }}
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left">
+                  <th class="pb-2 pr-4">{{ t('crm.status') }}</th>
+                  <th class="pb-2 pr-4">Direction</th>
+                  <th class="pb-2 pr-4">Type</th>
+                  <th class="pb-2 pr-4">Action</th>
+                  <th class="pb-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="log in syncLogs" :key="log.id" class="border-b border-border/50">
+                  <td class="py-2 pr-4">
+                    <span
+                      :class="[
+                        'inline-block w-2 h-2 rounded-full',
+                        log.status === 'success' ? 'bg-green-400' : 'bg-red-400'
+                      ]"
+                    />
+                  </td>
+                  <td class="py-2 pr-4 text-muted-foreground">{{ log.direction }}</td>
+                  <td class="py-2 pr-4">{{ log.entity_type }}</td>
+                  <td class="py-2 pr-4">{{ log.action }}</td>
+                  <td class="py-2 text-muted-foreground">{{ formatDate(log.created) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features -->
+      <div class="card p-6 mt-6">
+        <h3 class="font-semibold mb-4">{{ t('crm.plannedFeatures') }}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+            <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <div class="font-medium">{{ t('crm.feature.oauth') }}</div>
+              <div class="text-sm text-muted-foreground">{{ t('crm.feature.oauthDesc') }}</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+            <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <div class="font-medium">{{ t('crm.feature.contacts') }}</div>
+              <div class="text-sm text-muted-foreground">{{ t('crm.feature.contactsDesc') }}</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+            <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <div class="font-medium">{{ t('crm.feature.leads') }}</div>
+              <div class="text-sm text-muted-foreground">{{ t('crm.feature.leadsDesc') }}</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+            <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <div class="font-medium">{{ t('crm.feature.webhook') }}</div>
+              <div class="text-sm text-muted-foreground">{{ t('crm.feature.webhookDesc') }}</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Sync Log -->
-    <div class="card p-6">
-      <button class="flex items-center gap-2 font-semibold w-full text-left" @click="loadSyncLog">
-        <Clock class="w-5 h-5" />
-        {{ t('crm.syncLog') }}
-        <span class="text-muted-foreground text-sm ml-auto">{{ showSyncLog ? '▲' : '▼' }}</span>
-      </button>
+    <!-- Tab Content: Kanban -->
+    <CrmKanban v-if="activeTab === 'kanban'" :subdomain="settings.subdomain" />
 
-      <div v-if="showSyncLog" class="mt-4">
-        <div v-if="syncLogs.length === 0" class="text-sm text-muted-foreground py-4 text-center">
-          {{ t('crm.never') }}
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-border text-left">
-                <th class="pb-2 pr-4">{{ t('crm.status') }}</th>
-                <th class="pb-2 pr-4">Direction</th>
-                <th class="pb-2 pr-4">Type</th>
-                <th class="pb-2 pr-4">Action</th>
-                <th class="pb-2">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in syncLogs" :key="log.id" class="border-b border-border/50">
-                <td class="py-2 pr-4">
-                  <span
-:class="[
-                    'inline-block w-2 h-2 rounded-full',
-                    log.status === 'success' ? 'bg-green-400' : 'bg-red-400'
-                  ]" />
-                </td>
-                <td class="py-2 pr-4 text-muted-foreground">{{ log.direction }}</td>
-                <td class="py-2 pr-4">{{ log.entity_type }}</td>
-                <td class="py-2 pr-4">{{ log.action }}</td>
-                <td class="py-2 text-muted-foreground">{{ formatDate(log.created) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <!-- Tab Content: Deals -->
+    <CrmDeals v-if="activeTab === 'deals'" :subdomain="settings.subdomain" />
 
-    <!-- Features -->
-    <div class="card p-6">
-      <h3 class="font-semibold mb-4">{{ t('crm.plannedFeatures') }}</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
-          <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-          <div>
-            <div class="font-medium">{{ t('crm.feature.oauth') }}</div>
-            <div class="text-sm text-muted-foreground">{{ t('crm.feature.oauthDesc') }}</div>
-          </div>
-        </div>
-        <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
-          <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-          <div>
-            <div class="font-medium">{{ t('crm.feature.contacts') }}</div>
-            <div class="text-sm text-muted-foreground">{{ t('crm.feature.contactsDesc') }}</div>
-          </div>
-        </div>
-        <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
-          <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-          <div>
-            <div class="font-medium">{{ t('crm.feature.leads') }}</div>
-            <div class="text-sm text-muted-foreground">{{ t('crm.feature.leadsDesc') }}</div>
-          </div>
-        </div>
-        <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
-          <Check class="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-          <div>
-            <div class="font-medium">{{ t('crm.feature.webhook') }}</div>
-            <div class="text-sm text-muted-foreground">{{ t('crm.feature.webhookDesc') }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Tab Content: Inbox -->
+    <CrmInbox v-if="activeTab === 'inbox'" />
   </div>
 </template>

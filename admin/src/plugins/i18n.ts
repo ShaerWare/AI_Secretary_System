@@ -841,6 +841,61 @@ const messages = {
         leadsDesc: 'Автоматическое создание сделок по обращениям',
         webhook: 'Вебхуки',
         webhookDesc: 'Уведомления о событиях в CRM'
+      },
+      tabs: {
+        settings: 'Настройки',
+        kanban: 'Канбан',
+        deals: 'Сделки',
+        inbox: 'Входящие'
+      },
+      kanban: {
+        title: 'Канбан-доска',
+        selectPipeline: 'Выберите воронку',
+        dragHint: 'Перетащите карточку для смены статуса',
+        emptyColumn: 'Нет сделок',
+        price: 'Сумма',
+        noContact: 'Без контакта',
+        loading: 'Загрузка...',
+        updateFailed: 'Ошибка обновления сделки'
+      },
+      deals: {
+        title: 'Сделки',
+        search: 'Поиск сделок...',
+        name: 'Название',
+        price: 'Сумма',
+        pipeline: 'Воронка',
+        status: 'Статус',
+        contact: 'Контакт',
+        contacts: 'Контакты',
+        created: 'Создано',
+        page: 'Страница',
+        empty: 'Нет сделок',
+        create: 'Создать сделку',
+        created_success: 'Сделка создана',
+        createFailed: 'Ошибка создания сделки',
+        namePlaceholder: 'Название сделки...',
+        selectPipeline: 'Выберите воронку',
+        cancel: 'Отмена',
+        addNote: 'Добавить заметку',
+        notePlaceholder: 'Текст заметки...',
+        sendNote: 'Отправить',
+        noteAdded: 'Заметка добавлена',
+        noteFailed: 'Ошибка добавления заметки'
+      },
+      inbox: {
+        title: 'Входящие',
+        searchChats: 'Поиск чатов...',
+        typeMessage: 'Напишите сообщение...',
+        send: 'Отправить',
+        noChats: 'Нет чатов',
+        noMessages: 'Нет сообщений',
+        selectChat: 'Выберите чат',
+        sendFailed: 'Ошибка отправки сообщения',
+        setupRequired: 'Требуется настройка Inbox',
+        setupHint: 'Настройте учётные данные amojo в разделе Настройки для использования Inbox',
+        goToSettings: 'Перейдите в Настройки CRM',
+        settingsTitle: 'Настройки Inbox (Amojo)',
+        settingsHint: 'Для работы с чатами из amoCRM нужны данные amojo-канала (scope_id и secret)'
       }
     },
     roles: {
@@ -1707,6 +1762,61 @@ const messages = {
         leadsDesc: 'Auto-create leads from inquiries',
         webhook: 'Webhooks',
         webhookDesc: 'CRM event notifications'
+      },
+      tabs: {
+        settings: 'Settings',
+        kanban: 'Kanban',
+        deals: 'Deals',
+        inbox: 'Inbox'
+      },
+      kanban: {
+        title: 'Kanban Board',
+        selectPipeline: 'Select pipeline',
+        dragHint: 'Drag cards to change status',
+        emptyColumn: 'No deals',
+        price: 'Amount',
+        noContact: 'No contact',
+        loading: 'Loading...',
+        updateFailed: 'Failed to update deal'
+      },
+      deals: {
+        title: 'Deals',
+        search: 'Search deals...',
+        name: 'Name',
+        price: 'Amount',
+        pipeline: 'Pipeline',
+        status: 'Status',
+        contact: 'Contact',
+        contacts: 'Contacts',
+        created: 'Created',
+        page: 'Page',
+        empty: 'No deals',
+        create: 'Create deal',
+        created_success: 'Deal created',
+        createFailed: 'Failed to create deal',
+        namePlaceholder: 'Deal name...',
+        selectPipeline: 'Select pipeline',
+        cancel: 'Cancel',
+        addNote: 'Add note',
+        notePlaceholder: 'Note text...',
+        sendNote: 'Send',
+        noteAdded: 'Note added',
+        noteFailed: 'Failed to add note'
+      },
+      inbox: {
+        title: 'Inbox',
+        searchChats: 'Search chats...',
+        typeMessage: 'Type a message...',
+        send: 'Send',
+        noChats: 'No chats',
+        noMessages: 'No messages',
+        selectChat: 'Select a chat',
+        sendFailed: 'Failed to send message',
+        setupRequired: 'Inbox Setup Required',
+        setupHint: 'Configure amojo credentials in Settings to use Inbox',
+        goToSettings: 'Go to CRM Settings',
+        settingsTitle: 'Inbox Settings (Amojo)',
+        settingsHint: 'To use amoCRM chats you need amojo channel credentials (scope_id and secret)'
       }
     },
     roles: {
