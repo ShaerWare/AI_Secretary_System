@@ -50,9 +50,15 @@ python scripts/manage_users.py delete <user>                 # Delete user
 
 ### Database Migrations
 
-Manual scripts in `scripts/migrate_*.py` (no Alembic). New tables are auto-created by `Base.metadata.create_all` on startup; **schema changes to existing tables need migration scripts**. Seed scripts: `scripts/seed_*.py`.
+Two migration systems: **Alembic** (preferred for new migrations) and legacy manual scripts in `scripts/migrate_*.py`. New tables are auto-created by `Base.metadata.create_all` on startup; **schema changes to existing tables need migration scripts**. Seed scripts: `scripts/seed_*.py`.
 
 ```bash
+# Alembic (preferred)
+alembic upgrade head                        # Apply all pending migrations
+alembic revision --autogenerate -m "desc"   # Generate migration from model changes
+alembic history                             # List migrations
+
+# Legacy manual scripts
 ls scripts/migrate_*.py                     # List all available migrations
 python scripts/migrate_json_to_db.py        # Initial JSON → SQLite migration (first-time)
 python scripts/migrate_<feature>.py         # Run specific migration after adding new columns/tables
@@ -276,7 +282,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to both `ru` and `en` message objects
 
-**Database migrations:** Manual scripts in `scripts/migrate_*.py` (no Alembic). New tables auto-created by `Base.metadata.create_all` on startup; schema changes to existing tables need migration scripts.
+**Database migrations:** Two systems — **Alembic** (preferred for new work, `alembic revision --autogenerate -m "desc"`) and legacy manual scripts in `scripts/migrate_*.py`. New tables auto-created by `Base.metadata.create_all` on startup; schema changes to existing tables need migration scripts.
 
 **API URL patterns:**
 - `GET/POST /admin/{resource}` — List/create
