@@ -153,8 +153,9 @@ class AsyncChatManager:
         pinned: Optional[bool] = None,
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
+        context_files: Optional[list] = None,
     ) -> Optional[dict]:
-        """Update session title, system prompt, pinned status, or RAG config."""
+        """Update session title, system prompt, pinned status, RAG config, or context files."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.update_session(
@@ -164,6 +165,7 @@ class AsyncChatManager:
                 pinned=pinned,
                 rag_mode=rag_mode,
                 knowledge_collection_id=knowledge_collection_id,
+                context_files=context_files,
             )
 
     async def delete_session(self, session_id: str, owner_id: Optional[int] = None) -> bool:
@@ -185,6 +187,12 @@ class AsyncChatManager:
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.list_sessions_grouped(owner_id=owner_id)
+
+    async def get_branch_path(self, session_id: str, message_id: str) -> List[dict]:
+        """Get ordered message path from root to a specific message."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.get_branch_path(session_id, message_id)
 
     async def add_message(
         self,

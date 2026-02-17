@@ -30,6 +30,7 @@ export interface ChatSession {
   messages: ChatMessage[]
   system_prompt?: string
   pinned?: boolean
+  context_files?: { name: string; content: string }[]
   source?: 'admin' | 'telegram' | 'widget' | null
   source_id?: string
   created: string
@@ -76,7 +77,7 @@ export const chatApi = {
       source_id: sourceId,
     }),
 
-  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean }) =>
+  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[] }) =>
     api.put<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`, data),
 
   deleteSession: (sessionId: string) =>
@@ -108,6 +109,11 @@ export const chatApi = {
   regenerateResponse: (sessionId: string, messageId: string) =>
     api.post<{ response: ChatMessage }>(
       `/admin/chat/sessions/${sessionId}/messages/${messageId}/regenerate`
+    ),
+
+  summarizeBranch: (sessionId: string, messageId: string) =>
+    api.post<{ summary: string }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}/summarize`
     ),
 
   // Branches

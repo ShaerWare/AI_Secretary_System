@@ -42,6 +42,16 @@ _NO_TOOLS_SUFFIX = (
 )
 
 
+def _inject_context_files(prompt: str | None, session: dict) -> str | None:
+    """Inject context file contents into system prompt if session has any."""
+    context_files = session.get("context_files")
+    if not context_files:
+        return prompt
+    files_text = "\n\n".join(f"# {f['name']}\n{f['content']}" for f in context_files)
+    base = prompt or _DEFAULT_RAG_PROMPT
+    return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
+
+
 def _finalize_prompt(prompt: str | None) -> str:
     """Add anti-tool-call suffix to any system prompt before sending to LLM."""
     base = prompt or _DEFAULT_RAG_PROMPT
@@ -146,6 +156,7 @@ class UpdateSessionRequest(BaseModel):
     pinned: Optional[bool] = None
     rag_mode: Optional[str] = None
     knowledge_collection_id: Optional[int] = None
+    context_files: Optional[list] = None  # [{"name": str, "content": str}]
 
 
 class LLMOverrideConfig(BaseModel):
@@ -249,6 +260,7 @@ async def admin_update_chat_session(
         pinned=request.pinned,
         rag_mode=request.rag_mode,
         knowledge_collection_id=request.knowledge_collection_id,
+        context_files=request.context_files,
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -299,6 +311,9 @@ async def admin_send_chat_message(
     default_prompt = _inject_rag_context(
         container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_id
     )
+
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
@@ -447,6 +462,9 @@ async def admin_stream_chat_message(
         container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_id
     )
 
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
+
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
@@ -527,6 +545,9 @@ async def admin_edit_chat_message(
     default_prompt = _inject_rag_context(
         container.wiki_rag_service, request.content, default_prompt, rag_mode, collection_id
     )
+
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
@@ -615,6 +636,9 @@ async def admin_regenerate_chat_response(
         container.wiki_rag_service, user_content, default_prompt, rag_mode, collection_id
     )
 
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
+
     llm_messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
@@ -631,6 +655,51 @@ async def admin_regenerate_chat_response(
 
     except Exception as e:
         logger.error(f"❌ Chat regenerate error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Summarize Endpoint ==============
+
+
+@router.post("/sessions/{session_id}/messages/{message_id}/summarize")
+async def admin_summarize_branch(
+    session_id: str, message_id: str, user: User = Depends(get_current_user)
+):
+    """Сгенерировать итоги ветки диалога и вернуть как markdown."""
+    container = get_container()
+    owner_id = None if user.role == "admin" else user.id
+    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    llm_service = container.llm_service
+    if not llm_service:
+        raise HTTPException(status_code=503, detail="LLM service not available")
+
+    # Get branch path from root to this message
+    branch_messages = await async_chat_manager.get_branch_path(session_id, message_id)
+    if not branch_messages:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Build LLM request with summarize instruction
+    summarize_prompt = (
+        "Проанализируй следующий диалог и создай структурированный markdown-документ с итогами. "
+        "Включи: основные темы, ключевые решения, выводы и открытые вопросы. "
+        "Пиши на языке диалога. Отвечай ТОЛЬКО markdown-документом без пояснений."
+    )
+    dialog_text = "\n\n".join(f"**{m['role']}**: {m['content']}" for m in branch_messages)
+    messages = [
+        {"role": "system", "content": _finalize_prompt(summarize_prompt)},
+        {"role": "user", "content": dialog_text},
+    ]
+
+    try:
+        response_text = llm_service.generate_response_from_messages(messages, stream=False)
+        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+            response_text = "".join(response_text)
+        return {"summary": response_text}
+    except Exception as e:
+        logger.error(f"❌ Summarize error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
