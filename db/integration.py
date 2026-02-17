@@ -143,11 +143,14 @@ class AsyncChatManager:
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
         pinned: Optional[bool] = None,
+        context_files: Optional[list] = None,
     ) -> Optional[dict]:
-        """Update session title, system prompt, or pinned status."""
+        """Update session title, system prompt, pinned status, or context files."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.update_session(session_id, title, system_prompt, pinned=pinned)
+            return await repo.update_session(
+                session_id, title, system_prompt, pinned=pinned, context_files=context_files
+            )
 
     async def delete_session(self, session_id: str, owner_id: Optional[int] = None) -> bool:
         """Delete session."""

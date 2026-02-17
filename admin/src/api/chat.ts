@@ -30,6 +30,7 @@ export interface ChatSession {
   messages: ChatMessage[]
   system_prompt?: string
   pinned?: boolean
+  context_files?: { name: string; content: string }[]
   source?: 'admin' | 'telegram' | 'widget' | null
   source_id?: string
   created: string
@@ -76,7 +77,7 @@ export const chatApi = {
       source_id: sourceId,
     }),
 
-  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean }) =>
+  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[] }) =>
     api.put<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`, data),
 
   deleteSession: (sessionId: string) =>

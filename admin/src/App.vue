@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
 import { useSearchStore } from './stores/search'
 import { useThemeStore } from './stores/theme'
+import { useResizablePanel } from './composables/useResizablePanel'
 import { setLocale, getLocale } from './plugins/i18n'
 import ToastContainer from './components/ToastContainer.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -32,6 +33,9 @@ const themeStore = useThemeStore()
 const sidebarOpen = ref(true)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(false)
+
+const { width: mainSidebarWidth, startResize: startMainSidebarResize } =
+  useResizablePanel('main-sidebar-width', 256, 180, 400, 'right')
 
 // Check if mobile
 function checkMobile() {
@@ -94,11 +98,13 @@ function toggleLocale() {
         <!-- Sidebar -->
         <aside
           :class="[
-            'flex flex-col bg-card border-r border-border transition-all duration-300 z-50',
-            isMobile ? 'fixed inset-y-0 left-0' : '',
+            'flex flex-col bg-card border-r border-border z-50 flex-shrink-0',
+            isMobile ? 'fixed inset-y-0 left-0 transition-all duration-300' : '',
             isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0',
-            sidebarOpen || isMobile ? 'w-64' : 'w-16'
+            isMobile ? 'w-64' : '',
+            !isMobile && !sidebarOpen ? 'w-16' : ''
           ]"
+          :style="!isMobile && sidebarOpen ? { width: mainSidebarWidth + 'px' } : undefined"
         >
           <!-- Logo -->
           <div class="flex items-center justify-between h-16 px-4 border-b border-border">
@@ -185,6 +191,13 @@ function toggleLocale() {
             </button>
           </div>
         </aside>
+
+        <!-- Sidebar resize handle (desktop only) -->
+        <div
+          v-if="sidebarOpen && !isMobile"
+          class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+          @mousedown="startMainSidebarResize"
+        />
 
         <!-- Main Content -->
         <main class="flex-1 flex flex-col overflow-hidden">
