@@ -285,6 +285,7 @@ const messages = {
       close: 'Закрыть',
       selectOrCreate: 'Выберите чат или создайте новый',
       recording: 'Запись... Нажмите на микрофон для остановки',
+      summarizeBranch: 'Итоги ветки',
     },
     // Auth
     auth: {
@@ -1127,6 +1128,7 @@ const messages = {
       close: 'Close',
       selectOrCreate: 'Select a chat or create a new one',
       recording: 'Recording... Click mic to stop',
+      summarizeBranch: 'Summarize branch',
     },
     // Auth
     auth: {
