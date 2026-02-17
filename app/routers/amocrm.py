@@ -18,10 +18,17 @@ from app.services.amocrm_service import (
     create_lead,
     exchange_code_for_token,
     get_account_info,
+    get_chat_history,
+    get_contact_chats,
     get_contacts,
+    get_events,
+    get_lead,
     get_leads,
+    get_leads_by_pipeline,
     get_pipelines,
     refresh_access_token,
+    send_chat_message,
+    update_lead,
 )
 from auth_manager import User, require_admin, require_not_guest
 from db.integration import async_amocrm_manager, async_audit_logger
@@ -108,6 +115,9 @@ class AmoCRMConfigRequest(BaseModel):
     auto_create_lead: Optional[bool] = None
     lead_pipeline_id: Optional[int] = None
     lead_status_id: Optional[int] = None
+    amojo_base_url: Optional[str] = None
+    amojo_scope_id: Optional[str] = None
+    amojo_channel_secret: Optional[str] = None
 
 
 class CreateContactRequest(BaseModel):
@@ -124,6 +134,19 @@ class CreateLeadRequest(BaseModel):
 
 class AddNoteRequest(BaseModel):
     text: str
+
+
+class UpdateLeadRequest(BaseModel):
+    status_id: Optional[int] = None
+    pipeline_id: Optional[int] = None
+    name: Optional[str] = None
+    price: Optional[int] = None
+
+
+class SendChatMessageRequest(BaseModel):
+    text: str
+    sender_id: Optional[str] = "admin"
+    sender_name: Optional[str] = "Admin"
 
 
 # ============== Status & Config ==============
@@ -445,6 +468,176 @@ async def crm_add_note_to_lead(
             lead_id=lead_id,
             text=request.text,
         )
+        return result
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# ============== Lead Detail & Update ==============
+
+
+@router.get("/leads/by-pipeline/{pipeline_id}")
+async def crm_get_leads_by_pipeline(
+    pipeline_id: int,
+    user: User = Depends(require_not_guest),
+):
+    """Get all leads in a specific pipeline (for kanban board)."""
+    config = await _get_valid_token()
+    try:
+        data = await get_leads_by_pipeline(config["subdomain"], config["access_token"], pipeline_id)
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.get("/leads/{lead_id}")
+async def crm_get_lead(
+    lead_id: int,
+    user: User = Depends(require_not_guest),
+):
+    """Get single lead detail with contacts."""
+    config = await _get_valid_token()
+    try:
+        data = await get_lead(
+            config["subdomain"], config["access_token"], lead_id, with_contacts=True
+        )
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.patch("/leads/{lead_id}")
+async def crm_update_lead(
+    lead_id: int,
+    request: UpdateLeadRequest,
+    user: User = Depends(require_not_guest),
+):
+    """Update a lead (status, pipeline, name, price)."""
+    config = await _get_valid_token()
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    try:
+        result = await update_lead(
+            config["subdomain"], config["access_token"], lead_id, update_data
+        )
+
+        await async_amocrm_manager.log_sync(
+            direction="outgoing",
+            entity_type="lead",
+            entity_id=lead_id,
+            action="update",
+            details=update_data,
+        )
+
+        return result
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# ============== Events ==============
+
+
+@router.get("/events")
+async def crm_get_events(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    types: Optional[str] = None,
+    user: User = Depends(require_not_guest),
+):
+    """Get events feed (chat messages, lead changes, etc.)."""
+    config = await _get_valid_token()
+    try:
+        data = await get_events(config["subdomain"], config["access_token"], page, limit, types)
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# ============== Contact Chats ==============
+
+
+@router.get("/contacts/{contact_id}/chats")
+async def crm_get_contact_chats(
+    contact_id: int,
+    user: User = Depends(require_not_guest),
+):
+    """Get chats linked to a contact."""
+    config = await _get_valid_token()
+    try:
+        data = await get_contact_chats(config["subdomain"], config["access_token"], contact_id)
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# ============== Chat Messages (amojo API) ==============
+
+
+@router.get("/chats/{chat_id}/history")
+async def crm_get_chat_history(
+    chat_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(require_not_guest),
+):
+    """Get chat message history via amojo API."""
+    config = await async_amocrm_manager.get_config_with_secrets()
+    if not config:
+        raise HTTPException(status_code=400, detail="amoCRM not configured")
+
+    amojo_base_url = config.get("amojo_base_url", "https://amojo.amocrm.ru")
+    scope_id = config.get("amojo_scope_id")
+    channel_secret = config.get("amojo_channel_secret")
+
+    if not scope_id or not channel_secret:
+        raise HTTPException(status_code=400, detail="Amojo inbox not configured")
+
+    try:
+        data = await get_chat_history(
+            amojo_base_url, scope_id, channel_secret, chat_id, limit, offset
+        )
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/chats/{chat_id}/messages")
+async def crm_send_chat_message(
+    chat_id: str,
+    request: SendChatMessageRequest,
+    user: User = Depends(require_not_guest),
+):
+    """Send a chat message via amojo API."""
+    config = await async_amocrm_manager.get_config_with_secrets()
+    if not config:
+        raise HTTPException(status_code=400, detail="amoCRM not configured")
+
+    amojo_base_url = config.get("amojo_base_url", "https://amojo.amocrm.ru")
+    scope_id = config.get("amojo_scope_id")
+    channel_secret = config.get("amojo_channel_secret")
+
+    if not scope_id or not channel_secret:
+        raise HTTPException(status_code=400, detail="Amojo inbox not configured")
+
+    try:
+        result = await send_chat_message(
+            amojo_base_url,
+            scope_id,
+            channel_secret,
+            chat_id,
+            sender_id=request.sender_id or "admin",
+            sender_name=request.sender_name or "Admin",
+            text=request.text,
+        )
+
+        await async_amocrm_manager.log_sync(
+            direction="outgoing",
+            entity_type="chat",
+            action="send_message",
+            details={"chat_id": chat_id, "text_length": len(request.text)},
+        )
+
         return result
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)

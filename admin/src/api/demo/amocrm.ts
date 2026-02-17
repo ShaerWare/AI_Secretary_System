@@ -27,10 +27,13 @@ const mockConfig = () => ({
   webhook_url: window.location.origin + '/webhooks/amocrm',
   last_sync_at: connected ? minutesAgo(35) : null,
   contacts_count: connected ? 5 : 0,
-  leads_count: connected ? 5 : 0,
+  leads_count: connected ? leads.length : 0,
   account_info: connected ? accountInfo : {},
   created: daysAgo(14),
   updated: minutesAgo(35),
+  amojo_base_url: 'https://amojo.amocrm.ru',
+  amojo_scope_id: 'demo-scope-id-12345',
+  amojo_inbox_configured: true,
 })
 
 const contacts = [
@@ -41,12 +44,16 @@ const contacts = [
   { id: 50005, name: 'Новиков Сергей', custom_fields_values: [{ field_id: 1, values: [{ value: '+79991234505' }] }] },
 ]
 
-const leads = [
-  { id: 60001, name: 'Подключение VoIP', price: 15000, pipeline_id: 7001, status_id: 42000001 },
-  { id: 60002, name: 'Настройка секретаря', price: 25000, pipeline_id: 7001, status_id: 42000002 },
-  { id: 60003, name: 'Интеграция CRM', price: 35000, pipeline_id: 7001, status_id: 42000003 },
-  { id: 60004, name: 'Обучение персонала', price: 10000, pipeline_id: 7002, status_id: 42000011 },
-  { id: 60005, name: 'Поддержка 6 мес', price: 60000, pipeline_id: 7002, status_id: 42000012 },
+const now = Math.floor(Date.now() / 1000)
+
+const leads: Record<string, unknown>[] = [
+  { id: 60001, name: 'Подключение VoIP', price: 15000, pipeline_id: 7001, status_id: 42000001, responsible_user_id: 1, created_at: now - 86400 * 7, updated_at: now - 3600, _embedded: { contacts: [{ id: 50001, name: 'Иванов Алексей' }] } },
+  { id: 60002, name: 'Настройка секретаря', price: 25000, pipeline_id: 7001, status_id: 42000002, responsible_user_id: 1, created_at: now - 86400 * 5, updated_at: now - 7200, _embedded: { contacts: [{ id: 50002, name: 'Петрова Мария' }] } },
+  { id: 60003, name: 'Интеграция CRM', price: 35000, pipeline_id: 7001, status_id: 42000003, responsible_user_id: 1, created_at: now - 86400 * 3, updated_at: now - 1800, _embedded: { contacts: [{ id: 50003, name: 'Сидоров Дмитрий' }] } },
+  { id: 60004, name: 'Обучение персонала', price: 10000, pipeline_id: 7002, status_id: 42000011, responsible_user_id: 1, created_at: now - 86400 * 2, updated_at: now - 900, _embedded: { contacts: [{ id: 50004, name: 'Козлова Анна' }] } },
+  { id: 60005, name: 'Поддержка 6 мес', price: 60000, pipeline_id: 7002, status_id: 42000012, responsible_user_id: 1, created_at: now - 86400, updated_at: now - 600, _embedded: { contacts: [{ id: 50005, name: 'Новиков Сергей' }] } },
+  { id: 60006, name: 'Миграция данных', price: 45000, pipeline_id: 7001, status_id: 42000001, responsible_user_id: 1, created_at: now - 86400 * 4, updated_at: now - 3000, _embedded: { contacts: [{ id: 50001, name: 'Иванов Алексей' }] } },
+  { id: 60007, name: 'Настройка виджета', price: 8000, pipeline_id: 7001, status_id: 42000004, responsible_user_id: 1, created_at: now - 86400 * 10, updated_at: now - 86400, _embedded: { contacts: [{ id: 50003, name: 'Сидоров Дмитрий' }] } },
 ]
 
 const pipelines = [
@@ -91,6 +98,21 @@ const syncLogEntries = [
   { id: 9, direction: 'incoming', entity_type: 'lead', entity_id: 60005, action: 'created', details: null, status: 'success', error_message: null, created: minutesAgo(27) },
   { id: 10, direction: 'outgoing', entity_type: 'contact', entity_id: 50005, action: 'created', details: null, status: 'success', error_message: null, created: minutesAgo(26) },
 ]
+
+const chatMessages: Record<string, { id: string; timestamp: number; sender: { id: string; name: string }; receiver: { id: string; name: string }; message: { type: string; text: string } }[]> = {
+  '50001': [
+    { id: 'msg1', timestamp: now - 3600, sender: { id: '50001', name: 'Иванов Алексей' }, receiver: { id: 'admin', name: 'Admin' }, message: { type: 'text', text: 'Здравствуйте! Хотел уточнить по подключению VoIP.' } },
+    { id: 'msg2', timestamp: now - 3500, sender: { id: 'admin', name: 'Admin' }, receiver: { id: '50001', name: 'Иванов Алексей' }, message: { type: 'text', text: 'Добрый день! Конечно, расскажите что вас интересует.' } },
+    { id: 'msg3', timestamp: now - 3400, sender: { id: '50001', name: 'Иванов Алексей' }, receiver: { id: 'admin', name: 'Admin' }, message: { type: 'text', text: 'Какие АТС поддерживаются?' } },
+  ],
+  '50002': [
+    { id: 'msg4', timestamp: now - 7200, sender: { id: '50002', name: 'Петрова Мария' }, receiver: { id: 'admin', name: 'Admin' }, message: { type: 'text', text: 'Добрый день, когда можно начать настройку?' } },
+    { id: 'msg5', timestamp: now - 7100, sender: { id: 'admin', name: 'Admin' }, receiver: { id: '50002', name: 'Петрова Мария' }, message: { type: 'text', text: 'Здравствуйте! Можем начать завтра, удобно?' } },
+  ],
+  '50003': [
+    { id: 'msg6', timestamp: now - 1800, sender: { id: '50003', name: 'Сидоров Дмитрий' }, receiver: { id: 'admin', name: 'Admin' }, message: { type: 'text', text: 'Привет! Нужна помощь с интеграцией CRM.' } },
+  ],
+}
 
 export const amocrmRoutes: DemoRoute[] = [
   // GET /admin/crm/config
@@ -176,6 +198,40 @@ export const amocrmRoutes: DemoRoute[] = [
       return newContact
     },
   },
+  // GET /admin/crm/leads/by-pipeline/:id
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/leads\/by-pipeline\/(\d+)$/,
+    handler: ({ matches }) => {
+      const pipelineId = Number(matches[1])
+      const filtered = leads.filter(l => l.pipeline_id === pipelineId)
+      return { _embedded: { leads: filtered } }
+    },
+  },
+  // GET /admin/crm/leads/:id (single lead detail)
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/leads\/(\d+)$/,
+    handler: ({ matches }) => {
+      const leadId = Number(matches[1])
+      const lead = leads.find(l => l.id === leadId)
+      return lead || { error: 'Not found' }
+    },
+  },
+  // PATCH /admin/crm/leads/:id (update lead)
+  {
+    method: 'PATCH',
+    pattern: /^\/admin\/crm\/leads\/(\d+)$/,
+    handler: ({ matches, body }) => {
+      const leadId = Number(matches[1])
+      const lead = leads.find(l => l.id === leadId)
+      if (lead && body) {
+        const updates = body as Record<string, unknown>
+        Object.assign(lead, updates)
+      }
+      return lead || { error: 'Not found' }
+    },
+  },
   // GET /admin/crm/leads
   {
     method: 'GET',
@@ -194,6 +250,10 @@ export const amocrmRoutes: DemoRoute[] = [
         price: 0,
         pipeline_id: b.pipeline_id || 7001,
         status_id: b.status_id || 42000001,
+        responsible_user_id: 1,
+        created_at: now,
+        updated_at: now,
+        _embedded: { contacts: [] },
       }
       leads.push(newLead)
       return newLead
@@ -213,6 +273,62 @@ export const amocrmRoutes: DemoRoute[] = [
     method: 'GET',
     pattern: /^\/admin\/crm\/pipelines$/,
     handler: () => ({ _embedded: { pipelines } }),
+  },
+  // GET /admin/crm/events
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/events$/,
+    handler: () => ({
+      _embedded: {
+        events: [
+          { id: 'ev1', type: 'incoming_chat_message', entity_id: 50001, entity_type: 'contact', created_at: now - 3600, value_after: [], value_before: [], account_id: 31234567 },
+          { id: 'ev2', type: 'outgoing_chat_message', entity_id: 50001, entity_type: 'contact', created_at: now - 3500, value_after: [], value_before: [], account_id: 31234567 },
+        ],
+      },
+    }),
+  },
+  // GET /admin/crm/contacts/:id/chats
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/contacts\/(\d+)\/chats$/,
+    handler: ({ matches }) => {
+      const contactId = matches[1]
+      return {
+        _embedded: {
+          chats: [
+            { id: contactId, contact_id: Number(contactId), created_at: now - 86400 },
+          ],
+        },
+      }
+    },
+  },
+  // GET /admin/crm/chats/:id/history
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/chats\/([^/]+)\/history$/,
+    handler: ({ matches }) => {
+      const chatId = matches[1]
+      return { messages: chatMessages[chatId] || [] }
+    },
+  },
+  // POST /admin/crm/chats/:id/messages
+  {
+    method: 'POST',
+    pattern: /^\/admin\/crm\/chats\/([^/]+)\/messages$/,
+    handler: ({ matches, body }) => {
+      const chatId = matches[1]
+      const b = body as { text: string }
+      const msg = {
+        id: 'msg_' + Date.now(),
+        timestamp: Math.floor(Date.now() / 1000),
+        sender: { id: 'admin', name: 'Admin' },
+        receiver: { id: chatId, name: 'Contact' },
+        message: { type: 'text', text: b.text },
+      }
+      if (!chatMessages[chatId]) chatMessages[chatId] = []
+      chatMessages[chatId].push(msg)
+      return { status: 'ok' }
+    },
   },
   // POST /admin/crm/sync
   {

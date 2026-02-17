@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Secretary System — virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony (SIM7600E-H), amoCRM integration (OAuth2, contacts, leads, pipelines, sync), Vue 3 PWA admin panel, i18n (ru/en), multi-instance Telegram bots with sales/payments, multi-instance WhatsApp bots (Cloud API), website chat widgets, and LoRA fine-tuning.
+AI Secretary System — virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony (SIM7600E-H), amoCRM integration (OAuth2, contacts, leads, pipelines, kanban board, deals table, inbox messaging), Vue 3 PWA admin panel, i18n (ru/en), multi-instance Telegram bots with sales/payments, multi-instance WhatsApp bots (Cloud API), website chat widgets, and LoRA fine-tuning.
 
 ## Commands
 
@@ -152,7 +152,7 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (21 routers, ~371 endpoints) │
+│  orchestrator.py + app/routers/ (21 routers, ~378 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (20 views, PWA)                │  │
 │  │                admin/dist/                              │  │
@@ -201,7 +201,9 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Per-Instance RAG Configuration**: `BotInstance`, `WidgetInstance`, `WhatsAppInstance` have `rag_mode` ("all" | "collection" | "none") and `knowledge_collection_id` (FK to `knowledge_collections`) columns. `ChatSession` has the same fields (nullable, for admin chat overrides). `app/routers/chat.py` resolves RAG config via `_resolve_rag_config()` with priority: request override → widget instance → telegram bot instance → whatsapp instance → session → default ("all", global index). `_inject_rag_context()` replaces all 4 RAG injection points — "none" disables RAG, "collection" searches specific collection, "all" uses global index. `LLMOverrideConfig` accepts `rag_mode` + `knowledge_collection_id` for per-request control from admin chat. Frontend: RAG mode dropdown + conditional collection picker in Widget/Telegram/WhatsApp edit forms and read-only displays. `ChatView` has RAG mode selector (persisted to localStorage) next to LLM backend selector. Migration: `scripts/migrate_rag_settings.py`.
 
-**amoCRM integration**: `app/services/amocrm_service.py` is a pure async HTTP client (no DB) with optional proxy support (`AMOCRM_PROXY` env var for Docker/VPN environments). `app/routers/amocrm.py` handles OAuth2 flow, token auto-refresh, and proxies API calls. Config/tokens stored via `AsyncAmoCRMManager` in `db/integration.py`. Webhook at `POST /webhooks/amocrm`. For private amoCRM integrations, auth codes are obtained from the integration settings (not OAuth redirect). If Docker can't reach amoCRM (VPN on host), run `scripts/amocrm_proxy.py` on the host.
+**amoCRM integration**: `app/services/amocrm_service.py` is a pure async HTTP client (no DB) with optional proxy support (`AMOCRM_PROXY` env var for Docker/VPN environments). Two API layers: standard v4 REST API (Bearer auth) for leads/contacts/pipelines/events, and Amojo API (HMAC-SHA1 signing) for chat history and messaging. `app/routers/amocrm.py` handles OAuth2 flow, token auto-refresh, and proxies API calls. Config/tokens stored via `AsyncAmoCRMManager` in `db/integration.py`. `AmoCRMConfig` model includes `amojo_base_url`, `amojo_scope_id`, `amojo_channel_secret` for Amojo inbox integration. Webhook at `POST /webhooks/amocrm`. For private amoCRM integrations, auth codes are obtained from the integration settings (not OAuth redirect). If Docker can't reach amoCRM (VPN on host), run `scripts/amocrm_proxy.py` on the host. Migration: `scripts/migrate_amocrm_inbox.py` (adds amojo columns).
+
+**amoCRM Admin UI** (`CrmView.vue`): Tabbed layout (Settings / Kanban / Deals / Inbox). Settings tab: OAuth config + amojo credentials. Kanban tab (`CrmKanban.vue`): pipeline selector, horizontal columns per status, drag & drop via `vuedraggable@next` (SortableJS), auto-refresh 30s. Deals tab (`CrmDeals.vue`): paginated table with search/filters, detail modal with contacts + notes, create deal dialog. Inbox tab (`CrmInbox.vue`): messenger layout (contact list + message thread), requires amojo credentials configured in Settings. API endpoints: `GET /admin/crm/leads/{id}`, `PATCH /admin/crm/leads/{id}`, `GET /admin/crm/leads/by-pipeline/{pipeline_id}`, `GET /admin/crm/events`, `GET /admin/crm/contacts/{id}/chats`, `GET /admin/crm/chats/{chat_id}/history`, `POST /admin/crm/chats/{chat_id}/messages`.
 
 **GSM telephony**: `app/services/gsm_service.py` manages SIM7600E-H modem via AT commands over serial port (`/dev/ttyUSB2`). Auto-switches to mock mode when hardware is unavailable. `app/routers/gsm.py` exposes call/SMS management endpoints. Call and SMS logs stored via `GSMCallLogRepository` and `GSMSMSLogRepository` in `db/repositories/gsm.py`. Models: `GSMCallLog`, `GSMSMSLog` in `db/models.py`. Manager: `AsyncGSMManager` in `db/integration.py`. Migration: `scripts/migrate_gsm_tables.py`.
 
