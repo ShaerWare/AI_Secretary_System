@@ -606,9 +606,7 @@ async def admin_summarize_branch(
         "Включи: основные темы, ключевые решения, выводы и открытые вопросы. "
         "Пиши на языке диалога. Отвечай ТОЛЬКО markdown-документом без пояснений."
     )
-    dialog_text = "\n\n".join(
-        f"**{m['role']}**: {m['content']}" for m in branch_messages
-    )
+    dialog_text = "\n\n".join(f"**{m['role']}**: {m['content']}" for m in branch_messages)
     messages = [
         {"role": "system", "content": _finalize_prompt(summarize_prompt)},
         {"role": "user", "content": dialog_text},
