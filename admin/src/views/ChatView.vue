@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import {
@@ -217,6 +217,21 @@ const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
 const branchTree = computed(() => branchData.value?.branches || [])
 const siblingInfo = computed(() => currentSession.value?.sibling_info || {})
+
+// Token usage
+const tokenUsage = computed(() => currentSession.value?.token_usage)
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return String(n)
+}
+
+function tokenBarColor(percent: number): string {
+  if (percent >= 90) return 'bg-red-500'
+  if (percent >= 70) return 'bg-yellow-500'
+  return 'bg-green-500'
+}
 
 // Available LLM options for dropdown
 interface LlmOption {
@@ -609,6 +624,16 @@ function sendMessage() {
       pendingUserContent.value = null
       const responseText = fullContent || streamingContent.value
       streamingContent.value = ''
+
+      // Update token_usage from stream event
+      if (data.token_usage && currentSessionId.value) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        queryClient.setQueryData(['chat-session', currentSessionId.value], (old: any) => {
+          if (!old?.session) return old
+          return { ...old, session: { ...old.session, token_usage: data.token_usage } }
+        })
+      }
+
       refetchSession()
       refetchSessions()
       scrollToBottom()
@@ -1354,12 +1379,26 @@ watch(sessions, (newSessions) => {
               <Edit3 class="w-3.5 h-3.5 opacity-0 group-hover/title:opacity-50 transition-opacity shrink-0" />
             </h2>
           </template>
-          <p class="text-xs text-muted-foreground">
-            {{ messages.length }} messages
-            <span v-if="currentSession.system_prompt" class="ml-2 text-primary">
-              (custom prompt)
+          <div class="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              {{ messages.length }} messages
+              <span v-if="currentSession.system_prompt" class="ml-1 text-primary">(custom prompt)</span>
             </span>
-          </p>
+            <template v-if="tokenUsage">
+              <span class="flex items-center gap-1.5">
+                {{ formatTokens(tokenUsage.tokens) }} / {{ formatTokens(tokenUsage.context_window) }}
+                <span class="inline-flex w-16 h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <span
+                    :class="[tokenBarColor(tokenUsage.percent), 'h-full rounded-full transition-all']"
+                    :style="{ width: Math.min(tokenUsage.percent, 100) + '%' }"
+                  />
+                </span>
+                <span v-if="tokenUsage.percent >= 90" class="text-red-500 font-medium">
+                  {{ t('chatView.tokenWarning') }}
+                </span>
+              </span>
+            </template>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <!-- LLM provider selector -->
