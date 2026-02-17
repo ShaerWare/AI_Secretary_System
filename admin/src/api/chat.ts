@@ -24,6 +24,13 @@ export interface BranchNode {
   children: BranchNode[]
 }
 
+export interface TokenUsage {
+  tokens: number
+  context_window: number
+  percent: number
+  trimmed?: boolean
+}
+
 export interface ChatSession {
   id: string
   title: string
@@ -36,6 +43,7 @@ export interface ChatSession {
   created: string
   updated: string
   sibling_info?: Record<string, SiblingInfo>
+  token_usage?: TokenUsage
 }
 
 export interface ChatSessionSummary {
@@ -130,7 +138,7 @@ export const chatApi = {
   streamMessage: (
     sessionId: string,
     content: string,
-    onChunk: (data: { type: string; content?: string; message?: ChatMessage }) => void,
+    onChunk: (data: { type: string; content?: string; message?: ChatMessage; token_usage?: TokenUsage }) => void,
     llmOverride?: { llm_backend?: string; system_prompt?: string },
     widgetInstanceId?: string
   ) => {

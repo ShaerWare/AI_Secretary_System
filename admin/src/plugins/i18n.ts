@@ -292,6 +292,8 @@ const messages = {
       selectOrCreate: 'Выберите чат или создайте новый',
       recording: 'Запись... Нажмите на микрофон для остановки',
       summarizeBranch: 'Итоги ветки',
+      tokenUsage: 'Контекст',
+      tokenWarning: 'Контекст почти заполнен',
     },
     // Auth
     auth: {
@@ -1156,6 +1158,8 @@ const messages = {
       selectOrCreate: 'Select a chat or create a new one',
       recording: 'Recording... Click mic to stop',
       summarizeBranch: 'Summarize branch',
+      tokenUsage: 'Context',
+      tokenWarning: 'Context nearly full',
     },
     // Auth
     auth: {

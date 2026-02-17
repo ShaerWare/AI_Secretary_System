@@ -103,8 +103,23 @@ export const chatRoutes: DemoRoute[] = [
     pattern: /^\/admin\/chat\/sessions\/([^/?]+)$/,
     handler: ({ matches }) => {
       initChatData()
-      const session = getStore().chatSessions.find(s => s.id === matches[1])
-      return { session: session || getStore().chatSessions[0] }
+      const session = getStore().chatSessions.find(s => s.id === matches[1]) || getStore().chatSessions[0]
+      if (session) {
+        const tokens = session.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0) + 200
+        const context_window = 200_000
+        return {
+          session: {
+            ...session,
+            token_usage: {
+              tokens,
+              context_window,
+              percent: Math.round(tokens / context_window * 1000) / 10,
+              trimmed: false,
+            },
+          },
+        }
+      }
+      return { session }
     },
   },
   {

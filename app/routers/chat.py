@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_CHAT, limiter
+from app.utils.tokens import count_message_tokens, get_context_window, trim_messages
 from auth_manager import User, get_current_user
 from cloud_llm_service import CloudLLMService
 from db.integration import (
@@ -134,6 +135,43 @@ def _inject_rag_context(
     return base_prompt
 
 
+# ============== Token Counting Helpers ==============
+
+
+def _get_model_name(llm_service) -> str:
+    """Extract model name from LLM service for token counting."""
+    if hasattr(llm_service, "model_name") and llm_service.model_name:
+        return llm_service.model_name
+    if hasattr(llm_service, "config") and isinstance(llm_service.config, dict):
+        return llm_service.config.get("model_name", "")
+    return "claude"
+
+
+def _build_token_usage(messages: list[dict], model: str, trimmed: bool = False) -> dict:
+    """Build token_usage dict for API responses."""
+    tokens = count_message_tokens(messages, model)
+    context_window = get_context_window(model)
+    percent = round(tokens / context_window * 100, 1) if context_window else 0
+    return {
+        "tokens": tokens,
+        "context_window": context_window,
+        "percent": percent,
+        "trimmed": trimmed,
+    }
+
+
+def _trim_and_log(messages: list[dict], model: str, session_id: str) -> tuple[list[dict], bool]:
+    """Trim messages to fit context window and log if trimmed."""
+    context_window = get_context_window(model)
+    trimmed_messages, was_trimmed = trim_messages(messages, context_window)
+    if was_trimmed:
+        logger.info(
+            f"Trimmed context for session {session_id}: "
+            f"{len(messages)} -> {len(trimmed_messages)} messages"
+        )
+    return trimmed_messages, was_trimmed
+
+
 # ============== Pydantic Models ==============
 
 
@@ -245,6 +283,12 @@ async def admin_get_chat_session(session_id: str, user: User = Depends(get_curre
     sibling_info = await async_chat_manager.get_sibling_info(session_id)
     session["sibling_info"] = sibling_info
 
+    # Token usage info
+    llm_service = get_container().llm_service
+    model = _get_model_name(llm_service) if llm_service else "claude"
+    llm_messages = [{"role": m["role"], "content": m["content"]} for m in session.get("messages", [])]
+    session["token_usage"] = _build_token_usage(llm_messages, model)
+
     return {"session": session}
 
 
@@ -318,6 +362,10 @@ async def admin_send_chat_message(
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
+
+    # Trim to fit context window
+    model = _get_model_name(llm_service)
+    messages, _ = _trim_and_log(messages, model, session_id)
 
     # Генерируем ответ
     try:
@@ -469,6 +517,10 @@ async def admin_stream_chat_message(
         session_id, _finalize_prompt(default_prompt)
     )
 
+    # Trim to fit context window
+    model = _get_model_name(active_llm)
+    messages, was_trimmed = _trim_and_log(messages, model, session_id)
+
     async def generate_stream():
         full_response = []
         try:
@@ -486,8 +538,12 @@ async def admin_stream_chat_message(
                 session_id, "assistant", response_text
             )
 
+            # Build token_usage for the final event
+            all_msgs = messages + [{"role": "assistant", "content": response_text}]
+            token_usage = _build_token_usage(all_msgs, model, was_trimmed)
+
             # Отправляем финальное сообщение
-            yield f"data: {json.dumps({'type': 'assistant_message', 'message': assistant_msg}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'assistant_message', 'message': assistant_msg, 'token_usage': token_usage}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
 
         except Exception as e:
@@ -552,6 +608,10 @@ async def admin_edit_chat_message(
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
+
+    # Trim to fit context window
+    model = _get_model_name(llm_service)
+    messages, _ = _trim_and_log(messages, model, session_id)
 
     try:
         response_text = llm_service.generate_response_from_messages(messages, stream=False)
@@ -642,6 +702,10 @@ async def admin_regenerate_chat_response(
     llm_messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
+
+    # Trim to fit context window
+    model = _get_model_name(llm_service)
+    llm_messages, _ = _trim_and_log(llm_messages, model, session_id)
 
     try:
         response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
