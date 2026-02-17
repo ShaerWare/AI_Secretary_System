@@ -41,6 +41,16 @@ _NO_TOOLS_SUFFIX = (
 )
 
 
+def _inject_context_files(prompt: str | None, session: dict) -> str | None:
+    """Inject context file contents into system prompt if session has any."""
+    context_files = session.get("context_files")
+    if not context_files:
+        return prompt
+    files_text = "\n\n".join(f"# {f['name']}\n{f['content']}" for f in context_files)
+    base = prompt or _DEFAULT_RAG_PROMPT
+    return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
+
+
 def _finalize_prompt(prompt: str | None) -> str:
     """Add anti-tool-call suffix to any system prompt before sending to LLM."""
     base = prompt or _DEFAULT_RAG_PROMPT
@@ -65,6 +75,7 @@ class UpdateSessionRequest(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
     pinned: Optional[bool] = None
+    context_files: Optional[list] = None  # [{"name": str, "content": str}]
 
 
 class LLMOverrideConfig(BaseModel):
@@ -158,7 +169,11 @@ async def admin_update_chat_session(
 ):
     """Обновить чат-сессию"""
     session = await async_chat_manager.update_session(
-        session_id, request.title, request.system_prompt, pinned=request.pinned
+        session_id,
+        request.title,
+        request.system_prompt,
+        pinned=request.pinned,
+        context_files=request.context_files,
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -211,6 +226,9 @@ async def admin_send_chat_message(
         if wiki_context:
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
+
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
@@ -359,6 +377,9 @@ async def admin_stream_chat_message(
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
 
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
+
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
     )
@@ -441,6 +462,9 @@ async def admin_edit_chat_message(
         if wiki_context:
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
+
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)
@@ -530,6 +554,9 @@ async def admin_regenerate_chat_response(
         if wiki_context:
             base = default_prompt or _DEFAULT_RAG_PROMPT
             default_prompt = f"{base}\n\n{wiki_context}"
+
+    # Inject context files
+    default_prompt = _inject_context_files(default_prompt, session)
 
     llm_messages = await async_chat_manager.get_messages_for_llm(
         session_id, _finalize_prompt(default_prompt)

@@ -30,7 +30,6 @@ import {
   Square,
   RotateCw,
   FileText,
-  Sparkles,
   Mic,
   MicOff,
   CheckSquare,
@@ -44,6 +43,7 @@ import {
   Paperclip
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
+import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
 
 const { t } = useI18n()
@@ -59,15 +59,23 @@ const streamingContent = ref('')
 const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const showSettings = ref(false)
-const settingsTab = ref<'session' | 'default'>('session')
+const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
-const editingDefaultPrompt = ref('')
-const isEditingDefault = ref(false)
+const contextFiles = ref<{ name: string; content: string }[]>([])
+const editingFileIndex = ref<number | null>(null)
+const editingFileName = ref('')
+const editingFileContent = ref('')
+const contextFileInputRef = ref<HTMLInputElement | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
 const showSidebar = ref(true)
 
 // Sidebar collapse (desktop)
 const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSidebarCollapse('chat-sidebar-collapsed')
+
+// Resizable panels
+const { width: sidebarWidth, startResize: startSidebarResize } = useResizablePanel('chat-sidebar-width', 288, 200, 480, 'right')
+const { width: branchTreeWidth, startResize: startBranchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
+const { width: settingsWidth, startResize: startSettingsResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
 
 // Markdown renderer
 marked.use({
@@ -151,11 +159,6 @@ const { data: sessionData, refetch: refetchSession } = useQuery({
   enabled: computed(() => !!currentSessionId.value),
 })
 
-const { data: defaultPromptData } = useQuery({
-  queryKey: ['default-prompt'],
-  queryFn: () => chatApi.getDefaultPrompt(),
-})
-
 const { data: groupedSessionsData, refetch: refetchGrouped } = useQuery({
   queryKey: ['chat-sessions-grouped'],
   queryFn: () => chatApi.listSessionsGrouped(),
@@ -185,7 +188,6 @@ const sessions = computed(() => sessionsData.value?.sessions || [])
 const groupedSessions = computed(() => groupedSessionsData.value?.sessions || null)
 const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
-const defaultPrompt = computed(() => defaultPromptData.value?.prompt || '')
 const branchTree = computed(() => branchData.value?.branches || [])
 const siblingInfo = computed(() => currentSession.value?.sibling_info || {})
 
@@ -232,6 +234,7 @@ const currentLlmLabel = computed(() => {
 watch(currentSession, (session) => {
   if (session) {
     customPrompt.value = session.system_prompt || ''
+    contextFiles.value = session.context_files ? [...session.context_files] : []
   }
   attachedFiles.value = []
 })
@@ -358,20 +361,11 @@ const deleteMessageMutation = useMutation({
   },
 })
 
-const saveDefaultPromptMutation = useMutation({
-  mutationFn: ({ persona, prompt }: { persona: string; prompt: string }) =>
-    llmApi.setPrompt(persona, prompt),
+const saveContextFilesMutation = useMutation({
+  mutationFn: ({ sessionId, files }: { sessionId: string; files: { name: string; content: string }[] }) =>
+    chatApi.updateSession(sessionId, { context_files: files }),
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['default-prompt'] })
-    isEditingDefault.value = false
-  },
-})
-
-const resetDefaultPromptMutation = useMutation({
-  mutationFn: (persona: string) => llmApi.resetPrompt(persona),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['default-prompt'] })
-    isEditingDefault.value = false
+    refetchSession()
   },
 })
 
@@ -720,31 +714,75 @@ function saveSettings() {
   showSettings.value = false
 }
 
-function startEditingDefault() {
-  editingDefaultPrompt.value = defaultPrompt.value
-  isEditingDefault.value = true
+function triggerContextFileUpload() {
+  contextFileInputRef.value?.click()
 }
 
-function cancelEditingDefault() {
-  isEditingDefault.value = false
-  editingDefaultPrompt.value = ''
-}
-
-function saveDefaultPrompt() {
-  const persona = defaultPromptData.value?.persona
-  if (!persona) return
-  saveDefaultPromptMutation.mutate({
-    persona,
-    prompt: editingDefaultPrompt.value,
+function handleContextFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      contextFiles.value.push({ name: file.name, content })
+    }
+    reader.readAsText(file)
   })
+  input.value = ''
 }
 
-function resetDefaultPrompt() {
-  const persona = defaultPromptData.value?.persona
-  if (!persona) return
-  if (confirm('Reset to original prompt? This cannot be undone.')) {
-    resetDefaultPromptMutation.mutate(persona)
+function addEmptyContextFile() {
+  const idx = contextFiles.value.length + 1
+  contextFiles.value.push({ name: `file_${idx}.txt`, content: '' })
+  editingFileIndex.value = contextFiles.value.length - 1
+  editingFileName.value = contextFiles.value[editingFileIndex.value].name
+  editingFileContent.value = ''
+}
+
+function editContextFile(index: number) {
+  editingFileIndex.value = index
+  editingFileName.value = contextFiles.value[index].name
+  editingFileContent.value = contextFiles.value[index].content
+}
+
+function saveContextFileEdit() {
+  if (editingFileIndex.value === null) return
+  contextFiles.value[editingFileIndex.value] = {
+    name: editingFileName.value || 'untitled.txt',
+    content: editingFileContent.value,
   }
+  editingFileIndex.value = null
+  editingFileName.value = ''
+  editingFileContent.value = ''
+}
+
+function cancelContextFileEdit() {
+  // If the file was just added empty and has no content, remove it
+  if (editingFileIndex.value !== null) {
+    const file = contextFiles.value[editingFileIndex.value]
+    if (!file.content && editingFileContent.value === '') {
+      contextFiles.value.splice(editingFileIndex.value, 1)
+    }
+  }
+  editingFileIndex.value = null
+  editingFileName.value = ''
+  editingFileContent.value = ''
+}
+
+function removeContextFile(index: number) {
+  contextFiles.value.splice(index, 1)
+  if (editingFileIndex.value === index) {
+    editingFileIndex.value = null
+  }
+}
+
+function saveContextFiles() {
+  if (!currentSessionId.value) return
+  saveContextFilesMutation.mutate({
+    sessionId: currentSessionId.value,
+    files: contextFiles.value,
+  })
 }
 
 function copyToClipboard(text: string) {
@@ -907,8 +945,9 @@ watch(sessions, (newSessions) => {
         'border-r border-border bg-card flex flex-col transition-all',
         showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         'fixed md:relative inset-y-0 left-0 z-40 md:z-0',
-        sidebarCollapsed ? 'w-full md:w-14' : 'w-full md:w-72'
+        sidebarCollapsed ? 'w-full md:!w-14' : 'w-full'
       ]"
+      :style="!sidebarCollapsed ? { width: sidebarWidth + 'px' } : undefined"
     >
       <!-- Collapsed mode (desktop only) -->
       <template v-if="sidebarCollapsed">
@@ -1204,6 +1243,13 @@ watch(sessions, (newSessions) => {
       </div>
       </template>
     </div>
+
+    <!-- Sidebar resize handle (desktop only) -->
+    <div
+      v-if="!sidebarCollapsed"
+      class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+      @mousedown="startSidebarResize"
+    />
 
     <!-- Mobile sidebar backdrop -->
     <div
@@ -1542,32 +1588,43 @@ watch(sessions, (newSessions) => {
       </div>
 
       <!-- Branch Tree Panel -->
-      <BranchTree
-        v-if="showBranchTree"
-        :branches="branchTree"
-        :session-id="currentSessionId || ''"
-        @switch="onBranchSwitch"
-        @scroll-to="onBranchScrollTo"
-        @close="showBranchTree = false"
-      />
+      <template v-if="showBranchTree">
+        <div
+          class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+          @mousedown="startBranchResize"
+        />
+        <BranchTree
+          :branches="branchTree"
+          :session-id="currentSessionId || ''"
+          :style="{ width: branchTreeWidth + 'px' }"
+          @switch="onBranchSwitch"
+          @scroll-to="onBranchScrollTo"
+          @close="showBranchTree = false"
+        />
+      </template>
 
       <!-- Settings Panel (slide-out right) -->
       <div
         v-if="showSettings"
-        class="border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden"
-        :class="showBranchTree ? 'w-[50%]' : 'w-[60%]'"
+        class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+        @mousedown="startSettingsResize"
+      />
+      <div
+        v-if="showSettings"
+        class="border-l border-border bg-card/50 flex flex-col flex-shrink-0 overflow-hidden"
+        :style="{ width: settingsWidth + 'px' }"
       >
         <!-- Panel header -->
         <div class="p-3 border-b border-border flex items-center justify-between">
-          <h3 class="text-sm font-semibold flex items-center gap-2">
-            <Settings2 class="w-4 h-4" />
-            Chat Settings
+          <h3 class="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+            <Settings2 class="w-3.5 h-3.5" />
+            Настройки чата
           </h3>
           <button
             class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
             @click="showSettings = false"
           >
-            <X class="w-4 h-4" />
+            <X class="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -1583,19 +1640,22 @@ watch(sessions, (newSessions) => {
             @click="settingsTab = 'session'"
           >
             <FileText class="w-3.5 h-3.5 inline mr-1" />
-            Session Prompt
+            Промпт сессии
           </button>
           <button
             :class="[
               'px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px',
-              settingsTab === 'default'
+              settingsTab === 'files'
                 ? 'border-primary text-primary'
                 : 'border-transparent hover:text-foreground text-muted-foreground'
             ]"
-            @click="settingsTab = 'default'"
+            @click="settingsTab = 'files'"
           >
-            <Sparkles class="w-3.5 h-3.5 inline mr-1" />
-            Default Prompt
+            <Paperclip class="w-3.5 h-3.5 inline mr-1" />
+            Файлы контекста
+            <span v-if="contextFiles.length" class="ml-1 text-[10px] bg-primary/20 px-1 rounded-full">
+              {{ contextFiles.length }}
+            </span>
           </button>
         </div>
 
@@ -1604,7 +1664,7 @@ watch(sessions, (newSessions) => {
           <!-- Session Prompt Tab -->
           <div v-if="settingsTab === 'session'" class="flex flex-col flex-1 gap-3">
             <p class="text-xs text-muted-foreground">
-              Leave empty to use the default persona prompt
+              Оставьте пустым, чтобы использовать промпт по умолчанию
             </p>
 
             <!-- File attachment -->
@@ -1643,14 +1703,127 @@ watch(sessions, (newSessions) => {
             <textarea
               v-model="customPrompt"
               class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm font-mono"
-              placeholder="Enter custom system prompt..."
+              placeholder="Введите системный промпт..."
             />
 
-            <div class="p-2 bg-secondary/50 rounded-lg">
-              <p class="text-xs font-medium mb-1">Default ({{ defaultPromptData?.persona }}):</p>
-              <p class="text-xs text-muted-foreground whitespace-pre-wrap max-h-20 overflow-y-auto">
-                {{ defaultPrompt || 'Loading...' }}
-              </p>
+            <div class="flex justify-end gap-2">
+              <button
+                class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="showSettings = false"
+              >
+                Отмена
+              </button>
+              <button
+                :disabled="updateSessionMutation.isPending.value"
+                class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                @click="saveSettings"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+
+          <!-- Context Files Tab -->
+          <div v-if="settingsTab === 'files'" class="flex flex-col flex-1 gap-3">
+            <p class="text-xs text-muted-foreground">
+              Содержимое файлов будет добавлено в системный промпт при каждом запросе к LLM
+            </p>
+
+            <!-- Hidden file input -->
+            <input
+              ref="contextFileInputRef"
+              type="file"
+              accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts"
+              multiple
+              class="hidden"
+              @change="handleContextFileUpload"
+            />
+
+            <!-- File list -->
+            <div class="flex-1 overflow-y-auto space-y-2">
+              <div v-if="contextFiles.length === 0" class="text-center py-8 text-muted-foreground text-sm">
+                Нет прикреплённых файлов
+              </div>
+
+              <div
+                v-for="(file, idx) in contextFiles"
+                :key="idx"
+                class="border border-border rounded-lg p-2.5 bg-secondary/30"
+              >
+                <!-- Editing mode for this file -->
+                <template v-if="editingFileIndex === idx">
+                  <input
+                    v-model="editingFileName"
+                    class="w-full px-2 py-1 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary mb-2"
+                    placeholder="Имя файла"
+                  />
+                  <textarea
+                    v-model="editingFileContent"
+                    class="w-full min-h-[100px] p-2 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono"
+                    placeholder="Содержимое файла..."
+                  />
+                  <div class="flex justify-end gap-1.5 mt-2">
+                    <button
+                      class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors"
+                      @click="cancelContextFileEdit"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      class="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+                      @click="saveContextFileEdit"
+                    >
+                      <Check class="w-3 h-3 inline mr-0.5" />
+                      OK
+                    </button>
+                  </div>
+                </template>
+
+                <!-- View mode for this file -->
+                <template v-else>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium flex items-center gap-1">
+                      <FileText class="w-3.5 h-3.5 text-muted-foreground" />
+                      {{ file.name }}
+                    </span>
+                    <div class="flex gap-1">
+                      <button
+                        class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+                        title="Редактировать"
+                        @click="editContextFile(idx)"
+                      >
+                        <Edit3 class="w-3 h-3" />
+                      </button>
+                      <button
+                        class="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                        title="Удалить"
+                        @click="removeContextFile(idx)"
+                      >
+                        <X class="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3 font-mono">{{ file.content.slice(0, 200) }}{{ file.content.length > 200 ? '...' : '' }}</p>
+                </template>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-2">
+              <button
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="triggerContextFileUpload"
+              >
+                <Paperclip class="w-3.5 h-3.5" />
+                Загрузить файл
+              </button>
+              <button
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                @click="addEmptyContextFile"
+              >
+                <Plus class="w-3.5 h-3.5" />
+                Пустой файл
+              </button>
             </div>
 
             <div class="flex justify-end gap-2">
@@ -1658,86 +1831,15 @@ watch(sessions, (newSessions) => {
                 class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                 @click="showSettings = false"
               >
-                Cancel
+                Закрыть
               </button>
               <button
-                :disabled="updateSessionMutation.isPending.value"
+                :disabled="saveContextFilesMutation.isPending.value"
                 class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                @click="saveSettings"
+                @click="saveContextFiles"
               >
-                Save
-              </button>
-            </div>
-          </div>
-
-          <!-- Default Prompt Tab -->
-          <div v-if="settingsTab === 'default'" class="flex flex-col flex-1 gap-3">
-            <div class="flex items-center justify-between">
-              <label class="text-xs font-medium">
-                Persona: {{ defaultPromptData?.persona }}
-              </label>
-              <div class="flex gap-1.5">
-                <button
-                  v-if="!isEditingDefault"
-                  class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors"
-                  @click="startEditingDefault"
-                >
-                  <Edit3 class="w-3 h-3 inline mr-1" />
-                  Edit
-                </button>
-                <button
-                  v-if="!isEditingDefault"
-                  :disabled="resetDefaultPromptMutation.isPending.value"
-                  class="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors text-orange-500"
-                  @click="resetDefaultPrompt"
-                >
-                  <RotateCw class="w-3 h-3 inline mr-1" />
-                  Reset
-                </button>
-              </div>
-            </div>
-            <p class="text-xs text-muted-foreground">
-              Used for all chats without a custom prompt
-            </p>
-
-            <!-- View mode -->
-            <div v-if="!isEditingDefault" class="flex-1 p-3 bg-secondary rounded-lg overflow-y-auto">
-              <p class="text-sm whitespace-pre-wrap">
-                {{ defaultPrompt || 'Loading...' }}
-              </p>
-            </div>
-
-            <!-- Edit mode -->
-            <template v-else>
-              <textarea
-                v-model="editingDefaultPrompt"
-                class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
-                placeholder="Enter default system prompt..."
-              />
-              <div class="flex justify-end gap-2">
-                <button
-                  class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-                  @click="cancelEditingDefault"
-                >
-                  Cancel
-                </button>
-                <button
-                  :disabled="saveDefaultPromptMutation.isPending.value"
-                  class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                  @click="saveDefaultPrompt"
-                >
-                  <Loader2 v-if="saveDefaultPromptMutation.isPending.value" class="w-4 h-4 inline mr-1 animate-spin" />
-                  Save Default
-                </button>
-              </div>
-            </template>
-
-            <div v-if="!isEditingDefault" class="flex justify-end">
-              <button
-                class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-                @click="showSettings = false"
-              >
-                Close
+                <Loader2 v-if="saveContextFilesMutation.isPending.value" class="w-4 h-4 inline mr-1 animate-spin" />
+                Сохранить
               </button>
             </div>
           </div>

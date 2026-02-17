@@ -124,8 +124,9 @@ class ChatRepository(BaseRepository[ChatSession]):
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
         pinned: Optional[bool] = None,
+        context_files: Optional[list] = None,
     ) -> Optional[dict]:
-        """Update session title, system prompt, or pinned status."""
+        """Update session title, system prompt, pinned status, or context files."""
         result = await self.session.execute(
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
@@ -142,6 +143,12 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.system_prompt = system_prompt
         if pinned is not None:
             session.pinned = pinned
+        if context_files is not None:
+            import json
+
+            session.context_files = (
+                json.dumps(context_files, ensure_ascii=False) if context_files else None
+            )
         session.updated = datetime.utcnow()
 
         await self.session.commit()

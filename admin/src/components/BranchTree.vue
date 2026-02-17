@@ -27,7 +27,7 @@ function handleScrollTo(messageId: string) {
 </script>
 
 <template>
-  <div class="w-52 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0">
+  <div class="border-l border-border bg-card/50 overflow-y-auto flex-shrink-0">
     <div class="p-3 border-b border-border flex items-center justify-between">
       <h3 class="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
         <GitBranch class="w-3.5 h-3.5" />

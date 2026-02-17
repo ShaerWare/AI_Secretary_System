@@ -128,6 +128,9 @@ class ChatSession(Base):
     # Pinned chat (stays at top of list)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
+    # Context files (JSON: [{"name": "file.txt", "content": "..."}])
+    context_files: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Source tracking (admin, telegram, widget)
     source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -146,6 +149,7 @@ class ChatSession(Base):
             "title": self.title,
             "system_prompt": self.system_prompt,
             "pinned": self.pinned,
+            "context_files": json.loads(self.context_files) if self.context_files else [],
             "source": self.source,
             "source_id": self.source_id,
             "created": self.created.isoformat() if self.created else None,
