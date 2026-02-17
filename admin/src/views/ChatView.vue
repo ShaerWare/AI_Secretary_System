@@ -101,6 +101,10 @@ const selectedIds = ref<Set<string>>(new Set())
 const renamingSessionId = ref<string | null>(null)
 const renamingTitle = ref('')
 
+// Header title edit state
+const editingHeaderTitle = ref(false)
+const headerTitleValue = ref('')
+
 // Grouping state
 const groupBySource = ref(true)
 const collapsedGroups = ref<Set<string>>(new Set())
@@ -488,6 +492,36 @@ function saveRename() {
 
   renamingSessionId.value = null
   renamingTitle.value = ''
+}
+
+// Header title inline edit
+function startHeaderRename() {
+  if (!currentSession.value) return
+  editingHeaderTitle.value = true
+  headerTitleValue.value = currentSession.value.title
+  nextTick(() => {
+    const input = document.querySelector('.header-rename-input') as HTMLInputElement
+    input?.focus()
+    input?.select()
+  })
+}
+
+function saveHeaderRename() {
+  if (!currentSession.value || !headerTitleValue.value.trim()) {
+    cancelHeaderRename()
+    return
+  }
+  updateSessionMutation.mutate({
+    sessionId: currentSession.value.id,
+    data: { title: headerTitleValue.value.trim() }
+  })
+  editingHeaderTitle.value = false
+  headerTitleValue.value = ''
+}
+
+function cancelHeaderRename() {
+  editingHeaderTitle.value = false
+  headerTitleValue.value = ''
 }
 
 // Delete single session from list
@@ -1191,7 +1225,25 @@ watch(sessions, (newSessions) => {
       <!-- Chat Header -->
       <div v-if="currentSession" class="p-4 border-b border-border flex items-center justify-between bg-card">
         <div class="flex-1 min-w-0">
-          <h2 class="font-semibold truncate">{{ currentSession.title }}</h2>
+          <template v-if="editingHeaderTitle">
+            <input
+              v-model="headerTitleValue"
+              class="header-rename-input w-full font-semibold bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
+              @keydown.enter="saveHeaderRename"
+              @keydown.escape="cancelHeaderRename"
+              @blur="saveHeaderRename"
+              @click.stop
+            />
+          </template>
+          <template v-else>
+            <h2
+              class="font-semibold truncate cursor-pointer group/title flex items-center gap-1.5 hover:text-primary transition-colors"
+              @click="startHeaderRename"
+            >
+              {{ currentSession.title }}
+              <Edit3 class="w-3.5 h-3.5 opacity-0 group-hover/title:opacity-50 transition-opacity shrink-0" />
+            </h2>
+          </template>
           <p class="text-xs text-muted-foreground">
             {{ messages.length }} messages
             <span v-if="currentSession.system_prompt" class="ml-2 text-primary">
@@ -1254,6 +1306,50 @@ watch(sessions, (newSessions) => {
           >
             <Trash2 class="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div v-if="currentSession" class="p-4 border-b border-border bg-card">
+        <div class="flex gap-3 items-end">
+          <textarea
+            v-model="inputMessage"
+            placeholder="Type a message..."
+            rows="1"
+            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            :disabled="isStreaming || isRecording"
+            @keydown.enter.exact.prevent="sendMessage"
+          />
+          <!-- Microphone button -->
+          <button
+            :disabled="isStreaming || isTranscribing"
+            :class="[
+              'p-3 rounded-lg transition-colors',
+              isRecording
+                ? 'bg-red-500 text-white animate-pulse'
+                : 'bg-secondary hover:bg-secondary/80'
+            ]"
+            :title="isRecording ? 'Stop recording' : (isTranscribing ? 'Transcribing...' : 'Start voice input')"
+            @click="toggleRecording"
+          >
+            <Loader2 v-if="isTranscribing" class="w-5 h-5 animate-spin" />
+            <MicOff v-else-if="isRecording" class="w-5 h-5" />
+            <Mic v-else class="w-5 h-5" />
+          </button>
+          <!-- Send button -->
+          <button
+            :disabled="!inputMessage.trim() || isStreaming || isRecording"
+            class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            @click="sendMessage"
+          >
+            <Send v-if="!isStreaming" class="w-5 h-5" />
+            <Loader2 v-else class="w-5 h-5 animate-spin" />
+          </button>
+        </div>
+        <!-- Recording indicator -->
+        <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
+          <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+          Recording... Click mic to stop
         </div>
       </div>
 
@@ -1648,50 +1744,6 @@ watch(sessions, (newSessions) => {
         </div>
       </div>
       </div><!-- end Messages + Branch Tree row -->
-
-      <!-- Input Area -->
-      <div v-if="currentSession" class="p-4 border-t border-border bg-card">
-        <div class="flex gap-3 items-end">
-          <textarea
-            v-model="inputMessage"
-            placeholder="Type a message..."
-            rows="1"
-            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-            :disabled="isStreaming || isRecording"
-            @keydown.enter.exact.prevent="sendMessage"
-          />
-          <!-- Microphone button -->
-          <button
-            :disabled="isStreaming || isTranscribing"
-            :class="[
-              'p-3 rounded-lg transition-colors',
-              isRecording
-                ? 'bg-red-500 text-white animate-pulse'
-                : 'bg-secondary hover:bg-secondary/80'
-            ]"
-            :title="isRecording ? 'Stop recording' : (isTranscribing ? 'Transcribing...' : 'Start voice input')"
-            @click="toggleRecording"
-          >
-            <Loader2 v-if="isTranscribing" class="w-5 h-5 animate-spin" />
-            <MicOff v-else-if="isRecording" class="w-5 h-5" />
-            <Mic v-else class="w-5 h-5" />
-          </button>
-          <!-- Send button -->
-          <button
-            :disabled="!inputMessage.trim() || isStreaming || isRecording"
-            class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            @click="sendMessage"
-          >
-            <Send v-if="!isStreaming" class="w-5 h-5" />
-            <Loader2 v-else class="w-5 h-5 animate-spin" />
-          </button>
-        </div>
-        <!-- Recording indicator -->
-        <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
-          <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          Recording... Click mic to stop
-        </div>
-      </div>
     </div>
 
   </div>
