@@ -33,6 +33,8 @@ export interface WhatsAppInstanceData {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   allowed_phones: string[]
   blocked_phones: string[]
   rate_limit_count?: number | null
@@ -83,6 +85,8 @@ export interface BotInstanceData {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   action_buttons: ActionButtonData[]
   payment_enabled: boolean
   stars_enabled: boolean
@@ -134,6 +138,8 @@ export interface WidgetInstanceData {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   created?: string
   updated?: string
 }

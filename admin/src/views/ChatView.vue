@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { chatApi, ttsApi, llmApi, sttApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import {
@@ -35,6 +35,7 @@ import {
   CheckSquare,
   ListChecks,
   Brain,
+  BookOpen,
   GitBranch,
   PanelLeftClose,
   PanelLeftOpen,
@@ -139,6 +140,12 @@ const audioChunks = ref<Blob[]>([])
 // LLM selection state
 const selectedLlmBackend = ref<string>(localStorage.getItem('chat-llm-backend') || '')
 
+// RAG selection state
+const selectedRagMode = ref<string>(localStorage.getItem('chat-rag-mode') || '')
+const selectedCollectionId = ref<number | null>(
+  localStorage.getItem('chat-rag-collection') ? Number(localStorage.getItem('chat-rag-collection')) : null
+)
+
 // Save voice mode preference
 watch(voiceMode, (val) => {
   localStorage.setItem('chat-voice-mode', val ? 'true' : 'false')
@@ -147,6 +154,18 @@ watch(voiceMode, (val) => {
 // Save selected LLM backend
 watch(selectedLlmBackend, (val) => {
   localStorage.setItem('chat-llm-backend', val)
+})
+
+// Save RAG selection
+watch(selectedRagMode, (val) => {
+  localStorage.setItem('chat-rag-mode', val)
+})
+watch(selectedCollectionId, (val) => {
+  if (val) {
+    localStorage.setItem('chat-rag-collection', String(val))
+  } else {
+    localStorage.removeItem('chat-rag-collection')
+  }
 })
 
 // Queries
@@ -177,6 +196,12 @@ const { data: llmProvidersData } = useQuery({
   queryKey: ['llm-providers-enabled'],
   queryFn: () => llmApi.getProviders(true),
 })
+
+const { data: collectionsData } = useQuery({
+  queryKey: ['knowledge-collections'],
+  queryFn: () => wikiRagApi.getCollections(),
+})
+const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
 
 // Branch tree query
 const { data: branchData, refetch: refetchBranches } = useQuery({
@@ -566,8 +591,13 @@ function sendMessage() {
   scrollToBottom()
 
   let fullContent = ''
-  // Build LLM override if a specific backend is selected
-  const llmOverride = selectedLlmBackend.value ? { llm_backend: selectedLlmBackend.value } : undefined
+  // Build LLM override if a specific backend or RAG mode is selected
+  const hasOverride = selectedLlmBackend.value || selectedRagMode.value
+  const llmOverride = hasOverride ? {
+    ...(selectedLlmBackend.value ? { llm_backend: selectedLlmBackend.value } : {}),
+    ...(selectedRagMode.value ? { rag_mode: selectedRagMode.value } : {}),
+    ...(selectedRagMode.value === 'collection' && selectedCollectionId.value ? { knowledge_collection_id: selectedCollectionId.value } : {}),
+  } : undefined
 
   const stream = chatApi.streamMessage(currentSessionId.value, content, (data) => {
     if (data.type === 'chunk' && data.content) {
@@ -1344,6 +1374,29 @@ watch(sessions, (newSessions) => {
               <option v-for="option in availableLlmOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
+            </select>
+          </div>
+          <!-- RAG mode selector -->
+          <div class="flex items-center gap-1">
+            <BookOpen class="w-4 h-4 text-muted-foreground" />
+            <select
+              v-model="selectedRagMode"
+              class="px-2 py-1 text-sm bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary border-none cursor-pointer"
+              :title="t('chatView.ragMode')"
+            >
+              <option value="">{{ t('chat.defaultLlm') }}</option>
+              <option value="all">{{ t('chatView.ragModeAll') }}</option>
+              <option value="collection">{{ t('chatView.ragModeCollection') }}</option>
+              <option value="none">{{ t('chatView.ragModeNone') }}</option>
+            </select>
+            <select
+              v-if="selectedRagMode === 'collection'"
+              v-model="selectedCollectionId"
+              class="px-2 py-1 text-sm bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary border-none cursor-pointer"
+              :title="t('chatView.ragCollectionSelect')"
+            >
+              <option :value="null">{{ t('chatView.ragCollectionSelect') }}</option>
+              <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
             </select>
           </div>
           <!-- Voice mode toggle -->

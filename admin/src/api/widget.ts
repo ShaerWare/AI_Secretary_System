@@ -42,6 +42,9 @@ export interface WidgetInstance {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  // RAG
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   // Rate limiting
   rate_limit_count?: number | null
   rate_limit_hours?: number | null

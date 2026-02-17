@@ -86,6 +86,8 @@ class ChatRepository(BaseRepository[ChatSession]):
         source: Optional[str] = None,
         source_id: Optional[str] = None,
         owner_id: Optional[int] = None,
+        rag_mode: Optional[str] = None,
+        knowledge_collection_id: Optional[int] = None,
     ) -> dict:
         """Create new chat session."""
         session_id = self._generate_session_id()
@@ -98,6 +100,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             source=source,
             source_id=source_id,
             owner_id=owner_id,
+            rag_mode=rag_mode,
+            knowledge_collection_id=knowledge_collection_id,
             created=now,
             updated=now,
         )
@@ -113,6 +117,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             "system_prompt": session.system_prompt,
             "source": session.source,
             "source_id": session.source_id,
+            "rag_mode": session.rag_mode,
+            "knowledge_collection_id": session.knowledge_collection_id,
             "created": session.created.isoformat() if session.created else None,
             "updated": session.updated.isoformat() if session.updated else None,
             "messages": [],  # New session has no messages
@@ -124,9 +130,11 @@ class ChatRepository(BaseRepository[ChatSession]):
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
         pinned: Optional[bool] = None,
+        rag_mode: Optional[str] = None,
+        knowledge_collection_id: Optional[int] = None,
         context_files: Optional[list] = None,
     ) -> Optional[dict]:
-        """Update session title, system prompt, pinned status, or context files."""
+        """Update session title, system prompt, pinned status, RAG config, or context files."""
         result = await self.session.execute(
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
@@ -143,6 +151,13 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.system_prompt = system_prompt
         if pinned is not None:
             session.pinned = pinned
+        if rag_mode is not None:
+            session.rag_mode = rag_mode
+        if knowledge_collection_id is not None:
+            # Allow unsetting with 0 or -1
+            session.knowledge_collection_id = (
+                knowledge_collection_id if knowledge_collection_id > 0 else None
+            )
         if context_files is not None:
             import json
 

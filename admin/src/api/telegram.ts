@@ -86,6 +86,9 @@ export interface BotInstance {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  // RAG
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   // Action buttons
   action_buttons: ActionButton[]
   // Payment

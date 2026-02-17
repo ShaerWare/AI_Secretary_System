@@ -20,6 +20,8 @@ const defaultBots: BotInstanceData[] = [
     tts_engine: 'xtts',
     tts_voice: 'anna',
     tts_preset: 'natural',
+    rag_mode: 'all',
+    knowledge_collection_id: null,
     action_buttons: [
       { id: 'btn-1', label: 'FAQ', icon: '❓', enabled: true, order: 1 },
       { id: 'btn-2', label: 'Оператор', icon: '👨‍💼', enabled: true, order: 2 },
@@ -55,6 +57,8 @@ const defaultBots: BotInstanceData[] = [
     tts_engine: 'xtts',
     tts_voice: 'marina',
     tts_preset: 'expressive',
+    rag_mode: 'none',
+    knowledge_collection_id: null,
     action_buttons: [
       { id: 'btn-4', label: 'Тарифы', icon: '📋', enabled: true, order: 1 },
       { id: 'btn-5', label: 'Демо', icon: '🎯', enabled: true, order: 2 },
@@ -258,6 +262,8 @@ export const telegramRoutes: DemoRoute[] = [
         llm_persona: 'anna',
         tts_engine: 'xtts',
         tts_voice: 'anna',
+        rag_mode: 'all',
+        knowledge_collection_id: null,
         action_buttons: [],
         payment_enabled: false,
         stars_enabled: false,

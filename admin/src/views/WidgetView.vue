@@ -32,6 +32,7 @@ import {
 } from 'lucide-vue-next'
 import { widgetInstancesApi, llmApi, type WidgetInstance, type CloudProvider } from '@/api'
 import { chatApi, type ChatMessage } from '@/api/chat'
+import { wikiRagApi } from '@/api/wikiRag'
 import { useToastStore } from '@/stores/toast'
 
 const { t } = useI18n()
@@ -70,6 +71,8 @@ const formData = ref<Partial<WidgetInstance>>({
   tts_engine: 'xtts',
   tts_voice: 'anna',
   tts_preset: '',
+  rag_mode: 'all',
+  knowledge_collection_id: null,
   rate_limit_count: null,
   rate_limit_hours: null,
 })
@@ -101,6 +104,13 @@ const { data: cloudProvidersData } = useQuery({
   queryFn: () => llmApi.getProviders(),
 })
 const cloudProviders = computed(() => (cloudProvidersData.value?.providers || []).filter((p: CloudProvider) => p.enabled))
+
+// Knowledge collections for RAG config
+const { data: collectionsData } = useQuery({
+  queryKey: ['knowledge-collections'],
+  queryFn: () => wikiRagApi.getCollections(),
+})
+const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
 
 const selectedInstance = computed(() =>
   instances.value.find(i => i.id === selectedInstanceId.value)
@@ -163,6 +173,8 @@ function openCreateDialog() {
     tts_engine: 'xtts',
     tts_voice: 'anna',
     tts_preset: '',
+    rag_mode: 'all',
+    knowledge_collection_id: null,
     rate_limit_count: null,
     rate_limit_hours: null,
   }
@@ -690,6 +702,17 @@ function handleTestKeydown(e: KeyboardEvent) {
                 <p class="text-lg font-semibold">{{ selectedInstance.tts_voice }}</p>
               </div>
             </div>
+            <div class="bg-card rounded-xl border border-border p-4">
+              <div>
+                <h3 class="text-sm font-medium text-muted-foreground">{{ t('widget.ragMode') }}</h3>
+                <p class="text-sm">
+                  {{ selectedInstance.rag_mode === 'none' ? t('widget.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('widget.ragModeCollection') : t('widget.ragModeAll') }}
+                  <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id">
+                    ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
+                  </span>
+                </p>
+              </div>
+            </div>
             <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('widget.systemPrompt') }}</h3>
               <p class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap">{{ selectedInstance.system_prompt }}</p>
@@ -1156,6 +1179,25 @@ function handleTestKeydown(e: KeyboardEvent) {
                 >
                   <option value="anna">Анна</option>
                   <option value="marina">Марина</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- RAG Config -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">{{ t('widget.ragMode') }}</label>
+                <select v-model="formData.rag_mode" class="w-full px-3 py-2 rounded-lg border border-border bg-background">
+                  <option value="all">{{ t('widget.ragModeAll') }}</option>
+                  <option value="collection">{{ t('widget.ragModeCollection') }}</option>
+                  <option value="none">{{ t('widget.ragModeNone') }}</option>
+                </select>
+              </div>
+              <div v-if="formData.rag_mode === 'collection'">
+                <label class="block text-sm font-medium mb-1">{{ t('widget.ragCollection') }}</label>
+                <select v-model="formData.knowledge_collection_id" class="w-full px-3 py-2 rounded-lg border border-border bg-background">
+                  <option :value="null">—</option>
+                  <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
                 </select>
               </div>
             </div>

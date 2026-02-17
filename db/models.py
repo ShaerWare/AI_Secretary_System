@@ -135,6 +135,12 @@ class ChatSession(Base):
     source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # RAG configuration (NULL = inherit from source instance)
+    rag_mode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
+
     # Relationships
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage",
@@ -152,6 +158,8 @@ class ChatSession(Base):
             "context_files": json.loads(self.context_files) if self.context_files else [],
             "source": self.source,
             "source_id": self.source_id,
+            "rag_mode": self.rag_mode,
+            "knowledge_collection_id": self.knowledge_collection_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
@@ -171,6 +179,8 @@ class ChatSession(Base):
             "last_message": last_msg,
             "source": self.source,
             "source_id": self.source_id,
+            "rag_mode": self.rag_mode,
+            "knowledge_collection_id": self.knowledge_collection_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
@@ -432,6 +442,12 @@ class BotInstance(Base):
     payment_products: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
     payment_success_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # RAG configuration
+    rag_mode: Mapped[str] = mapped_column(String(20), default="all", server_default="all")
+    knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
+
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rate_limit_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -550,6 +566,9 @@ class BotInstance(Base):
             "stars_enabled": self.stars_enabled,
             "payment_products": self.get_payment_products(),
             "payment_success_message": self.payment_success_message,
+            # RAG
+            "rag_mode": self.rag_mode,
+            "knowledge_collection_id": self.knowledge_collection_id,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -603,6 +622,12 @@ class WidgetInstance(Base):
     tts_engine: Mapped[str] = mapped_column(String(20), default="xtts")
     tts_voice: Mapped[str] = mapped_column(String(50), default="anna")
     tts_preset: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # RAG configuration
+    rag_mode: Mapped[str] = mapped_column(String(20), default="all", server_default="all")
+    knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -665,6 +690,9 @@ class WidgetInstance(Base):
             "tts_engine": self.tts_engine,
             "tts_voice": self.tts_voice,
             "tts_preset": self.tts_preset,
+            # RAG
+            "rag_mode": self.rag_mode,
+            "knowledge_collection_id": self.knowledge_collection_id,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -712,6 +740,12 @@ class WhatsAppInstance(Base):
     # Access control
     allowed_phones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
     blocked_phones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
+
+    # RAG configuration
+    rag_mode: Mapped[str] = mapped_column(String(20), default="all", server_default="all")
+    knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -787,6 +821,9 @@ class WhatsAppInstance(Base):
             # Access control
             "allowed_phones": self.get_allowed_phones(),
             "blocked_phones": self.get_blocked_phones(),
+            # RAG
+            "rag_mode": self.rag_mode,
+            "knowledge_collection_id": self.knowledge_collection_id,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -1968,6 +2005,13 @@ class AmoCRMConfig(Base):
     webhook_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     webhook_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # Amojo (chat messaging) settings
+    amojo_base_url: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, default="https://amojo.amocrm.ru"
+    )
+    amojo_scope_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    amojo_channel_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
     # Stats
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     contacts_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -2021,8 +2065,14 @@ class AmoCRMConfig(Base):
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
+        # Amojo fields
+        result["amojo_base_url"] = self.amojo_base_url or "https://amojo.amocrm.ru"
+        result["amojo_scope_id"] = self.amojo_scope_id
+        result["amojo_inbox_configured"] = bool(self.amojo_scope_id and self.amojo_channel_secret)
+
         if include_secrets:
             result["client_secret"] = self.client_secret
+            result["amojo_channel_secret"] = self.amojo_channel_secret
         else:
             result["client_secret_masked"] = (
                 "***" + self.client_secret[-4:]

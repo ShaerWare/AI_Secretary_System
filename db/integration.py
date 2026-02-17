@@ -129,12 +129,20 @@ class AsyncChatManager:
         source: Optional[str] = None,
         source_id: Optional[str] = None,
         owner_id: Optional[int] = None,
+        rag_mode: Optional[str] = None,
+        knowledge_collection_id: Optional[int] = None,
     ) -> dict:
         """Create new session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.create_session(
-                title, system_prompt, source, source_id, owner_id=owner_id
+                title,
+                system_prompt,
+                source,
+                source_id,
+                owner_id=owner_id,
+                rag_mode=rag_mode,
+                knowledge_collection_id=knowledge_collection_id,
             )
 
     async def update_session(
@@ -143,13 +151,21 @@ class AsyncChatManager:
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
         pinned: Optional[bool] = None,
+        rag_mode: Optional[str] = None,
+        knowledge_collection_id: Optional[int] = None,
         context_files: Optional[list] = None,
     ) -> Optional[dict]:
-        """Update session title, system prompt, pinned status, or context files."""
+        """Update session title, system prompt, pinned status, RAG config, or context files."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.update_session(
-                session_id, title, system_prompt, pinned=pinned, context_files=context_files
+                session_id,
+                title,
+                system_prompt,
+                pinned=pinned,
+                rag_mode=rag_mode,
+                knowledge_collection_id=knowledge_collection_id,
+                context_files=context_files,
             )
 
     async def delete_session(self, session_id: str, owner_id: Optional[int] = None) -> bool:

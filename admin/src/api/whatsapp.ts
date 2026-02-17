@@ -24,6 +24,9 @@ export interface WhatsAppInstance {
   tts_engine: string
   tts_voice: string
   tts_preset?: string
+  // RAG
+  rag_mode?: string
+  knowledge_collection_id?: number | null
   // Access control
   allowed_phones: string[]
   blocked_phones: string[]

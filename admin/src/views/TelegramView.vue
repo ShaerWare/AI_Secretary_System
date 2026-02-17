@@ -39,7 +39,7 @@ import {
   GitBranch,
   Wallet,
 } from 'lucide-vue-next'
-import { botInstancesApi, botSalesApi, llmApi, type BotInstance, type BotInstanceSession, type ActionButton, type PaymentProduct } from '@/api'
+import { botInstancesApi, botSalesApi, llmApi, wikiRagApi, type BotInstance, type BotInstanceSession, type ActionButton, type PaymentProduct } from '@/api'
 import type { AgentPrompt, QuizQuestion, Segment, FollowupRule, Testimonial, HardwareSpec, GithubConfig, FunnelData, Subscriber } from '@/api/bot-sales'
 import { useToastStore } from '@/stores/toast'
 
@@ -299,6 +299,8 @@ const formData = ref<Partial<BotInstance>>({
   typing_enabled: true,
   llm_backend: 'vllm',
   llm_persona: 'anna',
+  rag_mode: 'all',
+  knowledge_collection_id: null as number | null,
   system_prompt: '',
   tts_engine: 'xtts',
   tts_voice: 'anna',
@@ -348,6 +350,12 @@ const { data: llmProvidersData } = useQuery({
   queryKey: ['llm-providers-enabled'],
   queryFn: () => llmApi.getProviders(true),
 })
+
+const { data: collectionsData } = useQuery({
+  queryKey: ['knowledge-collections'],
+  queryFn: () => wikiRagApi.getCollections(),
+})
+const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
 
 // Available LLM options for dropdown
 interface LlmOption {
@@ -480,6 +488,8 @@ function openCreateDialog() {
     typing_enabled: true,
     llm_backend: 'vllm',
     llm_persona: 'anna',
+    rag_mode: 'all',
+    knowledge_collection_id: null,
     system_prompt: '',
     tts_engine: 'xtts',
     tts_voice: 'anna',
@@ -1033,6 +1043,15 @@ watch(instances, (newInstances) => {
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('telegram.ttsVoice') }}</h3>
                 <p class="text-lg font-semibold">{{ selectedInstance.tts_voice }}</p>
+              </div>
+              <div class="bg-card rounded-xl border border-border p-4">
+                <h3 class="font-medium mb-2">{{ t('telegram.ragMode') }}</h3>
+                <p class="text-lg font-semibold">
+                  {{ selectedInstance.rag_mode === 'none' ? t('telegram.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('telegram.ragModeCollection') : t('telegram.ragModeAll') }}
+                  <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id" class="text-sm text-muted-foreground font-normal">
+                    ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
+                  </span>
+                </p>
               </div>
             </div>
             <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
@@ -1803,6 +1822,31 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
                 >
                   <option value="anna">Анна</option>
                   <option value="marina">Марина</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- RAG config -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">{{ t('telegram.ragMode') }}</label>
+                <select
+                  v-model="formData.rag_mode"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="all">{{ t('telegram.ragModeAll') }}</option>
+                  <option value="collection">{{ t('telegram.ragModeCollection') }}</option>
+                  <option value="none">{{ t('telegram.ragModeNone') }}</option>
+                </select>
+              </div>
+              <div v-if="formData.rag_mode === 'collection'">
+                <label class="block text-sm font-medium mb-1">{{ t('telegram.ragCollection') }}</label>
+                <select
+                  v-model="formData.knowledge_collection_id"
+                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option :value="null">—</option>
+                  <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
                 </select>
               </div>
             </div>
