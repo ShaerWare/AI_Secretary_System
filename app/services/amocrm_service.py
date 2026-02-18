@@ -323,7 +323,7 @@ async def get_leads_by_pipeline(
 ) -> dict:
     """Get all leads in a specific pipeline (for kanban board)."""
     params: dict[str, Any] = {
-        "filter[pipe]": pipeline_id,
+        "filter[pipeline_id][]": pipeline_id,
         "limit": limit,
         "with": "contacts",
     }

@@ -271,6 +271,7 @@ const messages = {
       ragCollection: 'Коллекция знаний',
       ragCollectionSelect: 'Выберите коллекцию',
       branchTree: 'Дерево веток',
+      newBranch: 'Новая ветка',
       version: 'Версия {current} из {total}',
       switchBranch: 'Переключить ветку',
       noBranches: 'Нет веток',
@@ -856,7 +857,10 @@ const messages = {
         price: 'Сумма',
         noContact: 'Без контакта',
         loading: 'Загрузка...',
-        updateFailed: 'Ошибка обновления сделки'
+        updateFailed: 'Ошибка обновления сделки',
+        main: 'основная',
+        deals: 'сделок',
+        resetWidths: 'Сбросить ширину колонок'
       },
       deals: {
         title: 'Сделки',
@@ -891,6 +895,7 @@ const messages = {
         noMessages: 'Нет сообщений',
         selectChat: 'Выберите чат',
         sendFailed: 'Ошибка отправки сообщения',
+        chatLoadFailed: 'Не удалось загрузить чат',
         setupRequired: 'Требуется настройка Inbox',
         setupHint: 'Настройте учётные данные amojo в разделе Настройки для использования Inbox',
         goToSettings: 'Перейдите в Настройки CRM',
@@ -1192,6 +1197,7 @@ const messages = {
       ragCollection: 'Knowledge collection',
       ragCollectionSelect: 'Select collection',
       branchTree: 'Branch Tree',
+      newBranch: 'New Branch',
       version: 'Version {current} of {total}',
       switchBranch: 'Switch Branch',
       noBranches: 'No branches',
@@ -1777,7 +1783,10 @@ const messages = {
         price: 'Amount',
         noContact: 'No contact',
         loading: 'Loading...',
-        updateFailed: 'Failed to update deal'
+        updateFailed: 'Failed to update deal',
+        main: 'main',
+        deals: 'deals',
+        resetWidths: 'Reset column widths'
       },
       deals: {
         title: 'Deals',
@@ -1812,6 +1821,7 @@ const messages = {
         noMessages: 'No messages',
         selectChat: 'Select a chat',
         sendFailed: 'Failed to send message',
+        chatLoadFailed: 'Failed to load chat',
         setupRequired: 'Inbox Setup Required',
         setupHint: 'Configure amojo credentials in Settings to use Inbox',
         goToSettings: 'Go to CRM Settings',

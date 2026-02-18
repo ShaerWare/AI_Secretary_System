@@ -255,6 +255,12 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.switch_branch(session_id, message_id)
 
+    async def start_new_branch(self, session_id: str) -> bool:
+        """Deactivate all active messages to start a fresh branch."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.start_new_branch(session_id)
+
     async def count_messages(
         self,
         session_id: str,

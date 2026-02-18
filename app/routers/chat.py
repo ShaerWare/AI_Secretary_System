@@ -796,3 +796,19 @@ async def admin_switch_branch(
         sibling_info = await async_chat_manager.get_sibling_info(session_id)
         session["sibling_info"] = sibling_info
     return {"status": "ok", "session": session}
+
+
+@router.post("/sessions/{session_id}/branches/new")
+async def admin_new_branch(
+    session_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Начать новую ветку с чистого листа (деактивирует все сообщения)"""
+    success = await async_chat_manager.start_new_branch(session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = await async_chat_manager.get_session(session_id)
+    sibling_info = await async_chat_manager.get_sibling_info(session_id)
+    if session:
+        session["sibling_info"] = sibling_info
+    return {"status": "ok", "session": session}

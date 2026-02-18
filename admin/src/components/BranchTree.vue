@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { GitBranch, X } from 'lucide-vue-next'
+import { GitBranch, Plus, X } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
 import BranchTreeNode from '@/components/BranchTreeNode.vue'
 
@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   switch: [messageId: string]
   'scroll-to': [messageId: string]
+  'new-branch': []
   close: []
 }>()
 
@@ -33,12 +34,21 @@ function handleScrollTo(messageId: string) {
         <GitBranch class="w-3.5 h-3.5" />
         {{ t('chatView.branchTree') }}
       </h3>
-      <button
-        class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
-        @click="emit('close')"
-      >
-        <X class="w-3.5 h-3.5" />
-      </button>
+      <div class="flex items-center gap-1">
+        <button
+          class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+          :title="t('chatView.newBranch')"
+          @click="emit('new-branch')"
+        >
+          <Plus class="w-3.5 h-3.5" />
+        </button>
+        <button
+          class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+          @click="emit('close')"
+        >
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
 
     <div v-if="branches.length > 0" class="p-2">

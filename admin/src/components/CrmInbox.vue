@@ -19,7 +19,9 @@ const { t } = useI18n()
 const toast = useToastStore()
 
 const searchQuery = ref('')
-const selectedChatId = ref<string | null>(null)
+const selectedContactId = ref<number | null>(null)
+const resolvedChatId = ref<string | null>(null)
+const resolvingChat = ref(false)
 const messageText = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 
@@ -45,14 +47,14 @@ const contacts = computed<AmoCRMContact[]>(() =>
   contactsData.value?._embedded?.contacts || []
 )
 
-// Fetch chat history for selected contact
+// Fetch chat history for resolved chat ID
 const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery({
-  queryKey: ['crm-inbox-messages', selectedChatId],
+  queryKey: ['crm-inbox-messages', resolvedChatId],
   queryFn: () => {
-    if (!selectedChatId.value) return Promise.resolve({ messages: [] })
-    return amocrmApi.getChatHistory(selectedChatId.value)
+    if (!resolvedChatId.value) return Promise.resolve({ messages: [] })
+    return amocrmApi.getChatHistory(resolvedChatId.value)
   },
-  enabled: computed(() => !!selectedChatId.value),
+  enabled: computed(() => !!resolvedChatId.value),
   refetchInterval: 10000,
 })
 
@@ -63,8 +65,8 @@ const messages = computed<AmoCRMChatMessage[]>(() =>
 // Send message
 const sendMutation = useMutation({
   mutationFn: (text: string) => {
-    if (!selectedChatId.value) throw new Error('No chat selected')
-    return amocrmApi.sendChatMessage(selectedChatId.value, text)
+    if (!resolvedChatId.value) throw new Error('No chat selected')
+    return amocrmApi.sendChatMessage(resolvedChatId.value, text)
   },
   onSuccess: () => {
     messageText.value = ''
@@ -73,8 +75,27 @@ const sendMutation = useMutation({
   onError: () => toast.error(t('crm.inbox.sendFailed')),
 })
 
-function selectChat(chatId: string) {
-  selectedChatId.value = chatId
+// Resolve chat ID from contact: call getContactChats() to get the real chat UUID
+async function selectContact(contactId: number) {
+  selectedContactId.value = contactId
+  resolvedChatId.value = null
+  resolvingChat.value = true
+
+  try {
+    const data = await amocrmApi.getContactChats(contactId)
+    const chats = data?._embedded?.chats
+    if (chats && chats.length > 0) {
+      resolvedChatId.value = chats[0].id
+    } else {
+      // No chats for this contact — show empty state
+      resolvedChatId.value = null
+    }
+  } catch {
+    toast.error(t('crm.inbox.chatLoadFailed'))
+    resolvedChatId.value = null
+  } finally {
+    resolvingChat.value = false
+  }
 }
 
 function handleSend() {
@@ -154,9 +175,9 @@ function doSearch() {
             :key="contact.id"
             :class="[
               'flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-border/50 transition-colors',
-              selectedChatId === String(contact.id) ? 'bg-primary/10' : 'hover:bg-secondary/50'
+              selectedContactId === contact.id ? 'bg-primary/10' : 'hover:bg-secondary/50'
             ]"
-            @click="selectChat(String(contact.id))"
+            @click="selectContact(contact.id)"
           >
             <div class="w-10 h-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
               <User class="w-5 h-5 text-muted-foreground" />
@@ -172,7 +193,7 @@ function doSearch() {
       <!-- Messages (right panel) -->
       <div class="flex-1 flex flex-col">
         <!-- No chat selected -->
-        <div v-if="!selectedChatId" class="flex-1 flex items-center justify-center text-muted-foreground">
+        <div v-if="!selectedContactId" class="flex-1 flex items-center justify-center text-muted-foreground">
           <div class="text-center">
             <MessageSquare class="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p class="text-sm">{{ t('crm.inbox.selectChat') }}</p>
@@ -187,24 +208,37 @@ function doSearch() {
               <User class="w-4 h-4 text-muted-foreground" />
             </div>
             <div class="font-medium text-sm">
-              {{ contacts.find(c => String(c.id) === selectedChatId)?.name || 'Chat' }}
+              {{ contacts.find(c => c.id === selectedContactId)?.name || 'Chat' }}
             </div>
             <div class="flex-1" />
-            <button class="btn btn-ghost btn-sm" :disabled="messagesLoading" @click="refetchMessages()">
-              <RefreshCw :class="['w-4 h-4', messagesLoading && 'animate-spin']" />
+            <button class="btn btn-ghost btn-sm" :disabled="messagesLoading || resolvingChat" @click="refetchMessages()">
+              <RefreshCw :class="['w-4 h-4', (messagesLoading || resolvingChat) && 'animate-spin']" />
             </button>
           </div>
 
           <!-- Messages area -->
           <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-3">
-            <div v-if="messagesLoading && messages.length === 0" class="flex items-center justify-center py-8">
+            <!-- Resolving chat -->
+            <div v-if="resolvingChat" class="flex items-center justify-center py-8">
               <RefreshCw class="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
 
-            <div v-if="!messagesLoading && messages.length === 0" class="text-center py-8 text-muted-foreground text-sm">
+            <!-- No chat found for this contact -->
+            <div v-else-if="!resolvedChatId" class="text-center py-8 text-muted-foreground text-sm">
               {{ t('crm.inbox.noMessages') }}
             </div>
 
+            <!-- Loading messages -->
+            <div v-else-if="messagesLoading && messages.length === 0" class="flex items-center justify-center py-8">
+              <RefreshCw class="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+
+            <!-- No messages in chat -->
+            <div v-else-if="!messagesLoading && messages.length === 0" class="text-center py-8 text-muted-foreground text-sm">
+              {{ t('crm.inbox.noMessages') }}
+            </div>
+
+            <!-- Message list -->
             <div
               v-for="msg in messages"
               :key="msg.id"
@@ -230,11 +264,12 @@ function doSearch() {
                 type="text"
                 :placeholder="t('crm.inbox.typeMessage')"
                 class="input flex-1"
+                :disabled="!resolvedChatId"
                 @keydown.enter="handleSend"
               />
               <button
                 class="btn btn-primary"
-                :disabled="!messageText.trim() || sendMutation.isPending.value"
+                :disabled="!messageText.trim() || !resolvedChatId || sendMutation.isPending.value"
                 @click="handleSend"
               >
                 <Send class="w-4 h-4" />

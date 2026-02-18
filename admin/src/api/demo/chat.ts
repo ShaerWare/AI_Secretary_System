@@ -153,6 +153,16 @@ export const chatRoutes: DemoRoute[] = [
   },
   {
     method: 'POST',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/branches\/new$/,
+    handler: ({ matches }) => {
+      initChatData()
+      const session = getStore().chatSessions.find(s => s.id === matches[1])
+      if (session) session.messages = []
+      return { status: 'ok', session }
+    },
+  },
+  {
+    method: 'POST',
     pattern: /^\/admin\/chat\/sessions\/([^/]+)\/stream$/,
     handler: () => '__STREAM__',
   },

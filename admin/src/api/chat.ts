@@ -134,6 +134,11 @@ export const chatApi = {
       { message_id: messageId }
     ),
 
+  newBranchFromScratch: (sessionId: string) =>
+    api.post<{ status: string; session: ChatSession }>(
+      `/admin/chat/sessions/${sessionId}/branches/new`
+    ),
+
   // Streaming chat
   streamMessage: (
     sessionId: string,

@@ -460,6 +460,18 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         return sibling_info
 
+    async def start_new_branch(self, session_id: str) -> bool:
+        """Deactivate all active messages to start a fresh branch."""
+        await self.session.execute(
+            update(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .where(ChatMessage.is_active.is_(True))
+            .values(is_active=False)
+        )
+        await self.session.commit()
+        await invalidate_session_cache(session_id)
+        return True
+
     async def switch_branch(self, session_id: str, message_id: str) -> bool:
         """Switch active branch to the given message.
 
