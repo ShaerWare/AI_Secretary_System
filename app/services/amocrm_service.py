@@ -346,6 +346,45 @@ async def get_leads_by_pipeline(
     return {"_embedded": {"leads": all_leads}}
 
 
+async def get_unsorted_leads(
+    subdomain: str,
+    access_token: str,
+    page: int = 1,
+    limit: int = 250,
+) -> dict:
+    """Get unsorted (incoming) leads for one page.
+
+    Returns flattened lead objects from unsorted items with _is_unsorted=True marker,
+    plus total count from response metadata.
+    """
+    all_leads: list[dict] = []
+    params: dict[str, Any] = {"limit": limit, "page": page}
+    try:
+        data = await _api_request(subdomain, access_token, "GET", "leads/unsorted", params=params)
+    except AmoCRMAPIError as e:
+        if e.status_code == 204:
+            return {"_embedded": {"leads": []}, "total": 0}
+        raise
+    if not data or "_embedded" not in data:
+        return {"_embedded": {"leads": []}, "total": 0}
+
+    total_from_api = data.get("_total_items", 0)
+    unsorted_items = data["_embedded"].get("unsorted", [])
+    for item in unsorted_items:
+        embedded = item.get("_embedded", {})
+        leads = embedded.get("leads", [])
+        contacts = embedded.get("contacts", [])
+        for lead in leads:
+            lead["_is_unsorted"] = True
+            lead["_unsorted_uid"] = item.get("uid")
+            lead["_unsorted_created_at"] = item.get("created_at")
+            if contacts and "_embedded" not in lead:
+                lead["_embedded"] = {"contacts": contacts}
+            all_leads.append(lead)
+
+    return {"_embedded": {"leads": all_leads}, "total": total_from_api or len(all_leads)}
+
+
 async def get_events(
     subdomain: str,
     access_token: str,

@@ -26,6 +26,7 @@ from app.services.amocrm_service import (
     get_leads,
     get_leads_by_pipeline,
     get_pipelines,
+    get_unsorted_leads,
     refresh_access_token,
     send_chat_message,
     update_lead,
@@ -485,6 +486,23 @@ async def crm_get_leads_by_pipeline(
     config = await _get_valid_token()
     try:
         data = await get_leads_by_pipeline(config["subdomain"], config["access_token"], pipeline_id)
+        return data
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.get("/leads/unsorted")
+async def crm_get_unsorted_leads(
+    page: int = 1,
+    limit: int = 250,
+    user: User = Depends(require_not_guest),
+):
+    """Get unsorted (incoming) leads, paginated."""
+    config = await _get_valid_token()
+    try:
+        data = await get_unsorted_leads(
+            config["subdomain"], config["access_token"], page=page, limit=limit
+        )
         return data
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
