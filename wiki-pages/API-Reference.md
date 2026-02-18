@@ -246,6 +246,57 @@ GET /health
 }
 ```
 
+## Ветвление чата (Chat Branching)
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| PUT | `/admin/chat/sessions/{id}/messages/{msg_id}` | Не-деструктивное редактирование (создаёт sibling) |
+| POST | `/admin/chat/sessions/{id}/messages/{msg_id}/regenerate` | Регенерация ответа |
+| GET | `/admin/chat/sessions/{id}/branches` | Дерево веток |
+| POST | `/admin/chat/sessions/{id}/branches/switch` | Переключить активную ветку |
+| POST | `/admin/chat/sessions/{id}/branches/new` | Начать новую ветку с чистого листа |
+
+### Новая ветка с чистого листа
+
+```bash
+POST /admin/chat/sessions/{session_id}/branches/new
+Authorization: Bearer <jwt_token>
+```
+
+**Ответ:**
+```json
+{
+  "status": "ok",
+  "session": { ... }
+}
+```
+
+Деактивирует все `is_active` сообщения в сессии. Следующее отправленное сообщение автоматически создаст новый корень. Системный промпт и файлы контекста сохраняются.
+
+## CRM (amoCRM) эндпоинты
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/admin/crm/config` | Конфигурация CRM |
+| PUT | `/admin/crm/config` | Обновить конфигурацию |
+| GET | `/admin/crm/auth-url` | URL для OAuth2 авторизации |
+| GET | `/admin/crm/callback` | OAuth2 callback |
+| GET | `/admin/crm/status` | Статус подключения |
+| POST | `/admin/crm/disconnect` | Отключить amoCRM |
+| GET | `/admin/crm/contacts` | Контакты |
+| GET | `/admin/crm/leads` | Сделки |
+| GET | `/admin/crm/leads/{id}` | Детали сделки |
+| PATCH | `/admin/crm/leads/{id}` | Обновить сделку |
+| GET | `/admin/crm/leads/by-pipeline/{pipeline_id}` | Сделки по воронке (Kanban) |
+| GET | `/admin/crm/pipelines` | Воронки и статусы |
+| GET | `/admin/crm/events` | Лента событий |
+| GET | `/admin/crm/contacts/{id}/chats` | Чаты контакта (Amojo) |
+| GET | `/admin/crm/chats/{chat_id}/history` | История сообщений (Amojo) |
+| POST | `/admin/crm/chats/{chat_id}/messages` | Отправить сообщение (Amojo) |
+| GET | `/admin/crm/account` | Информация об аккаунте |
+| POST | `/admin/crm/sync` | Запустить синхронизацию |
+| GET | `/admin/crm/sync/log` | Лог синхронизации |
+
 ## URL паттерны
 
 ### CRUD ресурсов
