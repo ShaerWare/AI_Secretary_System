@@ -73,9 +73,14 @@ function handleLogout() {
 }
 
 function toggleLocale() {
-  const newLocale = getLocale() === 'ru' ? 'en' : 'ru'
+  const order = ['ru', 'en', 'kk'] as const
+  const idx = order.indexOf(getLocale())
+  const newLocale = order[(idx + 1) % order.length]
   setLocale(newLocale)
 }
+
+const localeLabel: Record<string, string> = { ru: 'RU', en: 'EN', kk: 'ҚАЗ' }
+const localeTitle: Record<string, string> = { ru: 'Переключить язык', en: 'Switch language', kk: 'Тілді ауыстыру' }
 </script>
 
 <template>
@@ -217,11 +222,12 @@ function toggleLocale() {
             <div class="flex items-center gap-2 md:gap-4">
               <!-- Language Toggle -->
               <button
-                class="p-2 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors"
-                :title="getLocale() === 'ru' ? 'Switch to English' : 'Переключить на русский'"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+                :title="localeTitle[getLocale()]"
                 @click="toggleLocale"
               >
-                <Languages class="w-5 h-5" />
+                <Languages class="w-4 h-4" />
+                <span>{{ localeLabel[getLocale()] }}</span>
               </button>
 
               <!-- Theme Toggle -->

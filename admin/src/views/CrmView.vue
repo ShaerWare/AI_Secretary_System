@@ -600,10 +600,10 @@ onMounted(async () => {
     </div>
 
     <!-- Tab Content: Kanban -->
-    <CrmKanban v-if="activeTab === 'kanban'" :subdomain="settings.subdomain" />
+    <CrmKanban v-if="activeTab === 'kanban'" :subdomain="settings.subdomain" :currency="(accountInfo.currency as string) || 'RUB'" />
 
     <!-- Tab Content: Deals -->
-    <CrmDeals v-if="activeTab === 'deals'" :subdomain="settings.subdomain" />
+    <CrmDeals v-if="activeTab === 'deals'" :subdomain="settings.subdomain" :currency="(accountInfo.currency as string) || 'RUB'" />
 
     <!-- Tab Content: Inbox -->
     <CrmInbox v-if="activeTab === 'inbox'" />
