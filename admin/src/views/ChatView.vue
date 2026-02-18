@@ -395,6 +395,19 @@ const switchBranchMutation = useMutation({
   },
 })
 
+const newBranchMutation = useMutation({
+  mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
+  onSuccess: async () => {
+    await refetchSession()
+    await refetchBranches()
+  },
+})
+
+function startNewBranch() {
+  if (!currentSessionId.value) return
+  newBranchMutation.mutate(currentSessionId.value)
+}
+
 const deleteMessageMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
     chatApi.deleteMessage(sessionId, messageId),
@@ -1460,6 +1473,15 @@ watch(sessions, (newSessions) => {
           >
             <Settings2 class="w-4 h-4" />
           </button>
+          <!-- New branch from scratch -->
+          <button
+            :disabled="newBranchMutation.isPending.value"
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranch"
+          >
+            <Plus class="w-4 h-4" />
+          </button>
           <!-- Branch tree toggle -->
           <button
             :class="[
@@ -1680,6 +1702,14 @@ watch(sessions, (newSessions) => {
                     <RefreshCw class="w-3 h-3" />
                   </button>
                   <button
+                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    :title="t('chatView.newBranch')"
+                    :disabled="newBranchMutation.isPending.value"
+                    @click="startNewBranch"
+                  >
+                    <Plus class="w-3 h-3" />
+                  </button>
+                  <button
                     class="p-1 rounded bg-background/80 hover:bg-background text-red-500"
                     title="Delete"
                     @click="deleteMessage(message.id)"
@@ -1745,6 +1775,7 @@ watch(sessions, (newSessions) => {
           :style="{ width: branchTreeWidth + 'px' }"
           @switch="onBranchSwitch"
           @scroll-to="onBranchScrollTo"
+          @new-branch="startNewBranch"
           @close="showBranchTree = false"
         />
       </template>
