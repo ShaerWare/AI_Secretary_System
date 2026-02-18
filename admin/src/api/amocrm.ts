@@ -162,6 +162,11 @@ export const amocrmApi = {
   getLeadsByPipeline: (pipelineId: number) =>
     api.get<{ _embedded: { leads: AmoCRMLead[] } }>(`/admin/crm/leads/by-pipeline/${pipelineId}`),
 
+  getUnsortedLeads: (page = 1, limit = 250) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+    return api.get<{ _embedded: { leads: AmoCRMLead[] }; total: number }>(`/admin/crm/leads/unsorted?${params}`)
+  },
+
   createLead: (data: {
     name: string
     pipeline_id?: number

@@ -198,6 +198,12 @@ export const amocrmRoutes: DemoRoute[] = [
       return newContact
     },
   },
+  // GET /admin/crm/leads/unsorted
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/leads\/unsorted/,
+    handler: () => ({ _embedded: { leads: [] }, total: 0 }),
+  },
   // GET /admin/crm/leads/by-pipeline/:id
   {
     method: 'GET',

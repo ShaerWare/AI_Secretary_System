@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { RefreshCw, ChevronDown, GripVertical, ExternalLink, User, RotateCcw } from 'lucide-vue-next'
+import { RefreshCw, ChevronDown, GripVertical, ExternalLink, User, RotateCcw, Loader2 } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
 import { amocrmApi } from '@/api/amocrm'
 import type { AmoCRMPipeline, AmoCRMPipelineStatus, AmoCRMLead } from '@/api/amocrm'
@@ -19,6 +19,65 @@ const toast = useToastStore()
 
 const selectedPipelineId = ref<number | null>(null)
 const showPipelineSelect = ref(false)
+
+// ============== Progressive rendering ==============
+
+const BATCH_SIZE = 30
+
+// What vuedraggable renders (sliced from columnLeads)
+const visibleColumnLeads = ref<Record<number, AmoCRMLead[]>>({})
+
+// Display limits per column
+const displayLimits = ref<Record<number, number>>({})
+
+function syncVisible() {
+  const result: Record<number, AmoCRMLead[]> = {}
+  for (const sid of Object.keys(columnLeads.value)) {
+    const statusId = Number(sid)
+    const all = columnLeads.value[statusId] || []
+    const limit = displayLimits.value[statusId] || BATCH_SIZE
+    result[statusId] = all.slice(0, limit)
+  }
+  visibleColumnLeads.value = result
+}
+
+function loadMore(statusId: number) {
+  const newLimit = (displayLimits.value[statusId] || BATCH_SIZE) + BATCH_SIZE
+  displayLimits.value = { ...displayLimits.value, [statusId]: newLimit }
+  const all = columnLeads.value[statusId] || []
+  visibleColumnLeads.value = {
+    ...visibleColumnLeads.value,
+    [statusId]: all.slice(0, newLimit),
+  }
+}
+
+function hiddenCount(statusId: number): number {
+  return (columnLeads.value[statusId]?.length || 0) -
+         (visibleColumnLeads.value[statusId]?.length || 0)
+}
+
+function totalCount(statusId: number): number {
+  return columnLeads.value[statusId]?.length || 0
+}
+
+// IntersectionObserver per column sentinel
+const sentinelObservers = new Map<number, IntersectionObserver>()
+
+function observeSentinel(el: HTMLElement | null, statusId: number) {
+  if (sentinelObservers.has(statusId)) {
+    sentinelObservers.get(statusId)!.disconnect()
+    sentinelObservers.delete(statusId)
+  }
+  if (!el) return
+
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && hiddenCount(statusId) > 0) {
+      loadMore(statusId)
+    }
+  }, { threshold: 0.1 })
+  observer.observe(el)
+  sentinelObservers.set(statusId, observer)
+}
 
 // ============== Column widths (resizable + persisted) ==============
 
@@ -168,26 +227,53 @@ const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQ
   enabled: computed(() => !!selectedPipeline.value),
 })
 
+// Unsorted leads (separate amoCRM API — they have no pipeline)
+const { data: unsortedData, refetch: refetchUnsorted } = useQuery({
+  queryKey: ['crm-kanban-unsorted'],
+  queryFn: () => amocrmApi.getUnsortedLeads(1, 250),
+  enabled: computed(() => !!selectedPipeline.value),
+})
+
+const unsortedTotal = computed(() => unsortedData.value?.total || 0)
+
 const allLeads = computed<AmoCRMLead[]>(() =>
   leadsData.value?._embedded?.leads || []
 )
 
+const unsortedLeads = computed<AmoCRMLead[]>(() =>
+  unsortedData.value?._embedded?.leads || []
+)
+
 const columnLeads = ref<Record<number, AmoCRMLead[]>>({})
+
+// Find the "Неразобранное" status (sort === 10, first in pipeline)
+const unsortedStatusId = computed(() => {
+  const first = statuses.value[0]
+  return first && first.sort <= 10 ? first.id : null
+})
 
 function rebuildColumns() {
   const grouped: Record<number, AmoCRMLead[]> = {}
+  const newLimits: Record<number, number> = {}
   for (const status of statuses.value) {
     grouped[status.id] = []
+    newLimits[status.id] = BATCH_SIZE
   }
   for (const lead of allLeads.value) {
     if (grouped[lead.status_id]) {
       grouped[lead.status_id].push(lead)
     }
   }
+  // Merge unsorted leads into "Неразобранное" column
+  if (unsortedStatusId.value && grouped[unsortedStatusId.value]) {
+    grouped[unsortedStatusId.value].push(...unsortedLeads.value)
+  }
   columnLeads.value = grouped
+  displayLimits.value = newLimits
+  syncVisible()
 }
 
-watch([allLeads, statuses], rebuildColumns, { immediate: true })
+watch([allLeads, unsortedLeads, statuses], rebuildColumns, { immediate: true })
 
 watch(pipelines, (val) => {
   if (val.length && !selectedPipelineId.value) {
@@ -207,13 +293,34 @@ const updateLeadMutation = useMutation({
   },
 })
 
-function onDragEnd(statusId: number) {
-  const leads = columnLeads.value[statusId] || []
-  for (const lead of leads) {
-    if (lead.status_id !== statusId) {
-      lead.status_id = statusId
-      updateLeadMutation.mutate({ leadId: lead.id, data: { status_id: statusId } })
-    }
+function onColumnChange(targetStatusId: number, evt: { added?: { element: AmoCRMLead; newIndex: number }; removed?: { element: AmoCRMLead; oldIndex: number } }) {
+  if (!evt.added) return
+  const lead = evt.added.element
+  const oldStatusId = lead.status_id
+  if (oldStatusId === targetStatusId) return
+
+  // Remove from source column's full list
+  const srcAll = columnLeads.value[oldStatusId]
+  if (srcAll) {
+    const idx = srcAll.findIndex(l => l.id === lead.id)
+    if (idx !== -1) srcAll.splice(idx, 1)
+  }
+
+  // Add to target column's full list
+  const targetAll = columnLeads.value[targetStatusId]
+  if (targetAll && !targetAll.some(l => l.id === lead.id)) {
+    targetAll.push(lead)
+  }
+
+  lead.status_id = targetStatusId
+  updateLeadMutation.mutate({ leadId: lead.id, data: { status_id: targetStatusId } })
+
+  // Refill source column's visible list
+  const srcLimit = displayLimits.value[oldStatusId] || BATCH_SIZE
+  const srcAllNow = columnLeads.value[oldStatusId] || []
+  visibleColumnLeads.value = {
+    ...visibleColumnLeads.value,
+    [oldStatusId]: srcAllNow.slice(0, srcLimit),
   }
 }
 
@@ -242,20 +349,21 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadColumnWidths()
-  refreshTimer = setInterval(() => refetchLeads(), 30000)
+  refreshTimer = setInterval(() => { refetchLeads(); refetchUnsorted() }, 30000)
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
+  for (const obs of sentinelObservers.values()) obs.disconnect()
 })
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="kanban-wrapper">
     <!-- Toolbar -->
-    <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-3 flex-wrap mb-4">
       <!-- Pipeline selector -->
       <div class="relative">
         <button
@@ -310,8 +418,7 @@ onUnmounted(() => {
       <!-- Kanban board (drag-to-scroll) -->
       <div
         ref="boardContainer"
-        class="flex overflow-x-auto pb-4 kanban-board"
-        style="min-height: 400px;"
+        class="flex kanban-board"
         @pointerdown="onBoardPointerDown"
         @pointermove="onBoardPointerMove"
         @pointerup="onBoardPointerUp"
@@ -319,56 +426,69 @@ onUnmounted(() => {
       >
         <template v-for="(status, idx) in statuses" :key="status.id">
           <div
-            class="flex-shrink-0 flex flex-col"
+            class="kanban-column flex-shrink-0 flex flex-col"
             :style="{ width: getColumnWidth(status.id) + 'px' }"
           >
             <!-- Column header -->
-            <div class="flex items-center gap-2 mb-3 px-2">
+            <div class="flex items-center gap-2 mb-3 px-2 flex-shrink-0">
               <span
                 class="w-3 h-3 rounded-full flex-shrink-0"
                 :style="{ backgroundColor: getStatusColor(status.color) }"
               />
               <span class="font-medium text-sm truncate">{{ status.name }}</span>
               <span class="text-xs text-muted-foreground ml-auto">
-                {{ (columnLeads[status.id] || []).length }}
+                {{ status.id === unsortedStatusId && unsortedTotal > totalCount(status.id) ? unsortedTotal : totalCount(status.id) }}
               </span>
             </div>
 
-            <!-- Draggable column -->
-            <draggable
-              v-model="columnLeads[status.id]"
-              group="kanban"
-              item-key="id"
-              class="flex-1 space-y-2 p-2 rounded-lg bg-secondary/30 min-h-[100px]"
-              ghost-class="opacity-50"
-              @end="onDragEnd(status.id)"
-            >
-              <template #item="{ element: lead }">
-                <div class="kanban-card bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
-                  <div class="flex items-start gap-2">
-                    <GripVertical class="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div class="flex-1 min-w-0">
-                      <div class="font-medium text-sm truncate">{{ lead.name }}</div>
-                      <div v-if="lead.price" class="text-sm text-green-400 mt-1">
-                        {{ formatPrice(lead.price) }}
+            <!-- Scrollable column body -->
+            <div class="kanban-column-body flex-1 rounded-lg bg-secondary/30 overflow-y-auto">
+              <draggable
+                v-model="visibleColumnLeads[status.id]"
+                group="kanban"
+                item-key="id"
+                class="space-y-2 p-2 min-h-[80px]"
+                ghost-class="opacity-50"
+                @change="onColumnChange(status.id, $event)"
+              >
+                <template #item="{ element: lead }">
+                  <div class="kanban-card bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
+                    <div class="flex items-start gap-2">
+                      <GripVertical class="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <div class="flex-1 min-w-0">
+                        <div class="font-medium text-sm truncate">{{ lead.name }}</div>
+                        <div v-if="lead.price" class="text-sm text-green-400 mt-1">
+                          {{ formatPrice(lead.price) }}
+                        </div>
+                        <div v-if="getContactName(lead)" class="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                          <User class="w-3 h-3" />
+                          {{ getContactName(lead) }}
+                        </div>
                       </div>
-                      <div v-if="getContactName(lead)" class="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                        <User class="w-3 h-3" />
-                        {{ getContactName(lead) }}
-                      </div>
+                      <a
+                        :href="`https://${props.subdomain}.amocrm.ru/leads/detail/${lead.id}`"
+                        target="_blank"
+                        class="text-muted-foreground hover:text-primary"
+                        @click.stop
+                      >
+                        <ExternalLink class="w-3.5 h-3.5" />
+                      </a>
                     </div>
-                    <a
-                      :href="`https://${props.subdomain}.amocrm.ru/leads/detail/${lead.id}`"
-                      target="_blank"
-                      class="text-muted-foreground hover:text-primary"
-                      @click.stop
-                    >
-                      <ExternalLink class="w-3.5 h-3.5" />
-                    </a>
                   </div>
-                </div>
-              </template>
-            </draggable>
+                </template>
+
+                <template #footer>
+                  <div
+                    v-if="hiddenCount(status.id) > 0"
+                    :ref="(el: any) => observeSentinel(el as HTMLElement, status.id)"
+                    class="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"
+                  >
+                    <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                    <span>{{ t('crm.kanban.moreDeals', { count: hiddenCount(status.id) }) }}</span>
+                  </div>
+                </template>
+              </draggable>
+            </div>
           </div>
 
           <!-- Resize handle between columns -->
@@ -394,6 +514,49 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.kanban-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 10rem);
+  overflow: hidden;
+}
+
+.kanban-board {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  cursor: grab;
+  padding-bottom: 1rem;
+}
+.kanban-board::-webkit-scrollbar {
+  display: none;
+}
+.kanban-board.is-grabbing {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.kanban-column {
+  height: 100%;
+}
+
+.kanban-column-body {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+.kanban-column-body::-webkit-scrollbar {
+  width: 4px;
+}
+.kanban-column-body::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 2px;
+}
+
+.kanban-card {
+  cursor: grab;
+}
+
 .kanban-resize-handle {
   width: 16px;
   cursor: col-resize;
@@ -418,19 +581,4 @@ onUnmounted(() => {
   transition: background-color 0.15s, opacity 0.15s;
 }
 
-/* Hide native scrollbar, use drag-to-scroll instead */
-.kanban-board {
-  scrollbar-width: none;
-  cursor: grab;
-}
-.kanban-board::-webkit-scrollbar {
-  display: none;
-}
-.kanban-board.is-grabbing {
-  cursor: grabbing;
-  user-select: none;
-}
-.kanban-card {
-  cursor: grab;
-}
 </style>
