@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type GroupedSessions, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import {
@@ -1473,15 +1473,6 @@ watch(sessions, (newSessions) => {
           >
             <Settings2 class="w-4 h-4" />
           </button>
-          <!-- New branch from scratch -->
-          <button
-            :disabled="newBranchMutation.isPending.value"
-            class="p-2 rounded-lg hover:bg-secondary transition-colors"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranch"
-          >
-            <Plus class="w-4 h-4" />
-          </button>
           <!-- Branch tree toggle -->
           <button
             :class="[
@@ -1492,6 +1483,15 @@ watch(sessions, (newSessions) => {
             @click="showBranchTree = !showBranchTree"
           >
             <GitBranch class="w-4 h-4" />
+          </button>
+          <!-- New branch from scratch -->
+          <button
+            :disabled="newBranchMutation.isPending.value"
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranch"
+          >
+            <Plus class="w-4 h-4" />
           </button>
           <button
             class="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
