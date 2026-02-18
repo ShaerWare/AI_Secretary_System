@@ -164,7 +164,7 @@ export const amocrmApi = {
 
   getUnsortedLeads: (page = 1, limit = 250) => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
-    return api.get<{ _embedded: { leads: AmoCRMLead[] }; total: number }>(`/admin/crm/leads/unsorted?${params}`)
+    return api.get<{ _embedded: { leads: AmoCRMLead[] }; total: number; has_next: boolean }>(`/admin/crm/leads/unsorted?${params}`)
   },
 
   createLead: (data: {

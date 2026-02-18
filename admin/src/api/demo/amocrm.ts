@@ -202,7 +202,7 @@ export const amocrmRoutes: DemoRoute[] = [
   {
     method: 'GET',
     pattern: /^\/admin\/crm\/leads\/unsorted/,
-    handler: () => ({ _embedded: { leads: [] }, total: 0 }),
+    handler: () => ({ _embedded: { leads: [] }, has_next: false }),
   },
   // GET /admin/crm/leads/by-pipeline/:id
   {

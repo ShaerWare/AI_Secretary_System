@@ -269,7 +269,7 @@ const { data: unsortedData, refetch: refetchUnsorted } = useQuery({
   enabled: computed(() => !!selectedPipeline.value),
 })
 
-const unsortedTotal = computed(() => unsortedData.value?.total || 0)
+const unsortedHasNext = computed(() => unsortedData.value?.has_next || false)
 
 const allLeads = computed<AmoCRMLead[]>(() =>
   leadsData.value?._embedded?.leads || []
@@ -299,9 +299,12 @@ function rebuildColumns() {
       grouped[lead.status_id].push(lead)
     }
   }
-  // Merge unsorted leads into "Неразобранное" column
-  if (unsortedStatusId.value && grouped[unsortedStatusId.value]) {
-    grouped[unsortedStatusId.value].push(...unsortedLeads.value)
+  // Merge unsorted leads into "Неразобранное" column (assign status_id)
+  const usId = unsortedStatusId.value
+  if (usId && grouped[usId]) {
+    for (const lead of unsortedLeads.value) {
+      grouped[usId].push({ ...lead, status_id: usId })
+    }
   }
   columnLeads.value = grouped
   displayLimits.value = newLimits
@@ -495,7 +498,7 @@ onUnmounted(() => {
               />
               <span class="font-medium text-sm truncate">{{ status.name }}</span>
               <span class="text-xs text-muted-foreground ml-auto">
-                {{ status.id === unsortedStatusId && unsortedTotal > totalCount(status.id) ? unsortedTotal : totalCount(status.id) }}
+                {{ totalCount(status.id) }}{{ status.id === unsortedStatusId && unsortedHasNext ? '+' : '' }}
               </span>
               <button
                 class="p-0.5 rounded hover:bg-secondary text-muted-foreground"
