@@ -20,6 +20,7 @@ import { useToastStore } from '@/stores/toast'
 
 const props = defineProps<{
   subdomain: string
+  currency?: string
 }>()
 
 const { t } = useI18n()
@@ -108,7 +109,8 @@ function getStatusColor(pipelineId: number, statusId: number): string {
 
 function formatPrice(price: number): string {
   if (!price) return '-'
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(price)
+  const cur = props.currency || 'RUB'
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(price)
 }
 
 function formatTs(ts: number | undefined): string {

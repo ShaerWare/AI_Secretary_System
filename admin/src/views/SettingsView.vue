@@ -172,10 +172,14 @@ function downloadAuditLog() {
   toast.success('Audit log exported')
 }
 
+const localeLabelMap: Record<string, string> = { ru: 'Русский', en: 'English', kk: 'Қазақша' }
+
 function toggleLocale() {
-  const newLocale = getLocale() === 'ru' ? 'en' : 'ru'
+  const order = ['ru', 'en', 'kk'] as const
+  const idx = order.indexOf(getLocale())
+  const newLocale = order[(idx + 1) % order.length]
   setLocale(newLocale)
-  toast.success(`Language changed to ${newLocale.toUpperCase()}`)
+  toast.success(`Language: ${localeLabelMap[newLocale]}`)
 }
 </script>
 
@@ -336,7 +340,7 @@ function toggleLocale() {
             class="px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
             @click="toggleLocale"
           >
-            {{ getLocale().toUpperCase() }}
+            {{ localeLabelMap[getLocale()] || getLocale().toUpperCase() }}
           </button>
         </div>
       </div>
