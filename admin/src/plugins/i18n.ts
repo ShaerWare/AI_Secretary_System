@@ -259,6 +259,7 @@ const messages = {
       groups: {
         admin: 'Админ-панель',
         telegram: 'Telegram',
+        whatsapp: 'WhatsApp',
         widget: 'Чат-виджет',
         unknown: 'Другие'
       },
@@ -860,7 +861,9 @@ const messages = {
         updateFailed: 'Ошибка обновления сделки',
         main: 'основная',
         deals: 'сделок',
-        resetWidths: 'Сбросить ширину колонок'
+        resetWidths: 'Сбросить ширину колонок',
+        collapseColumn: 'Свернуть колонку',
+        expandColumn: 'Развернуть колонку'
       },
       deals: {
         title: 'Сделки',
@@ -888,6 +891,19 @@ const messages = {
       },
       inbox: {
         title: 'Входящие',
+        aiChats: 'Чаты AI',
+        amocrmInbox: 'amoCRM Inbox',
+        groups: {
+          telegram: 'Telegram',
+          whatsapp: 'WhatsApp',
+          widget: 'Виджеты'
+        },
+        filterAll: 'Все',
+        filterWidget: 'Виджет',
+        sourceWidget: 'Виджет',
+        sourceUnknown: 'Неизвестно',
+        user: 'Пользователь',
+        thinking: 'Думаю...',
         searchChats: 'Поиск чатов...',
         typeMessage: 'Напишите сообщение...',
         send: 'Отправить',
@@ -1185,6 +1201,7 @@ const messages = {
       groups: {
         admin: 'Admin Panel',
         telegram: 'Telegram',
+        whatsapp: 'WhatsApp',
         widget: 'Chat Widget',
         unknown: 'Other'
       },
@@ -1786,7 +1803,9 @@ const messages = {
         updateFailed: 'Failed to update deal',
         main: 'main',
         deals: 'deals',
-        resetWidths: 'Reset column widths'
+        resetWidths: 'Reset column widths',
+        collapseColumn: 'Collapse column',
+        expandColumn: 'Expand column'
       },
       deals: {
         title: 'Deals',
@@ -1814,6 +1833,19 @@ const messages = {
       },
       inbox: {
         title: 'Inbox',
+        aiChats: 'AI Chats',
+        amocrmInbox: 'amoCRM Inbox',
+        groups: {
+          telegram: 'Telegram',
+          whatsapp: 'WhatsApp',
+          widget: 'Widgets'
+        },
+        filterAll: 'All',
+        filterWidget: 'Widget',
+        sourceWidget: 'Widget',
+        sourceUnknown: 'Unknown',
+        user: 'User',
+        thinking: 'Thinking...',
         searchChats: 'Search chats...',
         typeMessage: 'Type a message...',
         send: 'Send',
@@ -2110,6 +2142,7 @@ const messages = {
       groups: {
         admin: 'Әкімші панелі',
         telegram: 'Telegram',
+        whatsapp: 'WhatsApp',
         widget: 'Чат-виджет',
         unknown: 'Басқа'
       },
@@ -2711,7 +2744,9 @@ const messages = {
         updateFailed: 'Мәмілені жаңарту қатесі',
         main: 'негізгі',
         deals: 'мәміле',
-        resetWidths: 'Бағандар енін қалпына келтіру'
+        resetWidths: 'Бағандар енін қалпына келтіру',
+        collapseColumn: 'Бағанды жию',
+        expandColumn: 'Бағанды жаю'
       },
       deals: {
         title: 'Мәмілелер',
@@ -2739,6 +2774,19 @@ const messages = {
       },
       inbox: {
         title: 'Кіріс',
+        aiChats: 'AI чаттар',
+        amocrmInbox: 'amoCRM Inbox',
+        groups: {
+          telegram: 'Telegram',
+          whatsapp: 'WhatsApp',
+          widget: 'Виджеттер'
+        },
+        filterAll: 'Барлығы',
+        filterWidget: 'Виджет',
+        sourceWidget: 'Виджет',
+        sourceUnknown: 'Белгісіз',
+        user: 'Пайдаланушы',
+        thinking: 'Ойланамын...',
         searchChats: 'Чаттарды іздеу...',
         typeMessage: 'Хабарлама жазыңыз...',
         send: 'Жіберу',

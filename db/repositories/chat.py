@@ -36,8 +36,13 @@ class ChatRepository(BaseRepository[ChatSession]):
         hash_suffix = hashlib.md5(ts.encode()).hexdigest()[:6]
         return f"msg_{int(time.time() * 1000)}_{hash_suffix}"
 
-    async def list_sessions(self, owner_id: Optional[int] = None) -> List[dict]:
-        """Get list of sessions with summary info, filtered by owner."""
+    async def list_sessions(
+        self,
+        owner_id: Optional[int] = None,
+        source: Optional[str] = None,
+        exclude_source: Optional[str] = None,
+    ) -> List[dict]:
+        """Get list of sessions with summary info, filtered by owner and source."""
         query = (
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
@@ -46,6 +51,14 @@ class ChatRepository(BaseRepository[ChatSession]):
         if owner_id is not None:
             query = query.where(
                 (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
+            )
+        if source is not None:
+            db_source = "telegram_bot" if source == "telegram" else source
+            query = query.where(ChatSession.source == db_source)
+        if exclude_source is not None:
+            db_exclude = "telegram_bot" if exclude_source == "telegram" else exclude_source
+            query = query.where(
+                (ChatSession.source != db_exclude) & (ChatSession.source.is_not(None))
             )
         result = await self.session.execute(query)
         sessions = result.scalars().all()
@@ -223,12 +236,16 @@ class ChatRepository(BaseRepository[ChatSession]):
             "admin": [],
             "telegram": [],
             "widget": [],
+            "whatsapp": [],
             "unknown": [],
         }
 
         for s in sessions:
             summary = s.to_summary()
             source = s.source or "unknown"
+            # Normalize DB value to frontend key
+            if source == "telegram_bot":
+                source = "telegram"
             if source in grouped:
                 grouped[source].append(summary)
             else:

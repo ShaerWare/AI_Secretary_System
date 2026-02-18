@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { RefreshCw, ChevronDown, GripVertical, ExternalLink, User, RotateCcw, Loader2 } from 'lucide-vue-next'
+import { RefreshCw, ChevronDown, ChevronLeft, GripVertical, ExternalLink, User, RotateCcw, Loader2 } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
 import { amocrmApi } from '@/api/amocrm'
 import type { AmoCRMPipeline, AmoCRMPipelineStatus, AmoCRMLead } from '@/api/amocrm'
@@ -108,6 +108,41 @@ function getColumnWidth(statusId: number): number {
 function resetColumnWidths() {
   columnWidths.value = {}
   localStorage.removeItem(STORAGE_KEY)
+}
+
+// ============== Column collapse/expand (persisted) ==============
+
+const COLLAPSED_STORAGE_KEY = 'crm-kanban-collapsed'
+const COLLAPSED_WIDTH = 48
+const collapsedColumns = ref<Set<number>>(new Set())
+
+function loadCollapsedState() {
+  try {
+    const saved = localStorage.getItem(COLLAPSED_STORAGE_KEY)
+    if (saved) collapsedColumns.value = new Set(JSON.parse(saved))
+  } catch { /* ignore */ }
+}
+
+function saveCollapsedState() {
+  try {
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedColumns.value]))
+  } catch { /* ignore */ }
+}
+
+function toggleColumnCollapse(statusId: number) {
+  const next = new Set(collapsedColumns.value)
+  if (next.has(statusId)) next.delete(statusId)
+  else next.add(statusId)
+  collapsedColumns.value = next
+  saveCollapsedState()
+}
+
+function isCollapsed(statusId: number): boolean {
+  return collapsedColumns.value.has(statusId)
+}
+
+function getEffectiveColumnWidth(statusId: number): number {
+  return isCollapsed(statusId) ? COLLAPSED_WIDTH : getColumnWidth(statusId)
 }
 
 // Column resize drag
@@ -349,6 +384,7 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadColumnWidths()
+  loadCollapsedState()
   refreshTimer = setInterval(() => { refetchLeads(); refetchUnsorted() }, 30000)
 })
 
@@ -425,7 +461,29 @@ onUnmounted(() => {
         @pointercancel="onBoardPointerUp"
       >
         <template v-for="(status, idx) in statuses" :key="status.id">
+          <!-- Collapsed column -->
           <div
+            v-if="isCollapsed(status.id)"
+            class="flex-shrink-0 flex flex-col items-center cursor-pointer rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors py-3"
+            :style="{ width: COLLAPSED_WIDTH + 'px' }"
+            :title="t('crm.kanban.expandColumn')"
+            @click="toggleColumnCollapse(status.id)"
+          >
+            <span
+              class="w-3 h-3 rounded-full flex-shrink-0 mb-2"
+              :style="{ backgroundColor: getStatusColor(status.color) }"
+            />
+            <span class="text-xs text-muted-foreground mb-2">
+              {{ totalCount(status.id) }}
+            </span>
+            <span class="kanban-vertical-text text-xs font-medium text-muted-foreground">
+              {{ status.name }}
+            </span>
+          </div>
+
+          <!-- Expanded column -->
+          <div
+            v-else
             class="kanban-column flex-shrink-0 flex flex-col"
             :style="{ width: getColumnWidth(status.id) + 'px' }"
           >
@@ -439,6 +497,13 @@ onUnmounted(() => {
               <span class="text-xs text-muted-foreground ml-auto">
                 {{ status.id === unsortedStatusId && unsortedTotal > totalCount(status.id) ? unsortedTotal : totalCount(status.id) }}
               </span>
+              <button
+                class="p-0.5 rounded hover:bg-secondary text-muted-foreground"
+                :title="t('crm.kanban.collapseColumn')"
+                @click="toggleColumnCollapse(status.id)"
+              >
+                <ChevronLeft class="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <!-- Scrollable column body -->
@@ -491,9 +556,9 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Resize handle between columns -->
+          <!-- Resize handle between columns (hidden if either adjacent column is collapsed) -->
           <div
-            v-if="idx < statuses.length - 1"
+            v-if="idx < statuses.length - 1 && !isCollapsed(status.id) && !isCollapsed(statuses[idx + 1].id)"
             class="kanban-resize-handle flex-shrink-0"
             @mousedown="onResizeStart($event, status.id)"
           >
@@ -581,4 +646,12 @@ onUnmounted(() => {
   transition: background-color 0.15s, opacity 0.15s;
 }
 
+.kanban-vertical-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 200px;
+}
 </style>

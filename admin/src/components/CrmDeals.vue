@@ -162,6 +162,18 @@ function doSearch() {
 
       <div class="flex-1" />
 
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost btn-sm" :disabled="page <= 1" @click="page--">
+          <ChevronLeft class="w-4 h-4" />
+        </button>
+        <span class="text-sm text-muted-foreground">
+          {{ t('crm.deals.page') }} {{ page }}
+        </span>
+        <button class="btn btn-ghost btn-sm" :disabled="!hasMore" @click="page++">
+          <ChevronRight class="w-4 h-4" />
+        </button>
+      </div>
+
       <button class="btn btn-primary" @click="showCreateDialog = true">
         <Plus class="w-4 h-4 mr-2" />
         {{ t('crm.deals.create') }}
@@ -219,20 +231,6 @@ function doSearch() {
         </table>
       </div>
 
-      <!-- Pagination -->
-      <div class="flex items-center justify-between px-4 py-3 border-t border-border">
-        <span class="text-sm text-muted-foreground">
-          {{ t('crm.deals.page') }} {{ page }}
-        </span>
-        <div class="flex gap-2">
-          <button class="btn btn-ghost btn-sm" :disabled="page <= 1" @click="page--">
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <button class="btn btn-ghost btn-sm" :disabled="!hasMore" @click="page++">
-            <ChevronRight class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- Detail Modal -->
