@@ -354,35 +354,55 @@ async def get_unsorted_leads(
 ) -> dict:
     """Get unsorted (incoming) leads for one page.
 
-    Returns flattened lead objects from unsorted items with _is_unsorted=True marker,
-    plus total count from response metadata.
+    amoCRM unsorted API returns wrapper items whose embedded leads are stubs
+    (only id + _links).  We build proper lead-like objects from the wrapper
+    metadata (source_name, category, contacts) so the frontend can render them.
+
+    Returns ``{_embedded: {leads: [...]}, has_next: bool}``.
     """
-    all_leads: list[dict] = []
+    empty: dict[str, Any] = {"_embedded": {"leads": []}, "has_next": False}
     params: dict[str, Any] = {"limit": limit, "page": page}
     try:
         data = await _api_request(subdomain, access_token, "GET", "leads/unsorted", params=params)
     except AmoCRMAPIError as e:
         if e.status_code == 204:
-            return {"_embedded": {"leads": []}, "total": 0}
+            return empty
         raise
     if not data or "_embedded" not in data:
-        return {"_embedded": {"leads": []}, "total": 0}
+        return empty
 
-    total_from_api = data.get("_total_items", 0)
+    has_next = bool(data.get("_links", {}).get("next"))
     unsorted_items = data["_embedded"].get("unsorted", [])
+    all_leads: list[dict] = []
+
     for item in unsorted_items:
         embedded = item.get("_embedded", {})
-        leads = embedded.get("leads", [])
+        stub_leads = embedded.get("leads", [])
         contacts = embedded.get("contacts", [])
-        for lead in leads:
-            lead["_is_unsorted"] = True
-            lead["_unsorted_uid"] = item.get("uid")
-            lead["_unsorted_created_at"] = item.get("created_at")
-            if contacts and "_embedded" not in lead:
-                lead["_embedded"] = {"contacts": contacts}
-            all_leads.append(lead)
+        category = item.get("category", "")
+        source_name = item.get("source_name", "")
+        contact_name = contacts[0]["name"] if contacts else ""
 
-    return {"_embedded": {"leads": all_leads}, "total": total_from_api or len(all_leads)}
+        lead_id = stub_leads[0]["id"] if stub_leads else item.get("uid")
+        name = contact_name or source_name or category or "Неразобранное"
+
+        lead: dict[str, Any] = {
+            "id": lead_id,
+            "name": name,
+            "price": 0,
+            "pipeline_id": item.get("pipeline_id"),
+            "status_id": None,
+            "created_at": item.get("created_at"),
+            "_is_unsorted": True,
+            "_unsorted_uid": item.get("uid"),
+            "_unsorted_category": category,
+            "_unsorted_source": source_name,
+        }
+        if contacts:
+            lead["_embedded"] = {"contacts": contacts}
+        all_leads.append(lead)
+
+    return {"_embedded": {"leads": all_leads}, "has_next": has_next}
 
 
 async def get_events(
