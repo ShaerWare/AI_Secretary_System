@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { RefreshCw, ChevronDown, GripVertical, ExternalLink, User, RotateCcw } from 'lucide-vue-next'
@@ -83,34 +83,58 @@ function onResizeEnd() {
   saveColumnWidths()
 }
 
-// ============== Scroll sync (sticky horizontal scrollbar) ==============
+// ============== Drag-to-scroll ==============
 
 const boardContainer = ref<HTMLElement | null>(null)
-const scrollProxy = ref<HTMLElement | null>(null)
-const scrollProxyInner = ref<HTMLElement | null>(null)
-const syncingScroll = ref(false)
+const isDragScrolling = ref(false)
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragScrollLeft = ref(0)
+const dragScrollTop = ref(0)
+const dragMoved = ref(false)
 
-function onBoardScroll() {
-  if (syncingScroll.value) return
-  syncingScroll.value = true
-  if (scrollProxy.value && boardContainer.value) {
-    scrollProxy.value.scrollLeft = boardContainer.value.scrollLeft
+function isCardElement(el: HTMLElement | null): boolean {
+  while (el) {
+    if (el.classList?.contains('kanban-card')) return true
+    if (el.classList?.contains('kanban-resize-handle')) return true
+    if (el === boardContainer.value) return false
+    el = el.parentElement
   }
-  nextTick(() => { syncingScroll.value = false })
+  return false
 }
 
-function onProxyScroll() {
-  if (syncingScroll.value) return
-  syncingScroll.value = true
-  if (boardContainer.value && scrollProxy.value) {
-    boardContainer.value.scrollLeft = scrollProxy.value.scrollLeft
-  }
-  nextTick(() => { syncingScroll.value = false })
+function onBoardPointerDown(e: PointerEvent) {
+  if (isCardElement(e.target as HTMLElement)) return
+  const board = boardContainer.value
+  if (!board) return
+  isDragScrolling.value = true
+  dragMoved.value = false
+  dragStartX.value = e.clientX
+  dragStartY.value = e.clientY
+  dragScrollLeft.value = board.scrollLeft
+  dragScrollTop.value = board.scrollTop
+  board.setPointerCapture(e.pointerId)
+  board.classList.add('is-grabbing')
 }
 
-function syncProxyWidth() {
-  if (boardContainer.value && scrollProxyInner.value) {
-    scrollProxyInner.value.style.width = boardContainer.value.scrollWidth + 'px'
+function onBoardPointerMove(e: PointerEvent) {
+  if (!isDragScrolling.value) return
+  const board = boardContainer.value
+  if (!board) return
+  const dx = e.clientX - dragStartX.value
+  const dy = e.clientY - dragStartY.value
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved.value = true
+  board.scrollLeft = dragScrollLeft.value - dx
+  board.scrollTop = dragScrollTop.value - dy
+}
+
+function onBoardPointerUp(e: PointerEvent) {
+  if (!isDragScrolling.value) return
+  isDragScrolling.value = false
+  const board = boardContainer.value
+  if (board) {
+    board.releasePointerCapture(e.pointerId)
+    board.classList.remove('is-grabbing')
   }
 }
 
@@ -171,10 +195,6 @@ watch(pipelines, (val) => {
   }
 }, { immediate: true })
 
-// Sync proxy width when columns/widths change
-watch([statuses, columnWidths], () => {
-  nextTick(syncProxyWidth)
-}, { deep: true })
 
 // ============== Lead drag & drop ==============
 
@@ -219,23 +239,14 @@ function getStatusColor(color: string): string {
 // ============== Lifecycle ==============
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
-let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   loadColumnWidths()
   refreshTimer = setInterval(() => refetchLeads(), 30000)
-  // Watch board content size for scroll proxy
-  if (boardContainer.value) {
-    resizeObserver = new ResizeObserver(syncProxyWidth)
-    resizeObserver.observe(boardContainer.value)
-  }
-  nextTick(syncProxyWidth)
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
-  if (resizeObserver) resizeObserver.disconnect()
-  // Cleanup resize listeners in case component unmounts during resize
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
 })
@@ -296,22 +307,15 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-      <!-- Sticky horizontal scrollbar (top) -->
-      <div
-        ref="scrollProxy"
-        class="overflow-x-auto overflow-y-hidden sticky top-0 z-10"
-        style="height: 12px;"
-        @scroll="onProxyScroll"
-      >
-        <div ref="scrollProxyInner" style="height: 1px;" />
-      </div>
-
-      <!-- Kanban board -->
+      <!-- Kanban board (drag-to-scroll) -->
       <div
         ref="boardContainer"
         class="flex overflow-x-auto pb-4 kanban-board"
         style="min-height: 400px;"
-        @scroll="onBoardScroll"
+        @pointerdown="onBoardPointerDown"
+        @pointermove="onBoardPointerMove"
+        @pointerup="onBoardPointerUp"
+        @pointercancel="onBoardPointerUp"
       >
         <template v-for="(status, idx) in statuses" :key="status.id">
           <div
@@ -340,7 +344,7 @@ onUnmounted(() => {
               @end="onDragEnd(status.id)"
             >
               <template #item="{ element: lead }">
-                <div class="bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
+                <div class="kanban-card bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
                   <div class="flex items-start gap-2">
                     <GripVertical class="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                     <div class="flex-1 min-w-0">
@@ -414,8 +418,19 @@ onUnmounted(() => {
   transition: background-color 0.15s, opacity 0.15s;
 }
 
-/* Hide native scrollbar on main board (proxy handles it) */
+/* Hide native scrollbar, use drag-to-scroll instead */
 .kanban-board {
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  cursor: grab;
+}
+.kanban-board::-webkit-scrollbar {
+  display: none;
+}
+.kanban-board.is-grabbing {
+  cursor: grabbing;
+  user-select: none;
+}
+.kanban-card {
+  cursor: grab;
 }
 </style>

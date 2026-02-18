@@ -319,15 +319,31 @@ async def get_leads_by_pipeline(
     subdomain: str,
     access_token: str,
     pipeline_id: int,
-    limit: int = 250,
 ) -> dict:
-    """Get all leads in a specific pipeline (for kanban board)."""
-    params: dict[str, Any] = {
-        "filter[pipeline_id][]": pipeline_id,
-        "limit": limit,
-        "with": "contacts",
-    }
-    return await _api_request(subdomain, access_token, "GET", "leads", params=params)
+    """Get ALL leads in a specific pipeline (paginated, for kanban board)."""
+    all_leads: list[dict] = []
+    page = 1
+    limit = 250
+
+    while True:
+        params: dict[str, Any] = {
+            "filter[pipeline_id][]": pipeline_id,
+            "limit": limit,
+            "page": page,
+            "with": "contacts",
+        }
+        data = await _api_request(subdomain, access_token, "GET", "leads", params=params)
+        if not data or "_embedded" not in data:
+            break
+        leads = data["_embedded"].get("leads", [])
+        if not leads:
+            break
+        all_leads.extend(leads)
+        if len(leads) < limit:
+            break
+        page += 1
+
+    return {"_embedded": {"leads": all_leads}}
 
 
 async def get_events(
