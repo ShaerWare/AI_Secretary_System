@@ -381,10 +381,23 @@ async def get_unsorted_leads(
         contacts = embedded.get("contacts", [])
         category = item.get("category", "")
         source_name = item.get("source_name", "")
-        contact_name = contacts[0]["name"] if contacts else ""
+        metadata = item.get("metadata", {})
+
+        # Build display name from metadata (contacts are stubs without names)
+        name = ""
+        if category == "mail":
+            name = metadata.get("subject") or metadata.get("from", {}).get("email", "")
+        elif category == "chats":
+            client = metadata.get("client", {})
+            name = (
+                (client.get("name") if client else None)
+                or metadata.get("source_name", "")
+                or source_name
+            )
+        if not name:
+            name = source_name or category or "Неразобранное"
 
         lead_id = stub_leads[0]["id"] if stub_leads else item.get("uid")
-        name = contact_name or source_name or category or "Неразобранное"
 
         lead: dict[str, Any] = {
             "id": lead_id,
