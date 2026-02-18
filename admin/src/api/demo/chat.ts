@@ -48,6 +48,21 @@ const defaultSessions: ChatSessionData[] = [
       { id: 'msg-12', role: 'assistant', content: 'Конечно! Вы можете:\n\n1. Попробовать демо-версию прямо сейчас на ai-sekretar24.ru\n2. Написать нашему боту @ai_support_bot в Telegram\n3. Заказать бесплатную консультацию\n\nВыбирайте удобный вариант!', timestamp: minutesAgo(15) },
     ],
   },
+  {
+    id: 'session-wa-1',
+    title: 'WhatsApp: Мария',
+    pinned: false,
+    source: 'whatsapp',
+    source_id: '79001234567',
+    created: daysAgo(1),
+    updated: minutesAgo(45),
+    messages: [
+      { id: 'msg-13', role: 'user', content: 'Привет! Видела рекламу, хочу узнать подробнее', timestamp: daysAgo(1) },
+      { id: 'msg-14', role: 'assistant', content: 'Привет, Мария! Рада, что заинтересовались. AI-секретарь — это виртуальный помощник, который работает 24/7: отвечает клиентам, записывает на приём, принимает оплату.\n\nЧто вас интересует?', timestamp: daysAgo(1) },
+      { id: 'msg-15', role: 'user', content: 'Какая цена?', timestamp: minutesAgo(50) },
+      { id: 'msg-16', role: 'assistant', content: 'Тарифы:\n\n*Базовый* — 5 000 ₽/мес\n*Бизнес* — 15 000 ₽/мес\n*Премиум* — 30 000 ₽/мес\n\nЕсть бесплатный пробный период 7 дней. Хотите попробовать?', timestamp: minutesAgo(49) },
+    ],
+  },
 ]
 
 export function initChatData() {
@@ -86,9 +101,18 @@ export const chatRoutes: DemoRoute[] = [
     handler: ({ searchParams }) => {
       initChatData()
       const store = getStore()
-      const sorted = sortByPinned(store.chatSessions)
+      let filtered = store.chatSessions
+      const source = searchParams.get('source')
+      const excludeSource = searchParams.get('exclude_source')
+      if (source) {
+        filtered = filtered.filter(s => s.source === source)
+      }
+      if (excludeSource) {
+        filtered = filtered.filter(s => s.source !== excludeSource && s.source != null)
+      }
+      const sorted = sortByPinned(filtered)
       if (searchParams.get('group_by') === 'source') {
-        const grouped = { admin: [] as unknown[], telegram: [] as unknown[], widget: [] as unknown[], unknown: [] as unknown[] }
+        const grouped = { admin: [] as unknown[], telegram: [] as unknown[], widget: [] as unknown[], whatsapp: [] as unknown[], unknown: [] as unknown[] }
         for (const s of sorted) {
           const key = s.source && s.source in grouped ? s.source : 'unknown'
           grouped[key as keyof typeof grouped].push(sessionToSummary(s))

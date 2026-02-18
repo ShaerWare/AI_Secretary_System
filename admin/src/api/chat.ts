@@ -38,7 +38,7 @@ export interface ChatSession {
   system_prompt?: string
   pinned?: boolean
   context_files?: { name: string; content: string }[]
-  source?: 'admin' | 'telegram' | 'widget' | null
+  source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
   source_id?: string
   created: string
   updated: string
@@ -52,7 +52,7 @@ export interface ChatSessionSummary {
   pinned?: boolean
   message_count: number
   last_message?: string
-  source?: 'admin' | 'telegram' | 'widget' | null
+  source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
   source_id?: string
   created: string
   updated: string
@@ -62,14 +62,20 @@ export interface GroupedSessions {
   admin: ChatSessionSummary[]
   telegram: ChatSessionSummary[]
   widget: ChatSessionSummary[]
+  whatsapp: ChatSessionSummary[]
   unknown: ChatSessionSummary[]
 }
 
 // Chat API
 export const chatApi = {
   // Sessions
-  listSessions: () =>
-    api.get<{ sessions: ChatSessionSummary[] }>('/admin/chat/sessions'),
+  listSessions: (source?: string, excludeSource?: string) => {
+    const params = new URLSearchParams()
+    if (source) params.set('source', source)
+    if (excludeSource) params.set('exclude_source', excludeSource)
+    const qs = params.toString()
+    return api.get<{ sessions: ChatSessionSummary[] }>(`/admin/chat/sessions${qs ? `?${qs}` : ''}`)
+  },
 
   listSessionsGrouped: () =>
     api.get<{ sessions: GroupedSessions; grouped: true }>('/admin/chat/sessions?group_by=source'),

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -224,14 +224,19 @@ class SwitchBranchRequest(BaseModel):
 
 @router.get("/sessions")
 async def admin_list_chat_sessions(
-    group_by: Optional[str] = None, user: User = Depends(get_current_user)
+    group_by: Optional[str] = None,
+    source: Optional[str] = Query(None),
+    exclude_source: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
 ):
     """Список всех чат-сессий. group_by=source для группировки по источнику."""
     owner_id = None if user.role == "admin" else user.id
     if group_by == "source":
         grouped = await async_chat_manager.list_sessions_grouped(owner_id=owner_id)
         return {"sessions": grouped, "grouped": True}
-    sessions = await async_chat_manager.list_sessions(owner_id=owner_id)
+    sessions = await async_chat_manager.list_sessions(
+        owner_id=owner_id, source=source, exclude_source=exclude_source
+    )
     return {"sessions": sessions}
 
 

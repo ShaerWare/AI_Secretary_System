@@ -18,21 +18,17 @@ import {
   Check,
   X,
   ChevronLeft,
-  ChevronDown,
   ChevronRight,
   Loader2,
   Bot,
   User,
   Copy,
-  MoreVertical,
   Volume2,
   VolumeX,
   Square,
-  RotateCw,
   FileText,
   Mic,
   MicOff,
-  CheckSquare,
   ListChecks,
   Brain,
   BookOpen,
@@ -116,9 +112,7 @@ const renamingTitle = ref('')
 const editingHeaderTitle = ref(false)
 const headerTitleValue = ref('')
 
-// Grouping state
-const groupBySource = ref(true)
-const collapsedGroups = ref<Set<string>>(new Set())
+// (grouping removed — admin chats only)
 
 // TTS state
 const audioRef = ref<HTMLAudioElement | null>(null)
@@ -171,7 +165,7 @@ watch(selectedCollectionId, (val) => {
 // Queries
 const { data: sessionsData, refetch: refetchSessions } = useQuery({
   queryKey: ['chat-sessions'],
-  queryFn: () => chatApi.listSessions(),
+  queryFn: () => chatApi.listSessions('admin'),
 })
 
 const { data: sessionData, refetch: refetchSession } = useQuery({
@@ -180,11 +174,7 @@ const { data: sessionData, refetch: refetchSession } = useQuery({
   enabled: computed(() => !!currentSessionId.value),
 })
 
-const { data: groupedSessionsData, refetch: refetchGrouped } = useQuery({
-  queryKey: ['chat-sessions-grouped'],
-  queryFn: () => chatApi.listSessionsGrouped(),
-  enabled: computed(() => groupBySource.value),
-})
+// (grouped sessions query removed)
 
 // LLM queries
 const { data: llmBackendData } = useQuery({
@@ -212,7 +202,6 @@ const { data: branchData, refetch: refetchBranches } = useQuery({
 
 // Computed
 const sessions = computed(() => sessionsData.value?.sessions || [])
-const groupedSessions = computed(() => groupedSessionsData.value?.sessions || null)
 const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
 const branchTree = computed(() => branchData.value?.branches || [])
@@ -286,7 +275,6 @@ const createSessionMutation = useMutation({
   mutationFn: () => chatApi.createSession(undefined, undefined, 'admin'),
   onSuccess: (data) => {
     refetchSessions()
-    refetchGrouped()
     currentSessionId.value = data.session.id
   },
 })
@@ -295,7 +283,6 @@ const deleteSessionMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.deleteSession(sessionId),
   onSuccess: () => {
     refetchSessions()
-    refetchGrouped()
     if (sessions.value.length > 0) {
       currentSessionId.value = sessions.value[0].id
     } else {
@@ -310,7 +297,6 @@ const bulkDeleteMutation = useMutation({
     selectedIds.value.clear()
     selectionMode.value = false
     refetchSessions()
-    refetchGrouped()
     // Select first remaining session or clear
     if (sessions.value.length > 0) {
       currentSessionId.value = sessions.value[0].id
@@ -326,7 +312,6 @@ const updateSessionMutation = useMutation({
   onSuccess: () => {
     refetchSession()
     refetchSessions()
-    refetchGrouped()
   },
 })
 
@@ -518,15 +503,6 @@ async function deleteSelected() {
 
   if (confirmed) {
     bulkDeleteMutation.mutate([...selectedIds.value])
-  }
-}
-
-// Grouping methods
-function toggleGroup(groupName: string) {
-  if (collapsedGroups.value.has(groupName)) {
-    collapsedGroups.value.delete(groupName)
-  } else {
-    collapsedGroups.value.add(groupName)
   }
 }
 
@@ -1138,122 +1114,8 @@ watch(sessions, (newSessions) => {
         </div>
       </div>
 
-      <!-- Sessions List (Grouped) -->
-      <div v-if="groupBySource && groupedSessions" class="flex-1 overflow-y-auto">
-        <template v-for="groupName in ['admin', 'telegram', 'widget', 'unknown']" :key="groupName">
-          <div v-if="groupedSessions[groupName as keyof typeof groupedSessions]?.length > 0">
-            <!-- Group header (collapsible) -->
-            <div
-              class="px-3 py-2 bg-secondary/30 flex items-center gap-2 cursor-pointer hover:bg-secondary/50 sticky top-0"
-              @click="toggleGroup(groupName)"
-            >
-              <ChevronRight v-if="collapsedGroups.has(groupName)" class="w-4 h-4 text-muted-foreground" />
-              <ChevronDown v-else class="w-4 h-4 text-muted-foreground" />
-              <span class="text-xs font-medium uppercase text-muted-foreground">
-                {{ t(`chatView.groups.${groupName}`) }}
-              </span>
-              <span class="text-xs text-muted-foreground ml-auto">
-                {{ groupedSessions[groupName as keyof typeof groupedSessions].length }}
-              </span>
-            </div>
-
-            <!-- Group sessions -->
-            <div v-if="!collapsedGroups.has(groupName)">
-              <div
-                v-for="session in groupedSessions[groupName as keyof typeof groupedSessions]"
-                :key="session.id"
-                :class="[
-                  'p-3 cursor-pointer border-b border-border transition-colors group',
-                  currentSessionId === session.id
-                    ? 'bg-primary/10 border-l-2 border-l-primary'
-                    : 'hover:bg-secondary/50'
-                ]"
-                @click="!selectionMode && selectSession(session.id)"
-              >
-                <div class="flex items-start gap-2">
-                  <!-- Checkbox (selection mode) -->
-                  <input
-                    v-if="selectionMode"
-                    type="checkbox"
-                    :checked="selectedIds.has(session.id)"
-                    class="mt-1 rounded border-border"
-                    @click.stop="toggleSelection(session.id)"
-                  />
-
-                  <div class="flex-1 min-w-0">
-                    <!-- Title (normal or editing) -->
-                    <template v-if="renamingSessionId === session.id">
-                      <input
-                        v-model="renamingTitle"
-                        class="rename-input w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                        @keydown.enter="saveRename"
-                        @keydown.escape="cancelRename"
-                        @blur="saveRename"
-                        @click.stop
-                      />
-                    </template>
-                    <template v-else>
-                      <p
-                        class="font-medium text-sm truncate flex items-center gap-1"
-                        @dblclick="startRename(session, $event)"
-                      >
-                        <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
-                        {{ session.title }}
-                      </p>
-                    </template>
-
-                    <p class="text-xs text-muted-foreground truncate mt-1">
-                      {{ session.last_message || t('chatView.noChats') }}
-                    </p>
-                    <p class="text-xs text-muted-foreground mt-1">
-                      {{ session.message_count }} messages
-                    </p>
-                  </div>
-
-                  <!-- Action buttons (on hover, not in selection mode) -->
-                  <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
-                    <button
-                      class="p-1 rounded hover:bg-background text-muted-foreground"
-                      :title="session.pinned ? 'Unpin' : 'Pin'"
-                      @click.stop="togglePin(session.id, session.pinned)"
-                    >
-                      <PinOff v-if="session.pinned" class="w-3 h-3" />
-                      <Pin v-else class="w-3 h-3" />
-                    </button>
-                    <button
-                      class="p-1 rounded hover:bg-background text-muted-foreground"
-                      :title="t('chatView.rename')"
-                      @click.stop="startRename(session, $event)"
-                    >
-                      <Edit3 class="w-3 h-3" />
-                    </button>
-                    <button
-                      class="p-1 rounded hover:bg-background text-red-500"
-                      :title="t('chatView.deleteChat')"
-                      @click.stop="deleteSingleSession(session, $event)"
-                    >
-                      <Trash2 class="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <div v-if="!sessions.length" class="p-4 text-center text-muted-foreground">
-          <p>{{ t('chatView.noChats') }}</p>
-          <button
-            class="mt-2 text-primary hover:underline"
-            @click="createNewChat"
-          >
-            {{ t('chatView.createFirst') }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Sessions List (Flat, when grouping is disabled) -->
-      <div v-else class="flex-1 overflow-y-auto">
+      <!-- Sessions List -->
+      <div class="flex-1 overflow-y-auto">
         <div
           v-for="session in sessions"
           :key="session.id"

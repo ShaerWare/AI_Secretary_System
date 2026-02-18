@@ -110,11 +110,18 @@ class AsyncChatManager:
         ts = str(time.time())
         return f"msg_{int(time.time() * 1000)}_{hashlib.md5(ts.encode()).hexdigest()[:6]}"
 
-    async def list_sessions(self, owner_id: Optional[int] = None) -> List[dict]:
+    async def list_sessions(
+        self,
+        owner_id: Optional[int] = None,
+        source: Optional[str] = None,
+        exclude_source: Optional[str] = None,
+    ) -> List[dict]:
         """List all sessions with summary info."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.list_sessions(owner_id=owner_id)
+            return await repo.list_sessions(
+                owner_id=owner_id, source=source, exclude_source=exclude_source
+            )
 
     async def get_session(self, session_id: str, owner_id: Optional[int] = None) -> Optional[dict]:
         """Get full session with messages."""
