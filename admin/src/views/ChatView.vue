@@ -1805,45 +1805,13 @@ watch(sessions, (newSessions) => {
           </button>
         </div>
 
-        <!-- Panel content (scrollable, fills remaining height) -->
-        <div class="flex-1 overflow-y-auto p-3 flex flex-col">
+        <!-- Panel content (scrollable, fills remaining height; pb-16 keeps buttons above widget icon) -->
+        <div class="flex-1 overflow-y-auto p-3 pb-16 flex flex-col">
           <!-- Session Prompt Tab -->
           <div v-if="settingsTab === 'session'" class="flex flex-col flex-1 gap-3">
             <p class="text-xs text-muted-foreground">
               {{ t('chatView.promptHint') }}
             </p>
-
-            <!-- File attachment -->
-            <div>
-              <input
-                ref="fileInputRef"
-                type="file"
-                accept=".txt,.md"
-                multiple
-                class="hidden"
-                @change="handleFileUpload"
-              />
-              <button
-                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-                @click="triggerFileUpload"
-              >
-                <Paperclip class="w-3.5 h-3.5" />
-                {{ t('chatView.attachTxtMd') }}
-              </button>
-              <div v-if="attachedFiles.length > 0" class="flex flex-wrap gap-1.5 mt-2">
-                <span
-                  v-for="(file, idx) in attachedFiles"
-                  :key="idx"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full"
-                >
-                  <FileText class="w-3 h-3" />
-                  {{ file.name }}
-                  <button class="hover:text-red-500 ml-0.5" @click="removeAttachedFile(idx)">
-                    <X class="w-3 h-3" />
-                  </button>
-                </span>
-              </div>
-            </div>
 
             <!-- Textarea fills remaining space -->
             <textarea
