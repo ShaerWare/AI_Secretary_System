@@ -863,7 +863,8 @@ const messages = {
         deals: 'сделок',
         resetWidths: 'Сбросить ширину колонок',
         collapseColumn: 'Свернуть колонку',
-        expandColumn: 'Развернуть колонку'
+        expandColumn: 'Развернуть колонку',
+        moreDeals: 'ещё {count}'
       },
       deals: {
         title: 'Сделки',
@@ -1805,7 +1806,8 @@ const messages = {
         deals: 'deals',
         resetWidths: 'Reset column widths',
         collapseColumn: 'Collapse column',
-        expandColumn: 'Expand column'
+        expandColumn: 'Expand column',
+        moreDeals: '{count} more'
       },
       deals: {
         title: 'Deals',
@@ -2746,7 +2748,8 @@ const messages = {
         deals: 'мәміле',
         resetWidths: 'Бағандар енін қалпына келтіру',
         collapseColumn: 'Бағанды жию',
-        expandColumn: 'Бағанды жаю'
+        expandColumn: 'Бағанды жаю',
+        moreDeals: 'тағы {count}'
       },
       deals: {
         title: 'Мәмілелер',
