@@ -436,8 +436,9 @@ async def admin_send_chat_message(
     user_msg = await async_chat_manager.add_message(session_id, "user", msg_request.content)
 
     # Получаем историю для LLM
-    default_prompt = None
-    if hasattr(llm_service, "get_system_prompt"):
+    # Session prompt takes priority; fallback to LLM service default
+    default_prompt = session.get("system_prompt")
+    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode
@@ -588,7 +589,8 @@ async def admin_stream_chat_message(
     user_msg = await async_chat_manager.add_message(session_id, "user", msg_request.content)
 
     # Получаем историю для LLM
-    default_prompt = custom_prompt
+    # Priority: widget prompt > session prompt > LLM service default
+    default_prompt = custom_prompt or session.get("system_prompt")
     if not default_prompt and hasattr(active_llm, "get_system_prompt"):
         default_prompt = active_llm.get_system_prompt()
 
@@ -686,8 +688,8 @@ async def admin_edit_chat_message(
     if not llm_service:
         return {"message": edited_msg}
 
-    default_prompt = None
-    if hasattr(llm_service, "get_system_prompt"):
+    default_prompt = session.get("system_prompt")
+    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode
@@ -779,8 +781,8 @@ async def admin_regenerate_chat_response(
         parent_id = message_id
 
     # Generate new response
-    default_prompt = None
-    if hasattr(llm_service, "get_system_prompt"):
+    default_prompt = session.get("system_prompt")
+    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode

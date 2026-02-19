@@ -624,8 +624,8 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         messages = []
 
-        # Add system prompt
-        prompt = session.system_prompt or system_prompt
+        # Add system prompt (passed system_prompt already includes session prompt + RAG)
+        prompt = system_prompt or session.system_prompt
         if prompt:
             messages.append({"role": "system", "content": prompt})
 
