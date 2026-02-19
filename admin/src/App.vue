@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import {
   Settings,
   Menu,
@@ -68,8 +69,11 @@ const currentTitle = computed(() => {
 
 const isLoginPage = computed(() => route.name === 'login')
 
+const queryClient = useQueryClient()
+
 function handleLogout() {
   authStore.logout()
+  queryClient.clear()
   router.push('/login')
 }
 
