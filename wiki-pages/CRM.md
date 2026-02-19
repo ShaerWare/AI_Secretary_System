@@ -321,6 +321,46 @@ if response.status_code == 429 and retry_count < MAX_429_RETRIES:
     return await self._request(...)
 ```
 
+## Redis-кэширование API
+
+Для снижения нагрузки на amoCRM API (лимит ~7 req/s) используется Redis-кэширование ответов. Kanban-доска обновляется каждые 30 секунд, при этом каждый рефреш вызывает `GET /leads/by-pipeline/{id}`, который пагинирует все сделки (250/стр). Без кэша это создаёт большое количество запросов к amoCRM.
+
+### Кэшируемые эндпоинты
+
+| Эндпоинт | TTL | Ключ кэша |
+|----------|-----|-----------|
+| `GET /pipelines` | 300с (5 мин) | `amocrm:pipelines:{subdomain}` |
+| `GET /leads/by-pipeline/{id}` | 60с (1 мин) | `amocrm:pipeline_leads:{subdomain}:{pipeline_id}` |
+| `GET /leads/unsorted` | 30с | `amocrm:unsorted:{subdomain}:{page}:{limit}` |
+| `GET /leads/{id}` | 120с (2 мин) | `amocrm:lead:{subdomain}:{lead_id}` |
+
+> `GET /leads` (поиск с query) **не кэшируется** — динамические запросы, низкая частота.
+
+### Инвалидация кэша
+
+Кэш автоматически сбрасывается при мутациях:
+
+| Мутация | Что инвалидируется |
+|---------|-------------------|
+| `PATCH /leads/{id}` | `amocrm:lead:*:{lead_id}` + `amocrm:pipeline_leads:*` + `amocrm:unsorted:*` |
+| `POST /leads` | `amocrm:pipeline_leads:*` + `amocrm:unsorted:*` |
+| `POST /webhooks/amocrm` (events: `leads[*]`) | `amocrm:pipeline_leads:*` + `amocrm:unsorted:*` + `amocrm:lead:*` |
+| `POST /disconnect` | `amocrm:*` (все ключи) |
+
+### Graceful fallback
+
+Redis опционален. Если Redis недоступен — все эндпоинты работают напрямую с amoCRM API, как и до внедрения кэша. При восстановлении Redis кэширование возобновляется автоматически.
+
+### Проверка
+
+```bash
+# Посмотреть ключи кэша
+redis-cli keys "amocrm:*"
+
+# Очистить весь CRM-кэш
+redis-cli keys "amocrm:*" | xargs redis-cli del
+```
+
 ## Архитектура сервиса
 
 ```

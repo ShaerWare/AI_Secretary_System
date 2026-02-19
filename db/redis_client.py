@@ -106,6 +106,7 @@ class CacheKey:
     RATE_LIMIT = "ratelimit"
     TTS_PRESET = "tts:preset"
     CONFIG = "config"
+    AMOCRM = "amocrm"
 
 
 async def cache_get(key: str) -> Optional[Any]:
