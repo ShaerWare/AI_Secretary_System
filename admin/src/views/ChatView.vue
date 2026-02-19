@@ -1158,8 +1158,8 @@ watch(sessions, (newSessions) => {
             @click="selectSession(session.id)"
           >
             <div v-if="session.pinned" class="absolute top-1 left-1 w-2 h-2 rounded-full bg-primary" />
-            <div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-base shrink-0">
-              {{ getChatEmoji(session.title) }}
+            <div class="w-8 h-8 rounded-full border border-border bg-transparent flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0">
+              {{ session.title.trim().slice(0, 2).toUpperCase() }}
             </div>
           </button>
         </div>
