@@ -617,12 +617,12 @@ function sendMessage() {
   scrollToBottom()
 
   let fullContent = ''
-  // Build LLM override if a specific backend or RAG mode is selected
-  const hasOverride = selectedLlmBackend.value || selectedRagMode.value
+  // Build LLM override if a specific backend or RAG collections are selected
+  const hasCollections = selectedCollectionIds.value.length > 0
+  const hasOverride = selectedLlmBackend.value || hasCollections
   const llmOverride = hasOverride ? {
     ...(selectedLlmBackend.value ? { llm_backend: selectedLlmBackend.value } : {}),
-    ...(selectedRagMode.value ? { rag_mode: selectedRagMode.value } : {}),
-    ...(selectedRagMode.value === 'selected' && selectedCollectionIds.value.length ? { knowledge_collection_ids: selectedCollectionIds.value } : {}),
+    ...(hasCollections ? { rag_mode: 'selected', knowledge_collection_ids: selectedCollectionIds.value } : {}),
   } : undefined
 
   const stream = chatApi.streamMessage(currentSessionId.value, content, (data) => {
@@ -1389,27 +1389,15 @@ watch(sessions, (newSessions) => {
               </option>
             </select>
           </div>
-          <!-- RAG mode selector -->
-          <div class="flex items-center gap-1 relative">
+          <!-- RAG collections multi-select -->
+          <div v-if="knowledgeCollections.length" class="flex items-center gap-1">
             <BookOpen class="w-4 h-4 text-muted-foreground" />
-            <select
-              v-model="selectedRagMode"
-              class="px-2 py-1 text-sm bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary border-none cursor-pointer"
-              :title="t('chatView.ragMode')"
-            >
-              <option value="">{{ t('chat.defaultLlm') }}</option>
-              <option value="all">{{ t('chatView.ragModeAll') }}</option>
-              <option value="selected">{{ t('chatView.ragModeSelected') }}</option>
-              <option value="none">{{ t('chatView.ragModeNone') }}</option>
-            </select>
-            <template v-if="selectedRagMode === 'selected'">
-              <div v-for="col in knowledgeCollections" :key="col.id" class="flex items-center">
-                <label class="flex items-center gap-1 px-2 py-1 text-sm bg-secondary rounded-lg cursor-pointer hover:bg-secondary/80">
-                  <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3 h-3" />
-                  <span>{{ col.name }}</span>
-                </label>
-              </div>
-            </template>
+            <div v-for="col in knowledgeCollections" :key="col.id" class="flex items-center">
+              <label class="flex items-center gap-1 px-2 py-1 text-sm bg-secondary rounded-lg cursor-pointer hover:bg-secondary/80">
+                <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3 h-3" />
+                <span>{{ col.name }}</span>
+              </label>
+            </div>
           </div>
           <!-- Export chat dropdown -->
           <div class="relative">
@@ -1468,16 +1456,6 @@ watch(sessions, (newSessions) => {
             <Volume2 v-if="voiceMode" class="w-4 h-4" />
             <VolumeX v-else class="w-4 h-4" />
           </button>
-          <button
-            :class="[
-              'p-2 rounded-lg transition-colors',
-              showSettings ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
-            ]"
-            title="Chat settings"
-            @click="showSettings = !showSettings"
-          >
-            <Settings2 class="w-4 h-4" />
-          </button>
           <!-- Branch tree toggle -->
           <button
             :class="[
@@ -1488,6 +1466,16 @@ watch(sessions, (newSessions) => {
             @click="showBranchTree = !showBranchTree"
           >
             <GitBranch class="w-4 h-4" />
+          </button>
+          <button
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              showSettings ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
+            title="Chat settings"
+            @click="showSettings = !showSettings"
+          >
+            <Settings2 class="w-4 h-4" />
           </button>
           <!-- New branch from scratch -->
           <button
