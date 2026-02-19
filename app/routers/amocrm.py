@@ -23,12 +23,14 @@ from app.services.amocrm_service import (
     get_chat_history,
     get_contact_chats,
     get_contacts,
+    get_contacts_by_ids,
     get_events,
     get_lead,
     get_leads,
     get_leads_by_pipeline,
     get_pipelines,
     get_unsorted_leads,
+    get_users,
     refresh_access_token,
     send_chat_message,
     update_lead,
@@ -826,6 +828,28 @@ async def crm_dataset_sync(user: User = Depends(require_not_guest)):
     # 2. Fetch all leads with contacts
     all_leads = await get_all_leads_paginated(subdomain, access_token)
 
+    # 2a. Collect unique contact IDs from all leads for enrichment
+    contact_ids: set[int] = set()
+    for lead in all_leads:
+        for c in (lead.get("_embedded") or {}).get("contacts", []):
+            if c.get("id"):
+                contact_ids.add(c["id"])
+
+    # 2b. Batch-fetch full contacts (with phone/email)
+    contacts_map: dict[int, dict] = {}
+    if contact_ids:
+        try:
+            contacts_map = await get_contacts_by_ids(subdomain, access_token, list(contact_ids))
+        except Exception as e:
+            logger.warning(f"CRM dataset: failed to enrich contacts: {e}")
+
+    # 2c. Fetch users for responsible_user_id resolution
+    users_map: dict[int, str] = {}
+    try:
+        users_map = await get_users(subdomain, access_token)
+    except Exception as e:
+        logger.warning(f"CRM dataset: failed to fetch users: {e}")
+
     # Group leads by pipeline
     pipeline_leads: dict[int, list[dict]] = {p["id"]: [] for p in pipelines}
     for lead in all_leads:
@@ -843,14 +867,18 @@ async def crm_dataset_sync(user: User = Depends(require_not_guest)):
     for pipeline in pipelines:
         pid = pipeline["id"]
         leads = pipeline_leads.get(pid, [])
-        content = build_pipeline_document(pipeline, leads, status_maps.get(pid, {}), sync_time)
+        content = build_pipeline_document(
+            pipeline, leads, status_maps.get(pid, {}), sync_time, contacts_map, users_map
+        )
         filename = f"{CRM_FILE_PREFIX}pipeline-{pid}.md"
         filepath = CRM_DIR / filename
         filepath.write_text(content, encoding="utf-8")
         written_files.append((filename, content, f"Воронка: {pipeline.get('name', '')}"))
 
     # Summary document
-    summary_content = build_summary_document(pipelines, pipeline_leads, status_maps, sync_time)
+    summary_content = build_summary_document(
+        pipelines, pipeline_leads, status_maps, sync_time, contacts_map, users_map
+    )
     summary_filename = f"{CRM_FILE_PREFIX}summary.md"
     (CRM_DIR / summary_filename).write_text(summary_content, encoding="utf-8")
     written_files.append((summary_filename, summary_content, "amoCRM: Сводка по сделкам"))
@@ -900,6 +928,8 @@ async def crm_dataset_sync(user: User = Depends(require_not_guest)):
         details={
             "pipelines": len(pipelines),
             "leads": len(all_leads),
+            "contacts_enriched": len(contacts_map),
+            "users_resolved": len(users_map),
             "files_written": len(written_files),
             "files_removed": len(removed),
             "collection_id": collection_id,
@@ -921,6 +951,8 @@ async def crm_dataset_sync(user: User = Depends(require_not_guest)):
         "status": "ok",
         "pipelines": len(pipelines),
         "leads_total": len(all_leads),
+        "contacts_enriched": len(contacts_map),
+        "users_resolved": len(users_map),
         "files_written": len(written_files),
         "files_removed": len(removed),
         "collection_id": collection_id,

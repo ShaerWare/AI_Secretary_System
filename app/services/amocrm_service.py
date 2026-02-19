@@ -450,6 +450,80 @@ async def get_unsorted_leads(
     return {"_embedded": {"leads": all_leads}, "has_next": has_next}
 
 
+async def get_contacts_by_ids(
+    subdomain: str,
+    access_token: str,
+    contact_ids: list[int],
+    batch_size: int = 50,
+) -> dict[int, dict]:
+    """Batch-fetch contacts by IDs with custom_fields_values (phone, email).
+
+    amoCRM allows up to 50 IDs per request via filter[id][]=...
+    Returns dict mapping contact_id -> full contact dict.
+    """
+    result: dict[int, dict] = {}
+    for i in range(0, len(contact_ids), batch_size):
+        batch = contact_ids[i : i + batch_size]
+        # httpx supports repeated keys via list of tuples
+        param_list: list[tuple[str, Any]] = [("limit", batch_size)]
+        for cid in batch:
+            param_list.append(("filter[id][]", cid))
+
+        url = f"https://{subdomain}.amocrm.ru/api/{AMOCRM_API_VERSION}/contacts"
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        for attempt in range(MAX_429_RETRIES + 1):
+            async with _http_client() as client:
+                resp = await client.get(url, headers=headers, params=param_list)
+
+            if resp.status_code == 204:
+                break
+            if resp.status_code == 401:
+                raise AmoCRMTokenExpired()
+            if resp.status_code == 429:
+                if attempt < MAX_429_RETRIES:
+                    delay = RETRY_DELAY_SECONDS * (attempt + 1)
+                    logger.warning(
+                        f"amoCRM rate limit hit (contacts batch), retrying in {delay}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise AmoCRMAPIError(429, "Rate limit exceeded after retries")
+            if resp.status_code >= 400:
+                raise AmoCRMAPIError(resp.status_code, resp.text)
+
+            data = resp.json()
+            for contact in (data.get("_embedded") or {}).get("contacts", []):
+                result[contact["id"]] = contact
+            break
+
+    return result
+
+
+async def get_users(
+    subdomain: str,
+    access_token: str,
+) -> dict[int, str]:
+    """Fetch all amoCRM account users. Returns {user_id: name} mapping."""
+    result: dict[int, str] = {}
+    page = 1
+    while True:
+        data = await _api_request(
+            subdomain, access_token, "GET", "users", params={"page": page, "limit": 250}
+        )
+        if not data or "_embedded" not in data:
+            break
+        users = data["_embedded"].get("users", [])
+        if not users:
+            break
+        for u in users:
+            result[u["id"]] = u.get("name") or f"user_{u['id']}"
+        if len(users) < 250:
+            break
+        page += 1
+    return result
+
+
 async def get_events(
     subdomain: str,
     access_token: str,
