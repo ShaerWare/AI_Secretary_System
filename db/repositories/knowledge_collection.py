@@ -59,6 +59,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
                 "slug": col.slug,
                 "description": col.description,
                 "enabled": col.enabled,
+                "base_dir": col.base_dir,
                 "document_count": doc_count,
                 "created": col.created.isoformat() if col.created else None,
                 "updated": col.updated.isoformat() if col.updated else None,
