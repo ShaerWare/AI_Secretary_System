@@ -31,6 +31,7 @@ import {
   Mic,
   MicOff,
   ListChecks,
+  FileOutput,
   Brain,
   BookOpen,
   GitBranch,
@@ -950,6 +951,17 @@ function exportChatJson() {
   showExportMenu.value = false
 }
 
+function saveMessageToContext(message: ChatMessage) {
+  if (!currentSessionId.value) return
+  const ts = new Date().toISOString().slice(0, 16).replace('T', '_')
+  contextFiles.value.push({ name: `response_${ts}.md`, content: message.content })
+  saveContextFilesMutation.mutate({
+    sessionId: currentSessionId.value,
+    files: contextFiles.value,
+  })
+  toastStore.success(t('chatView.savedToContext'))
+}
+
 function summarizeBranch(messageId: string) {
   if (!currentSessionId.value || summarizingMessageId.value) return
   summarizingMessageId.value = messageId
@@ -1682,6 +1694,15 @@ watch(sessions, (newSessions) => {
                   >
                     <Loader2 v-if="summarizingMessageId === message.id" class="w-3 h-3 animate-spin" />
                     <ListChecks v-else class="w-3 h-3" />
+                  </button>
+                  <!-- Save to context button for assistant messages -->
+                  <button
+                    v-if="message.role === 'assistant'"
+                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    :title="t('chatView.saveToContext')"
+                    @click="saveMessageToContext(message)"
+                  >
+                    <FileOutput class="w-3 h-3" />
                   </button>
                   <!-- Edit button (both user and assistant messages) -->
                   <button
