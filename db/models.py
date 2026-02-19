@@ -159,6 +159,7 @@ class ChatSession(Base):
             "context_files": json.loads(self.context_files) if self.context_files else [],
             "source": self.source,
             "source_id": self.source_id,
+            "owner_id": self.owner_id,
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
@@ -183,6 +184,7 @@ class ChatSession(Base):
             "last_message": last_msg,
             "source": self.source,
             "source_id": self.source_id,
+            "owner_id": self.owner_id,
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
@@ -243,6 +245,43 @@ class ChatMessage(Base):
             "timestamp": self.created.isoformat() if self.created else None,
             "parent_id": self.parent_id,
             "is_active": self.is_active,
+        }
+
+
+class ChatSessionShare(Base):
+    """Sharing access for chat sessions between users."""
+
+    __tablename__ = "chat_session_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    permission: Mapped[str] = mapped_column(String(10), default="read")  # "read" or "write"
+    shared_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    shared_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_chat_session_shares_session_user", "session_id", "user_id", unique=True),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "permission": self.permission,
+            "shared_by": self.shared_by,
+            "shared_at": self.shared_at.isoformat() if self.shared_at else None,
         }
 
 

@@ -19,6 +19,7 @@ from db.repositories import (
     AuditRepository,
     BotInstanceRepository,
     ChatRepository,
+    ChatShareRepository,
     CloudProviderRepository,
     ConfigRepository,
     FAQRepository,
@@ -1313,6 +1314,84 @@ class AsyncKnowledgeCollectionManager:
         )
 
 
+# ============== Chat Share Manager ==============
+
+
+class AsyncChatShareManager:
+    """Async manager for chat session sharing between users."""
+
+    async def get_shares(self, session_id: str) -> List[dict]:
+        """Get all shares for a session with user info."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.get_shares_for_session(session_id)
+
+    async def add_share(
+        self,
+        session_id: str,
+        user_id: int,
+        permission: str = "read",
+        shared_by: Optional[int] = None,
+    ) -> dict:
+        """Add or update a share."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.add_share(session_id, user_id, permission, shared_by)
+
+    async def remove_share(self, session_id: str, user_id: int) -> bool:
+        """Remove a share."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.remove_share(session_id, user_id)
+
+    async def update_permission(self, session_id: str, user_id: int, permission: str) -> bool:
+        """Update share permission."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.update_permission(session_id, user_id, permission)
+
+    async def get_user_permission(self, session_id: str, user_id: int) -> Optional[str]:
+        """Get user's permission for a session."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.get_user_permission(session_id, user_id)
+
+    async def get_shared_sessions_with_permissions(self, user_id: int) -> Dict[str, str]:
+        """Get dict of session_id -> permission for all sessions shared with user."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.get_shared_sessions_with_permissions(user_id)
+
+    async def fork_session(
+        self,
+        session_id: str,
+        new_owner_id: int,
+        new_title: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Fork (deep copy) a session to a new owner."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.fork_session(session_id, new_owner_id, new_title)
+
+    async def list_shareable_users(self, exclude_user_id: Optional[int] = None) -> List[dict]:
+        """Get list of active non-guest users for sharing."""
+        async with AsyncSessionLocal() as session:
+            repo = UserRepository(session)
+            users = await repo.list_users()
+            return [
+                {
+                    "id": u["id"],
+                    "username": u["username"],
+                    "display_name": u["display_name"],
+                    "role": u["role"],
+                }
+                for u in users
+                if u.get("is_active", True)
+                and u.get("role") != "guest"
+                and u["id"] != exclude_user_id
+            ]
+
+
 # ============== Global Instances ==============
 
 # These can be used directly in orchestrator
@@ -1332,6 +1411,7 @@ async_gsm_manager = AsyncGSMManager()
 async_user_manager = AsyncUserManager()
 async_knowledge_doc_manager = AsyncKnowledgeDocManager()
 async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
+async_chat_share_manager = AsyncChatShareManager()
 
 
 # ============== Initialization Function ==============

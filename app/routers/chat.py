@@ -18,6 +18,7 @@ from cloud_llm_service import CloudLLMService
 from db.integration import (
     async_bot_instance_manager,
     async_chat_manager,
+    async_chat_share_manager,
     async_cloud_provider_manager,
     async_knowledge_collection_manager,
     async_whatsapp_instance_manager,
@@ -303,6 +304,56 @@ class SwitchBranchRequest(BaseModel):
     message_id: str
 
 
+class ShareSessionRequest(BaseModel):
+    user_id: int
+    permission: str = "read"  # "read" or "write"
+
+
+class UpdateShareRequest(BaseModel):
+    permission: str  # "read" or "write"
+
+
+class ForkSessionRequest(BaseModel):
+    title: Optional[str] = None
+
+
+# ============== Share Helpers ==============
+
+
+async def _check_session_owner_or_admin(session_id: str, user: User) -> dict:
+    """Verify user is session owner or admin. Returns session data."""
+    session_data = await async_chat_manager.get_session(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if user.role != "admin" and session_data.get("owner_id") not in (user.id, None):
+        raise HTTPException(status_code=403, detail="Only session owner or admin can manage shares")
+    return session_data
+
+
+async def _check_write_access(session_id: str, user: User) -> dict:
+    """Check that user has write access to session. Returns session data."""
+    # Admin always has access
+    if user.role == "admin":
+        session_data = await async_chat_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session_data
+
+    # Owner has access
+    session_data = await async_chat_manager.get_session(session_id, owner_id=user.id)
+    if session_data:
+        owner_id = session_data.get("owner_id")
+        if owner_id == user.id or owner_id is None:
+            return session_data
+        # Session found via share — check write permission
+        perm = await async_chat_share_manager.get_user_permission(session_id, user.id)
+        if perm == "write":
+            return session_data
+        raise HTTPException(status_code=403, detail="Read-only access")
+
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
 # ============== Sessions Endpoints ==============
 
 
@@ -315,12 +366,33 @@ async def admin_list_chat_sessions(
 ):
     """Список всех чат-сессий. group_by=source для группировки по источнику."""
     owner_id = None if user.role == "admin" else user.id
+
+    # Get shared session permissions for non-admin users
+    shared_perms: dict[str, str] = {}
+    if owner_id is not None:
+        shared_perms = await async_chat_share_manager.get_shared_sessions_with_permissions(user.id)
+
+    def _enrich(sessions_list: list[dict]) -> list[dict]:
+        for s in sessions_list:
+            sid = s.get("id", "")
+            s_owner = s.get("owner_id")
+            if sid in shared_perms and s_owner != user.id and s_owner is not None:
+                s["is_shared_with_me"] = True
+                s["share_permission"] = shared_perms[sid]
+            else:
+                s["is_shared_with_me"] = False
+                s["share_permission"] = "owner"
+        return sessions_list
+
     if group_by == "source":
         grouped = await async_chat_manager.list_sessions_grouped(owner_id=owner_id)
+        for source_key in grouped:
+            _enrich(grouped[source_key])
         return {"sessions": grouped, "grouped": True}
     sessions = await async_chat_manager.list_sessions(
         owner_id=owner_id, source=source, exclude_source=exclude_source
     )
+    _enrich(sessions)
     return {"sessions": sessions}
 
 
@@ -380,6 +452,20 @@ async def admin_get_chat_session(session_id: str, user: User = Depends(get_curre
     ]
     session["token_usage"] = _build_token_usage(llm_messages, model)
 
+    # Share info
+    session_owner_id = session.get("owner_id")
+    is_owner = user.role == "admin" or session_owner_id == user.id or session_owner_id is None
+    if is_owner:
+        session["is_shared_with_me"] = False
+        session["share_permission"] = "owner"
+        shares = await async_chat_share_manager.get_shares(session_id)
+        session["share_count"] = len(shares)
+    else:
+        perm = await async_chat_share_manager.get_user_permission(session_id, user.id)
+        session["is_shared_with_me"] = True
+        session["share_permission"] = perm or "read"
+        session["share_count"] = 0
+
     return {"session": session}
 
 
@@ -388,6 +474,7 @@ async def admin_update_chat_session(
     session_id: str, request: UpdateSessionRequest, user: User = Depends(get_current_user)
 ):
     """Обновить чат-сессию"""
+    await _check_write_access(session_id, user)
     session = await async_chat_manager.update_session(
         session_id,
         request.title,
@@ -405,7 +492,8 @@ async def admin_update_chat_session(
 
 @router.delete("/sessions/{session_id}")
 async def admin_delete_chat_session(session_id: str, user: User = Depends(get_current_user)):
-    """Удалить чат-сессию"""
+    """Удалить чат-сессию (owner/admin only, shared users cannot delete)"""
+    await _check_session_owner_or_admin(session_id, user)
     owner_id = None if user.role == "admin" else user.id
     if not await async_chat_manager.delete_session(session_id, owner_id=owner_id):
         raise HTTPException(status_code=404, detail="Session not found")
@@ -425,10 +513,7 @@ async def admin_send_chat_message(
 ):
     """Отправить сообщение и получить ответ (non-streaming)"""
     container = get_container()
-    owner_id = None if user.role == "admin" else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _check_write_access(session_id, user)
 
     llm_service = container.llm_service
     if not llm_service:
@@ -484,10 +569,7 @@ async def admin_stream_chat_message(
 ):
     """Отправить сообщение и получить streaming ответ"""
     container = get_container()
-    owner_id = None if user.role == "admin" else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _check_write_access(session_id, user)
 
     # Per-instance rate limiting for telegram bot sessions
     if session.get("source") == "telegram_bot" and session.get("source_id"):
@@ -660,10 +742,7 @@ async def admin_edit_chat_message(
 ):
     """Редактировать сообщение (non-destructive: creates new branch)"""
     container = get_container()
-    owner_id = None if user.role == "admin" else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _check_write_access(session_id, user)
 
     # Находим сообщение
     message = None
@@ -732,6 +811,7 @@ async def admin_delete_chat_message(
     session_id: str, message_id: str, user: User = Depends(get_current_user)
 ):
     """Удалить сообщение и все последующие"""
+    await _check_write_access(session_id, user)
     if not await async_chat_manager.delete_message(session_id, message_id):
         raise HTTPException(status_code=404, detail="Message not found")
     return {"status": "ok"}
@@ -743,10 +823,7 @@ async def admin_regenerate_chat_response(
 ):
     """Перегенерировать ответ (non-destructive: creates new branch)"""
     container = get_container()
-    owner_id = None if user.role == "admin" else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _check_write_access(session_id, user)
 
     llm_service = container.llm_service
     if not llm_service:
@@ -900,6 +977,7 @@ async def admin_new_branch(
     user: User = Depends(get_current_user),
 ):
     """Начать новую ветку с чистого листа (деактивирует все сообщения)"""
+    await _check_write_access(session_id, user)
     success = await async_chat_manager.start_new_branch(session_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -908,3 +986,106 @@ async def admin_new_branch(
     if session:
         session["sibling_info"] = sibling_info
     return {"status": "ok", "session": session}
+
+
+# ============== Sharing Endpoints ==============
+
+
+@router.get("/sessions/{session_id}/shares")
+async def admin_get_session_shares(session_id: str, user: User = Depends(get_current_user)):
+    """Получить список шар для сессии (owner/admin)"""
+    await _check_session_owner_or_admin(session_id, user)
+    shares = await async_chat_share_manager.get_shares(session_id)
+    return {"shares": shares}
+
+
+@router.post("/sessions/{session_id}/shares")
+async def admin_share_session(
+    session_id: str,
+    request: ShareSessionRequest,
+    user: User = Depends(get_current_user),
+):
+    """Расшарить сессию пользователю (owner/admin, not guest)"""
+    if user.role == "guest":
+        raise HTTPException(status_code=403, detail="Guests cannot share sessions")
+    session_data = await _check_session_owner_or_admin(session_id, user)
+
+    # Only share admin-source sessions
+    if session_data.get("source") and session_data["source"] != "admin":
+        raise HTTPException(status_code=400, detail="Only admin chats can be shared")
+
+    if request.permission not in ("read", "write"):
+        raise HTTPException(status_code=400, detail="Permission must be 'read' or 'write'")
+
+    # Cannot share with yourself
+    if request.user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot share with yourself")
+
+    share = await async_chat_share_manager.add_share(
+        session_id, request.user_id, request.permission, shared_by=user.id
+    )
+    return {"share": share}
+
+
+@router.put("/sessions/{session_id}/shares/{target_user_id}")
+async def admin_update_session_share(
+    session_id: str,
+    target_user_id: int,
+    request: UpdateShareRequest,
+    user: User = Depends(get_current_user),
+):
+    """Изменить permission шара (owner/admin)"""
+    await _check_session_owner_or_admin(session_id, user)
+    if request.permission not in ("read", "write"):
+        raise HTTPException(status_code=400, detail="Permission must be 'read' or 'write'")
+    ok = await async_chat_share_manager.update_permission(
+        session_id, target_user_id, request.permission
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Share not found")
+    return {"status": "ok"}
+
+
+@router.delete("/sessions/{session_id}/shares/{target_user_id}")
+async def admin_remove_session_share(
+    session_id: str,
+    target_user_id: int,
+    user: User = Depends(get_current_user),
+):
+    """Удалить шар (owner/admin)"""
+    await _check_session_owner_or_admin(session_id, user)
+    ok = await async_chat_share_manager.remove_share(session_id, target_user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Share not found")
+    return {"status": "ok"}
+
+
+@router.post("/sessions/{session_id}/fork")
+async def admin_fork_session(
+    session_id: str,
+    request: ForkSessionRequest,
+    user: User = Depends(get_current_user),
+):
+    """Форк сессии — глубокое копирование к себе (любой с доступом, not guest)"""
+    if user.role == "guest":
+        raise HTTPException(status_code=403, detail="Guests cannot fork sessions")
+
+    # Verify the user has at least read access
+    owner_id = None if user.role == "admin" else user.id
+    session_data = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    new_session = await async_chat_share_manager.fork_session(session_id, user.id, request.title)
+    if not new_session:
+        raise HTTPException(status_code=500, detail="Failed to fork session")
+    return {"session": new_session}
+
+
+@router.get("/shareable-users")
+async def admin_get_shareable_users(user: User = Depends(get_current_user)):
+    """Список пользователей для шаринга (not guest)"""
+    if user.role == "guest":
+        raise HTTPException(status_code=403, detail="Guests cannot share sessions")
+    users = await async_chat_share_manager.list_shareable_users(exclude_user_id=user.id)
+    return {"users": users}

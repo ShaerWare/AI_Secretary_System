@@ -72,6 +72,16 @@ export function initChatData() {
   }
 }
 
+// Demo share storage
+const demoShares: Record<string, Array<{ id: number; session_id: string; user_id: number; permission: string; shared_by: number; shared_at: string; username: string; display_name: string | null }>> = {}
+let shareIdCounter = 100
+
+const demoShareableUsers = [
+  { id: 2, username: 'operator', display_name: 'Оператор Иван', role: 'user' },
+  { id: 3, username: 'manager', display_name: 'Менеджер Анна', role: 'user' },
+  { id: 4, username: 'viewer', display_name: null, role: 'user' },
+]
+
 function sessionToSummary(s: ChatSessionData) {
   return {
     id: s.id,
@@ -81,8 +91,11 @@ function sessionToSummary(s: ChatSessionData) {
     last_message: s.messages[s.messages.length - 1]?.content?.slice(0, 100),
     source: s.source,
     source_id: s.source_id,
+    owner_id: null,
     created: s.created,
     updated: s.updated,
+    is_shared_with_me: false,
+    share_permission: 'owner',
   }
 }
 
@@ -131,9 +144,14 @@ export const chatRoutes: DemoRoute[] = [
       if (session) {
         const tokens = session.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0) + 200
         const context_window = 200_000
+        const shares = demoShares[session.id] || []
         return {
           session: {
             ...session,
+            owner_id: null,
+            is_shared_with_me: false,
+            share_permission: 'owner',
+            share_count: shares.length,
             token_usage: {
               tokens,
               context_window,
@@ -144,6 +162,96 @@ export const chatRoutes: DemoRoute[] = [
         }
       }
       return { session }
+    },
+  },
+  // Shareable users
+  {
+    method: 'GET',
+    pattern: /^\/admin\/chat\/shareable-users$/,
+    handler: () => ({ users: demoShareableUsers }),
+  },
+  // Get shares
+  {
+    method: 'GET',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/shares$/,
+    handler: ({ matches }) => {
+      const sessionId = matches[1]
+      return { shares: demoShares[sessionId] || [] }
+    },
+  },
+  // Add share
+  {
+    method: 'POST',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/shares$/,
+    handler: ({ matches, body }) => {
+      const sessionId = matches[1]
+      const { user_id, permission } = body as { user_id: number; permission: string }
+      const user = demoShareableUsers.find(u => u.id === user_id)
+      const share = {
+        id: ++shareIdCounter,
+        session_id: sessionId,
+        user_id,
+        permission: permission || 'read',
+        shared_by: 1,
+        shared_at: nowISO(),
+        username: user?.username || 'unknown',
+        display_name: user?.display_name || null,
+      }
+      if (!demoShares[sessionId]) demoShares[sessionId] = []
+      demoShares[sessionId].push(share)
+      return { share }
+    },
+  },
+  // Update share permission
+  {
+    method: 'PUT',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/shares\/(\d+)$/,
+    handler: ({ matches, body }) => {
+      const sessionId = matches[1]
+      const userId = parseInt(matches[2])
+      const { permission } = body as { permission: string }
+      const shares = demoShares[sessionId] || []
+      const share = shares.find(s => s.user_id === userId)
+      if (share) share.permission = permission
+      return { status: 'ok' }
+    },
+  },
+  // Delete share
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/shares\/(\d+)$/,
+    handler: ({ matches }) => {
+      const sessionId = matches[1]
+      const userId = parseInt(matches[2])
+      if (demoShares[sessionId]) {
+        demoShares[sessionId] = demoShares[sessionId].filter(s => s.user_id !== userId)
+      }
+      return { status: 'ok' }
+    },
+  },
+  // Fork session
+  {
+    method: 'POST',
+    pattern: /^\/admin\/chat\/sessions\/([^/]+)\/fork$/,
+    handler: ({ matches, body }) => {
+      initChatData()
+      const store = getStore()
+      const source = store.chatSessions.find(s => s.id === matches[1])
+      const { title } = (body || {}) as { title?: string }
+      if (source) {
+        const forked: ChatSessionData = {
+          id: generateId(),
+          title: title || `${source.title} (fork)`,
+          messages: source.messages.map(m => ({ ...m, id: generateId() })),
+          pinned: false,
+          source: 'admin',
+          created: nowISO(),
+          updated: nowISO(),
+        }
+        store.chatSessions.push(forked)
+        return { session: forked }
+      }
+      return { session: null }
     },
   },
   {
