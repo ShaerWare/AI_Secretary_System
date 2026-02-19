@@ -33,6 +33,7 @@ from app.services.amocrm_service import (
 )
 from auth_manager import User, require_admin, require_not_guest
 from db.integration import async_amocrm_manager, async_audit_logger
+from db.redis_client import CacheKey, cache_delete_pattern, cache_get, cache_set
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,17 @@ async def _get_valid_token() -> dict:
         config["token_expires_at"] = new_expires.isoformat()
 
     return config
+
+
+def _get_subdomain(config: dict) -> str:
+    """Extract subdomain from config for use in cache keys."""
+    return config.get("subdomain", "unknown")
+
+
+async def _invalidate_leads_cache(subdomain: str | None = None) -> None:
+    """Invalidate all leads-related caches (pipeline leads + unsorted)."""
+    await cache_delete_pattern(f"{CacheKey.AMOCRM}:pipeline_leads:*")
+    await cache_delete_pattern(f"{CacheKey.AMOCRM}:unsorted:*")
 
 
 # ============== Pydantic Models ==============
@@ -303,6 +315,7 @@ async def crm_oauth_redirect(
 async def crm_disconnect(user: User = Depends(require_admin)):
     """Clear tokens — disconnect from amoCRM."""
     await async_amocrm_manager.clear_tokens()
+    await cache_delete_pattern(f"{CacheKey.AMOCRM}:*")
 
     await async_audit_logger.log(
         action="delete",
@@ -442,6 +455,9 @@ async def crm_create_lead(
             contact_id=request.contact_id,
         )
 
+        # Invalidate pipeline leads and unsorted caches
+        await _invalidate_leads_cache()
+
         await async_amocrm_manager.log_sync(
             direction="outgoing",
             entity_type="lead",
@@ -484,8 +500,14 @@ async def crm_get_leads_by_pipeline(
 ):
     """Get all leads in a specific pipeline (for kanban board)."""
     config = await _get_valid_token()
+    subdomain = _get_subdomain(config)
+    cache_key = f"{CacheKey.AMOCRM}:pipeline_leads:{subdomain}:{pipeline_id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     try:
         data = await get_leads_by_pipeline(config["subdomain"], config["access_token"], pipeline_id)
+        await cache_set(cache_key, data, ttl_seconds=60)
         return data
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -499,10 +521,16 @@ async def crm_get_unsorted_leads(
 ):
     """Get unsorted (incoming) leads, paginated."""
     config = await _get_valid_token()
+    subdomain = _get_subdomain(config)
+    cache_key = f"{CacheKey.AMOCRM}:unsorted:{subdomain}:{page}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     try:
         data = await get_unsorted_leads(
             config["subdomain"], config["access_token"], page=page, limit=limit
         )
+        await cache_set(cache_key, data, ttl_seconds=30)
         return data
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -515,10 +543,16 @@ async def crm_get_lead(
 ):
     """Get single lead detail with contacts."""
     config = await _get_valid_token()
+    subdomain = _get_subdomain(config)
+    cache_key = f"{CacheKey.AMOCRM}:lead:{subdomain}:{lead_id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     try:
         data = await get_lead(
             config["subdomain"], config["access_token"], lead_id, with_contacts=True
         )
+        await cache_set(cache_key, data, ttl_seconds=120)
         return data
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -539,6 +573,10 @@ async def crm_update_lead(
         result = await update_lead(
             config["subdomain"], config["access_token"], lead_id, update_data
         )
+
+        # Invalidate caches for this lead and pipeline views
+        await cache_delete_pattern(f"{CacheKey.AMOCRM}:lead:*:{lead_id}")
+        await _invalidate_leads_cache()
 
         await async_amocrm_manager.log_sync(
             direction="outgoing",
@@ -668,8 +706,14 @@ async def crm_send_chat_message(
 async def crm_get_pipelines(user: User = Depends(require_not_guest)):
     """List pipelines with their statuses."""
     config = await _get_valid_token()
+    subdomain = _get_subdomain(config)
+    cache_key = f"{CacheKey.AMOCRM}:pipelines:{subdomain}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     try:
         data = await get_pipelines(config["subdomain"], config["access_token"])
+        await cache_set(cache_key, data, ttl_seconds=300)
         return data
     except AmoCRMAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -756,6 +800,14 @@ async def amocrm_webhook(request: Request):
         logger.info(
             f"amoCRM webhook received: {list(data.keys()) if isinstance(data, dict) else 'raw'}"
         )
+
+        # Invalidate caches on lead-related webhook events
+        if isinstance(data, dict):
+            lead_keys = [k for k in data if k.startswith("leads[")]
+            if lead_keys:
+                await cache_delete_pattern(f"{CacheKey.AMOCRM}:pipeline_leads:*")
+                await cache_delete_pattern(f"{CacheKey.AMOCRM}:unsorted:*")
+                await cache_delete_pattern(f"{CacheKey.AMOCRM}:lead:*")
 
         await async_amocrm_manager.log_sync(
             direction="incoming",
