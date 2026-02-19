@@ -48,7 +48,7 @@ const activeTab = ref<'llm' | 'tts'>('llm')
 
 // LLM sub-mode: local LoRA vs cloud AI knowledge
 // Web role users only see Cloud AI
-const llmMode = ref<'local' | 'cloud'>(authStore.isWeb ? 'cloud' : 'local')
+const llmMode = ref<'local' | 'cloud'>(authStore.isWeb || authStore.isCloudMode ? 'cloud' : 'local')
 
 // ============== Cloud AI (Wiki RAG) State ==============
 const searchQuery = ref('')
@@ -564,7 +564,7 @@ onUnmounted(() => {
         LLM Training
       </button>
       <button
-        v-if="!authStore.isWeb"
+        v-if="!authStore.isWeb && !authStore.isCloudMode"
         :class="[
           'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
           activeTab === 'tts' ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-secondary/80'
@@ -578,8 +578,8 @@ onUnmounted(() => {
 
     <!-- ============== LLM TAB ============== -->
     <template v-if="activeTab === 'llm'">
-      <!-- Local / Cloud AI Toggle (hidden for web role — they only see Cloud AI) -->
-      <div v-if="!authStore.isWeb" class="bg-card rounded-lg border border-border p-4">
+      <!-- Local / Cloud AI Toggle (hidden for web/cloud — they only see Cloud AI) -->
+      <div v-if="!authStore.isWeb && !authStore.isCloudMode" class="bg-card rounded-lg border border-border p-4">
         <div class="grid grid-cols-2 gap-2 p-1 bg-secondary rounded-lg max-w-md">
           <button
             :class="[
@@ -605,7 +605,7 @@ onUnmounted(() => {
       </div>
 
       <!-- ====== LOCAL (LoRA) MODE ====== -->
-      <template v-if="llmMode === 'local'">
+      <template v-if="llmMode === 'local' && !authStore.isCloudMode">
       <!-- Project Dataset Generator -->
       <div class="bg-card rounded-lg border border-border">
         <div class="p-4 border-b border-border">
@@ -1024,7 +1024,7 @@ v-if="!adapter.active" :disabled="deleteAdapterMutation.isPending.value" class="
       </template>
 
       <!-- ====== CLOUD AI MODE ====== -->
-      <template v-if="llmMode === 'cloud'">
+      <template v-if="llmMode === 'cloud' || authStore.isCloudMode">
         <!-- Wiki RAG Status -->
         <div class="bg-card rounded-lg border border-border">
           <div class="p-4 border-b border-border flex items-center justify-between">

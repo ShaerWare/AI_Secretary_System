@@ -7,7 +7,8 @@ import {
   Search,
   LogOut,
   User,
-  Languages
+  Languages,
+  PanelLeftClose
 } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -113,12 +114,19 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
         >
           <!-- Logo -->
           <div class="flex items-center justify-between h-16 px-4 border-b border-border">
-            <div class="flex items-center gap-3 cursor-pointer" @click="isMobile ? (mobileMenuOpen = false) : (sidebarOpen = !sidebarOpen)">
+            <div :class="['flex items-center gap-3', !sidebarOpen && !isMobile ? 'cursor-pointer' : '']" @click="!sidebarOpen && !isMobile && (sidebarOpen = true)">
               <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
                 <Settings class="w-5 h-5 text-primary" />
               </div>
               <span v-if="sidebarOpen || isMobile" class="font-semibold text-lg">AI Secretary</span>
             </div>
+            <button
+              v-if="!isMobile && sidebarOpen"
+              class="p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
+              @click="sidebarOpen = false"
+            >
+              <PanelLeftClose class="w-4 h-4" />
+            </button>
             <button
               v-if="isMobile"
               class="p-1 rounded-lg hover:bg-secondary/50 text-muted-foreground"
