@@ -144,11 +144,9 @@ const audioChunks = ref<Blob[]>([])
 // LLM selection state
 const selectedLlmBackend = ref<string>(localStorage.getItem('chat-llm-backend') || '')
 
-// RAG selection state
-const selectedRagMode = ref<string>(localStorage.getItem('chat-rag-mode') || '')
-const selectedCollectionIds = ref<number[]>(
-  localStorage.getItem('chat-rag-collections') ? JSON.parse(localStorage.getItem('chat-rag-collections')!) : []
-)
+// RAG selection state (per-session, loaded from session data)
+const selectedRagMode = ref<string>('')
+const selectedCollectionIds = ref<number[]>([])
 
 // Save voice mode preference
 watch(voiceMode, (val) => {
@@ -160,17 +158,21 @@ watch(selectedLlmBackend, (val) => {
   localStorage.setItem('chat-llm-backend', val)
 })
 
-// Save RAG selection
-watch(selectedRagMode, (val) => {
-  localStorage.setItem('chat-rag-mode', val)
-})
-watch(selectedCollectionIds, (val) => {
-  if (val.length) {
-    localStorage.setItem('chat-rag-collections', JSON.stringify(val))
-  } else {
-    localStorage.removeItem('chat-rag-collections')
-  }
-}, { deep: true })
+// Save RAG selection to session (per-chat)
+let ragSaveTimer: ReturnType<typeof setTimeout> | null = null
+function saveRagToSession() {
+  if (!currentSessionId.value) return
+  if (ragSaveTimer) clearTimeout(ragSaveTimer)
+  ragSaveTimer = setTimeout(() => {
+    if (!currentSessionId.value) return
+    chatApi.updateSession(currentSessionId.value, {
+      rag_mode: selectedRagMode.value || 'none',
+      knowledge_collection_ids: selectedRagMode.value === 'selected' ? selectedCollectionIds.value : [],
+    })
+  }, 500)
+}
+watch(selectedRagMode, saveRagToSession)
+watch(selectedCollectionIds, saveRagToSession, { deep: true })
 
 // Queries
 const { data: sessionsData, refetch: refetchSessions } = useQuery({
@@ -276,6 +278,9 @@ watch(currentSession, (session) => {
   if (session) {
     customPrompt.value = session.system_prompt || ''
     contextFiles.value = session.context_files ? [...session.context_files] : []
+    // Load per-session RAG settings
+    selectedRagMode.value = session.rag_mode || ''
+    selectedCollectionIds.value = session.knowledge_collection_ids || []
   }
   attachedFiles.value = []
 })
