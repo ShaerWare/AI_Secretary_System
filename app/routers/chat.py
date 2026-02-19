@@ -206,7 +206,13 @@ def _inject_rag_context(
 
     if wiki_context:
         base = base_prompt or _DEFAULT_RAG_PROMPT
-        return f"{base}\n\n{wiki_context}"
+        rag_instruction = (
+            "\n\n--- КОНТЕКСТ ИЗ БАЗЫ ЗНАНИЙ (обязательно к использованию) ---\n"
+            "Ниже приведена релевантная информация из базы знаний. "
+            "ОБЯЗАТЕЛЬНО используй эти данные при ответе. "
+            "Если информация ниже отвечает на вопрос пользователя — ответь на основе неё.\n"
+        )
+        return f"{base}{rag_instruction}\n{wiki_context}"
 
     return base_prompt
 
