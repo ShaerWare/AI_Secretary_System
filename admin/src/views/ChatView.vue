@@ -1511,9 +1511,9 @@ watch(sessions, (newSessions) => {
       <!-- Input Area -->
       <div
         v-if="currentSession"
-        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last' : 'border-b border-border']"
+        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-16' : 'border-b border-border']"
       >
-        <div class="flex gap-3 items-end">
+        <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
           <textarea
             ref="messageInputRef"
             v-model="inputMessage"
