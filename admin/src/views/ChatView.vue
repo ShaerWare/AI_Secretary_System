@@ -81,6 +81,7 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const showSidebar = ref(true)
 const showExportMenu = ref(false)
+const showRagMenu = ref(false)
 const showShareDialog = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
   (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
@@ -1130,13 +1131,14 @@ function formatTime(timestamp: string) {
   })
 }
 
-// Close export menu on outside click
+// Close dropdown menus on outside click
 function handleGlobalClick(e: MouseEvent) {
-  if (showExportMenu.value) {
-    const target = e.target as HTMLElement
-    if (!target.closest('.relative')) {
-      showExportMenu.value = false
-    }
+  const target = e.target as HTMLElement
+  if (showExportMenu.value && !target.closest('.relative')) {
+    showExportMenu.value = false
+  }
+  if (showRagMenu.value && !target.closest('.relative')) {
+    showRagMenu.value = false
   }
 }
 
@@ -1434,12 +1436,32 @@ watch(sessions, (newSessions) => {
               </option>
             </select>
           </div>
-          <!-- RAG collections multi-select -->
-          <div v-if="knowledgeCollections.length" class="flex items-center gap-1">
-            <BookOpen class="w-4 h-4 text-muted-foreground" />
-            <div v-for="col in knowledgeCollections" :key="col.id" class="flex items-center">
-              <label class="flex items-center gap-1 px-2 py-1 text-sm bg-secondary rounded-lg cursor-pointer hover:bg-secondary/80">
-                <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3 h-3" />
+          <!-- RAG collections dropdown -->
+          <div v-if="knowledgeCollections.length" class="relative">
+            <button
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                selectedCollectionIds.length > 0 ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+              ]"
+              :title="t('chatView.knowledgeBase')"
+              @click="showRagMenu = !showRagMenu"
+            >
+              <BookOpen class="w-4 h-4" />
+              <span
+                v-if="selectedCollectionIds.length"
+                class="absolute -top-1 -right-1 w-4 h-4 text-[10px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
+              >{{ selectedCollectionIds.length }}</span>
+            </button>
+            <div
+              v-if="showRagMenu"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[200px]"
+            >
+              <label
+                v-for="col in knowledgeCollections"
+                :key="col.id"
+                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary transition-colors cursor-pointer"
+              >
+                <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
                 <span>{{ col.name }}</span>
               </label>
             </div>
