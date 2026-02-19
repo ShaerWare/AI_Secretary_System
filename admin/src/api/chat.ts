@@ -40,12 +40,16 @@ export interface ChatSession {
   context_files?: { name: string; content: string }[]
   source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
   source_id?: string
+  owner_id?: number | null
   rag_mode?: string | null
   knowledge_collection_ids?: number[] | null
   created: string
   updated: string
   sibling_info?: Record<string, SiblingInfo>
   token_usage?: TokenUsage
+  is_shared_with_me?: boolean
+  share_permission?: string
+  share_count?: number
 }
 
 export interface ChatSessionSummary {
@@ -56,8 +60,29 @@ export interface ChatSessionSummary {
   last_message?: string
   source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
   source_id?: string
+  owner_id?: number | null
   created: string
   updated: string
+  is_shared_with_me?: boolean
+  share_permission?: string
+}
+
+export interface ChatShare {
+  id: number
+  session_id: string
+  user_id: number
+  permission: string
+  shared_by: number | null
+  shared_at: string
+  username: string
+  display_name: string | null
+}
+
+export interface ShareableUser {
+  id: number
+  username: string
+  display_name: string | null
+  role: string
 }
 
 export interface GroupedSessions {
@@ -218,4 +243,28 @@ export const chatApi = {
   // Get default system prompt
   getDefaultPrompt: () =>
     api.get<{ prompt: string; persona: string }>('/admin/llm/prompt'),
+
+  // Sharing
+  getShares: (sessionId: string) =>
+    api.get<{ shares: ChatShare[] }>(`/admin/chat/sessions/${sessionId}/shares`),
+
+  shareSession: (sessionId: string, userId: number, permission: string = 'read') =>
+    api.post<{ share: ChatShare }>(`/admin/chat/sessions/${sessionId}/shares`, {
+      user_id: userId,
+      permission,
+    }),
+
+  updateSharePermission: (sessionId: string, userId: number, permission: string) =>
+    api.put<{ status: string }>(`/admin/chat/sessions/${sessionId}/shares/${userId}`, {
+      permission,
+    }),
+
+  removeShare: (sessionId: string, userId: number) =>
+    api.delete<{ status: string }>(`/admin/chat/sessions/${sessionId}/shares/${userId}`),
+
+  forkSession: (sessionId: string, title?: string) =>
+    api.post<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}/fork`, { title }),
+
+  getShareableUsers: () =>
+    api.get<{ users: ShareableUser[] }>('/admin/chat/shareable-users'),
 }

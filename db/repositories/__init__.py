@@ -22,6 +22,7 @@ from db.repositories.bot_subscriber import BotSubscriberRepository
 from db.repositories.bot_testimonial import BotTestimonialRepository
 from db.repositories.bot_user_profile import BotUserProfileRepository
 from db.repositories.chat import ChatRepository
+from db.repositories.chat_share import ChatShareRepository
 from db.repositories.cloud_provider import CloudProviderRepository
 from db.repositories.config import ConfigRepository
 from db.repositories.consent import ConsentRepository
@@ -58,6 +59,7 @@ __all__ = [
     "BotTestimonialRepository",
     "BotUserProfileRepository",
     "ChatRepository",
+    "ChatShareRepository",
     "CloudProviderRepository",
     "ConfigRepository",
     "ConsentRepository",

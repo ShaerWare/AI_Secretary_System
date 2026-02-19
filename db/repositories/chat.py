@@ -11,7 +11,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import ChatMessage, ChatSession
+from db.models import ChatMessage, ChatSession, ChatSessionShare
 from db.redis_client import (
     cache_session,
     get_cached_session,
@@ -49,8 +49,15 @@ class ChatRepository(BaseRepository[ChatSession]):
             .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
         if owner_id is not None:
+            shared_subq = (
+                select(ChatSessionShare.session_id)
+                .where(ChatSessionShare.user_id == owner_id)
+                .scalar_subquery()
+            )
             query = query.where(
-                (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
+                (ChatSession.owner_id == owner_id)
+                | (ChatSession.owner_id.is_(None))
+                | (ChatSession.id.in_(shared_subq))
             )
         if source is not None:
             db_source = "telegram_bot" if source == "telegram" else source
@@ -79,8 +86,18 @@ class ChatRepository(BaseRepository[ChatSession]):
             .where(ChatSession.id == session_id)
         )
         if owner_id is not None:
+            shared_subq = (
+                select(ChatSessionShare.session_id)
+                .where(
+                    ChatSessionShare.user_id == owner_id,
+                    ChatSessionShare.session_id == session_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
+                (ChatSession.owner_id == owner_id)
+                | (ChatSession.owner_id.is_(None))
+                | (ChatSession.id.in_(shared_subq))
             )
         result = await self.session.execute(query)
         session = result.scalar_one_or_none()
@@ -233,8 +250,15 @@ class ChatRepository(BaseRepository[ChatSession]):
             .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
         if owner_id is not None:
+            shared_subq = (
+                select(ChatSessionShare.session_id)
+                .where(ChatSessionShare.user_id == owner_id)
+                .scalar_subquery()
+            )
             query = query.where(
-                (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
+                (ChatSession.owner_id == owner_id)
+                | (ChatSession.owner_id.is_(None))
+                | (ChatSession.id.in_(shared_subq))
             )
         result = await self.session.execute(query)
         sessions = result.scalars().all()
@@ -673,3 +697,68 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         result = await self.session.execute(select(func.count()).select_from(ChatMessage))
         return result.scalar() or 0
+
+    async def fork_session(
+        self,
+        session_id: str,
+        new_owner_id: int,
+        new_title: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Deep copy a session with active messages to a new owner."""
+        result = await self.session.execute(
+            select(ChatSession)
+            .options(selectinload(ChatSession.messages))
+            .where(ChatSession.id == session_id)
+        )
+        source_session = result.scalar_one_or_none()
+        if not source_session:
+            return None
+
+        # Create new session
+        new_session_id = self._generate_session_id()
+        now = datetime.utcnow()
+        title = new_title or f"{source_session.title} (fork)"
+
+        new_session = ChatSession(
+            id=new_session_id,
+            title=title,
+            system_prompt=source_session.system_prompt,
+            source=source_session.source,
+            owner_id=new_owner_id,
+            rag_mode=source_session.rag_mode,
+            knowledge_collection_id=source_session.knowledge_collection_id,
+            knowledge_collection_ids=source_session.knowledge_collection_ids,
+            context_files=source_session.context_files,
+            created=now,
+            updated=now,
+        )
+        self.session.add(new_session)
+
+        # Copy active messages with parent_id remapping
+        active_msgs = sorted(
+            [m for m in source_session.messages if m.is_active],
+            key=lambda m: m.created,
+        )
+        id_map: Dict[str, str] = {}
+
+        for msg in active_msgs:
+            new_msg_id = self._generate_message_id()
+            id_map[msg.id] = new_msg_id
+            new_parent_id = id_map.get(msg.parent_id) if msg.parent_id else None
+
+            new_msg = ChatMessage(
+                id=new_msg_id,
+                session_id=new_session_id,
+                role=msg.role,
+                content=msg.content,
+                edited=False,
+                created=now,
+                parent_id=new_parent_id,
+                is_active=True,
+            )
+            self.session.add(new_msg)
+
+        await self.session.commit()
+
+        # Return the new session
+        return await self.get_session(new_session_id)

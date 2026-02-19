@@ -6,8 +6,10 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
+import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 import {
   MessageSquare,
   Plus,
@@ -42,7 +44,10 @@ import {
   Paperclip,
   Download,
   ArrowDownToLine,
-  ArrowUpToLine
+  ArrowUpToLine,
+  Share2,
+  GitFork,
+  Users
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useResizablePanel } from '@/composables/useResizablePanel'
@@ -51,6 +56,7 @@ import { getChatEmoji } from '@/utils/chatEmoji'
 const { t } = useI18n()
 const confirmStore = useConfirmStore()
 const toastStore = useToastStore()
+const authStore = useAuthStore()
 
 const queryClient = useQueryClient()
 
@@ -75,6 +81,7 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const showSidebar = ref(true)
 const showExportMenu = ref(false)
+const showShareDialog = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
   (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
 )
@@ -222,6 +229,15 @@ const siblingInfo = computed(() => currentSession.value?.sibling_info || {})
 
 // Token usage
 const tokenUsage = computed(() => currentSession.value?.token_usage)
+
+// Sharing computed
+const isSessionOwner = computed(() => {
+  if (!currentSession.value) return false
+  const ownerId = currentSession.value.owner_id
+  return authStore.isAdmin || ownerId === authStore.user?.id || ownerId === null || ownerId === undefined
+})
+const isSharedWithMe = computed(() => currentSession.value?.is_shared_with_me === true)
+const isReadOnly = computed(() => isSharedWithMe.value && currentSession.value?.share_permission === 'read')
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
@@ -441,6 +457,17 @@ const summarizeBranchMutation = useMutation({
   },
   onError: () => {
     summarizingMessageId.value = null
+  },
+})
+
+const forkSessionMutation = useMutation({
+  mutationFn: (sessionId: string) => chatApi.forkSession(sessionId),
+  onSuccess: (data) => {
+    queryClient.invalidateQueries({ queryKey: ['chat-sessions'] })
+    if (data.session) {
+      currentSessionId.value = data.session.id
+    }
+    toastStore.success(t('chatView.chatForked'))
   },
 })
 
@@ -1271,6 +1298,7 @@ watch(sessions, (newSessions) => {
                   @dblclick="startRename(session, $event)"
                 >
                   <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
+                  <Users v-if="session.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('chatView.sharedWithYou')" />
                   {{ session.title }}
                 </p>
               </template>
@@ -1416,6 +1444,26 @@ watch(sessions, (newSessions) => {
               </label>
             </div>
           </div>
+          <!-- Share button (owner/admin only) -->
+          <button
+            v-if="isSessionOwner && !isSharedWithMe"
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="t('chatView.shareChat')"
+            @click="showShareDialog = true"
+          >
+            <Share2 class="w-4 h-4" />
+          </button>
+          <!-- Fork button (read-only shared sessions) -->
+          <button
+            v-if="isReadOnly"
+            :disabled="forkSessionMutation.isPending.value"
+            class="p-2 rounded-lg hover:bg-secondary transition-colors text-blue-400"
+            :title="t('chatView.forkChat')"
+            @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
+          >
+            <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
+            <GitFork v-else class="w-4 h-4" />
+          </button>
           <!-- Export chat dropdown -->
           <div class="relative">
             <button
@@ -1485,6 +1533,7 @@ watch(sessions, (newSessions) => {
             <GitBranch class="w-4 h-4" />
           </button>
           <button
+            v-if="!isReadOnly"
             :class="[
               'p-2 rounded-lg transition-colors',
               showSettings ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
@@ -1496,6 +1545,7 @@ watch(sessions, (newSessions) => {
           </button>
           <!-- New branch from scratch -->
           <button
+            v-if="!isReadOnly"
             :disabled="newBranchMutation.isPending.value"
             class="p-2 rounded-lg hover:bg-secondary transition-colors"
             :title="t('chatView.newBranch')"
@@ -1504,6 +1554,7 @@ watch(sessions, (newSessions) => {
             <Plus class="w-4 h-4" />
           </button>
           <button
+            v-if="isSessionOwner"
             class="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
             title="Delete chat"
             @click="deleteCurrentSession"
@@ -1513,19 +1564,28 @@ watch(sessions, (newSessions) => {
         </div>
       </div>
 
+      <!-- Read-only banner -->
+      <div
+        v-if="currentSession && isReadOnly"
+        class="px-4 py-2 bg-blue-950/50 border-b border-blue-900/50 text-sm text-blue-300 flex items-center gap-2"
+      >
+        <Users class="w-4 h-4" />
+        {{ t('chatView.readOnlyHint') }}
+      </div>
+
       <!-- Input Area -->
       <div
-        v-if="currentSession"
+        v-if="currentSession && !isReadOnly"
         :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
       >
         <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
           <textarea
             ref="messageInputRef"
             v-model="inputMessage"
-            placeholder="Type a message..."
+            :placeholder="isReadOnly ? t('chatView.readOnlyHint') : 'Type a message...'"
             rows="1"
             class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-            :disabled="isStreaming || isRecording"
+            :disabled="isStreaming || isRecording || isReadOnly"
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.ctrl.enter.prevent="sendMessage"
           />
@@ -1671,7 +1731,7 @@ watch(sessions, (newSessions) => {
                   </button>
                   <!-- Regenerate button for assistant messages -->
                   <button
-                    v-if="message.role === 'assistant'"
+                    v-if="message.role === 'assistant' && !isReadOnly"
                     :disabled="regenerateMutation.isPending.value"
                     class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
                     title="Regenerate response"
@@ -1706,6 +1766,7 @@ watch(sessions, (newSessions) => {
                   </button>
                   <!-- Edit button (both user and assistant messages) -->
                   <button
+                    v-if="!isReadOnly"
                     class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
                     :title="message.role === 'assistant' ? t('chatView.editResponse') : 'Edit'"
                     @click="startEditing(message)"
@@ -1713,7 +1774,7 @@ watch(sessions, (newSessions) => {
                     <Edit3 class="w-3 h-3" />
                   </button>
                   <button
-                    v-if="message.role === 'user'"
+                    v-if="message.role === 'user' && !isReadOnly"
                     :disabled="regenerateMutation.isPending.value"
                     class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
                     title="Regenerate response"
@@ -1722,6 +1783,7 @@ watch(sessions, (newSessions) => {
                     <RefreshCw class="w-3 h-3" />
                   </button>
                   <button
+                    v-if="!isReadOnly"
                     class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
                     :title="t('chatView.newBranch')"
                     :disabled="newBranchMutation.isPending.value"
@@ -1730,6 +1792,7 @@ watch(sessions, (newSessions) => {
                     <Plus class="w-3 h-3" />
                   </button>
                   <button
+                    v-if="!isReadOnly"
                     class="p-1 rounded bg-background/80 hover:bg-background text-red-500"
                     title="Delete"
                     @click="deleteMessage(message.id)"
@@ -2014,4 +2077,12 @@ watch(sessions, (newSessions) => {
     </div>
 
   </div>
+
+  <!-- Share Dialog -->
+  <ChatShareDialog
+    v-if="currentSessionId"
+    :session-id="currentSessionId"
+    :open="showShareDialog"
+    @close="showShareDialog = false"
+  />
 </template>
