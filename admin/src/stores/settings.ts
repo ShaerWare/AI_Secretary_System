@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 
 export const useSettingsStore = defineStore('settings', () => {
   // UI Settings (persisted to localStorage)
-  const sidebarCollapsed = ref(false)
+  const sidebarCollapsed = ref(true)
   const autoRefreshInterval = ref(5000) // ms
   const theme = ref<'dark' | 'light'>('dark')
 
@@ -12,7 +12,7 @@ export const useSettingsStore = defineStore('settings', () => {
   if (savedSettings) {
     try {
       const parsed = JSON.parse(savedSettings)
-      sidebarCollapsed.value = parsed.sidebarCollapsed ?? false
+      sidebarCollapsed.value = parsed.sidebarCollapsed ?? true
       autoRefreshInterval.value = parsed.autoRefreshInterval ?? 5000
       theme.value = parsed.theme ?? 'dark'
     } catch {
