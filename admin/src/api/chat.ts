@@ -40,6 +40,8 @@ export interface ChatSession {
   context_files?: { name: string; content: string }[]
   source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
   source_id?: string
+  rag_mode?: string | null
+  knowledge_collection_ids?: number[] | null
   created: string
   updated: string
   sibling_info?: Record<string, SiblingInfo>
@@ -91,7 +93,7 @@ export const chatApi = {
       source_id: sourceId,
     }),
 
-  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[] }) =>
+  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[]; rag_mode?: string; knowledge_collection_ids?: number[] }) =>
     api.put<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`, data),
 
   deleteSession: (sessionId: string) =>

@@ -276,6 +276,7 @@ class UpdateSessionRequest(BaseModel):
     pinned: Optional[bool] = None
     rag_mode: Optional[str] = None
     knowledge_collection_id: Optional[int] = None
+    knowledge_collection_ids: Optional[list[int]] = None
     context_files: Optional[list] = None  # [{"name": str, "content": str}]
 
 
@@ -394,6 +395,7 @@ async def admin_update_chat_session(
         pinned=request.pinned,
         rag_mode=request.rag_mode,
         knowledge_collection_id=request.knowledge_collection_id,
+        knowledge_collection_ids=request.knowledge_collection_ids,
         context_files=request.context_files,
     )
     if not session:

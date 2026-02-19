@@ -145,6 +145,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         pinned: Optional[bool] = None,
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
+        knowledge_collection_ids: Optional[list[int]] = None,
         context_files: Optional[list] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
@@ -170,6 +171,12 @@ class ChatRepository(BaseRepository[ChatSession]):
             # Allow unsetting with 0 or -1
             session.knowledge_collection_id = (
                 knowledge_collection_id if knowledge_collection_id > 0 else None
+            )
+        if knowledge_collection_ids is not None:
+            import json as _json
+
+            session.knowledge_collection_ids = (
+                _json.dumps(knowledge_collection_ids) if knowledge_collection_ids else None
             )
         if context_files is not None:
             import json
