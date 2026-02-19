@@ -1356,6 +1356,12 @@ class AsyncChatShareManager:
             repo = ChatShareRepository(session)
             return await repo.get_user_permission(session_id, user_id)
 
+    async def get_share_counts(self, session_ids: list[str]) -> dict[str, int]:
+        """Get share counts for multiple sessions in a single query."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            return await repo.get_share_counts(session_ids)
+
     async def get_shared_sessions_with_permissions(self, user_id: int) -> Dict[str, str]:
         """Get dict of session_id -> permission for all sessions shared with user."""
         async with AsyncSessionLocal() as session:

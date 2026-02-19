@@ -314,6 +314,7 @@ const messages = {
       chatForked: 'Чат скопирован',
       readOnlyHint: 'Только для чтения',
       sharedWithYou: 'Доступ открыт',
+      sharedByYou: 'Вы поделились ({count})',
       shareDialog: {
         title: 'Поделиться чатом',
         searchUsers: 'Поиск пользователей...',
@@ -1305,6 +1306,7 @@ const messages = {
       chatForked: 'Chat forked',
       readOnlyHint: 'Read-only',
       sharedWithYou: 'Shared with you',
+      sharedByYou: 'Shared by you ({count})',
       shareDialog: {
         title: 'Share chat',
         searchUsers: 'Search users...',
@@ -2295,6 +2297,7 @@ const messages = {
       chatForked: 'Чат көшірілді',
       readOnlyHint: 'Тек оқу',
       sharedWithYou: 'Сізбен бөлісілген',
+      sharedByYou: 'Сіз бөлістіңіз ({count})',
       shareDialog: {
         title: 'Чатпен бөлісу',
         searchUsers: 'Пайдаланушыларды іздеу...',

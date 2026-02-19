@@ -5,7 +5,7 @@ Repository for managing chat session sharing between users.
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import ChatSessionShare, User
@@ -124,6 +124,17 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
         )
         await self.session.commit()
         return int(result.rowcount)  # type: ignore[attr-defined]
+
+    async def get_share_counts(self, session_ids: list[str]) -> dict[str, int]:
+        """Get share counts for multiple sessions in a single query."""
+        if not session_ids:
+            return {}
+        result = await self.session.execute(
+            select(ChatSessionShare.session_id, func.count())
+            .where(ChatSessionShare.session_id.in_(session_ids))
+            .group_by(ChatSessionShare.session_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
 
     async def get_shared_sessions_with_permissions(self, user_id: int) -> dict[str, str]:
         """Get dict of session_id -> permission for all sessions shared with user."""
