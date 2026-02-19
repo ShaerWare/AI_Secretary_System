@@ -615,6 +615,67 @@ class WikiRAGService:
 
         return "".join(parts) if len(parts) > 1 else ""
 
+    def retrieve_multi(
+        self,
+        query: str,
+        collection_ids: list[int],
+        top_k: int = 3,
+        max_chars: int = 3000,
+    ) -> str:
+        """Search multiple collections, merge and rank results.
+
+        Returns formatted markdown context string (same format as retrieve()).
+        """
+        if not collection_ids or not query.strip():
+            return ""
+
+        # Gather scored sections from each collection
+        all_scored: list[tuple[float, WikiSection]] = []
+        query_tokens = self._tokenize(query)
+        if not query_tokens:
+            return ""
+
+        for cid in collection_ids:
+            if cid not in self._collection_indexes:
+                continue
+            cidx = self._collection_indexes[cid]
+            if not cidx.sections:
+                continue
+            for section in cidx.sections:
+                score = self._bm25_score_with_index(
+                    query_tokens, section, cidx.doc_freqs, cidx.total_docs, cidx.avg_dl
+                )
+                if score >= MIN_SCORE:
+                    all_scored.append((score, section))
+
+        if not all_scored:
+            return ""
+
+        all_scored.sort(key=lambda x: x[0], reverse=True)
+        top_sections = all_scored[:top_k]
+
+        # Format context (same logic as retrieve)
+        parts: list[str] = ["[Документация по теме:]"]
+        total_chars = len(parts[0])
+
+        for _score, section in top_sections:
+            header_line = f"\n\n## {section.title} ({section.source_file})"
+            body = section.body
+            available = max_chars - total_chars - len(header_line) - 4
+            if available <= 0:
+                break
+            if len(body) > available:
+                body = body[:available] + "..."
+
+            part = f"{header_line}\n{body}"
+            parts.append(part)
+            total_chars += len(part)
+
+            if total_chars >= max_chars:
+                break
+
+        return "".join(parts) if len(parts) > 1 else ""
+
     def reload(self, wiki_dir: Path) -> dict:
         """Re-index wiki from disk. Also rebuilds embeddings if provider is set."""
         old_count = len(self.sections)

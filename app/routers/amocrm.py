@@ -3,6 +3,7 @@
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -18,6 +19,7 @@ from app.services.amocrm_service import (
     create_lead,
     exchange_code_for_token,
     get_account_info,
+    get_all_leads_paginated,
     get_chat_history,
     get_contact_chats,
     get_contacts,
@@ -31,8 +33,19 @@ from app.services.amocrm_service import (
     send_chat_message,
     update_lead,
 )
+from app.services.crm_dataset_service import (
+    CRM_DIR,
+    build_pipeline_document,
+    build_summary_document,
+    clean_crm_files,
+)
 from auth_manager import User, require_admin, require_not_guest
-from db.integration import async_amocrm_manager, async_audit_logger
+from db.integration import (
+    async_amocrm_manager,
+    async_audit_logger,
+    async_knowledge_collection_manager,
+    async_knowledge_doc_manager,
+)
 from db.redis_client import CacheKey, cache_delete_pattern, cache_get, cache_set
 
 
@@ -775,6 +788,200 @@ async def crm_sync_log(
     """Get sync event log."""
     logs = await async_amocrm_manager.get_sync_logs(limit)
     return {"logs": logs}
+
+
+# ============== CRM Dataset (Knowledge Base Sync) ==============
+
+
+CRM_FILE_PREFIX = "crm-"
+
+
+@router.post("/dataset-sync")
+async def crm_dataset_sync(user: User = Depends(require_not_guest)):
+    """Sync amoCRM data into knowledge base for RAG.
+
+    Fetches all pipelines + leads, generates markdown documents,
+    writes to data/crm-dataset/, updates knowledge collection + re-indexes.
+    """
+    config = await _get_valid_token()
+    subdomain = config["subdomain"]
+    access_token = config["access_token"]
+
+    sync_time = datetime.utcnow().strftime("%d.%m.%Y %H:%M")
+
+    # 1. Fetch pipelines
+    pipelines_data = await get_pipelines(subdomain, access_token)
+    pipelines = (pipelines_data or {}).get("_embedded", {}).get("pipelines", [])
+    if not pipelines:
+        raise HTTPException(status_code=400, detail="No pipelines found in amoCRM")
+
+    # Build status maps: pipeline_id -> {status_id -> status_name}
+    status_maps: dict[int, dict[int, str]] = {}
+    for p in pipelines:
+        smap: dict[int, str] = {}
+        for s in (p.get("_embedded") or {}).get("statuses", []):
+            smap[s["id"]] = s["name"]
+        status_maps[p["id"]] = smap
+
+    # 2. Fetch all leads with contacts
+    all_leads = await get_all_leads_paginated(subdomain, access_token)
+
+    # Group leads by pipeline
+    pipeline_leads: dict[int, list[dict]] = {p["id"]: [] for p in pipelines}
+    for lead in all_leads:
+        pid = lead.get("pipeline_id")
+        if pid in pipeline_leads:
+            pipeline_leads[pid].append(lead)
+
+    # 3. Clean old CRM files
+    removed = clean_crm_files()
+
+    # 4. Generate and write documents
+    CRM_DIR.mkdir(parents=True, exist_ok=True)
+    written_files: list[tuple[str, str, str]] = []  # (filename, content, title)
+
+    for pipeline in pipelines:
+        pid = pipeline["id"]
+        leads = pipeline_leads.get(pid, [])
+        content = build_pipeline_document(pipeline, leads, status_maps.get(pid, {}), sync_time)
+        filename = f"{CRM_FILE_PREFIX}pipeline-{pid}.md"
+        filepath = CRM_DIR / filename
+        filepath.write_text(content, encoding="utf-8")
+        written_files.append((filename, content, f"Воронка: {pipeline.get('name', '')}"))
+
+    # Summary document
+    summary_content = build_summary_document(pipelines, pipeline_leads, status_maps, sync_time)
+    summary_filename = f"{CRM_FILE_PREFIX}summary.md"
+    (CRM_DIR / summary_filename).write_text(summary_content, encoding="utf-8")
+    written_files.append((summary_filename, summary_content, "amoCRM: Сводка по сделкам"))
+
+    # 5. Ensure "amoCRM" collection exists
+    collection = await async_knowledge_collection_manager.get_by_slug("amocrm")
+    if not collection:
+        collection = await async_knowledge_collection_manager.create(
+            name="amoCRM",
+            slug="amocrm",
+            description="Данные из amoCRM: сделки, контакты, воронки (автосинхронизация)",
+            enabled=True,
+            base_dir="data/crm-dataset",
+        )
+    collection_id = collection["id"]
+
+    # 6. Remove old DB records for CRM docs, create new ones
+    existing_docs = await async_knowledge_doc_manager.get_by_collection(collection_id)
+    for doc in existing_docs:
+        await async_knowledge_doc_manager.delete(doc["id"])
+
+    for filename, content, title in written_files:
+        sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
+        await async_knowledge_doc_manager.create(
+            filename=filename,
+            title=title,
+            source_type="amocrm",
+            file_size_bytes=len(content.encode("utf-8")),
+            section_count=sections,
+            collection_id=collection_id,
+        )
+
+    # 7. Re-index the collection in WikiRAG
+    from app.dependencies import get_container
+
+    container = get_container()
+    wiki_rag = container.wiki_rag_service
+    if wiki_rag:
+        filenames = [f[0] for f in written_files]
+        wiki_rag.reload_collection(collection_id, filenames, CRM_DIR)
+
+    # 8. Log sync event
+    await async_amocrm_manager.log_sync(
+        direction="incoming",
+        entity_type="dataset",
+        action="sync",
+        details={
+            "pipelines": len(pipelines),
+            "leads": len(all_leads),
+            "files_written": len(written_files),
+            "files_removed": len(removed),
+            "collection_id": collection_id,
+        },
+    )
+
+    await async_audit_logger.log(
+        action="dataset_sync",
+        resource="amocrm",
+        user_id=user.username,
+        details={
+            "leads": len(all_leads),
+            "pipelines": len(pipelines),
+            "files": len(written_files),
+        },
+    )
+
+    return {
+        "status": "ok",
+        "pipelines": len(pipelines),
+        "leads_total": len(all_leads),
+        "files_written": len(written_files),
+        "files_removed": len(removed),
+        "collection_id": collection_id,
+        "synced_at": sync_time,
+    }
+
+
+@router.get("/dataset-status")
+async def crm_dataset_status(user: User = Depends(require_not_guest)):
+    """Get CRM dataset sync status."""
+    collection = await async_knowledge_collection_manager.get_by_slug("amocrm")
+    if not collection:
+        return {
+            "synced": False,
+            "collection_id": None,
+            "documents": 0,
+            "total_sections": 0,
+            "last_sync": None,
+            "files": [],
+        }
+
+    docs = await async_knowledge_doc_manager.get_by_collection(collection["id"])
+
+    # Find last dataset sync in sync log
+    logs = await async_amocrm_manager.get_sync_logs(limit=20)
+    last_dataset_sync = None
+    for log_entry in logs:
+        if log_entry.get("entity_type") == "dataset" and log_entry.get("action") == "sync":
+            last_dataset_sync = log_entry.get("created")
+            break
+
+    return {
+        "synced": len(docs) > 0,
+        "collection_id": collection["id"],
+        "collection_name": collection["name"],
+        "documents": len(docs),
+        "total_sections": sum(d.get("section_count", 0) for d in docs),
+        "last_sync": last_dataset_sync,
+        "files": [d["filename"] for d in docs],
+    }
+
+
+@router.delete("/dataset")
+async def crm_dataset_clear(user: User = Depends(require_admin)):
+    """Clear CRM dataset — remove files, DB records, and collection index."""
+    removed = clean_crm_files()
+
+    collection = await async_knowledge_collection_manager.get_by_slug("amocrm")
+    if collection:
+        docs = await async_knowledge_doc_manager.get_by_collection(collection["id"])
+        for doc in docs:
+            await async_knowledge_doc_manager.delete(doc["id"])
+
+        from app.dependencies import get_container
+
+        container = get_container()
+        wiki_rag = container.wiki_rag_service
+        if wiki_rag:
+            wiki_rag.unload_collection(collection["id"])
+
+    return {"status": "ok", "files_removed": len(removed)}
 
 
 # ============== Webhook (public) ==============

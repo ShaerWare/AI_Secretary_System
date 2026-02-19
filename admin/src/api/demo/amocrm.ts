@@ -353,4 +353,38 @@ export const amocrmRoutes: DemoRoute[] = [
     pattern: /^\/admin\/crm\/sync-log$/,
     handler: () => ({ logs: syncLogEntries }),
   },
+  // POST /admin/crm/dataset-sync
+  {
+    method: 'POST',
+    pattern: /^\/admin\/crm\/dataset-sync$/,
+    handler: () => ({
+      status: 'ok',
+      pipelines: 2,
+      leads_total: leads.length,
+      files_written: 3,
+      files_removed: 0,
+      collection_id: 2,
+      synced_at: nowISO(),
+    }),
+  },
+  // GET /admin/crm/dataset-status
+  {
+    method: 'GET',
+    pattern: /^\/admin\/crm\/dataset-status$/,
+    handler: () => ({
+      synced: true,
+      collection_id: 2,
+      collection_name: 'amoCRM',
+      documents: 3,
+      total_sections: leads.length,
+      last_sync: minutesAgo(10),
+      files: ['crm-prodazhi.md', 'crm-servis.md', 'crm-summary.md'],
+    }),
+  },
+  // DELETE /admin/crm/dataset
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/crm\/dataset$/,
+    handler: () => ({ status: 'ok', files_removed: 3 }),
+  },
 ]

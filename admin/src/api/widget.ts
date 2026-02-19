@@ -45,6 +45,7 @@ export interface WidgetInstance {
   // RAG
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   // Rate limiting
   rate_limit_count?: number | null
   rate_limit_hours?: number | null

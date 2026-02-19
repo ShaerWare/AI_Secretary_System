@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify'
 import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import { useConfirmStore } from '@/stores/confirm'
+import { useToastStore } from '@/stores/toast'
 import {
   MessageSquare,
   Plus,
@@ -37,7 +38,10 @@ import {
   PanelLeftOpen,
   Pin,
   PinOff,
-  Paperclip
+  Paperclip,
+  Download,
+  ArrowDownToLine,
+  ArrowUpToLine
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useResizablePanel } from '@/composables/useResizablePanel'
@@ -45,6 +49,7 @@ import { getChatEmoji } from '@/utils/chatEmoji'
 
 const { t } = useI18n()
 const confirmStore = useConfirmStore()
+const toastStore = useToastStore()
 
 const queryClient = useQueryClient()
 
@@ -66,7 +71,12 @@ const editingFileName = ref('')
 const editingFileContent = ref('')
 const contextFileInputRef = ref<HTMLInputElement | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
+const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const showSidebar = ref(true)
+const showExportMenu = ref(false)
+const inputPosition = ref<'top' | 'bottom'>(
+  (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
+)
 
 // Sidebar collapse (desktop)
 const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSidebarCollapse('chat-sidebar-collapsed')
@@ -136,8 +146,8 @@ const selectedLlmBackend = ref<string>(localStorage.getItem('chat-llm-backend') 
 
 // RAG selection state
 const selectedRagMode = ref<string>(localStorage.getItem('chat-rag-mode') || '')
-const selectedCollectionId = ref<number | null>(
-  localStorage.getItem('chat-rag-collection') ? Number(localStorage.getItem('chat-rag-collection')) : null
+const selectedCollectionIds = ref<number[]>(
+  localStorage.getItem('chat-rag-collections') ? JSON.parse(localStorage.getItem('chat-rag-collections')!) : []
 )
 
 // Save voice mode preference
@@ -154,13 +164,13 @@ watch(selectedLlmBackend, (val) => {
 watch(selectedRagMode, (val) => {
   localStorage.setItem('chat-rag-mode', val)
 })
-watch(selectedCollectionId, (val) => {
-  if (val) {
-    localStorage.setItem('chat-rag-collection', String(val))
+watch(selectedCollectionIds, (val) => {
+  if (val.length) {
+    localStorage.setItem('chat-rag-collections', JSON.stringify(val))
   } else {
-    localStorage.removeItem('chat-rag-collection')
+    localStorage.removeItem('chat-rag-collections')
   }
-})
+}, { deep: true })
 
 // Queries
 const { data: sessionsData, refetch: refetchSessions } = useQuery({
@@ -429,11 +439,23 @@ const summarizeBranchMutation = useMutation({
 })
 
 // Methods
+function isNearBottom(): boolean {
+  if (!messagesContainer.value) return true
+  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
+  return scrollHeight - scrollTop - clientHeight < 150
+}
+
 function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
+    // Second pass for async-rendered content (images, code blocks, etc.)
+    setTimeout(() => {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    }, 50)
   })
 }
 
@@ -600,14 +622,14 @@ function sendMessage() {
   const llmOverride = hasOverride ? {
     ...(selectedLlmBackend.value ? { llm_backend: selectedLlmBackend.value } : {}),
     ...(selectedRagMode.value ? { rag_mode: selectedRagMode.value } : {}),
-    ...(selectedRagMode.value === 'collection' && selectedCollectionId.value ? { knowledge_collection_id: selectedCollectionId.value } : {}),
+    ...(selectedRagMode.value === 'selected' && selectedCollectionIds.value.length ? { knowledge_collection_ids: selectedCollectionIds.value } : {}),
   } : undefined
 
   const stream = chatApi.streamMessage(currentSessionId.value, content, (data) => {
     if (data.type === 'chunk' && data.content) {
       streamingContent.value += data.content
       fullContent += data.content
-      scrollToBottom()
+      if (isNearBottom()) scrollToBottom()
     } else if (data.type === 'done' || data.type === 'assistant_message') {
       isStreaming.value = false
       pendingUserContent.value = null
@@ -623,9 +645,10 @@ function sendMessage() {
         })
       }
 
-      refetchSession()
+      refetchSession().then(() => scrollToBottom())
       refetchSessions()
       scrollToBottom()
+      nextTick(() => messageInputRef.value?.focus())
 
       // Voice mode: auto-play TTS for the response
       const messageId = data.message?.id
@@ -640,6 +663,7 @@ function sendMessage() {
       pendingUserContent.value = null
       streamingContent.value = ''
       console.error('Stream error:', data.content)
+      nextTick(() => messageInputRef.value?.focus())
     }
   }, llmOverride)
 }
@@ -660,11 +684,15 @@ function saveEdit() {
   const messageId = editingMessageId.value
   const content = editingContent.value
 
+  // Detect role of the message being edited
+  const editedMessage = messages.value.find(m => m.id === messageId)
+  const isAssistantEdit = editedMessage?.role === 'assistant'
+
   // Close edit form immediately
   editingMessageId.value = null
   editingContent.value = ''
 
-  // Optimistic update: show edited question text immediately
+  // Optimistic update: show edited text immediately
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   queryClient.setQueryData(['chat-session', sessionId], (old: any) => {
     if (!old?.session?.messages) return old
@@ -679,12 +707,15 @@ function saveEdit() {
     }
   })
 
-  // Show loading for assistant response
-  isStreaming.value = true
-  streamingContent.value = ''
-  scrollToBottom()
+  if (!isAssistantEdit) {
+    // User message edit: show loading for LLM regeneration
+    isStreaming.value = true
+    streamingContent.value = ''
+    scrollToBottom()
+  }
 
   editMessageMutation.mutate({ sessionId, messageId, content })
+  nextTick(() => messageInputRef.value?.focus())
 }
 
 function regenerateResponse(messageId: string) {
@@ -858,6 +889,62 @@ function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
 }
 
+function toggleInputPosition() {
+  inputPosition.value = inputPosition.value === 'top' ? 'bottom' : 'top'
+  localStorage.setItem('chat-input-position', inputPosition.value)
+}
+
+function formatChatAsMarkdown(msgs: ChatMessage[], title: string): string {
+  let md = `# ${title}\n\n`
+  for (const msg of msgs) {
+    const role = msg.role === 'user' ? '**User**' : '**Assistant**'
+    md += `${role}:\n${msg.content}\n\n---\n\n`
+  }
+  return md
+}
+
+function copyChatToClipboard() {
+  if (!currentSession.value) return
+  const md = formatChatAsMarkdown(messages.value, currentSession.value.title)
+  navigator.clipboard.writeText(md)
+  toastStore.success(t('chatView.chatCopied'))
+  showExportMenu.value = false
+}
+
+function exportChatMarkdown() {
+  if (!currentSession.value) return
+  const md = formatChatAsMarkdown(messages.value, currentSession.value.title)
+  const blob = new Blob([md], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${currentSession.value.title.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+  showExportMenu.value = false
+}
+
+function exportChatJson() {
+  if (!currentSession.value) return
+  const data = {
+    title: currentSession.value.title,
+    created: currentSession.value.created,
+    messages: messages.value.map(m => ({
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    })),
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${currentSession.value.title.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  showExportMenu.value = false
+}
+
 function summarizeBranch(messageId: string) {
   if (!currentSessionId.value || summarizingMessageId.value) return
   summarizingMessageId.value = messageId
@@ -984,6 +1071,7 @@ function toggleRecording() {
 
 // Cleanup on unmount
 onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick)
   stopSpeaking()
   stopRecording()
   if (audioUrl.value) {
@@ -998,8 +1086,19 @@ function formatTime(timestamp: string) {
   })
 }
 
+// Close export menu on outside click
+function handleGlobalClick(e: MouseEvent) {
+  if (showExportMenu.value) {
+    const target = e.target as HTMLElement
+    if (!target.closest('.relative')) {
+      showExportMenu.value = false
+    }
+  }
+}
+
 // Initialize: select first session or create new
 onMounted(() => {
+  document.addEventListener('click', handleGlobalClick)
   if (sessions.value.length > 0) {
     currentSessionId.value = sessions.value[0].id
   }
@@ -1291,7 +1390,7 @@ watch(sessions, (newSessions) => {
             </select>
           </div>
           <!-- RAG mode selector -->
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 relative">
             <BookOpen class="w-4 h-4 text-muted-foreground" />
             <select
               v-model="selectedRagMode"
@@ -1300,19 +1399,63 @@ watch(sessions, (newSessions) => {
             >
               <option value="">{{ t('chat.defaultLlm') }}</option>
               <option value="all">{{ t('chatView.ragModeAll') }}</option>
-              <option value="collection">{{ t('chatView.ragModeCollection') }}</option>
+              <option value="selected">{{ t('chatView.ragModeSelected') }}</option>
               <option value="none">{{ t('chatView.ragModeNone') }}</option>
             </select>
-            <select
-              v-if="selectedRagMode === 'collection'"
-              v-model="selectedCollectionId"
-              class="px-2 py-1 text-sm bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary border-none cursor-pointer"
-              :title="t('chatView.ragCollectionSelect')"
-            >
-              <option :value="null">{{ t('chatView.ragCollectionSelect') }}</option>
-              <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
-            </select>
+            <template v-if="selectedRagMode === 'selected'">
+              <div v-for="col in knowledgeCollections" :key="col.id" class="flex items-center">
+                <label class="flex items-center gap-1 px-2 py-1 text-sm bg-secondary rounded-lg cursor-pointer hover:bg-secondary/80">
+                  <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3 h-3" />
+                  <span>{{ col.name }}</span>
+                </label>
+              </div>
+            </template>
           </div>
+          <!-- Export chat dropdown -->
+          <div class="relative">
+            <button
+              class="p-2 rounded-lg hover:bg-secondary transition-colors"
+              :title="t('chatView.exportChat')"
+              @click="showExportMenu = !showExportMenu"
+            >
+              <Download class="w-4 h-4" />
+            </button>
+            <div
+              v-if="showExportMenu"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[160px]"
+            >
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary transition-colors flex items-center gap-2"
+                @click="copyChatToClipboard"
+              >
+                <Copy class="w-3.5 h-3.5" />
+                {{ t('chatView.copyChat') }}
+              </button>
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary transition-colors flex items-center gap-2"
+                @click="exportChatMarkdown"
+              >
+                <FileText class="w-3.5 h-3.5" />
+                {{ t('chatView.exportMarkdown') }}
+              </button>
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary transition-colors flex items-center gap-2"
+                @click="exportChatJson"
+              >
+                <Download class="w-3.5 h-3.5" />
+                {{ t('chatView.exportJson') }}
+              </button>
+            </div>
+          </div>
+          <!-- Input position toggle -->
+          <button
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
+            @click="toggleInputPosition"
+          >
+            <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
+            <ArrowUpToLine v-else class="w-4 h-4" />
+          </button>
           <!-- Voice mode toggle -->
           <button
             :class="[
@@ -1366,15 +1509,20 @@ watch(sessions, (newSessions) => {
       </div>
 
       <!-- Input Area -->
-      <div v-if="currentSession" class="p-4 border-b border-border bg-card">
+      <div
+        v-if="currentSession"
+        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last' : 'border-b border-border']"
+      >
         <div class="flex gap-3 items-end">
           <textarea
+            ref="messageInputRef"
             v-model="inputMessage"
             placeholder="Type a message..."
             rows="1"
             class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             :disabled="isStreaming || isRecording"
             @keydown.enter.exact.prevent="sendMessage"
+            @keydown.ctrl.enter.prevent="sendMessage"
           />
           <!-- Microphone button -->
           <button
@@ -1414,7 +1562,7 @@ watch(sessions, (newSessions) => {
       <!-- Messages -->
       <div
         ref="messagesContainer"
-        class="flex-1 overflow-y-auto p-4 space-y-4"
+        class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
       >
         <div v-if="!currentSession" class="h-full flex items-center justify-center text-muted-foreground">
           <div class="text-center">
@@ -1445,7 +1593,7 @@ watch(sessions, (newSessions) => {
             <!-- Message Content -->
             <div
               :class="[
-                'max-w-[80%] rounded-lg p-3 group relative',
+                'max-w-[80%] rounded-lg p-3 group',
                 message.role === 'user'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary'
@@ -1457,6 +1605,7 @@ watch(sessions, (newSessions) => {
                   v-model="editingContent"
                   class="w-full min-h-[80px] p-2 bg-background text-foreground rounded resize-none"
                   @keydown.escape="cancelEditing"
+                  @keydown.ctrl.enter.prevent="saveEdit"
                 />
                 <div class="flex gap-2">
                   <button
@@ -1501,13 +1650,8 @@ watch(sessions, (newSessions) => {
                   </template>
                 </div>
 
-                <!-- Actions -->
-                <div
-                  :class="[
-                    'absolute top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1',
-                    message.role === 'user' ? 'left-1' : 'right-1'
-                  ]"
-                >
+                <!-- Actions — below content, in normal flow -->
+                <div class="flex flex-wrap gap-1 mt-1 -mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <!-- TTS button for assistant messages -->
                   <button
                     v-if="message.role === 'assistant'"
@@ -1546,10 +1690,10 @@ watch(sessions, (newSessions) => {
                     <Loader2 v-if="summarizingMessageId === message.id" class="w-3 h-3 animate-spin" />
                     <ListChecks v-else class="w-3 h-3" />
                   </button>
+                  <!-- Edit button (both user and assistant messages) -->
                   <button
-                    v-if="message.role === 'user'"
                     class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
-                    title="Edit"
+                    :title="message.role === 'assistant' ? t('chatView.editResponse') : 'Edit'"
                     @click="startEditing(message)"
                   >
                     <Edit3 class="w-3 h-3" />

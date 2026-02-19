@@ -19,6 +19,7 @@ from db.integration import (
     async_bot_instance_manager,
     async_chat_manager,
     async_cloud_provider_manager,
+    async_knowledge_collection_manager,
     async_whatsapp_instance_manager,
     async_widget_instance_manager,
 )
@@ -59,30 +60,72 @@ def _finalize_prompt(prompt: str | None) -> str:
     return base + _NO_TOOLS_SUFFIX
 
 
+def _extract_collection_ids(data: dict) -> list[int]:
+    """Extract collection IDs from config dict.
+
+    Checks knowledge_collection_ids (JSON list) first,
+    falls back to [knowledge_collection_id] for backward compat.
+    """
+    ids = data.get("knowledge_collection_ids")
+    if ids and isinstance(ids, list):
+        return [int(x) for x in ids if x is not None]
+    # Backward compat: single collection_id
+    single = data.get("knowledge_collection_id")
+    if single is not None:
+        return [int(single)]
+    return []
+
+
+async def _get_all_enabled_collection_ids() -> list[int]:
+    """Get IDs of all enabled knowledge collections."""
+    collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
+    return [c["id"] for c in collections]
+
+
 async def _resolve_rag_config(
     session_data: dict,
     llm_override: Optional["LLMOverrideConfig"] = None,
     widget_instance_id: Optional[str] = None,
-) -> tuple[str, Optional[int]]:
-    """Resolve RAG mode and collection_id from context.
+) -> tuple[str, list[int]]:
+    """Resolve RAG mode and collection_ids from context.
 
-    Priority:
-    1. llm_override (admin chat per-request)
-    2. Widget instance config
-    3. Telegram bot instance (from session source_id)
-    4. WhatsApp instance (from session source_id)
-    5. Session's own rag_mode
-    6. Default: ("all", None)
+    Returns (rag_mode, collection_ids):
+    - "all" + [all enabled collection IDs]
+    - "selected"/"collection" + [selected collection IDs]
+    - "none" + []
+
+    Priority chain: override → widget → telegram → whatsapp → session → default.
     """
+
+    def _resolve_from_config(cfg: dict) -> tuple[str, list[int]] | None:
+        mode = cfg.get("rag_mode")
+        if not mode:
+            return None
+        ids = _extract_collection_ids(cfg)
+        return mode, ids
+
     # 1. Explicit override from request
     if llm_override and llm_override.rag_mode:
-        return llm_override.rag_mode, llm_override.knowledge_collection_id
+        ids = []
+        if llm_override.knowledge_collection_ids:
+            ids = llm_override.knowledge_collection_ids
+        elif llm_override.knowledge_collection_id is not None:
+            ids = [llm_override.knowledge_collection_id]
+        mode = llm_override.rag_mode
+        if mode == "all":
+            ids = await _get_all_enabled_collection_ids()
+        return mode, ids
 
     # 2. Widget instance
     if widget_instance_id:
         widget = await async_widget_instance_manager.get_instance(widget_instance_id)
-        if widget and widget.get("rag_mode"):
-            return widget["rag_mode"], widget.get("knowledge_collection_id")
+        if widget:
+            result = _resolve_from_config(widget)
+            if result:
+                mode, ids = result
+                if mode == "all":
+                    ids = await _get_all_enabled_collection_ids()
+                return mode, ids
 
     # 3. Telegram bot instance
     source = session_data.get("source")
@@ -90,22 +133,36 @@ async def _resolve_rag_config(
     if source == "telegram_bot" and source_id:
         bot_id = source_id.split(":")[0] if ":" in source_id else source_id
         bot_config = await async_bot_instance_manager.get_instance(bot_id)
-        if bot_config and bot_config.get("rag_mode"):
-            return bot_config["rag_mode"], bot_config.get("knowledge_collection_id")
+        if bot_config:
+            result = _resolve_from_config(bot_config)
+            if result:
+                mode, ids = result
+                if mode == "all":
+                    ids = await _get_all_enabled_collection_ids()
+                return mode, ids
 
     # 4. WhatsApp instance
     if source == "whatsapp" and source_id:
         wa_id = source_id.split(":")[0] if ":" in source_id else source_id
         wa_config = await async_whatsapp_instance_manager.get_instance(wa_id)
-        if wa_config and wa_config.get("rag_mode"):
-            return wa_config["rag_mode"], wa_config.get("knowledge_collection_id")
+        if wa_config:
+            result = _resolve_from_config(wa_config)
+            if result:
+                mode, ids = result
+                if mode == "all":
+                    ids = await _get_all_enabled_collection_ids()
+                return mode, ids
 
     # 5. Session's own rag_mode
-    if session_data.get("rag_mode"):
-        return session_data["rag_mode"], session_data.get("knowledge_collection_id")
+    result = _resolve_from_config(session_data)
+    if result:
+        mode, ids = result
+        if mode == "all":
+            ids = await _get_all_enabled_collection_ids()
+        return mode, ids
 
-    # 6. Default
-    return "all", None
+    # 6. Default: all enabled collections
+    return "all", await _get_all_enabled_collection_ids()
 
 
 def _inject_rag_context(
@@ -113,20 +170,20 @@ def _inject_rag_context(
     user_content: str,
     base_prompt: Optional[str],
     rag_mode: str,
-    collection_id: Optional[int],
+    collection_ids: list[int],
 ) -> Optional[str]:
     """Inject RAG context into system prompt based on rag_mode.
 
     Returns updated prompt or base_prompt unchanged if no RAG injection needed.
+    collection_ids: list of collection IDs to search (resolved by _resolve_rag_config).
     """
-    if not wiki_rag or not user_content or rag_mode == "none":
+    if not wiki_rag or not user_content or rag_mode == "none" or not collection_ids:
         return base_prompt
 
-    if rag_mode == "collection" and collection_id:
-        wiki_context = wiki_rag.retrieve(user_content, top_k=3, collection_id=collection_id)
+    if len(collection_ids) == 1:
+        wiki_context = wiki_rag.retrieve(user_content, top_k=3, collection_id=collection_ids[0])
     else:
-        # "all" or fallback
-        wiki_context = wiki_rag.retrieve(user_content, top_k=3)
+        wiki_context = wiki_rag.retrieve_multi(user_content, collection_ids, top_k=3)
 
     if wiki_context:
         base = base_prompt or _DEFAULT_RAG_PROMPT
@@ -201,8 +258,9 @@ class LLMOverrideConfig(BaseModel):
     llm_backend: Optional[str] = None  # "vllm" or "cloud:provider-id"
     system_prompt: Optional[str] = None
     llm_params: Optional[dict] = None
-    rag_mode: Optional[str] = None  # "all", "collection", "none"
-    knowledge_collection_id: Optional[int] = None
+    rag_mode: Optional[str] = None  # "all", "selected", "none" ("collection" = backward compat)
+    knowledge_collection_id: Optional[int] = None  # backward compat (single)
+    knowledge_collection_ids: Optional[list[int]] = None  # multi-select
 
 
 class SendMessageRequest(BaseModel):
@@ -358,9 +416,9 @@ async def admin_send_chat_message(
         default_prompt = llm_service.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode
-    rag_mode, collection_id = await _resolve_rag_config(session, msg_request.llm_override)
+    rag_mode, collection_ids = await _resolve_rag_config(session, msg_request.llm_override)
     default_prompt = _inject_rag_context(
-        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_id
+        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_ids
     )
 
     # Inject context files
@@ -510,11 +568,11 @@ async def admin_stream_chat_message(
         default_prompt = active_llm.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode
-    rag_mode, collection_id = await _resolve_rag_config(
+    rag_mode, collection_ids = await _resolve_rag_config(
         session, msg_request.llm_override, msg_request.widget_instance_id
     )
     default_prompt = _inject_rag_context(
-        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_id
+        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_ids
     )
 
     # Inject context files
@@ -588,25 +646,29 @@ async def admin_edit_chat_message(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    if message["role"] != "user":
-        raise HTTPException(status_code=400, detail="Can only edit user messages")
+    if message["role"] not in ("user", "assistant"):
+        raise HTTPException(status_code=400, detail="Cannot edit system messages")
 
     # Non-destructive edit: creates sibling branch, deactivates old
-    user_msg = await async_chat_manager.edit_message(session_id, message_id, request.content)
+    edited_msg = await async_chat_manager.edit_message(session_id, message_id, request.content)
 
+    # Assistant edits: just save the new text, no LLM regeneration
+    if message["role"] == "assistant":
+        return {"message": edited_msg}
+
+    # User edits: generate new LLM response for the edited message
     llm_service = container.llm_service
     if not llm_service:
-        return {"message": user_msg}
+        return {"message": edited_msg}
 
-    # Generate new response for the edited message
     default_prompt = None
     if hasattr(llm_service, "get_system_prompt"):
         default_prompt = llm_service.get_system_prompt()
 
     # RAG: inject relevant wiki context based on rag_mode
-    rag_mode, collection_id = await _resolve_rag_config(session)
+    rag_mode, collection_ids = await _resolve_rag_config(session)
     default_prompt = _inject_rag_context(
-        container.wiki_rag_service, request.content, default_prompt, rag_mode, collection_id
+        container.wiki_rag_service, request.content, default_prompt, rag_mode, collection_ids
     )
 
     # Inject context files
@@ -627,13 +689,13 @@ async def admin_edit_chat_message(
 
         # Add response as child of the new edited message
         assistant_msg = await async_chat_manager.add_message(
-            session_id, "assistant", response_text, parent_id=user_msg["id"]
+            session_id, "assistant", response_text, parent_id=edited_msg["id"]
         )
-        return {"message": user_msg, "response": assistant_msg}
+        return {"message": edited_msg, "response": assistant_msg}
 
     except Exception as e:
         logger.error(f"❌ Chat regenerate error: {e}")
-        return {"message": user_msg, "error": str(e)}
+        return {"message": edited_msg, "error": str(e)}
 
 
 @router.delete("/sessions/{session_id}/messages/{message_id}")
@@ -698,9 +760,9 @@ async def admin_regenerate_chat_response(
 
     # RAG: inject relevant wiki context based on rag_mode
     user_content = target_msg["content"] if target_msg["role"] == "user" else ""
-    rag_mode, collection_id = await _resolve_rag_config(session)
+    rag_mode, collection_ids = await _resolve_rag_config(session)
     default_prompt = _inject_rag_context(
-        container.wiki_rag_service, user_content, default_prompt, rag_mode, collection_id
+        container.wiki_rag_service, user_content, default_prompt, rag_mode, collection_ids
     )
 
     # Inject context files

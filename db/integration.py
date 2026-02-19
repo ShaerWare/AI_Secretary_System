@@ -1260,12 +1260,17 @@ class AsyncKnowledgeCollectionManager:
         slug: str,
         description: Optional[str] = None,
         enabled: bool = True,
+        base_dir: str = "wiki-pages",
     ) -> dict:
         """Create a collection."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
             return await repo.create_collection(
-                name=name, slug=slug, description=description, enabled=enabled
+                name=name,
+                slug=slug,
+                description=description,
+                enabled=enabled,
+                base_dir=base_dir,
             )
 
     async def update(

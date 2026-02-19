@@ -15,6 +15,9 @@ const emit = defineEmits<{
 
 const collapsed = ref(false)
 
+const maxVisualDepth = 8
+const visualDepth = Math.min(props.depth, maxVisualDepth)
+
 const isAssistant = props.node.role === 'assistant'
 const isSystem = props.node.role === 'system'
 const hasChildren = props.node.children.length > 0
@@ -52,7 +55,7 @@ function onChildScrollTo(messageId: string) {
           ? 'hover:bg-secondary/80'
           : 'opacity-50 hover:opacity-75 hover:bg-secondary/50',
       ]"
-      :style="{ paddingLeft: `${depth * 14 + (isAssistant ? 18 : 4)}px` }"
+      :style="{ paddingLeft: `${visualDepth * 14 + (isAssistant ? 18 : 4)}px` }"
       :title="node.content_preview"
       @click="onClick"
     >
@@ -121,7 +124,7 @@ function onChildScrollTo(messageId: string) {
     <!-- Children (collapsible) -->
     <div v-if="hasChildren && !collapsed">
       <!-- Branch indicator line for multiple children -->
-      <div :class="hasBranches ? 'border-l border-primary/20' : ''" :style="{ marginLeft: `${depth * 14 + 10}px` }">
+      <div :class="hasBranches ? 'border-l border-primary/20' : ''" :style="{ marginLeft: `${visualDepth * 14 + 10}px` }">
         <BranchTreeNode
           v-for="child in node.children"
           :key="child.id"
