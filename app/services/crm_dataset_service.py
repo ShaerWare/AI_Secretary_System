@@ -3,6 +3,7 @@
 Pure functions: no DB access, no side effects (except file I/O in get/clean helpers).
 """
 
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -13,9 +14,9 @@ CRM_DIR = Path("data/crm-dataset")
 CRM_FILE_PREFIX = "crm-"
 
 
-def format_price(kopecks: int) -> str:
-    """Format price from kopecks to rubles with thousands separator."""
-    rubles = kopecks // 100 if kopecks else 0
+def format_price(amount: int) -> str:
+    """Format price with thousands separator. amoCRM returns rubles directly."""
+    rubles = amount if amount else 0
     return f"{rubles:,} ₽".replace(",", " ")
 
 
@@ -45,24 +46,73 @@ def _extract_contact_info(contact: dict[str, Any]) -> dict[str, str]:
     return info
 
 
+def _normalize_phone(phone: str) -> str:
+    """Strip formatting from phone: '+7 (999) 123-45-67' → '79991234567'."""
+    return re.sub(r"[^\d]", "", phone)
+
+
+def _extract_lead_custom_fields(lead: dict[str, Any]) -> list[tuple[str, str]]:
+    """Extract (field_name, value) pairs from lead's custom_fields_values."""
+    result: list[tuple[str, str]] = []
+    for field in lead.get("custom_fields_values") or []:
+        name = field.get("field_name", "")
+        values = field.get("values", [])
+        if not name or not values:
+            continue
+        # Take first value; for multi-select join all
+        if len(values) == 1:
+            val = str(values[0].get("value", ""))
+        else:
+            val = ", ".join(str(v.get("value", "")) for v in values if v.get("value"))
+        if val:
+            result.append((name, val))
+    return result
+
+
 def _build_lead_section(
     lead: dict[str, Any],
     status_map: dict[int, str],
+    contacts_map: Optional[dict[int, dict[str, Any]]] = None,
+    users_map: Optional[dict[int, str]] = None,
 ) -> str:
     """Build a ## section for a single lead/deal."""
+    lead_id = lead.get("id", "")
     name = lead.get("name", "Без названия")
-    price = format_price(lead.get("price", 0))
+    raw_price = lead.get("price", 0) or 0
+    price = format_price(raw_price)
     status_id = lead.get("status_id", 0)
     status_name = status_map.get(status_id, f"status_{status_id}")
 
-    lines = [f"## Сделка: {name} — {status_name} ({price})", ""]
+    lines = [f"## Сделка #{lead_id}: {name} — {status_name} ({price})", ""]
+    lines.append(f"- **ID сделки**: {lead_id}")
     lines.append(f"- **Статус**: {status_name}")
-    lines.append(f"- **Сумма**: {price}")
 
-    # Contacts (embedded — id + name only, no custom fields)
+    # Price: formatted + raw digits for BM25 matching
+    if raw_price:
+        lines.append(f"- **Сумма**: {price} ({raw_price})")
+    else:
+        lines.append(f"- **Сумма**: {price}")
+
+    # Contacts — enriched from contacts_map if available, else embedded stubs
     embedded_contacts = (lead.get("_embedded") or {}).get("contacts", [])
     for c in embedded_contacts:
-        lines.append(f"- **Контакт**: {c.get('name', 'Контакт')}")
+        cid = c.get("id")
+        if contacts_map and cid and cid in contacts_map:
+            info = _extract_contact_info(contacts_map[cid])
+            parts = [info["name"]]
+            if info.get("phone"):
+                digits = _normalize_phone(info["phone"])
+                parts.append(f"тел: {info['phone']} ({digits})")
+            if info.get("email"):
+                parts.append(f"email: {info['email']}")
+            lines.append(f"- **Контакт**: {' | '.join(parts)}")
+        else:
+            lines.append(f"- **Контакт**: {c.get('name', 'Контакт')}")
+
+    # Custom fields from lead
+    custom_fields = _extract_lead_custom_fields(lead)
+    for field_name, value in custom_fields:
+        lines.append(f"- **{field_name}**: {value}")
 
     # Tags
     tags = (lead.get("_embedded") or {}).get("tags", [])
@@ -74,8 +124,13 @@ def _build_lead_section(
     lines.append(f"- **Создана**: {format_timestamp(lead.get('created_at'))}")
     lines.append(f"- **Обновлена**: {format_timestamp(lead.get('updated_at'))}")
 
+    # Responsible user — resolved name from users_map
     if lead.get("responsible_user_id"):
-        lines.append(f"- **Ответственный**: user_{lead['responsible_user_id']}")
+        uid = lead["responsible_user_id"]
+        if users_map and uid in users_map:
+            lines.append(f"- **Ответственный**: {users_map[uid]}")
+        else:
+            lines.append(f"- **Ответственный**: user_{uid}")
 
     return "\n".join(lines)
 
@@ -85,6 +140,8 @@ def build_pipeline_document(
     leads: list[dict[str, Any]],
     status_map: dict[int, str],
     sync_time: str,
+    contacts_map: Optional[dict[int, dict[str, Any]]] = None,
+    users_map: Optional[dict[int, str]] = None,
 ) -> str:
     """Build markdown document for one pipeline with all its leads."""
     pipeline_name = pipeline.get("name", "Без названия")
@@ -101,10 +158,10 @@ def build_pipeline_document(
         lines.append("Сделок в этой воронке нет.")
         return "\n".join(lines)
 
-    # Sort leads by status sort order, then by updated_at desc
+    # Sort leads by updated_at desc
     leads_sorted = sorted(leads, key=lambda x: x.get("updated_at", 0), reverse=True)
     for lead in leads_sorted:
-        lines.append(_build_lead_section(lead, status_map))
+        lines.append(_build_lead_section(lead, status_map, contacts_map, users_map))
         lines.append("")
 
     return "\n".join(lines)
@@ -115,6 +172,8 @@ def build_summary_document(
     pipeline_leads: dict[int, list[dict[str, Any]]],
     status_maps: dict[int, dict[int, str]],
     sync_time: str,
+    contacts_map: Optional[dict[int, dict[str, Any]]] = None,
+    users_map: Optional[dict[int, str]] = None,
 ) -> str:
     """Build the crm-summary.md with aggregate stats."""
     total_deals = sum(len(leads) for leads in pipeline_leads.values())
@@ -174,11 +233,17 @@ def build_summary_document(
         lines.append("## Сделки обновлённые за последние 7 дней")
         lines.append("")
         for lead, smap in recent[:20]:
+            lead_id = lead.get("id", "")
             name = lead.get("name", "—")
             status = smap.get(lead.get("status_id", 0), "—")
             price = format_price(lead.get("price", 0))
             updated = format_timestamp(lead.get("updated_at"))
-            lines.append(f"- {name} — {status} ({price}) — обновлена {updated}")
+            parts = [f"#{lead_id} {name} — {status} ({price}) — обновлена {updated}"]
+            # Add responsible user name if available
+            uid = lead.get("responsible_user_id")
+            if uid and users_map and uid in users_map:
+                parts.append(f"[{users_map[uid]}]")
+            lines.append(f"- {' '.join(parts)}")
         lines.append("")
 
     return "\n".join(lines)

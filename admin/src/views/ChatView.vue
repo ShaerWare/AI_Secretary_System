@@ -1115,7 +1115,7 @@ watch(sessions, (newSessions) => {
   <!-- Hidden audio element for TTS playback -->
   <audio ref="audioRef" :src="audioUrl || undefined" class="hidden" @ended="onAudioEnded" />
 
-  <div class="flex h-[calc(100vh-6rem)] md:h-[calc(100vh-7rem)] -m-4 md:-m-6">
+  <div class="flex h-full">
     <!-- Sidebar: Chat List -->
     <div
       :class="[
@@ -1511,7 +1511,7 @@ watch(sessions, (newSessions) => {
       <!-- Input Area -->
       <div
         v-if="currentSession"
-        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-16' : 'border-b border-border']"
+        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
       >
         <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
           <textarea
