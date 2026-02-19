@@ -160,6 +160,7 @@ class AsyncChatManager:
         pinned: Optional[bool] = None,
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
+        knowledge_collection_ids: Optional[list[int]] = None,
         context_files: Optional[list] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
@@ -172,6 +173,7 @@ class AsyncChatManager:
                 pinned=pinned,
                 rag_mode=rag_mode,
                 knowledge_collection_id=knowledge_collection_id,
+                knowledge_collection_ids=knowledge_collection_ids,
                 context_files=context_files,
             )
 

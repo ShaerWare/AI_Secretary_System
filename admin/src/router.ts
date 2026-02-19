@@ -130,7 +130,7 @@ const router = createRouter({
       path: '/crm',
       name: 'crm',
       component: CrmView,
-      meta: { title: 'CRM', icon: 'Users', minRole: 'user' }
+      meta: { title: 'CRM', icon: 'Users', minRole: 'user', excludeRoles: ['web'] }
     },
     {
       path: '/sales',
