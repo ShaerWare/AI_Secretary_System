@@ -53,6 +53,7 @@ const formData = ref<Partial<WhatsAppInstance>>({
   system_prompt: '',
   rag_mode: 'all',
   knowledge_collection_id: null,
+  knowledge_collection_ids: [] as number[],
   tts_enabled: false,
   tts_engine: 'xtts',
   tts_voice: 'anna',
@@ -183,6 +184,7 @@ function openCreate() {
     system_prompt: '',
     rag_mode: 'all',
     knowledge_collection_id: null,
+    knowledge_collection_ids: [],
     tts_enabled: false,
     tts_engine: 'xtts',
     tts_voice: 'anna',
@@ -202,6 +204,14 @@ function openEdit() {
   formData.value = { ...inst }
   allowedPhonesText.value = (inst.allowed_phones || []).join('\n')
   blockedPhonesText.value = (inst.blocked_phones || []).join('\n')
+  // Backward compat: convert "collection" → "selected"
+  if (formData.value.rag_mode === 'collection') {
+    formData.value.rag_mode = 'selected'
+    if (formData.value.knowledge_collection_id && !formData.value.knowledge_collection_ids?.length) {
+      formData.value.knowledge_collection_ids = [formData.value.knowledge_collection_id]
+    }
+  }
+  if (!formData.value.knowledge_collection_ids) formData.value.knowledge_collection_ids = []
   showEditDialog.value = true
 }
 
@@ -486,9 +496,11 @@ watch(instances, (val) => {
             <div>
               <label class="block text-sm font-medium mb-1">{{ t('whatsapp.ragMode') }}</label>
               <div class="text-sm bg-secondary/50 px-3 py-2 rounded-lg">
-                {{ selectedInstance.rag_mode === 'none' ? t('whatsapp.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('whatsapp.ragModeCollection') : t('whatsapp.ragModeAll') }}
-                <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id">
-                  ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
+                {{ selectedInstance.rag_mode === 'none' ? t('whatsapp.ragModeNone') : selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection' ? t('whatsapp.ragModeSelected') : t('whatsapp.ragModeAll') }}
+              </div>
+              <div v-if="(selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection') && (selectedInstance.knowledge_collection_ids?.length || selectedInstance.knowledge_collection_id)" class="mt-1 flex flex-wrap gap-1">
+                <span v-for="cid in (selectedInstance.knowledge_collection_ids?.length ? selectedInstance.knowledge_collection_ids : [selectedInstance.knowledge_collection_id].filter(Boolean))" :key="String(cid)" class="text-xs bg-secondary px-2 py-0.5 rounded-full">
+                  {{ knowledgeCollections.find(c => c.id === cid)?.name || `#${cid}` }}
                 </span>
               </div>
             </div>
@@ -635,21 +647,21 @@ watch(instances, (val) => {
                 <input v-model="formData.llm_backend" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" placeholder="vllm" />
               </div>
               <!-- RAG config -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+              <div class="space-y-2 mt-2">
                 <div>
                   <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.ragMode') }}</label>
                   <select v-model="formData.rag_mode" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
                     <option value="all">{{ t('whatsapp.ragModeAll') }}</option>
-                    <option value="collection">{{ t('whatsapp.ragModeCollection') }}</option>
+                    <option value="selected">{{ t('whatsapp.ragModeSelected') }}</option>
                     <option value="none">{{ t('whatsapp.ragModeNone') }}</option>
                   </select>
                 </div>
-                <div v-if="formData.rag_mode === 'collection'">
-                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.ragCollection') }}</label>
-                  <select v-model="formData.knowledge_collection_id" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
-                    <option :value="null">—</option>
-                    <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
-                  </select>
+                <div v-if="formData.rag_mode === 'selected'" class="pl-1 space-y-1">
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.ragCollections') }}</label>
+                  <label v-for="col in knowledgeCollections" :key="col.id" class="flex items-center gap-2 cursor-pointer">
+                    <input v-model="formData.knowledge_collection_ids" type="checkbox" :value="col.id" class="rounded border-border" />
+                    <span class="text-sm">{{ col.name }}</span>
+                  </label>
                 </div>
               </div>
               <div class="mt-2">

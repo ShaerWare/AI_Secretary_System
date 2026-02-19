@@ -35,6 +35,7 @@ export interface WhatsAppInstanceData {
   tts_preset?: string
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   allowed_phones: string[]
   blocked_phones: string[]
   rate_limit_count?: number | null
@@ -87,6 +88,7 @@ export interface BotInstanceData {
   tts_preset?: string
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   action_buttons: ActionButtonData[]
   payment_enabled: boolean
   stars_enabled: boolean
@@ -140,6 +142,7 @@ export interface WidgetInstanceData {
   tts_preset?: string
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   created?: string
   updated?: string
 }

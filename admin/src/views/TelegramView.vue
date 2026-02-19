@@ -301,6 +301,7 @@ const formData = ref<Partial<BotInstance>>({
   llm_persona: 'anna',
   rag_mode: 'all',
   knowledge_collection_id: null as number | null,
+  knowledge_collection_ids: [] as number[],
   system_prompt: '',
   tts_engine: 'xtts',
   tts_voice: 'anna',
@@ -490,6 +491,7 @@ function openCreateDialog() {
     llm_persona: 'anna',
     rag_mode: 'all',
     knowledge_collection_id: null,
+    knowledge_collection_ids: [],
     system_prompt: '',
     tts_engine: 'xtts',
     tts_voice: 'anna',
@@ -520,6 +522,14 @@ async function openEditDialog(instance: BotInstance) {
     // Fallback to instance without token
     formData.value = { ...instance }
   }
+  // Backward compat: convert "collection" → "selected"
+  if (formData.value.rag_mode === 'collection') {
+    formData.value.rag_mode = 'selected'
+    if (formData.value.knowledge_collection_id && !formData.value.knowledge_collection_ids?.length) {
+      formData.value.knowledge_collection_ids = [formData.value.knowledge_collection_id]
+    }
+  }
+  if (!formData.value.knowledge_collection_ids) formData.value.knowledge_collection_ids = []
   showEditDialog.value = true
 }
 
@@ -1047,11 +1057,13 @@ watch(instances, (newInstances) => {
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('telegram.ragMode') }}</h3>
                 <p class="text-lg font-semibold">
-                  {{ selectedInstance.rag_mode === 'none' ? t('telegram.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('telegram.ragModeCollection') : t('telegram.ragModeAll') }}
-                  <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id" class="text-sm text-muted-foreground font-normal">
-                    ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
-                  </span>
+                  {{ selectedInstance.rag_mode === 'none' ? t('telegram.ragModeNone') : selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection' ? t('telegram.ragModeSelected') : t('telegram.ragModeAll') }}
                 </p>
+                <div v-if="(selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection') && (selectedInstance.knowledge_collection_ids?.length || selectedInstance.knowledge_collection_id)" class="mt-1 flex flex-wrap gap-1">
+                  <span v-for="cid in (selectedInstance.knowledge_collection_ids?.length ? selectedInstance.knowledge_collection_ids : [selectedInstance.knowledge_collection_id].filter(Boolean))" :key="String(cid)" class="text-xs bg-secondary px-2 py-0.5 rounded-full">
+                    {{ knowledgeCollections.find(c => c.id === cid)?.name || `#${cid}` }}
+                  </span>
+                </div>
               </div>
             </div>
             <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
@@ -1827,7 +1839,7 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
             </div>
 
             <!-- RAG config -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-3">
               <div>
                 <label class="block text-sm font-medium mb-1">{{ t('telegram.ragMode') }}</label>
                 <select
@@ -1835,19 +1847,16 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="all">{{ t('telegram.ragModeAll') }}</option>
-                  <option value="collection">{{ t('telegram.ragModeCollection') }}</option>
+                  <option value="selected">{{ t('telegram.ragModeSelected') }}</option>
                   <option value="none">{{ t('telegram.ragModeNone') }}</option>
                 </select>
               </div>
-              <div v-if="formData.rag_mode === 'collection'">
-                <label class="block text-sm font-medium mb-1">{{ t('telegram.ragCollection') }}</label>
-                <select
-                  v-model="formData.knowledge_collection_id"
-                  class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option :value="null">—</option>
-                  <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
-                </select>
+              <div v-if="formData.rag_mode === 'selected'" class="pl-1 space-y-1">
+                <label class="block text-sm font-medium mb-1">{{ t('telegram.ragCollections') }}</label>
+                <label v-for="col in knowledgeCollections" :key="col.id" class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="formData.knowledge_collection_ids" type="checkbox" :value="col.id" class="rounded border-border" />
+                  <span class="text-sm">{{ col.name }}</span>
+                </label>
               </div>
             </div>
 

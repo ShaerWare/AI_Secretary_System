@@ -72,6 +72,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         slug: str,
         description: Optional[str] = None,
         enabled: bool = True,
+        base_dir: str = "wiki-pages",
     ) -> dict:
         """Create a new collection."""
         col = KnowledgeCollection(
@@ -79,6 +80,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
             slug=slug,
             description=description,
             enabled=enabled,
+            base_dir=base_dir,
         )
         self.session.add(col)
         await self.session.commit()

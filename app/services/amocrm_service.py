@@ -346,6 +346,38 @@ async def get_leads_by_pipeline(
     return {"_embedded": {"leads": all_leads}}
 
 
+async def get_all_leads_paginated(
+    subdomain: str,
+    access_token: str,
+) -> list[dict]:
+    """Fetch ALL leads across all pipelines with contacts (paginated).
+
+    Used by CRM dataset sync. Iterates pages until empty response.
+    """
+    all_leads: list[dict] = []
+    page = 1
+    limit = 250
+
+    while True:
+        params: dict[str, Any] = {
+            "limit": limit,
+            "page": page,
+            "with": "contacts",
+        }
+        data = await _api_request(subdomain, access_token, "GET", "leads", params=params)
+        if not data or "_embedded" not in data:
+            break
+        leads = data["_embedded"].get("leads", [])
+        if not leads:
+            break
+        all_leads.extend(leads)
+        if len(leads) < limit:
+            break
+        page += 1
+
+    return all_leads
+
+
 async def get_unsorted_leads(
     subdomain: str,
     access_token: str,

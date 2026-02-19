@@ -89,6 +89,7 @@ export interface BotInstance {
   // RAG
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   // Action buttons
   action_buttons: ActionButton[]
   // Payment

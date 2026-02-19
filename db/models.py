@@ -140,6 +140,7 @@ class ChatSession(Base):
     knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
+    knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     messages: Mapped[List["ChatMessage"]] = relationship(
@@ -160,6 +161,9 @@ class ChatSession(Base):
             "source_id": self.source_id,
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
+            "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
+            if self.knowledge_collection_ids
+            else None,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
@@ -181,6 +185,9 @@ class ChatSession(Base):
             "source_id": self.source_id,
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
+            "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
+            if self.knowledge_collection_ids
+            else None,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
@@ -447,6 +454,7 @@ class BotInstance(Base):
     knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
+    knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -569,6 +577,9 @@ class BotInstance(Base):
             # RAG
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
+            "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
+            if self.knowledge_collection_ids
+            else None,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -628,6 +639,7 @@ class WidgetInstance(Base):
     knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
+    knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -693,6 +705,9 @@ class WidgetInstance(Base):
             # RAG
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
+            "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
+            if self.knowledge_collection_ids
+            else None,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -746,6 +761,7 @@ class WhatsAppInstance(Base):
     knowledge_collection_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
+    knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -824,6 +840,9 @@ class WhatsAppInstance(Base):
             # RAG
             "rag_mode": self.rag_mode,
             "knowledge_collection_id": self.knowledge_collection_id,
+            "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
+            if self.knowledge_collection_ids
+            else None,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
@@ -2186,6 +2205,9 @@ class KnowledgeCollection(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    base_dir: Mapped[str] = mapped_column(
+        String(200), default="wiki-pages", server_default="wiki-pages"
+    )
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -2207,6 +2229,7 @@ class KnowledgeCollection(Base):
             "slug": self.slug,
             "description": self.description,
             "enabled": self.enabled,
+            "base_dir": self.base_dir,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }

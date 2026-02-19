@@ -216,10 +216,18 @@ export const chatRoutes: DemoRoute[] = [
     method: 'PUT',
     pattern: /^\/admin\/chat\/sessions\/([^/]+)\/messages\/([^/]+)$/,
     handler: ({ matches, body }) => {
+      initChatData()
       const { content } = body as { content: string }
-      return {
-        message: { id: matches[2], role: 'user', content, timestamp: nowISO(), edited: true },
+      const store = getStore()
+      const session = store.chatSessions.find(s => s.id === matches[1])
+      const originalMsg = session?.messages.find(m => m.id === matches[2])
+      const role = originalMsg?.role || 'user'
+      const editedMsg = { id: matches[2], role, content, timestamp: nowISO(), edited: true }
+      if (role === 'assistant') {
+        // Assistant edit: no LLM regeneration
+        return { message: editedMsg }
       }
+      return { message: editedMsg }
     },
   },
   {

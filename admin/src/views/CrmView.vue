@@ -18,9 +18,13 @@ import {
   LayoutDashboard,
   Table2,
   MessageSquare,
+  BookOpen,
+  Database,
+  Trash2,
 } from 'lucide-vue-next'
 import { amocrmApi } from '@/api/amocrm'
-import type { AmoCRMSyncLogEntry } from '@/api/amocrm'
+import type { AmoCRMSyncLogEntry, CRMDatasetStatus } from '@/api/amocrm'
+import { useAuthStore } from '@/stores'
 import CrmKanban from '@/components/CrmKanban.vue'
 import CrmDeals from '@/components/CrmDeals.vue'
 import CrmInbox from '@/components/CrmInbox.vue'
@@ -82,6 +86,20 @@ const accountInfo = ref<Record<string, unknown>>({})
 // Sync log
 const syncLogs = ref<AmoCRMSyncLogEntry[]>([])
 const showSyncLog = ref(false)
+
+// Auth store for role checks
+const authStore = useAuthStore()
+
+// CRM Dataset state
+const datasetStatus = ref<CRMDatasetStatus>({
+  synced: false,
+  collection_id: null,
+  documents: 0,
+  total_sections: 0,
+  last_sync: null,
+  files: [],
+})
+const isDatasetSyncing = ref(false)
 
 function showToast(message: string, type: 'success' | 'error' = 'success') {
   toast.value = { message, type }
@@ -234,8 +252,41 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleString()
 }
 
+// CRM Dataset functions
+async function loadDatasetStatus() {
+  try {
+    datasetStatus.value = await amocrmApi.datasetStatus()
+  } catch {
+    // Ignore — dataset may not exist yet
+  }
+}
+
+async function syncDataset() {
+  isDatasetSyncing.value = true
+  try {
+    const result = await amocrmApi.datasetSync()
+    showToast(t('crm.dataset.syncSuccess', { leads: result.leads_total, files: result.files_written }))
+    await loadDatasetStatus()
+  } catch {
+    showToast(t('crm.dataset.syncFail'), 'error')
+  } finally {
+    isDatasetSyncing.value = false
+  }
+}
+
+async function clearDataset() {
+  try {
+    await amocrmApi.datasetClear()
+    showToast(t('crm.dataset.clearSuccess'))
+    await loadDatasetStatus()
+  } catch {
+    showToast(t('crm.dataset.syncFail'), 'error')
+  }
+}
+
 onMounted(async () => {
   await loadConfig()
+  await loadDatasetStatus()
 
   // Check for OAuth redirect result
   const query = route.query
@@ -560,6 +611,54 @@ onMounted(async () => {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- CRM Dataset (Knowledge Base Sync) -->
+      <div v-if="isConnected" class="card p-6 mt-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold flex items-center gap-2">
+            <BookOpen class="w-5 h-5" />
+            {{ t('crm.dataset.title') }}
+          </h3>
+          <div class="flex gap-2">
+            <button
+              :disabled="isDatasetSyncing"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              @click="syncDataset"
+            >
+              <Database :class="['w-4 h-4', isDatasetSyncing && 'animate-spin']" />
+              {{ isDatasetSyncing ? t('crm.dataset.syncing') : t('crm.dataset.syncButton') }}
+            </button>
+            <button
+              v-if="datasetStatus.synced && authStore.isAdmin"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg hover:bg-destructive/10 text-destructive"
+              @click="clearDataset"
+            >
+              <Trash2 class="w-4 h-4" />
+              {{ t('crm.dataset.clear') }}
+            </button>
+          </div>
+        </div>
+
+        <p class="text-sm text-muted-foreground mb-3">{{ t('crm.dataset.description') }}</p>
+
+        <div v-if="datasetStatus.synced" class="grid grid-cols-3 gap-4">
+          <div class="p-3 rounded-lg bg-secondary/50">
+            <div class="text-lg font-bold">{{ datasetStatus.documents }}</div>
+            <div class="text-xs text-muted-foreground">{{ t('crm.dataset.documents') }}</div>
+          </div>
+          <div class="p-3 rounded-lg bg-secondary/50">
+            <div class="text-lg font-bold">{{ datasetStatus.total_sections }}</div>
+            <div class="text-xs text-muted-foreground">{{ t('crm.dataset.sections') }}</div>
+          </div>
+          <div class="p-3 rounded-lg bg-secondary/50">
+            <div class="text-sm">{{ datasetStatus.last_sync ? formatDate(datasetStatus.last_sync) : '—' }}</div>
+            <div class="text-xs text-muted-foreground">{{ t('crm.dataset.lastSync') }}</div>
+          </div>
+        </div>
+        <div v-else class="text-sm text-muted-foreground italic">
+          {{ t('crm.dataset.notSynced') }}
         </div>
       </div>
 

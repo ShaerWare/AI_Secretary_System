@@ -208,4 +208,36 @@ export const amocrmApi = {
 
   getSyncLog: (limit = 50) =>
     api.get<{ logs: AmoCRMSyncLogEntry[] }>(`/admin/crm/sync-log?limit=${limit}`),
+
+  // CRM Dataset (Knowledge Base Sync)
+  datasetSync: () =>
+    api.post<CRMDatasetSyncResult>('/admin/crm/dataset-sync'),
+
+  datasetStatus: () =>
+    api.get<CRMDatasetStatus>('/admin/crm/dataset-status'),
+
+  datasetClear: () =>
+    api.delete<{ status: string; files_removed: number }>('/admin/crm/dataset'),
+}
+
+// ============== Dataset Types ==============
+
+export interface CRMDatasetStatus {
+  synced: boolean
+  collection_id: number | null
+  collection_name?: string
+  documents: number
+  total_sections: number
+  last_sync: string | null
+  files: string[]
+}
+
+export interface CRMDatasetSyncResult {
+  status: string
+  pipelines: number
+  leads_total: number
+  files_written: number
+  files_removed: number
+  collection_id: number
+  synced_at: string
 }

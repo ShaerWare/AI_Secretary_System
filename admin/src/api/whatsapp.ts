@@ -27,6 +27,7 @@ export interface WhatsAppInstance {
   // RAG
   rag_mode?: string
   knowledge_collection_id?: number | null
+  knowledge_collection_ids?: number[]
   // Access control
   allowed_phones: string[]
   blocked_phones: string[]

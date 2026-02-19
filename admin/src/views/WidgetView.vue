@@ -73,6 +73,7 @@ const formData = ref<Partial<WidgetInstance>>({
   tts_preset: '',
   rag_mode: 'all',
   knowledge_collection_id: null,
+  knowledge_collection_ids: [] as number[],
   rate_limit_count: null,
   rate_limit_hours: null,
 })
@@ -175,6 +176,7 @@ function openCreateDialog() {
     tts_preset: '',
     rag_mode: 'all',
     knowledge_collection_id: null,
+    knowledge_collection_ids: [],
     rate_limit_count: null,
     rate_limit_hours: null,
   }
@@ -189,6 +191,14 @@ async function openEditDialog(instance: WidgetInstance) {
   } catch {
     formData.value = { ...instance }
   }
+  // Backward compat: convert "collection" → "selected"
+  if (formData.value.rag_mode === 'collection') {
+    formData.value.rag_mode = 'selected'
+    if (formData.value.knowledge_collection_id && !formData.value.knowledge_collection_ids?.length) {
+      formData.value.knowledge_collection_ids = [formData.value.knowledge_collection_id]
+    }
+  }
+  if (!formData.value.knowledge_collection_ids) formData.value.knowledge_collection_ids = []
   showEditDialog.value = true
 }
 
@@ -706,11 +716,13 @@ function handleTestKeydown(e: KeyboardEvent) {
               <div>
                 <h3 class="text-sm font-medium text-muted-foreground">{{ t('widget.ragMode') }}</h3>
                 <p class="text-sm">
-                  {{ selectedInstance.rag_mode === 'none' ? t('widget.ragModeNone') : selectedInstance.rag_mode === 'collection' ? t('widget.ragModeCollection') : t('widget.ragModeAll') }}
-                  <span v-if="selectedInstance.rag_mode === 'collection' && selectedInstance.knowledge_collection_id">
-                    ({{ knowledgeCollections.find(c => c.id === selectedInstance?.knowledge_collection_id)?.name || `#${selectedInstance?.knowledge_collection_id}` }})
-                  </span>
+                  {{ selectedInstance.rag_mode === 'none' ? t('widget.ragModeNone') : selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection' ? t('widget.ragModeSelected') : t('widget.ragModeAll') }}
                 </p>
+                <div v-if="(selectedInstance.rag_mode === 'selected' || selectedInstance.rag_mode === 'collection') && (selectedInstance.knowledge_collection_ids?.length || selectedInstance.knowledge_collection_id)" class="mt-1 flex flex-wrap gap-1">
+                  <span v-for="cid in (selectedInstance.knowledge_collection_ids?.length ? selectedInstance.knowledge_collection_ids : [selectedInstance.knowledge_collection_id].filter(Boolean))" :key="String(cid)" class="text-xs bg-secondary px-2 py-0.5 rounded-full">
+                    {{ knowledgeCollections.find(c => c.id === cid)?.name || `#${cid}` }}
+                  </span>
+                </div>
               </div>
             </div>
             <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
@@ -1184,21 +1196,21 @@ function handleTestKeydown(e: KeyboardEvent) {
             </div>
 
             <!-- RAG Config -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-3">
               <div>
                 <label class="block text-sm font-medium mb-1">{{ t('widget.ragMode') }}</label>
                 <select v-model="formData.rag_mode" class="w-full px-3 py-2 rounded-lg border border-border bg-background">
                   <option value="all">{{ t('widget.ragModeAll') }}</option>
-                  <option value="collection">{{ t('widget.ragModeCollection') }}</option>
+                  <option value="selected">{{ t('widget.ragModeSelected') }}</option>
                   <option value="none">{{ t('widget.ragModeNone') }}</option>
                 </select>
               </div>
-              <div v-if="formData.rag_mode === 'collection'">
-                <label class="block text-sm font-medium mb-1">{{ t('widget.ragCollection') }}</label>
-                <select v-model="formData.knowledge_collection_id" class="w-full px-3 py-2 rounded-lg border border-border bg-background">
-                  <option :value="null">—</option>
-                  <option v-for="col in knowledgeCollections" :key="col.id" :value="col.id">{{ col.name }}</option>
-                </select>
+              <div v-if="formData.rag_mode === 'selected'" class="pl-1 space-y-1">
+                <label class="block text-sm font-medium mb-1">{{ t('widget.ragCollections') }}</label>
+                <label v-for="col in knowledgeCollections" :key="col.id" class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="formData.knowledge_collection_ids" type="checkbox" :value="col.id" class="rounded border-border" />
+                  <span class="text-sm">{{ col.name }}</span>
+                </label>
               </div>
             </div>
 
