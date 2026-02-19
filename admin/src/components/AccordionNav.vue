@@ -49,10 +49,10 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.monitoring',
     icon: Activity,
     items: [
-      { path: '/', nameKey: 'nav.dashboard', icon: LayoutDashboard, excludeRoles: ['web'] as UserRole[], localOnly: true },
-      { path: '/monitoring', nameKey: 'nav.monitoring', icon: Activity, minRole: 'user' as UserRole, excludeRoles: ['web'] as UserRole[], localOnly: true },
-      { path: '/services', nameKey: 'nav.services', icon: Server, minRole: 'user' as UserRole, excludeRoles: ['web'] as UserRole[], localOnly: true },
-      { path: '/audit', nameKey: 'nav.audit', icon: FileText, minRole: 'user' as UserRole, excludeRoles: ['web'] as UserRole[] },
+      { path: '/', nameKey: 'nav.dashboard', icon: LayoutDashboard, excludeRoles: ['web', 'user'] as UserRole[], localOnly: true },
+      { path: '/monitoring', nameKey: 'nav.monitoring', icon: Activity, minRole: 'admin' as UserRole, localOnly: true },
+      { path: '/services', nameKey: 'nav.services', icon: Server, minRole: 'admin' as UserRole, localOnly: true },
+      { path: '/audit', nameKey: 'nav.audit', icon: FileText, minRole: 'admin' as UserRole },
     ]
   },
   {
@@ -63,7 +63,7 @@ const allNavGroups = computed(() => [
       { path: '/llm', nameKey: 'nav.llm', icon: Brain, minRole: 'user' as UserRole },
       { path: '/tts', nameKey: 'nav.tts', icon: Mic, minRole: 'user' as UserRole, excludeRoles: ['web'] as UserRole[], localOnly: true },
       { path: '/models', nameKey: 'nav.models', icon: AudioLines, minRole: 'admin' as UserRole, localOnly: true },
-      { path: '/finetune', nameKey: 'nav.finetune', icon: Sparkles },
+      { path: '/finetune', nameKey: 'nav.finetune', icon: Sparkles, minRole: 'user' as UserRole },
     ]
   },
   {
