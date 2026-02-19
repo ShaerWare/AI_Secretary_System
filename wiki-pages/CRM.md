@@ -177,6 +177,86 @@ Unified inbox с двумя подвкладками (`CrmInbox.vue`):
 | **Leads Count** | Количество сделок |
 | **Last Sync Time** | Время последней успешной синхронизации |
 
+## CRM Dataset (База знаний из amoCRM)
+
+Синхронизация данных amoCRM в RAG-коллекцию для поиска по сделкам через LLM. Позволяет ИИ-секретарю отвечать на вопросы про конкретные сделки, клиентов, суммы и менеджеров.
+
+### Как работает
+
+1. **Сбор данных** — `POST /admin/crm/dataset-sync` загружает все воронки, сделки, контакты и пользователей из amoCRM
+2. **Обогащение** — контакты дополняются телефонами/email (`get_contacts_by_ids()`), ответственные менеджеры резолвятся в имена (`get_users()`)
+3. **Генерация markdown** — по каждой воронке создаётся `crm-pipeline-{id}.md` + общая сводка `crm-summary.md`
+4. **Индексация** — файлы пишутся в `data/crm-dataset/`, создаётся коллекция "amoCRM", BM25/embedding индекс обновляется
+
+### Содержимое документов
+
+Каждая сделка записывается как секция с полными данными для поиска:
+
+```markdown
+## Сделка #8847291: Разработка сайта — Переговоры (100 000 ₽)
+- **ID сделки**: 8847291
+- **Сумма**: 100 000 ₽ (100000)
+- **Контакт**: Иванов Пётр | тел: +7 (999) 123-45-67 (79991234567) | email: ivanov@mail.ru
+- **Тип продукта**: Корпоративный сайт
+- **Источник**: Яндекс Директ
+- **Теги**: VIP, срочно
+- **Создана**: 15.01.2026
+- **Обновлена**: 18.02.2026
+- **Ответственный**: Алексей Сидоров
+```
+
+### Оптимизация для поиска (BM25)
+
+| Проблема | Решение |
+|----------|---------|
+| Форматированная цена `100 000` не матчит запрос `100000` | Цена дублируется: `100 000 ₽ (100000)` |
+| Телефон `+7 (999) 123-45-67` фрагментируется токенизатором | Digits-only дубль: `(79991234567)` |
+| `responsible_user_id` — числовой ID | Резолвится в имя менеджера через `get_users()` |
+| Кастомные поля (товар, источник) игнорировались | `custom_fields_values` извлекаются в markdown |
+| ID сделки не записывался | Заголовок `## Сделка #8847291:` + строка `**ID сделки**` |
+
+### API эндпоинты
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/admin/crm/dataset-sync` | Полная синхронизация: воронки + сделки + контакты + пользователи → markdown → RAG |
+| GET | `/admin/crm/dataset-status` | Статус: количество документов, секций, дата последней синхронизации |
+| DELETE | `/admin/crm/dataset` | Очистить датасет (только admin) |
+
+### Ответ dataset-sync
+
+```json
+{
+  "status": "ok",
+  "pipelines": 3,
+  "leads_total": 150,
+  "contacts_enriched": 89,
+  "users_resolved": 5,
+  "files_written": 4,
+  "files_removed": 4,
+  "collection_id": 2,
+  "synced_at": "19.02.2026 14:30"
+}
+```
+
+### Архитектура
+
+```
+app/routers/amocrm.py (crm_dataset_sync)
+  ├── get_pipelines()           → воронки + статусы
+  ├── get_all_leads_paginated() → все сделки (250/стр)
+  ├── get_contacts_by_ids()     → контакты с телефонами/email (50/батч)
+  ├── get_users()               → пользователи → {id: имя}
+  └── app/services/crm_dataset_service.py
+        ├── build_pipeline_document()  → markdown по воронке
+        └── build_summary_document()   → сводка + статистика
+```
+
+> **Файлы**: `data/crm-dataset/crm-pipeline-*.md`, `data/crm-dataset/crm-summary.md`
+> **Коллекция**: slug `amocrm`, `base_dir="data/crm-dataset"`
+
+---
+
 ## Docker/VPN Proxy
 
 Если Docker-контейнер не может напрямую достучаться до amoCRM (например, VPN настроен на хосте), используйте прокси:
@@ -254,6 +334,9 @@ Endpoint для получения событий от amoCRM: **`POST /webhooks
 | GET | `/admin/crm/contacts/{id}/chats` | Чаты контакта (Amojo) |
 | GET | `/admin/crm/chats/{chat_id}/history` | История сообщений чата (Amojo) |
 | POST | `/admin/crm/chats/{chat_id}/messages` | Отправить сообщение в чат (Amojo) |
+| POST | `/admin/crm/dataset-sync` | Синхронизация данных в RAG-коллекцию |
+| GET | `/admin/crm/dataset-status` | Статус CRM-датасета |
+| DELETE | `/admin/crm/dataset` | Очистить CRM-датасет (admin only) |
 
 ### Пример запроса: Получить контакты
 
@@ -376,7 +459,10 @@ app/routers/amocrm.py
 Чистый async HTTP-клиент **без прямого DB-доступа**. Методы:
 
 - `get_contacts(limit, offset)` — список контактов
+- `get_contacts_by_ids(contact_ids, batch_size=50)` — батч-запрос контактов по ID с телефонами/email
 - `get_leads(limit, offset)` — список сделок
+- `get_all_leads_paginated()` — все сделки (250/стр, пагинация до конца)
+- `get_users()` — все пользователи аккаунта → `{id: имя}`
 - `create_lead(name, price, pipeline_id, status_id, contact_id)` — создать сделку
 - `get_pipelines()` — список воронок и статусов
 - `refresh_tokens()` — обновить токены при 401
