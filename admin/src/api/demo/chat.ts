@@ -96,6 +96,7 @@ function sessionToSummary(s: ChatSessionData) {
     updated: s.updated,
     is_shared_with_me: false,
     share_permission: 'owner',
+    share_count: (demoShares[s.id] || []).length,
   }
 }
 

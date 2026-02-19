@@ -1204,8 +1204,10 @@ watch(sessions, (newSessions) => {
             @click="selectSession(session.id)"
           >
             <div v-if="session.pinned" class="absolute top-1 left-1 w-2 h-2 rounded-full bg-primary" />
-            <div class="w-8 h-8 rounded-full border border-border bg-transparent flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0">
+            <div class="w-8 h-8 rounded-full border border-border bg-transparent flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0 relative">
               {{ session.title.trim().slice(0, 2).toUpperCase() }}
+              <span v-if="session.is_shared_with_me" class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-400 border-2 border-card" :title="t('chatView.sharedWithYou')" />
+              <span v-else-if="(session.share_count ?? 0) > 0" class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card" :title="t('chatView.sharedByYou', { count: session.share_count })" />
             </div>
           </button>
         </div>
@@ -1301,6 +1303,7 @@ watch(sessions, (newSessions) => {
                 >
                   <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
                   <Users v-if="session.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('chatView.sharedWithYou')" />
+                  <Share2 v-else-if="(session.share_count ?? 0) > 0" class="w-3 h-3 text-green-400 shrink-0" :title="t('chatView.sharedByYou', { count: session.share_count })" />
                   {{ session.title }}
                 </p>
               </template>
@@ -1467,14 +1470,19 @@ watch(sessions, (newSessions) => {
             </div>
           </div>
           <!-- Share button (owner/admin only) -->
-          <button
-            v-if="isSessionOwner && !isSharedWithMe"
-            class="p-2 rounded-lg hover:bg-secondary transition-colors"
-            :title="t('chatView.shareChat')"
-            @click="showShareDialog = true"
-          >
-            <Share2 class="w-4 h-4" />
-          </button>
+          <div v-if="isSessionOwner && !isSharedWithMe" class="relative">
+            <button
+              class="p-2 rounded-lg hover:bg-secondary transition-colors"
+              :title="t('chatView.shareChat')"
+              @click="showShareDialog = true"
+            >
+              <Share2 class="w-4 h-4" />
+              <span
+                v-if="(currentSession?.share_count ?? 0) > 0"
+                class="absolute -top-1 -right-1 w-4 h-4 text-[10px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
+              >{{ currentSession!.share_count }}</span>
+            </button>
+          </div>
           <!-- Fork button (read-only shared sessions) -->
           <button
             v-if="isReadOnly"

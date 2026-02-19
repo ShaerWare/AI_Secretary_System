@@ -372,7 +372,7 @@ async def admin_list_chat_sessions(
     if owner_id is not None:
         shared_perms = await async_chat_share_manager.get_shared_sessions_with_permissions(user.id)
 
-    def _enrich(sessions_list: list[dict]) -> list[dict]:
+    def _enrich(sessions_list: list[dict], share_counts: dict[str, int]) -> list[dict]:
         for s in sessions_list:
             sid = s.get("id", "")
             s_owner = s.get("owner_id")
@@ -382,17 +382,22 @@ async def admin_list_chat_sessions(
             else:
                 s["is_shared_with_me"] = False
                 s["share_permission"] = "owner"
+            s["share_count"] = share_counts.get(sid, 0)
         return sessions_list
 
     if group_by == "source":
         grouped = await async_chat_manager.list_sessions_grouped(owner_id=owner_id)
+        all_ids = [s["id"] for sl in grouped.values() for s in sl]
+        share_counts = await async_chat_share_manager.get_share_counts(all_ids) if all_ids else {}
         for source_key in grouped:
-            _enrich(grouped[source_key])
+            _enrich(grouped[source_key], share_counts)
         return {"sessions": grouped, "grouped": True}
     sessions = await async_chat_manager.list_sessions(
         owner_id=owner_id, source=source, exclude_source=exclude_source
     )
-    _enrich(sessions)
+    all_ids = [s["id"] for s in sessions]
+    share_counts = await async_chat_share_manager.get_share_counts(all_ids) if all_ids else {}
+    _enrich(sessions, share_counts)
     return {"sessions": sessions}
 
 
