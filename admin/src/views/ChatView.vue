@@ -1130,7 +1130,7 @@ watch(sessions, (newSessions) => {
       <template v-if="sidebarCollapsed">
         <!-- Collapsed header: expand + new chat -->
         <div class="hidden md:flex flex-col items-center gap-1 p-2 border-b border-border">
-          <button class="p-2 rounded-lg text-muted-foreground hover:bg-secondary/50" :title="t('chatView.expandSidebar')" @click="toggleSidebarCollapse">
+          <button class="p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors" :title="t('chatView.expandSidebar')" @click="toggleSidebarCollapse">
             <PanelLeftOpen class="w-4 h-4" />
           </button>
           <button
@@ -1175,7 +1175,7 @@ watch(sessions, (newSessions) => {
         </h2>
         <div class="flex items-center gap-1">
           <button
-            class="hidden md:inline-flex p-2 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+            class="hidden md:inline-flex p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
             :title="t('chatView.collapseSidebar')"
             @click="toggleSidebarCollapse"
           >
@@ -1511,9 +1511,9 @@ watch(sessions, (newSessions) => {
       <!-- Input Area -->
       <div
         v-if="currentSession"
-        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last' : 'border-b border-border']"
+        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-16' : 'border-b border-border']"
       >
-        <div class="flex gap-3 items-end">
+        <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
           <textarea
             ref="messageInputRef"
             v-model="inputMessage"
