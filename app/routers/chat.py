@@ -177,13 +177,32 @@ def _inject_rag_context(
     Returns updated prompt or base_prompt unchanged if no RAG injection needed.
     collection_ids: list of collection IDs to search (resolved by _resolve_rag_config).
     """
+    logger.info(
+        f"RAG inject: mode={rag_mode}, ids={collection_ids}, "
+        f"wiki_rag={'yes' if wiki_rag else 'NO'}, query={user_content[:80]!r}"
+    )
     if not wiki_rag or not user_content or rag_mode == "none" or not collection_ids:
+        logger.info(
+            f"RAG inject: skipped (wiki_rag={bool(wiki_rag)}, "
+            f"content={bool(user_content)}, mode={rag_mode}, ids={collection_ids})"
+        )
         return base_prompt
+
+    loaded_ids = (
+        list(wiki_rag._collection_indexes.keys())
+        if hasattr(wiki_rag, "_collection_indexes")
+        else []
+    )
+    logger.info(f"RAG inject: loaded collection indexes: {loaded_ids}")
 
     if len(collection_ids) == 1:
         wiki_context = wiki_rag.retrieve(user_content, top_k=3, collection_id=collection_ids[0])
     else:
         wiki_context = wiki_rag.retrieve_multi(user_content, collection_ids, top_k=3)
+
+    logger.info(
+        f"RAG inject: context found={bool(wiki_context)}, len={len(wiki_context) if wiki_context else 0}"
+    )
 
     if wiki_context:
         base = base_prompt or _DEFAULT_RAG_PROMPT
