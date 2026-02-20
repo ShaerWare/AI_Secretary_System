@@ -74,7 +74,6 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.channels',
     icon: MessageCircle,
     items: [
-      { path: '/chat', nameKey: 'nav.chat', icon: MessageCircle },
       { path: '/telegram', nameKey: 'nav.telegram', icon: Send, minRole: 'user' as UserRole },
       { path: '/whatsapp', nameKey: 'nav.whatsapp', icon: WhatsApp, minRole: 'user' as UserRole },
       { path: '/widget', nameKey: 'nav.widget', icon: Code2, minRole: 'user' as UserRole },
