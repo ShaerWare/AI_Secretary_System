@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Chat Sharing Visual Indicators**: Colored dots (collapsed sidebar) and icons (expanded) to distinguish shared chats — blue for "shared with me", green for "I shared this". Badge counter on Share button matching RAG collections style. Batch `share_count` in `list_sessions` API via single GROUP BY query (#268)
+- **Branch Tree Access Control**: Shared users see only the branch that was active at share time. Branch switch endpoint validates visibility. Per-share `branch_message_id` snapshot (#266, #269)
 - **FAQ Sections**: Split 11-question FAQ into 3 themed sections (Product, Installation, Pricing & Support) with category menu and back-navigation
 - **Usage Tracking & Limits**: Track TTS/STT/LLM usage with configurable limits
   - New models: `UsageLog`, `UsageLimits` in database
@@ -35,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - amoCRM Integration
 - Internet Restrictions Bypass (whitelist proxies)
 - Backup & Restore functionality
+- **Kanban + Gantt**: Built-in CRM-lite board with drag & drop, Gantt chart for task planning — as alternative to amoCRM (#270)
+- **Google Docs/Sheets in chat context**: OAuth2 integration to attach Google documents as chat context files (#271)
+- **Vision & OCR**: Photo recognition in chat — OCR for text extraction, multimodal LLM for image analysis (#272)
+- **Notes system**: Markdown notes with tags, search, pinning, and chat message linking (#273)
+- **AI → Google Docs/Sheets**: Generate reports and fill spreadsheets from AI responses (#274)
 
 ## [1.0.0] - 2026-02-05
 
