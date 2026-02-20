@@ -365,6 +365,7 @@ const sendMessageMutation = useMutation({
     chatApi.sendMessage(sessionId, content),
   onSuccess: () => {
     refetchSession()
+    refetchBranches()
     refetchSessions()
     scrollToBottom()
   },
@@ -697,6 +698,7 @@ function sendMessage() {
       }
 
       refetchSession().then(() => scrollToBottom())
+      refetchBranches()
       refetchSessions()
       scrollToBottom()
       nextTick(() => messageInputRef.value?.focus())
