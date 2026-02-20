@@ -446,8 +446,13 @@ class ChatRepository(BaseRepository[ChatSession]):
         messages = result.scalars().all()
         return [m.to_dict() for m in messages]
 
-    async def get_branch_tree(self, session_id: str) -> List[dict]:
-        """Get full branch tree structure for a session."""
+    async def get_branch_tree(
+        self, session_id: str, visible_ids: Optional[set[str]] = None
+    ) -> List[dict]:
+        """Get branch tree structure for a session.
+
+        If visible_ids is provided, only messages in the set are included.
+        """
         result = await self.session.execute(
             select(ChatMessage)
             .where(ChatMessage.session_id == session_id)
@@ -461,6 +466,8 @@ class ChatRepository(BaseRepository[ChatSession]):
         # Build lookup maps
         children_map: Dict[Optional[str], List[ChatMessage]] = {}
         for m in all_messages:
+            if visible_ids is not None and m.id not in visible_ids:
+                continue
             children_map.setdefault(m.parent_id, []).append(m)
 
         def build_node(msg: ChatMessage) -> dict:
@@ -473,9 +480,50 @@ class ChatRepository(BaseRepository[ChatSession]):
                 "children": [build_node(c) for c in kids],
             }
 
-        # Root nodes are messages with no parent
+        # Root nodes are messages with no parent (or whose parent is filtered out)
         roots = children_map.get(None, [])
         return [build_node(r) for r in roots]
+
+    async def compute_branch_visible_ids(self, session_id: str, branch_message_id: str) -> set[str]:
+        """Compute visible message IDs for a shared branch.
+
+        Returns the set of ancestors (linear path to root) + the tip message
+        + all descendants of the tip (with sub-branches).
+        """
+        result = await self.session.execute(
+            select(ChatMessage.id, ChatMessage.parent_id).where(
+                ChatMessage.session_id == session_id
+            )
+        )
+        rows = result.all()
+
+        parent_map: Dict[str, Optional[str]] = {}
+        children_map: Dict[str, List[str]] = {}
+        for msg_id, parent_id in rows:
+            parent_map[msg_id] = parent_id
+            if parent_id:
+                children_map.setdefault(parent_id, []).append(msg_id)
+
+        if branch_message_id not in parent_map:
+            return set()
+
+        visible: set[str] = set()
+
+        # Walk ancestors from tip to root
+        current: Optional[str] = branch_message_id
+        while current:
+            visible.add(current)
+            current = parent_map.get(current)
+
+        # BFS descendants from tip
+        queue = [branch_message_id]
+        while queue:
+            mid = queue.pop()
+            for child_id in children_map.get(mid, []):
+                visible.add(child_id)
+                queue.append(child_id)
+
+        return visible
 
     async def get_sibling_info(self, session_id: str) -> Dict[str, dict]:
         """Get sibling info for messages that have alternatives.

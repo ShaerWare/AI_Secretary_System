@@ -950,10 +950,35 @@ async def admin_summarize_branch(
 # ============== Branch Endpoints ==============
 
 
+async def _get_branch_visible_ids(session_id: str, user: User) -> tuple[dict, Optional[set[str]]]:
+    """Check session access and compute visible message IDs for branch endpoints.
+
+    Returns (session_data, visible_ids). visible_ids is None for owner/admin (full tree).
+    """
+    owner_id = None if user.role == "admin" else user.id
+    session_data = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    visible_ids: Optional[set[str]] = None
+    if user.role != "admin":
+        session_owner = session_data.get("owner_id")
+        if session_owner not in (user.id, None):
+            # Shared user — restrict to shared branch
+            share = await async_chat_share_manager.get_user_share(session_id, user.id)
+            if share and share.get("branch_message_id"):
+                visible_ids = await async_chat_manager.compute_branch_visible_ids(
+                    session_id, share["branch_message_id"]
+                )
+
+    return session_data, visible_ids
+
+
 @router.get("/sessions/{session_id}/branches")
 async def admin_get_branch_tree(session_id: str, user: User = Depends(get_current_user)):
     """Получить дерево веток чата"""
-    branches = await async_chat_manager.get_branch_tree(session_id)
+    _, visible_ids = await _get_branch_visible_ids(session_id, user)
+    branches = await async_chat_manager.get_branch_tree(session_id, visible_ids=visible_ids)
     return {"branches": branches}
 
 
@@ -964,6 +989,12 @@ async def admin_switch_branch(
     user: User = Depends(get_current_user),
 ):
     """Переключить активную ветку"""
+    _, visible_ids = await _get_branch_visible_ids(session_id, user)
+
+    # For shared users, verify the target message is within the visible branch
+    if visible_ids is not None and request.message_id not in visible_ids:
+        raise HTTPException(status_code=403, detail="Message not in shared branch")
+
     success = await async_chat_manager.switch_branch(session_id, request.message_id)
     if not success:
         raise HTTPException(status_code=404, detail="Message not found")
@@ -1026,8 +1057,16 @@ async def admin_share_session(
     if request.user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot share with yourself")
 
+    # Snapshot current branch tip (last active message)
+    active_messages = await async_chat_manager.get_active_messages(session_id)
+    branch_message_id = active_messages[-1]["id"] if active_messages else None
+
     share = await async_chat_share_manager.add_share(
-        session_id, request.user_id, request.permission, shared_by=user.id
+        session_id,
+        request.user_id,
+        request.permission,
+        shared_by=user.id,
+        branch_message_id=branch_message_id,
     )
     return {"share": share}
 

@@ -52,6 +52,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
         user_id: int,
         permission: str = "read",
         shared_by: Optional[int] = None,
+        branch_message_id: Optional[str] = None,
     ) -> dict:
         """Add or update a share (upsert)."""
         existing = await self.get_share(session_id, user_id)
@@ -59,6 +60,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             existing.permission = permission
             existing.shared_by = shared_by
             existing.shared_at = datetime.utcnow()
+            existing.branch_message_id = branch_message_id
             await self.session.commit()
             await self.session.refresh(existing)
             return existing.to_dict()
@@ -69,6 +71,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             permission=permission,
             shared_by=shared_by,
             shared_at=datetime.utcnow(),
+            branch_message_id=branch_message_id,
         )
         self.session.add(share)
         await self.session.commit()
