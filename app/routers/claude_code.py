@@ -18,6 +18,9 @@ import codecs
 import json
 import logging
 import os
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -30,11 +33,15 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_CLI = "/root/.local/bin/claude"
 _ALLOWED_USERS = {"shaerware", "ivan"}
+_ALLOWED_CWDS = ["/root", "/opt/ai-secretary", "/tmp"]
+_DEFAULT_CWD = "/root"
 
 # One active WS per user
 _active_connections: dict[int, WebSocket] = {}
 # Track running subprocess per user for abort
 _active_processes: dict[int, asyncio.subprocess.Process] = {}
+# Track temp context dirs per user for cleanup
+_context_dirs: dict[int, str] = {}
 
 
 def _ws_auth(token: str) -> TokenPayload:
@@ -55,18 +62,55 @@ async def _send(ws: WebSocket, msg: dict) -> None:
         pass
 
 
+def _prepare_context_files(
+    user_id: int, context_files: list[dict[str, str]]
+) -> tuple[str, list[str]]:
+    """Write context files to temp dir, return (dir_path, file_paths)."""
+    # Clean up previous context dir
+    old_dir = _context_dirs.pop(user_id, None)
+    if old_dir and Path(old_dir).is_dir():
+        shutil.rmtree(old_dir, ignore_errors=True)
+
+    tmp_dir = tempfile.mkdtemp(prefix=f"cc-ctx-{user_id}-")
+    _context_dirs[user_id] = tmp_dir
+    paths = []
+    for f in context_files:
+        name = f.get("name", "file.txt").replace("/", "_").replace("..", "_")
+        content = f.get("content", "")
+        fpath = str(Path(tmp_dir) / name)
+        with open(fpath, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        paths.append(fpath)
+    return tmp_dir, paths
+
+
+def _validate_cwd(cwd: Optional[str]) -> str:
+    """Validate and return working directory."""
+    if not cwd:
+        return _DEFAULT_CWD
+    cwd = cwd.rstrip("/")
+    if cwd in _ALLOWED_CWDS or any(cwd.startswith(d + "/") for d in _ALLOWED_CWDS):
+        if Path(cwd).is_dir():
+            return cwd
+    return _DEFAULT_CWD
+
+
 async def _run_claude(
     ws: WebSocket,
     user_id: int,
     prompt: str,
     session_id: Optional[str],
     db_session_id: str,
+    cwd: Optional[str] = None,
+    context_files: Optional[list[dict[str, str]]] = None,
 ) -> Optional[str]:
     """
     Spawn claude CLI subprocess, parse NDJSON stream, relay events over WS.
     Returns the CLI session_id (for resume).
     """
     from db.integration import async_claude_code_manager
+
+    working_dir = _validate_cwd(cwd)
 
     cmd = [
         CLAUDE_CLI,
@@ -77,11 +121,35 @@ async def _run_claude(
         "--max-turns",
         "50",
     ]
+
+    # Full permissions when running from /root
+    if working_dir == "/root":
+        cmd.append("--dangerously-skip-permissions")
+
     if session_id:
         cmd.extend(["--resume", session_id])
 
+    # Write context files and add paths to prompt
+    file_paths: list[str] = []
+    if context_files:
+        ctx_dir, file_paths = _prepare_context_files(user_id, context_files)
+        # Allow access to the temp context dir
+        cmd.extend(["--add-dir", ctx_dir])
+
+    # Allow access to additional directories if cwd is not /root
+    if working_dir != "/root":
+        cmd.extend(["--add-dir", working_dir])
+
     env = dict(os.environ)
     env.pop("CLAUDECODE", None)  # prevent nested-session guard
+
+    # Prepend context files info to prompt
+    if file_paths:
+        files_section = "Context files from chat:\n"
+        for fp in file_paths:
+            files_section += f"  - {fp}\n"
+        files_section += "\nPlease read these files first, then proceed with the task.\n\n"
+        prompt = files_section + prompt
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -89,7 +157,7 @@ async def _run_claude(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=env,
-        cwd="/root",
+        cwd=working_dir,
     )
 
     _active_processes[user_id] = process
@@ -406,6 +474,10 @@ async def claude_code_ws(websocket: WebSocket, token: str = ""):
         proc = _active_processes.pop(user_id, None)
         if proc and proc.returncode is None:
             proc.kill()
+        # Clean up context files
+        ctx_dir = _context_dirs.pop(user_id, None)
+        if ctx_dir and Path(ctx_dir).is_dir():
+            shutil.rmtree(ctx_dir, ignore_errors=True)
 
 
 async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
@@ -422,6 +494,9 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
         await _send(ws, {"type": "error", "error": "A process is already running"})
         return
 
+    cwd = raw.get("cwd")
+    context_files = raw.get("context_files")
+
     # Create DB session
     title = prompt[:50]
     db_session = await async_claude_code_manager.create_session(title=title, owner_id=user_id)
@@ -429,7 +504,8 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
     await _send(ws, {"type": "session_created", "session": db_session})
 
     cli_session_id = await _run_claude(
-        ws, user_id, prompt, session_id=None, db_session_id=db_session["id"]
+        ws, user_id, prompt, session_id=None, db_session_id=db_session["id"],
+        cwd=cwd, context_files=context_files,
     )
 
     if cli_session_id:
@@ -523,3 +599,9 @@ async def delete_session(session_id: str, user=Depends(require_admin)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "deleted"}
+
+
+@router.get("/directories")
+async def list_directories(user=Depends(require_admin)):
+    """List allowed working directories for Claude Code."""
+    return {"directories": _ALLOWED_CWDS, "default": _DEFAULT_CWD}

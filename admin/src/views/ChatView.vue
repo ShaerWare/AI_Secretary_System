@@ -50,7 +50,8 @@ import {
   Users,
   Terminal,
   StopCircle,
-  ChevronDown
+  ChevronDown,
+  FolderOpen
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -748,6 +749,19 @@ function ccSendMessage() {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
   })
+}
+
+function toggleCcContextFiles() {
+  if (cc.pendingContextFiles.value.length > 0) {
+    // Detach
+    cc.pendingContextFiles.value = []
+  } else {
+    // Attach all context files from the current chat session
+    cc.pendingContextFiles.value = contextFiles.value.map(f => ({
+      name: f.name,
+      content: f.content,
+    }))
+  }
 }
 
 function startEditing(message: ChatMessage) {
@@ -1681,6 +1695,39 @@ watch(sessions, (newSessions) => {
           <span v-if="cc.currentModel.value" class="text-muted-foreground ml-1">· {{ cc.currentModel.value }}</span>
         </div>
         <div v-if="cc.error.value" class="mb-2 text-xs text-red-500">{{ cc.error.value }}</div>
+        <!-- CC settings row (before first message only) -->
+        <div v-if="!cc.cliSessionId.value" class="flex flex-wrap items-center gap-2 mb-2">
+          <!-- Working directory selector -->
+          <div class="flex items-center gap-1.5 text-xs">
+            <FolderOpen class="w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              v-model="cc.workingDir.value"
+              class="px-2 py-1 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
+            >
+              <option value="/root">/root</option>
+              <option value="/opt/ai-secretary">/opt/ai-secretary</option>
+              <option value="/tmp">/tmp</option>
+            </select>
+          </div>
+          <!-- Attach context files button -->
+          <button
+            v-if="contextFiles.length > 0"
+            :class="[
+              'flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors',
+              cc.pendingContextFiles.value.length > 0
+                ? 'border-green-600 bg-green-600/20 text-green-400'
+                : 'border-border text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="t('chatView.claudeCode.attachFiles')"
+            @click="toggleCcContextFiles"
+          >
+            <Paperclip class="w-3.5 h-3.5" />
+            <span>{{ t('chatView.claudeCode.attachFiles') }}</span>
+            <span v-if="cc.pendingContextFiles.value.length > 0" class="font-medium">
+              ({{ cc.pendingContextFiles.value.length }})
+            </span>
+          </button>
+        </div>
         <div class="flex gap-3 items-end">
           <textarea
             ref="messageInputRef"
