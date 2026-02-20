@@ -73,6 +73,7 @@ const showSettings = ref(false)
 const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
 const contextFiles = ref<{ name: string; content: string }[]>([])
+const contextFilesSessionId = ref<string | null>(null) // tracks which session files belong to
 const editingFileIndex = ref<number | null>(null)
 const editingFileName = ref('')
 const editingFileContent = ref('')
@@ -295,7 +296,11 @@ const currentLlmLabel = computed(() => {
 watch(currentSession, (session) => {
   if (session) {
     customPrompt.value = session.system_prompt || ''
-    contextFiles.value = session.context_files ? [...session.context_files] : []
+    // Only reset context files when switching to a different session (not on refetch)
+    if (session.id !== contextFilesSessionId.value) {
+      contextFiles.value = session.context_files ? [...session.context_files] : []
+      contextFilesSessionId.value = session.id
+    }
     // Load per-session RAG settings
     selectedRagMode.value = session.rag_mode || ''
     selectedCollectionIds.value = session.knowledge_collection_ids || []
@@ -439,10 +444,20 @@ const deleteMessageMutation = useMutation({
 const saveContextFilesMutation = useMutation({
   mutationFn: ({ sessionId, files }: { sessionId: string; files: { name: string; content: string }[] }) =>
     chatApi.updateSession(sessionId, { context_files: files }),
-  onSuccess: () => {
+  onSuccess: (_data, variables) => {
+    // Sync local state with what was saved to avoid watcher overwrite
+    contextFilesSessionId.value = variables.sessionId
     refetchSession()
   },
 })
+
+function autoSaveContextFiles() {
+  if (!currentSessionId.value) return
+  saveContextFilesMutation.mutate({
+    sessionId: currentSessionId.value,
+    files: contextFiles.value,
+  })
+}
 
 const summarizeBranchMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
@@ -857,11 +872,15 @@ function triggerContextFileUpload() {
 function handleContextFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files) return
-  Array.from(input.files).forEach(file => {
+  const files = Array.from(input.files)
+  let loaded = 0
+  files.forEach(file => {
     const reader = new FileReader()
     reader.onload = (e) => {
       const content = e.target?.result as string
       contextFiles.value.push({ name: file.name, content })
+      loaded++
+      if (loaded === files.length) autoSaveContextFiles()
     }
     reader.readAsText(file)
   })
@@ -891,6 +910,7 @@ function saveContextFileEdit() {
   editingFileIndex.value = null
   editingFileName.value = ''
   editingFileContent.value = ''
+  autoSaveContextFiles()
 }
 
 function cancelContextFileEdit() {
@@ -911,14 +931,11 @@ function removeContextFile(index: number) {
   if (editingFileIndex.value === index) {
     editingFileIndex.value = null
   }
+  autoSaveContextFiles()
 }
 
 function saveContextFiles() {
-  if (!currentSessionId.value) return
-  saveContextFilesMutation.mutate({
-    sessionId: currentSessionId.value,
-    files: contextFiles.value,
-  })
+  autoSaveContextFiles()
 }
 
 function copyToClipboard(text: string) {
