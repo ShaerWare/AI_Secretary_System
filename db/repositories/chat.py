@@ -687,10 +687,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         ids_to_delete.extend(await self._collect_descendant_ids(session_id, message_id))
 
         # Delete in batches (SQLite IN clause limit safe for typical chat sizes)
-        await self.session.execute(
-            delete(ChatMessage)
-            .where(ChatMessage.id.in_(ids_to_delete))
-        )
+        await self.session.execute(delete(ChatMessage).where(ChatMessage.id.in_(ids_to_delete)))
 
         # Update session timestamp
         session = await self.session.get(ChatSession, session_id)
