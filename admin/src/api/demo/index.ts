@@ -19,9 +19,11 @@ import { ttsFinetueRoutes } from './ttsFinetune'
 import { botSalesRoutes } from './botSales'
 import { amocrmRoutes } from './amocrm'
 import { whatsappRoutes, initWhatsAppData } from './whatsapp'
+import { claudeCodeRoutes } from './claudeCode'
 
 // All routes — order matters: more specific patterns first
 const allRoutes: DemoRoute[] = [
+  ...claudeCodeRoutes,
   ...authRoutes,
   ...amocrmRoutes,
   ...botSalesRoutes,  // Must be before telegramRoutes (more specific patterns)

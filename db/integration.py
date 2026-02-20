@@ -20,6 +20,7 @@ from db.repositories import (
     BotInstanceRepository,
     ChatRepository,
     ChatShareRepository,
+    ClaudeCodeRepository,
     CloudProviderRepository,
     ConfigRepository,
     FAQRepository,
@@ -1422,6 +1423,43 @@ class AsyncChatShareManager:
             ]
 
 
+# ============== Claude Code Manager ==============
+
+
+class AsyncClaudeCodeManager:
+    """Manager for Claude Code session CRUD."""
+
+    async def list_sessions(self, owner_id: Optional[int] = None, limit: int = 50) -> List[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.list_sessions(owner_id=owner_id, limit=limit)
+
+    async def get_session(self, session_id: str) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.get_session(session_id)
+
+    async def create_session(
+        self,
+        title: str,
+        owner_id: int,
+        working_directory: str = "/opt/ai-secretary",
+    ) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.create_session(title, owner_id, working_directory)
+
+    async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.update_session(session_id, **kwargs)
+
+    async def delete_session(self, session_id: str) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.delete_session(session_id)
+
+
 # ============== Global Instances ==============
 
 # These can be used directly in orchestrator
@@ -1442,6 +1480,7 @@ async_user_manager = AsyncUserManager()
 async_knowledge_doc_manager = AsyncKnowledgeDocManager()
 async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
 async_chat_share_manager = AsyncChatShareManager()
+async_claude_code_manager = AsyncClaudeCodeManager()
 
 
 # ============== Initialization Function ==============

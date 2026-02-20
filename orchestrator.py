@@ -43,6 +43,7 @@ from app.routers import (
     backup,
     bot_sales,
     chat,
+    claude_code,
     faq,
     github_webhook,
     gsm,
@@ -432,6 +433,7 @@ app.include_router(backup.router)
 app.include_router(wiki_rag.router)
 app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
+app.include_router(claude_code.router)
 
 # Hardware/GPU routers — skip in cloud mode
 if DEPLOYMENT_MODE != "cloud":
