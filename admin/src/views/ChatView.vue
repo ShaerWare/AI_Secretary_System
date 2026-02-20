@@ -1475,6 +1475,18 @@ watch(sessions, (newSessions) => {
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <!-- Claude Code toggle (restricted users) -->
+          <button
+            v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              cc.isActive.value ? 'bg-green-600 text-white' : 'hover:bg-secondary'
+            ]"
+            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
+            @click="cc.toggle()"
+          >
+            <Terminal class="w-4 h-4" />
+          </button>
           <!-- LLM provider selector (hidden in Claude Code mode) -->
           <div v-if="!cc.isActive.value" class="flex items-center gap-1">
             <Brain class="w-4 h-4 text-muted-foreground" />
@@ -1588,18 +1600,6 @@ watch(sessions, (newSessions) => {
           >
             <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
             <ArrowUpToLine v-else class="w-4 h-4" />
-          </button>
-          <!-- Claude Code toggle (restricted users) -->
-          <button
-            v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
-            :class="[
-              'p-2 rounded-lg transition-colors',
-              cc.isActive.value ? 'bg-green-600 text-white' : 'hover:bg-secondary'
-            ]"
-            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-            @click="cc.toggle()"
-          >
-            <Terminal class="w-4 h-4" />
           </button>
           <!-- Voice mode toggle -->
           <button
