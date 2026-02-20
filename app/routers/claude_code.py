@@ -232,8 +232,22 @@ async def _parse_and_relay(ws: WebSocket, line: str) -> Optional[dict[str, Any]]
                     },
                 )
             elif part.get("type") == "text" and part.get("text"):
-                # For non-streaming fallback
-                pass
+                # Non-streaming fallback: emit as text_delta
+                await _send(
+                    ws,
+                    {
+                        "type": "text_delta",
+                        "text": part["text"],
+                    },
+                )
+            elif part.get("type") == "thinking" and part.get("thinking"):
+                await _send(
+                    ws,
+                    {
+                        "type": "thinking_delta",
+                        "text": part["thinking"],
+                    },
+                )
 
     elif msg_type == "user":
         # User message with tool_result
