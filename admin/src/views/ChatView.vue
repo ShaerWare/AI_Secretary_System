@@ -1432,7 +1432,7 @@ watch(sessions, (newSessions) => {
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Chat Header -->
-      <div v-if="currentSession" class="p-4 border-b border-border flex items-center justify-between bg-card">
+      <div v-if="currentSession" class="p-2 sm:p-4 border-b border-border flex items-center justify-between gap-2 bg-card">
         <div class="flex-1 min-w-0">
           <template v-if="editingHeaderTitle">
             <input
@@ -1453,7 +1453,7 @@ watch(sessions, (newSessions) => {
               <Edit3 class="w-3.5 h-3.5 opacity-0 group-hover/title:opacity-50 transition-opacity shrink-0" />
             </h2>
           </template>
-          <div class="flex items-center gap-3 text-xs text-muted-foreground">
+          <div class="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
             <span>
               {{ messages.length }} messages
               <span v-if="currentSession.system_prompt" class="ml-1 text-primary">(custom prompt)</span>
@@ -1474,13 +1474,13 @@ watch(sessions, (newSessions) => {
             </template>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center flex-wrap gap-1 sm:gap-2 shrink-0">
           <!-- Claude Code toggle (restricted users) -->
           <button
             v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
             :class="[
-              'p-2 rounded-lg transition-colors',
-              cc.isActive.value ? 'bg-green-600 text-white' : 'hover:bg-secondary'
+              'p-2 rounded-lg border transition-colors',
+              cc.isActive.value ? 'border-green-600 bg-green-600 text-white' : 'border-border text-muted-foreground hover:bg-secondary/50'
             ]"
             :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
             @click="cc.toggle()"
@@ -1556,8 +1556,8 @@ watch(sessions, (newSessions) => {
             <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
             <GitFork v-else class="w-4 h-4" />
           </button>
-          <!-- Export chat dropdown -->
-          <div class="relative">
+          <!-- Export chat dropdown (hidden on small screens) -->
+          <div class="relative hidden sm:block">
             <button
               class="p-2 rounded-lg hover:bg-secondary transition-colors"
               :title="t('chatView.exportChat')"
@@ -1592,9 +1592,9 @@ watch(sessions, (newSessions) => {
               </button>
             </div>
           </div>
-          <!-- Input position toggle -->
+          <!-- Input position toggle (hidden on small screens) -->
           <button
-            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            class="hidden sm:inline-flex p-2 rounded-lg hover:bg-secondary transition-colors"
             :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
             @click="toggleInputPosition"
           >
@@ -2142,16 +2142,22 @@ watch(sessions, (newSessions) => {
         />
       </template>
 
-      <!-- Settings Panel (slide-out right) -->
+      <!-- Settings Panel (slide-out right / fullscreen on mobile) -->
       <div
         v-if="showSettings"
-        class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+        class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
         @mousedown="startSettingsResize"
+      />
+      <!-- Mobile backdrop -->
+      <div
+        v-if="showSettings"
+        class="md:hidden fixed inset-0 bg-black/50 z-40"
+        @click="showSettings = false"
       />
       <div
         v-if="showSettings"
-        class="border-l border-border bg-card/50 flex flex-col flex-shrink-0 overflow-hidden"
-        :style="{ width: settingsWidth + 'px' }"
+        class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
+        :style="{ '--settings-w': settingsWidth + 'px' }"
       >
         <!-- Panel header -->
         <div class="p-3 border-b border-border flex items-center justify-between">
@@ -2365,3 +2371,11 @@ watch(sessions, (newSessions) => {
     @close="showShareDialog = false"
   />
 </template>
+
+<style scoped>
+@media (min-width: 768px) {
+  .settings-panel {
+    width: var(--settings-w);
+  }
+}
+</style>
