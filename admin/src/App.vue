@@ -9,7 +9,8 @@ import {
   LogOut,
   User,
   Languages,
-  PanelLeftClose
+  PanelLeftClose,
+  MessageCircle
 } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -140,24 +141,26 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
             </button>
           </div>
 
-          <!-- Search button -->
+          <!-- Chat shortcut -->
           <div v-if="sidebarOpen || isMobile" class="p-2">
-            <button
-              class="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-              @click="searchStore.open"
+            <router-link
+              to="/chat"
+              class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors"
+              :class="route.path === '/chat' ? 'bg-primary/10 text-primary' : 'text-muted-foreground bg-secondary/50 hover:bg-secondary'"
+              @click="isMobile && (mobileMenuOpen = false)"
             >
-              <Search class="w-4 h-4" />
-              <span class="flex-1 text-left">{{ t('nav.search') }}</span>
-              <kbd class="text-xs bg-background px-1.5 py-0.5 rounded hidden sm:inline">⌘K</kbd>
-            </button>
+              <MessageCircle class="w-4 h-4" />
+              <span class="flex-1 text-left">{{ t('nav.chat') }}</span>
+            </router-link>
           </div>
           <div v-else class="p-2">
-            <button
-              class="flex items-center justify-center w-full p-2 text-muted-foreground rounded-lg hover:bg-secondary/50 transition-colors"
-              @click="searchStore.open"
+            <router-link
+              to="/chat"
+              class="flex items-center justify-center w-full p-2 rounded-lg transition-colors"
+              :class="route.path === '/chat' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50'"
             >
-              <Search class="w-5 h-5" />
-            </button>
+              <MessageCircle class="w-5 h-5" />
+            </router-link>
           </div>
 
           <!-- Navigation -->
@@ -245,14 +248,13 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <!-- Theme Toggle -->
               <ThemeToggle />
 
-              <!-- Search shortcut hint (desktop only) -->
+              <!-- Search -->
               <button
-                class="hidden lg:flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                class="p-2 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors"
+                :title="t('nav.search') + ' (⌘K)'"
                 @click="searchStore.open"
               >
                 <Search class="w-4 h-4" />
-                <span>{{ t('nav.search') }}</span>
-                <kbd class="text-xs bg-secondary px-1.5 py-0.5 rounded">⌘K</kbd>
               </button>
             </div>
           </header>
