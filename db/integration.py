@@ -247,11 +247,19 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.delete_message(session_id, message_id)
 
-    async def get_branch_tree(self, session_id: str) -> List[dict]:
-        """Get full branch tree structure for a session."""
+    async def get_branch_tree(
+        self, session_id: str, visible_ids: Optional[set[str]] = None
+    ) -> List[dict]:
+        """Get branch tree structure for a session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.get_branch_tree(session_id)
+            return await repo.get_branch_tree(session_id, visible_ids=visible_ids)
+
+    async def compute_branch_visible_ids(self, session_id: str, branch_message_id: str) -> set[str]:
+        """Compute visible message IDs for a shared branch."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.compute_branch_visible_ids(session_id, branch_message_id)
 
     async def get_sibling_info(self, session_id: str) -> dict:
         """Get sibling info for messages with alternatives."""
@@ -1332,11 +1340,21 @@ class AsyncChatShareManager:
         user_id: int,
         permission: str = "read",
         shared_by: Optional[int] = None,
+        branch_message_id: Optional[str] = None,
     ) -> dict:
         """Add or update a share."""
         async with AsyncSessionLocal() as session:
             repo = ChatShareRepository(session)
-            return await repo.add_share(session_id, user_id, permission, shared_by)
+            return await repo.add_share(
+                session_id, user_id, permission, shared_by, branch_message_id
+            )
+
+    async def get_user_share(self, session_id: str, user_id: int) -> Optional[dict]:
+        """Get full share record for a user (with branch_message_id)."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatShareRepository(session)
+            share = await repo.get_share(session_id, user_id)
+            return share.to_dict() if share else None
 
     async def remove_share(self, session_id: str, user_id: int) -> bool:
         """Remove a share."""
