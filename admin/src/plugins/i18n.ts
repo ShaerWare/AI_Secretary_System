@@ -333,6 +333,7 @@ const messages = {
         abort: 'Прервать выполнение',
         welcome: 'Введите запрос для Claude Code CLI',
         thinking: 'Размышление',
+        newSession: 'Новая сессия Claude Code',
       },
     },
     // Auth
@@ -1334,6 +1335,7 @@ const messages = {
         abort: 'Abort execution',
         welcome: 'Enter a prompt for Claude Code CLI',
         thinking: 'Thinking',
+        newSession: 'New Claude Code session',
       },
     },
     // Auth
@@ -2334,6 +2336,7 @@ const messages = {
         abort: 'Орындауды тоқтату',
         welcome: 'Claude Code CLI үшін сұрау енгізіңіз',
         thinking: 'Ойлану',
+        newSession: 'Жаңа Claude Code сессиясы',
       },
     },
     // Auth
