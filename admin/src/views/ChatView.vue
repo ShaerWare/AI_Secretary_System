@@ -101,6 +101,8 @@ const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const showSidebar = ref(true)
 const showExportMenu = ref(false)
 const showRagMenu = ref(false)
+const showCcDirMenu = ref(false)
+const showCcFilesMenu = ref(false)
 const showShareDialog = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
   (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
@@ -751,17 +753,22 @@ function ccSendMessage() {
   })
 }
 
-function toggleCcContextFiles() {
-  if (cc.pendingContextFiles.value.length > 0) {
-    // Detach
-    cc.pendingContextFiles.value = []
+function toggleCcContextFile(file: { name: string; content: string }) {
+  const idx = cc.pendingContextFiles.value.findIndex(f => f.name === file.name)
+  if (idx >= 0) {
+    cc.pendingContextFiles.value.splice(idx, 1)
   } else {
-    // Attach all context files from the current chat session
-    cc.pendingContextFiles.value = contextFiles.value.map(f => ({
-      name: f.name,
-      content: f.content,
-    }))
+    cc.pendingContextFiles.value.push({ name: file.name, content: file.content })
   }
+}
+
+function isCcFileSelected(name: string) {
+  return cc.pendingContextFiles.value.some(f => f.name === name)
+}
+
+function selectCcDir(dir: string) {
+  cc.workingDir.value = dir
+  showCcDirMenu.value = false
 }
 
 function startEditing(message: ChatMessage) {
@@ -1203,6 +1210,12 @@ function handleGlobalClick(e: MouseEvent) {
   }
   if (showRagMenu.value && !target.closest('.relative')) {
     showRagMenu.value = false
+  }
+  if (showCcDirMenu.value && !target.closest('.relative')) {
+    showCcDirMenu.value = false
+  }
+  if (showCcFilesMenu.value && !target.closest('.relative')) {
+    showCcFilesMenu.value = false
   }
 }
 
@@ -1652,6 +1665,72 @@ watch(sessions, (newSessions) => {
           >
             <Settings2 class="w-4 h-4" />
           </button>
+          <!-- CC: Working directory dropdown -->
+          <div v-if="cc.isActive.value" class="relative">
+            <button
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-muted-foreground'
+              ]"
+              :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
+              @click="showCcDirMenu = !showCcDirMenu"
+            >
+              <FolderOpen class="w-4 h-4" />
+            </button>
+            <div
+              v-if="showCcDirMenu"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[200px]"
+            >
+              <button
+                v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
+                :key="dir"
+                :class="[
+                  'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+                  cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-foreground'
+                ]"
+                @click="selectCcDir(dir)"
+              >
+                <FolderOpen class="w-3.5 h-3.5 shrink-0" />
+                <span class="font-mono text-xs">{{ dir }}</span>
+                <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
+              </button>
+            </div>
+          </div>
+          <!-- CC: Context files from chat dropdown -->
+          <div v-if="cc.isActive.value && contextFiles.length > 0" class="relative">
+            <button
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                cc.pendingContextFiles.value.length > 0 ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-muted-foreground'
+              ]"
+              :title="t('chatView.claudeCode.attachFiles')"
+              @click="showCcFilesMenu = !showCcFilesMenu"
+            >
+              <Paperclip class="w-4 h-4" />
+              <span
+                v-if="cc.pendingContextFiles.value.length > 0"
+                class="absolute -top-1 -right-1 w-4 h-4 text-[10px] font-bold rounded-full bg-green-600 text-white flex items-center justify-center border border-background"
+              >{{ cc.pendingContextFiles.value.length }}</span>
+            </button>
+            <div
+              v-if="showCcFilesMenu"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[200px] max-w-[300px]"
+            >
+              <label
+                v-for="file in contextFiles"
+                :key="file.name"
+                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  :checked="isCcFileSelected(file.name)"
+                  class="rounded border-border w-3.5 h-3.5 accent-green-600"
+                  @change="toggleCcContextFile(file)"
+                />
+                <span class="truncate text-xs">{{ file.name }}</span>
+              </label>
+            </div>
+          </div>
           <!-- New branch / New CC session -->
           <button
             v-if="!isReadOnly"
@@ -1695,39 +1774,6 @@ watch(sessions, (newSessions) => {
           <span v-if="cc.currentModel.value" class="text-muted-foreground ml-1">· {{ cc.currentModel.value }}</span>
         </div>
         <div v-if="cc.error.value" class="mb-2 text-xs text-red-500">{{ cc.error.value }}</div>
-        <!-- CC settings row (before first message only) -->
-        <div v-if="!cc.cliSessionId.value" class="flex flex-wrap items-center gap-2 mb-2">
-          <!-- Working directory selector -->
-          <div class="flex items-center gap-1.5 text-xs">
-            <FolderOpen class="w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              v-model="cc.workingDir.value"
-              class="px-2 py-1 text-xs bg-secondary rounded border border-border focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
-            >
-              <option value="/root">/root</option>
-              <option value="/opt/ai-secretary">/opt/ai-secretary</option>
-              <option value="/tmp">/tmp</option>
-            </select>
-          </div>
-          <!-- Attach context files button -->
-          <button
-            v-if="contextFiles.length > 0"
-            :class="[
-              'flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors',
-              cc.pendingContextFiles.value.length > 0
-                ? 'border-green-600 bg-green-600/20 text-green-400'
-                : 'border-border text-muted-foreground hover:bg-secondary/50'
-            ]"
-            :title="t('chatView.claudeCode.attachFiles')"
-            @click="toggleCcContextFiles"
-          >
-            <Paperclip class="w-3.5 h-3.5" />
-            <span>{{ t('chatView.claudeCode.attachFiles') }}</span>
-            <span v-if="cc.pendingContextFiles.value.length > 0" class="font-medium">
-              ({{ cc.pendingContextFiles.value.length }})
-            </span>
-          </button>
-        </div>
         <div class="flex gap-3 items-end">
           <textarea
             ref="messageInputRef"
