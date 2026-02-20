@@ -1502,7 +1502,7 @@ watch(sessions, (newSessions) => {
             </select>
           </div>
           <!-- RAG collections dropdown -->
-          <div v-if="knowledgeCollections.length" class="relative">
+          <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative">
             <button
               :class="[
                 'p-2 rounded-lg transition-colors',
@@ -1532,7 +1532,7 @@ watch(sessions, (newSessions) => {
             </div>
           </div>
           <!-- Share button (owner/admin only) -->
-          <div v-if="isSessionOwner && !isSharedWithMe" class="relative">
+          <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative">
             <button
               class="p-2 rounded-lg hover:bg-secondary transition-colors"
               :title="t('chatView.shareChat')"
@@ -1547,7 +1547,7 @@ watch(sessions, (newSessions) => {
           </div>
           <!-- Fork button (read-only shared sessions) -->
           <button
-            v-if="isReadOnly"
+            v-if="!cc.isActive.value && isReadOnly"
             :disabled="forkSessionMutation.isPending.value"
             class="p-2 rounded-lg hover:bg-secondary transition-colors text-blue-400"
             :title="t('chatView.forkChat')"
@@ -1557,7 +1557,7 @@ watch(sessions, (newSessions) => {
             <GitFork v-else class="w-4 h-4" />
           </button>
           <!-- Export chat dropdown (hidden on small screens) -->
-          <div class="relative hidden sm:block">
+          <div v-if="!cc.isActive.value" class="relative hidden sm:block">
             <button
               class="p-2 rounded-lg hover:bg-secondary transition-colors"
               :title="t('chatView.exportChat')"
@@ -1594,6 +1594,7 @@ watch(sessions, (newSessions) => {
           </div>
           <!-- Input position toggle (hidden on small screens) -->
           <button
+            v-if="!cc.isActive.value"
             class="hidden sm:inline-flex p-2 rounded-lg hover:bg-secondary transition-colors"
             :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
             @click="toggleInputPosition"
@@ -1616,6 +1617,7 @@ watch(sessions, (newSessions) => {
           </button>
           <!-- Branch tree toggle -->
           <button
+            v-if="!cc.isActive.value"
             :class="[
               'p-2 rounded-lg transition-colors',
               showBranchTree ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
@@ -1626,7 +1628,7 @@ watch(sessions, (newSessions) => {
             <GitBranch class="w-4 h-4" />
           </button>
           <button
-            v-if="!isReadOnly"
+            v-if="!cc.isActive.value && !isReadOnly"
             :class="[
               'p-2 rounded-lg transition-colors',
               showSettings ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
