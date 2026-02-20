@@ -114,18 +114,15 @@ const navGroups = computed(() =>
 // Expanded groups state (persisted in localStorage)
 const expandedGroups = ref<Set<string>>(new Set())
 
-// Load from localStorage on mount
+// Load from localStorage on mount — default: all collapsed
 onMounted(() => {
   const saved = localStorage.getItem('nav_expanded_groups')
   if (saved) {
     try {
       expandedGroups.value = new Set(JSON.parse(saved))
     } catch {
-      // Default: expand group containing current route
-      expandActiveGroup()
+      // keep empty — all collapsed
     }
-  } else {
-    expandActiveGroup()
   }
 })
 
@@ -144,15 +141,7 @@ function expandActiveGroup() {
   }
 }
 
-// Auto-expand when route changes
-watch(() => route.path, () => {
-  for (const group of navGroups.value) {
-    if (group.items.some(item => item.path === route.path)) {
-      expandedGroups.value.add(group.id)
-      break
-    }
-  }
-})
+// No auto-expand on route change — user controls accordion state
 
 function toggleGroup(groupId: string) {
   if (expandedGroups.value.has(groupId)) {
@@ -228,22 +217,42 @@ function hasActiveItem(group: typeof navGroups.value[0]) {
         </div>
       </div>
 
-      <!-- Collapsed mode: show items on hover via tooltip or just icons -->
+      <!-- Collapsed mode: group icon as toggle, items expand below -->
       <template v-if="collapsed">
-        <RouterLink
-          v-for="item in group.items"
-          :key="item.path"
-          :to="item.path"
-          :title="t(item.nameKey)"
+        <button
+          :title="t(group.nameKey)"
           :class="[
-            'flex items-center justify-center p-2 rounded-lg transition-colors',
-            isItemActive(item.path)
-              ? 'bg-secondary text-foreground'
-              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+            'flex items-center justify-center w-full p-2 rounded-lg transition-colors',
+            'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+            hasActiveItem(group) ? 'bg-primary/10 text-primary' : ''
+          ]"
+          @click="toggleGroup(group.id)"
+        >
+          <component :is="group.icon" class="w-5 h-5" />
+        </button>
+        <div
+          :class="[
+            'overflow-hidden transition-all duration-200 ease-in-out',
+            isGroupExpanded(group.id) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
           ]"
         >
-          <component :is="item.icon" class="w-5 h-5" />
-        </RouterLink>
+          <div class="space-y-0.5 py-1">
+            <RouterLink
+              v-for="item in group.items"
+              :key="item.path"
+              :to="item.path"
+              :title="t(item.nameKey)"
+              :class="[
+                'flex items-center justify-center p-2 rounded-lg transition-colors',
+                isItemActive(item.path)
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+              ]"
+            >
+              <component :is="item.icon" class="w-4 h-4" />
+            </RouterLink>
+          </div>
+        </div>
       </template>
     </template>
   </nav>
