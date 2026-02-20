@@ -204,6 +204,12 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.get_branch_path(session_id, message_id)
 
+    async def get_active_messages(self, session_id: str) -> List[dict]:
+        """Get active (visible) messages for a session."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.get_active_messages(session_id)
+
     async def add_message(
         self,
         session_id: str,
