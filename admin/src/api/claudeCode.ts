@@ -30,9 +30,15 @@ export type CcWsEvent =
   | { type: 'error'; error: string }
   | { type: 'aborted' }
 
+/** Context file passed to Claude Code on session start */
+export interface CcContextFile {
+  name: string
+  content: string
+}
+
 /** Commands sent FROM client TO server over WebSocket */
 export type CcWsCommand =
-  | { action: 'start'; prompt: string }
+  | { action: 'start'; prompt: string; cwd?: string; context_files?: CcContextFile[] }
   | { action: 'message'; prompt: string; session_id?: string; cli_session_id?: string }
   | { action: 'abort' }
 
@@ -88,4 +94,7 @@ export const claudeCodeApi = {
 
   deleteSession: (id: string) =>
     api.delete<{ status: string }>(`/admin/claude-code/sessions/${id}`),
+
+  listDirectories: () =>
+    api.get<{ directories: string[]; default: string }>('/admin/claude-code/directories'),
 }

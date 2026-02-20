@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import {
   createClaudeCodeWs,
   type CcWsEvent,
+  type CcContextFile,
 } from '@/api/claudeCode'
 
 export interface CcMessage {
@@ -33,6 +34,8 @@ const currentToolBlocks = ref<CcToolBlock[]>([])
 const messages = ref<CcMessage[]>([])
 const currentModel = ref<string | null>(null)
 const error = ref<string | null>(null)
+const workingDir = ref('/root')
+const pendingContextFiles = ref<CcContextFile[]>([])
 
 let ws: ReturnType<typeof createClaudeCodeWs> | null = null
 const isDemo = import.meta.env.VITE_DEMO_MODE === 'true'
@@ -174,6 +177,7 @@ function _resetState() {
   dbSessionId.value = null
   currentModel.value = null
   error.value = null
+  pendingContextFiles.value = []
 }
 
 /** Activate / deactivate Claude Code mode */
@@ -238,7 +242,17 @@ function sendMessage(prompt: string) {
       cli_session_id: cliSessionId.value,
     })
   } else {
-    ws.send({ action: 'start', prompt })
+    // First message — include cwd and context files
+    const startCmd: Record<string, unknown> = {
+      action: 'start',
+      prompt,
+      cwd: workingDir.value,
+    }
+    if (pendingContextFiles.value.length > 0) {
+      startCmd.context_files = pendingContextFiles.value
+      pendingContextFiles.value = [] // clear after sending
+    }
+    ws.send(startCmd as never)
   }
 }
 
@@ -283,6 +297,8 @@ export function useClaudeCode() {
     messages,
     currentModel,
     error,
+    workingDir,
+    pendingContextFiles,
     toggle,
     newSession,
     connect,

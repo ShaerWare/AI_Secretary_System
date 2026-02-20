@@ -334,6 +334,7 @@ const messages = {
         welcome: 'Введите запрос для Claude Code CLI',
         thinking: 'Размышление',
         newSession: 'Новая сессия Claude Code',
+        attachFiles: 'Файлы из чата',
       },
     },
     // Auth
@@ -1336,6 +1337,7 @@ const messages = {
         welcome: 'Enter a prompt for Claude Code CLI',
         thinking: 'Thinking',
         newSession: 'New Claude Code session',
+        attachFiles: 'Files from chat',
       },
     },
     // Auth
@@ -2337,6 +2339,7 @@ const messages = {
         welcome: 'Claude Code CLI үшін сұрау енгізіңіз',
         thinking: 'Ойлану',
         newSession: 'Жаңа Claude Code сессиясы',
+        attachFiles: 'Чаттан файлдар',
       },
     },
     // Auth
