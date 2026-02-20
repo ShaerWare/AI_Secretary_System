@@ -1429,9 +1429,7 @@ class AsyncChatShareManager:
 class AsyncClaudeCodeManager:
     """Manager for Claude Code session CRUD."""
 
-    async def list_sessions(
-        self, owner_id: Optional[int] = None, limit: int = 50
-    ) -> List[dict]:
+    async def list_sessions(self, owner_id: Optional[int] = None, limit: int = 50) -> List[dict]:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
             return await repo.list_sessions(owner_id=owner_id, limit=limit)

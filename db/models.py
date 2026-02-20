@@ -2832,9 +2832,7 @@ class ClaudeCodeSession(Base):
     model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     total_turns: Mapped[int] = mapped_column(Integer, default=0)
     max_turns: Mapped[int] = mapped_column(Integer, default=50)
-    working_directory: Mapped[str] = mapped_column(
-        String(500), default="/opt/ai-secretary"
-    )
+    working_directory: Mapped[str] = mapped_column(String(500), default="/opt/ai-secretary")
     events_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
