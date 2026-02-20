@@ -1638,21 +1638,22 @@ watch(sessions, (newSessions) => {
           >
             <Settings2 class="w-4 h-4" />
           </button>
-          <!-- New branch from scratch -->
+          <!-- New branch / New CC session -->
           <button
             v-if="!isReadOnly"
-            :disabled="newBranchMutation.isPending.value"
+            :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
             class="p-2 rounded-lg hover:bg-secondary transition-colors"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranch"
+            :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
+            @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
           >
             <Plus class="w-4 h-4" />
           </button>
+          <!-- Delete chat / Stop CC mode -->
           <button
-            v-if="isSessionOwner"
+            v-if="cc.isActive.value || isSessionOwner"
             class="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
-            title="Delete chat"
-            @click="deleteCurrentSession"
+            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
+            @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
           >
             <Trash2 class="w-4 h-4" />
           </button>
