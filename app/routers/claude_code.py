@@ -89,7 +89,7 @@ async def _run_claude(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=env,
-        cwd="/opt/ai-secretary",
+        cwd="/root",
     )
 
     _active_processes[user_id] = process
