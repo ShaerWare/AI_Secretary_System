@@ -651,12 +651,26 @@ class ChatRepository(BaseRepository[ChatSession]):
         # Continue down the chain
         await self._activate_default_path(session_id, active_child.id)
 
+    async def _collect_descendant_ids(self, session_id: str, message_id: str) -> list[str]:
+        """Collect all descendant message IDs recursively (children, grandchildren, etc.)."""
+        ids: list[str] = []
+        result = await self.session.execute(
+            select(ChatMessage.id)
+            .where(ChatMessage.session_id == session_id)
+            .where(ChatMessage.parent_id == message_id)
+        )
+        child_ids = [row[0] for row in result.all()]
+        for child_id in child_ids:
+            ids.append(child_id)
+            ids.extend(await self._collect_descendant_ids(session_id, child_id))
+        return ids
+
     async def delete_message(
         self,
         session_id: str,
         message_id: str,
     ) -> bool:
-        """Delete message and all subsequent messages."""
+        """Delete message and all its descendants (branch-aware)."""
         # Get the target message
         result = await self.session.execute(
             select(ChatMessage)
@@ -668,12 +682,12 @@ class ChatRepository(BaseRepository[ChatSession]):
         if not message:
             return False
 
-        # Delete this message and all messages after it
-        await self.session.execute(
-            delete(ChatMessage)
-            .where(ChatMessage.session_id == session_id)
-            .where(ChatMessage.created >= message.created)
-        )
+        # Collect the target + all descendants via parent_id tree
+        ids_to_delete = [message_id]
+        ids_to_delete.extend(await self._collect_descendant_ids(session_id, message_id))
+
+        # Delete in batches (SQLite IN clause limit safe for typical chat sizes)
+        await self.session.execute(delete(ChatMessage).where(ChatMessage.id.in_(ids_to_delete)))
 
         # Update session timestamp
         session = await self.session.get(ChatSession, session_id)
