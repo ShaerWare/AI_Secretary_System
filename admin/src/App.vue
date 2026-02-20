@@ -33,7 +33,7 @@ const authStore = useAuthStore()
 const searchStore = useSearchStore()
 const themeStore = useThemeStore()
 
-const sidebarOpen = ref(true)
+const sidebarOpen = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(false)
 
