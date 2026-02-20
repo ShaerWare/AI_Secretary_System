@@ -40,7 +40,7 @@ function onPointerDown(e: PointerEvent) {
   const el = scrollContainer.value
   if (!el) return
   // Don't hijack clicks on buttons/interactive elements
-  if ((e.target as HTMLElement).closest('button')) return
+  if ((e.target as HTMLElement).closest('[data-branch-node], button')) return
   isDragging = true
   hasMoved = false
   startX = e.clientX
@@ -56,7 +56,7 @@ function onPointerMove(e: PointerEvent) {
   if (!isDragging) return
   const dx = e.clientX - startX
   const dy = e.clientY - startY
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true
+  if (Math.abs(dx) > 6 || Math.abs(dy) > 6) hasMoved = true
   const el = scrollContainer.value!
   el.scrollLeft = scrollLeft - dx
   el.scrollTop = scrollTop - dy

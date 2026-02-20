@@ -56,6 +56,7 @@ function onChildScrollTo(messageId: string) {
           : 'opacity-50 hover:opacity-75 hover:bg-secondary/50',
       ]"
       :style="{ paddingLeft: `${visualDepth * 14 + (isAssistant ? 18 : 4)}px` }"
+      data-branch-node
       :title="node.content_preview"
       @click="onClick"
     >
