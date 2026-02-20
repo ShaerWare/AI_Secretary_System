@@ -335,6 +335,7 @@ const messages = {
         thinking: 'Размышление',
         newSession: 'Новая сессия Claude Code',
         attachFiles: 'Файлы из чата',
+        workDir: 'Рабочая папка',
       },
     },
     // Auth
@@ -1338,6 +1339,7 @@ const messages = {
         thinking: 'Thinking',
         newSession: 'New Claude Code session',
         attachFiles: 'Files from chat',
+        workDir: 'Working directory',
       },
     },
     // Auth
@@ -2340,6 +2342,7 @@ const messages = {
         thinking: 'Ойлану',
         newSession: 'Жаңа Claude Code сессиясы',
         attachFiles: 'Чаттан файлдар',
+        workDir: 'Жұмыс қалтасы',
       },
     },
     // Auth
