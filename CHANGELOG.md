@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logo Sidebar Toggle**: Click logo to collapse/expand admin sidebar
 
 ### Fixed
+- **Branch-Aware Message Deletion**: Deleting a message now only removes that message and its descendants (via `parent_id` tree traversal), not sibling branches. Previously used timestamp-based deletion which destroyed parallel branches (#276)
+- **Branch Tree Live Refresh**: Branch tree panel now updates immediately after sending/receiving messages, editing, regenerating, or deleting — no page refresh needed (#276, #278)
+- **Context Files Auto-Save**: Uploading, deleting, or editing context files now auto-saves to the backend immediately. Previously required manual "Save" click, and any refetch (e.g. after sending a message) would revert unsaved changes (#277)
 - **Wiki Button**: Handler now matches both `"📚 Wiki"` and `"📚 Wiki проекта"` button text
 - **Multi-Instance Bots**: Fixed crashes and empty responses in multi-instance Telegram bot mode
 - **Bridge Auth Header**: Skip empty Authorization header for bridge provider
