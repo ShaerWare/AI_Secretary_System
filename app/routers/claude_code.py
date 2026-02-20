@@ -504,8 +504,13 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
     await _send(ws, {"type": "session_created", "session": db_session})
 
     cli_session_id = await _run_claude(
-        ws, user_id, prompt, session_id=None, db_session_id=db_session["id"],
-        cwd=cwd, context_files=context_files,
+        ws,
+        user_id,
+        prompt,
+        session_id=None,
+        db_session_id=db_session["id"],
+        cwd=cwd,
+        context_files=context_files,
     )
 
     if cli_session_id:
