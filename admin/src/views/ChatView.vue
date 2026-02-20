@@ -431,6 +431,8 @@ const deleteMessageMutation = useMutation({
     chatApi.deleteMessage(sessionId, messageId),
   onSuccess: () => {
     refetchSession()
+    refetchBranches()
+    refetchSessions()
   },
 })
 
