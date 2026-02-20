@@ -29,6 +29,7 @@ router = APIRouter(prefix="/admin/claude-code", tags=["claude-code"])
 logger = logging.getLogger(__name__)
 
 CLAUDE_CLI = "/root/.local/bin/claude"
+_ALLOWED_USERS = {"shaerware", "ivan"}
 
 # One active WS per user
 _active_connections: dict[int, WebSocket] = {}
@@ -41,8 +42,8 @@ def _ws_auth(token: str) -> TokenPayload:
     payload = decode_token(token)
     if payload is None:
         raise ValueError("Invalid or expired token")
-    if payload.role != "admin":
-        raise ValueError("Admin access required")
+    if payload.sub not in _ALLOWED_USERS:
+        raise ValueError("Access denied")
     return payload
 
 

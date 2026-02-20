@@ -1589,9 +1589,9 @@ watch(sessions, (newSessions) => {
             <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
             <ArrowUpToLine v-else class="w-4 h-4" />
           </button>
-          <!-- Claude Code toggle (admin only) -->
+          <!-- Claude Code toggle (restricted users) -->
           <button
-            v-if="authStore.isAdmin"
+            v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
             :class="[
               'p-2 rounded-lg transition-colors',
               cc.isActive.value ? 'bg-green-600 text-white' : 'hover:bg-secondary'
