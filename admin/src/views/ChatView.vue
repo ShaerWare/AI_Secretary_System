@@ -47,9 +47,13 @@ import {
   ArrowUpToLine,
   Share2,
   GitFork,
-  Users
+  Users,
+  Terminal,
+  StopCircle,
+  ChevronDown
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
+import { useClaudeCode } from '@/composables/useClaudeCode'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
 
@@ -59,6 +63,19 @@ const toastStore = useToastStore()
 const authStore = useAuthStore()
 
 const queryClient = useQueryClient()
+
+// Claude Code mode
+const cc = useClaudeCode()
+const expandedThinking = ref<Set<number>>(new Set())
+
+function toggleThinkingBlock(idx: number) {
+  if (expandedThinking.value.has(idx)) {
+    expandedThinking.value.delete(idx)
+  } else {
+    expandedThinking.value.add(idx)
+  }
+  expandedThinking.value = new Set(expandedThinking.value) // trigger reactivity
+}
 
 // State
 const currentSessionId = ref<string | null>(null)
@@ -719,6 +736,18 @@ function sendMessage() {
       nextTick(() => messageInputRef.value?.focus())
     }
   }, llmOverride)
+}
+
+function ccSendMessage() {
+  if (!inputMessage.value.trim() || cc.isProcessing.value) return
+  const prompt = inputMessage.value.trim()
+  inputMessage.value = ''
+  cc.sendMessage(prompt)
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
 }
 
 function startEditing(message: ChatMessage) {
@@ -1446,8 +1475,8 @@ watch(sessions, (newSessions) => {
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <!-- LLM provider selector -->
-          <div class="flex items-center gap-1">
+          <!-- LLM provider selector (hidden in Claude Code mode) -->
+          <div v-if="!cc.isActive.value" class="flex items-center gap-1">
             <Brain class="w-4 h-4 text-muted-foreground" />
             <select
               v-model="selectedLlmBackend"
@@ -1560,8 +1589,21 @@ watch(sessions, (newSessions) => {
             <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
             <ArrowUpToLine v-else class="w-4 h-4" />
           </button>
+          <!-- Claude Code toggle (admin only) -->
+          <button
+            v-if="authStore.isAdmin"
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              cc.isActive.value ? 'bg-green-600 text-white' : 'hover:bg-secondary'
+            ]"
+            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
+            @click="cc.toggle()"
+          >
+            <Terminal class="w-4 h-4" />
+          </button>
           <!-- Voice mode toggle -->
           <button
+            v-if="!cc.isActive.value"
             :class="[
               'p-2 rounded-lg transition-colors',
               voiceMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
@@ -1624,9 +1666,53 @@ watch(sessions, (newSessions) => {
         {{ t('chatView.readOnlyHint') }}
       </div>
 
-      <!-- Input Area -->
+      <!-- Input Area: Claude Code mode -->
       <div
-        v-if="currentSession && !isReadOnly"
+        v-if="cc.isActive.value"
+        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
+      >
+        <!-- CC status bar -->
+        <div v-if="cc.isConnected.value" class="flex items-center gap-2 mb-2 text-xs text-green-500">
+          <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+          {{ t('chatView.claudeCode.connected') }}
+          <span v-if="cc.currentModel.value" class="text-muted-foreground ml-1">· {{ cc.currentModel.value }}</span>
+        </div>
+        <div v-if="cc.error.value" class="mb-2 text-xs text-red-500">{{ cc.error.value }}</div>
+        <div class="flex gap-3 items-end">
+          <textarea
+            ref="messageInputRef"
+            v-model="inputMessage"
+            :placeholder="t('chatView.claudeCode.placeholder')"
+            rows="1"
+            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none font-mono text-sm"
+            :disabled="cc.isProcessing.value"
+            @keydown.enter.exact.prevent="ccSendMessage"
+            @keydown.ctrl.enter.prevent="ccSendMessage"
+          />
+          <!-- Abort button (while processing) -->
+          <button
+            v-if="cc.isProcessing.value"
+            class="p-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            :title="t('chatView.claudeCode.abort')"
+            @click="cc.abort()"
+          >
+            <StopCircle class="w-5 h-5" />
+          </button>
+          <!-- Send button -->
+          <button
+            v-else
+            :disabled="!inputMessage.trim() || !cc.isConnected.value"
+            class="p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+            @click="ccSendMessage"
+          >
+            <Send class="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Input Area: Normal chat mode -->
+      <div
+        v-else-if="currentSession && !isReadOnly"
         :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
       >
         <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
@@ -1680,12 +1766,154 @@ watch(sessions, (newSessions) => {
         ref="messagesContainer"
         class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
       >
-        <div v-if="!currentSession" class="h-full flex items-center justify-center text-muted-foreground">
-          <div class="text-center">
-            <MessageSquare class="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>{{ t('chatView.selectOrCreate') }}</p>
+        <!-- Claude Code mode messages -->
+        <template v-if="cc.isActive.value">
+          <div v-if="cc.messages.value.length === 0 && !cc.isProcessing.value" class="h-full flex items-center justify-center text-muted-foreground">
+            <div class="text-center">
+              <Terminal class="w-12 h-12 mx-auto mb-4 opacity-50 text-green-500" />
+              <p class="text-lg font-medium text-green-500">Claude Code</p>
+              <p class="text-sm mt-1">{{ t('chatView.claudeCode.welcome') }}</p>
+            </div>
           </div>
-        </div>
+
+          <!-- CC Messages -->
+          <div
+            v-for="(msg, idx) in cc.messages.value"
+            :key="idx"
+            :class="[
+              'flex gap-3 rounded-lg',
+              msg.role === 'user' ? 'justify-end' : 'justify-start'
+            ]"
+          >
+            <!-- Assistant avatar -->
+            <div
+              v-if="msg.role === 'assistant'"
+              class="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0"
+            >
+              <Terminal class="w-4 h-4 text-green-500" />
+            </div>
+
+            <div
+              :class="[
+                'max-w-[85%] rounded-lg p-3',
+                msg.role === 'user'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary'
+              ]"
+            >
+              <!-- Thinking block (collapsible, purple) -->
+              <div v-if="msg.thinking" class="mb-2 border border-purple-500/30 rounded-lg overflow-hidden">
+                <button
+                  class="w-full px-3 py-1.5 flex items-center gap-1.5 text-xs text-purple-400 hover:bg-purple-500/10 transition-colors"
+                  @click="toggleThinkingBlock(idx)"
+                >
+                  <ChevronDown v-if="expandedThinking.has(idx)" class="w-3 h-3" />
+                  <ChevronRight v-else class="w-3 h-3" />
+                  <Brain class="w-3 h-3" />
+                  {{ t('chatView.claudeCode.thinking') }}
+                </button>
+                <div v-if="expandedThinking.has(idx)" class="px-3 py-2 text-xs text-purple-300/80 whitespace-pre-wrap font-mono border-t border-purple-500/20">{{ msg.thinking }}</div>
+              </div>
+
+              <!-- Tool use cards -->
+              <div v-if="msg.toolBlocks?.length" class="space-y-1.5 mb-2">
+                <div
+                  v-for="tool in msg.toolBlocks"
+                  :key="tool.tool_use_id"
+                  class="border border-border rounded-lg overflow-hidden text-xs"
+                >
+                  <button
+                    class="w-full px-3 py-1.5 flex items-center gap-1.5 hover:bg-secondary/50 transition-colors"
+                    @click="tool.collapsed = !tool.collapsed"
+                  >
+                    <ChevronDown v-if="!tool.collapsed" class="w-3 h-3" />
+                    <ChevronRight v-else class="w-3 h-3" />
+                    <span class="font-mono font-medium text-green-400">{{ tool.name }}</span>
+                    <span v-if="tool.is_error" class="text-red-500 ml-auto">error</span>
+                    <Check v-else-if="tool.result !== undefined" class="w-3 h-3 text-green-500 ml-auto" />
+                    <Loader2 v-else class="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+                  </button>
+                  <div v-if="!tool.collapsed" class="border-t border-border">
+                    <div v-if="tool.input" class="px-3 py-2 bg-secondary/30">
+                      <div class="text-muted-foreground mb-0.5">Input:</div>
+                      <pre class="whitespace-pre-wrap break-all font-mono text-[11px] max-h-40 overflow-y-auto">{{ tool.input }}</pre>
+                    </div>
+                    <div v-if="tool.result !== undefined" class="px-3 py-2" :class="tool.is_error ? 'bg-red-950/20' : 'bg-green-950/10'">
+                      <div class="text-muted-foreground mb-0.5">Result:</div>
+                      <pre class="whitespace-pre-wrap break-all font-mono text-[11px] max-h-60 overflow-y-auto">{{ tool.result }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Text content -->
+              <div v-if="msg.content" class="chat-markdown break-words" v-html="renderMarkdown(msg.content)"></div>
+            </div>
+
+            <!-- User avatar -->
+            <div
+              v-if="msg.role === 'user'"
+              class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0"
+            >
+              <User class="w-4 h-4 text-primary-foreground" />
+            </div>
+          </div>
+
+          <!-- CC Streaming response -->
+          <div v-if="cc.isProcessing.value" class="flex gap-3 justify-start">
+            <div class="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0">
+              <Terminal class="w-4 h-4 text-green-500" />
+            </div>
+            <div class="max-w-[85%] rounded-lg p-3 bg-secondary">
+              <!-- Live thinking -->
+              <div v-if="cc.thinkingText.value" class="mb-2 text-xs text-purple-400 whitespace-pre-wrap font-mono">
+                <Brain class="w-3 h-3 inline mr-1" />
+                {{ cc.thinkingText.value }}
+              </div>
+
+              <!-- Live tool blocks -->
+              <div v-if="cc.currentToolBlocks.value.length" class="space-y-1.5 mb-2">
+                <div
+                  v-for="tool in cc.currentToolBlocks.value"
+                  :key="tool.tool_use_id"
+                  class="border border-border rounded-lg overflow-hidden text-xs"
+                >
+                  <div class="px-3 py-1.5 flex items-center gap-1.5">
+                    <span class="font-mono font-medium text-green-400">{{ tool.name }}</span>
+                    <Loader2 v-if="!tool.result" class="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+                    <Check v-else class="w-3 h-3 text-green-500 ml-auto" />
+                  </div>
+                  <div v-if="tool.input" class="px-3 py-2 border-t border-border bg-secondary/30">
+                    <pre class="whitespace-pre-wrap break-all font-mono text-[11px] max-h-40 overflow-y-auto">{{ tool.input }}</pre>
+                  </div>
+                  <div v-if="tool.result" class="px-3 py-2 border-t border-border" :class="tool.is_error ? 'bg-red-950/20' : 'bg-green-950/10'">
+                    <pre class="whitespace-pre-wrap break-all font-mono text-[11px] max-h-40 overflow-y-auto">{{ tool.result }}</pre>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live text stream -->
+              <div v-if="cc.streamingText.value" class="chat-markdown break-words" v-html="renderMarkdown(cc.streamingText.value)"></div>
+
+              <!-- Waiting indicator -->
+              <div v-if="!cc.streamingText.value && !cc.thinkingText.value && cc.currentToolBlocks.value.length === 0" class="flex items-center gap-1.5">
+                <span class="w-2 h-2 bg-green-500/60 rounded-full animate-bounce [animation-delay:0ms]"></span>
+                <span class="w-2 h-2 bg-green-500/60 rounded-full animate-bounce [animation-delay:150ms]"></span>
+                <span class="w-2 h-2 bg-green-500/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Normal chat: no session selected -->
+        <template v-else-if="!currentSession">
+          <div class="h-full flex items-center justify-center text-muted-foreground">
+            <div class="text-center">
+              <MessageSquare class="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>{{ t('chatView.selectOrCreate') }}</p>
+            </div>
+          </div>
+        </template>
 
         <template v-else>
           <!-- Messages -->

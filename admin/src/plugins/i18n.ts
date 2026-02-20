@@ -325,6 +325,15 @@ const messages = {
         remove: 'Удалить',
         noShares: 'Нет совместного доступа',
       },
+      claudeCode: {
+        enable: 'Включить Claude Code',
+        disable: 'Выключить Claude Code',
+        connected: 'Подключено',
+        placeholder: 'Введите команду для Claude Code...',
+        abort: 'Прервать выполнение',
+        welcome: 'Введите запрос для Claude Code CLI',
+        thinking: 'Размышление',
+      },
     },
     // Auth
     auth: {
@@ -1317,6 +1326,15 @@ const messages = {
         remove: 'Remove',
         noShares: 'No shares yet',
       },
+      claudeCode: {
+        enable: 'Enable Claude Code',
+        disable: 'Disable Claude Code',
+        connected: 'Connected',
+        placeholder: 'Enter a command for Claude Code...',
+        abort: 'Abort execution',
+        welcome: 'Enter a prompt for Claude Code CLI',
+        thinking: 'Thinking',
+      },
     },
     // Auth
     auth: {
@@ -2307,6 +2325,15 @@ const messages = {
         add: 'Қосу',
         remove: 'Жою',
         noShares: 'Бөлісу жоқ',
+      },
+      claudeCode: {
+        enable: 'Claude Code қосу',
+        disable: 'Claude Code өшіру',
+        connected: 'Қосылған',
+        placeholder: 'Claude Code үшін команда енгізіңіз...',
+        abort: 'Орындауды тоқтату',
+        welcome: 'Claude Code CLI үшін сұрау енгізіңіз',
+        thinking: 'Ойлану',
       },
     },
     // Auth

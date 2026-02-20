@@ -2814,6 +2814,54 @@ DEFAULT_FOLLOWUP_RULES = [
     },
 ]
 
+# ============== Claude Code Sessions ==============
+
+
+class ClaudeCodeSession(Base):
+    """Claude Code CLI session for web UI."""
+
+    __tablename__ = "claude_code_sessions"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    cli_session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), default="New session")
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default="active"
+    )  # active, completed, error, aborted
+    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    total_turns: Mapped[int] = mapped_column(Integer, default=0)
+    max_turns: Mapped[int] = mapped_column(Integer, default=50)
+    working_directory: Mapped[str] = mapped_column(
+        String(500), default="/opt/ai-secretary"
+    )
+    events_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "cli_session_id": self.cli_session_id,
+            "title": self.title,
+            "owner_id": self.owner_id,
+            "status": self.status,
+            "model": self.model,
+            "total_turns": self.total_turns,
+            "max_turns": self.max_turns,
+            "working_directory": self.working_directory,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
 DEFAULT_TESTIMONIALS = [
     {
         "text": "Поставил за вечер, работает как часы. Клонировал свой голос — клиенты не отличают от живого!",
