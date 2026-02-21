@@ -1,6 +1,6 @@
 # TASK: Kanban + Roadmap — вкладка «Tasks» в Admin Panel
 
-## Статус: Stage 1 (Backend) ✅ PR #299 | Stage 2 (Kanban Board) ✅ PR #300 | Stage 3 (Roadmap) — PENDING
+## Статус: Stage 1 (Backend) ✅ PR #299 | Stage 2 (Kanban Board) ✅ PR #300 | Stage 3 (Roadmap) ✅ PR #302
 ## Приоритет: HIGH
 ## Оценка: 6/10 сложности | ~4–6 дней
 
