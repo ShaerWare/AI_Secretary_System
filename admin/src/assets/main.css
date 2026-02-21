@@ -444,8 +444,8 @@
 }
 
 @keyframes zenFadeIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .zen-enter {
@@ -454,6 +454,11 @@
 
 .zen-toolbar-enter {
   animation: zenFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+.zen-activity-bar {
+  width: 3rem; /* 48px */
+  flex-shrink: 0;
 }
 
 .zen-glass {

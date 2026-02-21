@@ -13,9 +13,14 @@ export function useResizablePanel(
   let startX = 0
   let startW = 0
 
-  function onMouseMove(e: MouseEvent) {
-    const delta = direction === 'right' ? e.clientX - startX : startX - e.clientX
+  function applyDelta(clientX: number) {
+    const delta = direction === 'right' ? clientX - startX : startX - clientX
     width.value = Math.max(minWidth, Math.min(maxWidth, startW + delta))
+  }
+
+  // Mouse handlers
+  function onMouseMove(e: MouseEvent) {
+    applyDelta(e.clientX)
   }
 
   function onMouseUp() {
@@ -36,10 +41,37 @@ export function useResizablePanel(
     document.addEventListener('mouseup', onMouseUp)
   }
 
+  // Touch handlers
+  function onTouchMove(e: TouchEvent) {
+    if (e.touches.length === 1) {
+      applyDelta(e.touches[0].clientX)
+    }
+  }
+
+  function onTouchEnd() {
+    document.removeEventListener('touchmove', onTouchMove)
+    document.removeEventListener('touchend', onTouchEnd)
+    document.removeEventListener('touchcancel', onTouchEnd)
+    localStorage.setItem(storageKey, String(width.value))
+  }
+
+  function startTouchResize(e: TouchEvent) {
+    if (e.touches.length !== 1) return
+    e.preventDefault()
+    startX = e.touches[0].clientX
+    startW = width.value
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', onTouchEnd)
+    document.addEventListener('touchcancel', onTouchEnd)
+  }
+
   onUnmounted(() => {
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    document.removeEventListener('touchmove', onTouchMove)
+    document.removeEventListener('touchend', onTouchEnd)
+    document.removeEventListener('touchcancel', onTouchEnd)
   })
 
-  return { width, startResize }
+  return { width, startResize, startTouchResize }
 }

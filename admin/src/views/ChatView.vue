@@ -109,6 +109,7 @@ const showCcDirMenu = ref(false)
 const showCcFilesMenu = ref(false)
 const showShareDialog = ref(false)
 const showZenSettings = ref(false)
+const showZenLlmMenu = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
   (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
 )
@@ -117,9 +118,9 @@ const inputPosition = ref<'top' | 'bottom'>(
 const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSidebarCollapse('chat-sidebar-collapsed')
 
 // Resizable panels
-const { width: sidebarWidth, startResize: startSidebarResize } = useResizablePanel('chat-sidebar-width', 288, 200, 480, 'right')
-const { width: branchTreeWidth, startResize: startBranchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
-const { width: settingsWidth, startResize: startSettingsResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
+const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: startSidebarTouchResize } = useResizablePanel('chat-sidebar-width', 288, 200, 480, 'right')
+const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize: startBranchTouchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
+const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
 
 // Markdown renderer
 marked.use({
@@ -1227,6 +1228,9 @@ function handleGlobalClick(e: MouseEvent) {
   if (showZenSettings.value && !target.closest('.zen-settings-anchor')) {
     showZenSettings.value = false
   }
+  if (showZenLlmMenu.value && !target.closest('.zen-llm-anchor')) {
+    showZenLlmMenu.value = false
+  }
 }
 
 // Zen mode: restore from localStorage
@@ -1235,7 +1239,7 @@ if (localStorage.getItem('chat-fullscreen') === 'true') {
 }
 watch(() => fullscreenStore.isFullscreen, (val) => {
   localStorage.setItem('chat-fullscreen', val ? 'true' : 'false')
-  if (!val) showZenSettings.value = false
+  if (!val) { showZenSettings.value = false; showZenLlmMenu.value = false }
 })
 
 function handleEscapeKey(e: KeyboardEvent) {
@@ -1478,8 +1482,9 @@ watch(sessions, (newSessions) => {
     <!-- Sidebar resize handle (desktop only) -->
     <div
       v-if="!sidebarCollapsed && !fullscreenStore.isFullscreen"
-      class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+      class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
       @mousedown="startSidebarResize"
+      @touchstart="startSidebarTouchResize"
     />
 
     <!-- Mobile sidebar backdrop -->
@@ -1498,379 +1503,345 @@ watch(sessions, (newSessions) => {
       <ChevronLeft :class="['w-5 h-5 transition-transform', showSidebar ? '' : 'rotate-180']" />
     </button>
 
-    <!-- Main Chat Area -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <!-- Zen Mode: Floating Toolbar -->
-      <div v-if="fullscreenStore.isFullscreen && currentSession" class="zen-toolbar-enter relative flex items-center justify-center px-4 py-3">
-        <div class="zen-glass rounded-2xl px-4 py-2 flex items-center gap-2 shadow-lg max-w-4xl w-full">
-          <!-- Session title -->
-          <div class="flex-1 min-w-0">
-            <template v-if="editingHeaderTitle">
-              <input
-                v-model="headerTitleValue"
-                class="header-rename-input w-full text-sm font-medium bg-transparent border-b border-border focus:outline-none focus:border-primary"
-                @keydown.enter="saveHeaderRename"
-                @keydown.escape="cancelHeaderRename"
-                @blur="saveHeaderRename"
-                @click.stop
-              />
-            </template>
-            <template v-else>
-              <h2
-                class="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
-                @click="startHeaderRename"
-              >
-                {{ currentSession.title }}
-              </h2>
-            </template>
-          </div>
+    <!-- Zen Mode: Vertical Activity Bar (left) -->
+    <div
+      v-if="fullscreenStore.isFullscreen && currentSession"
+      class="zen-activity-bar zen-glass zen-toolbar-enter flex flex-col items-center py-3 px-1.5 gap-1 border-r border-border/30 z-10"
+    >
+      <!-- Session title: first letter avatar -->
+      <div
+        class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-bold cursor-pointer shrink-0"
+        :title="currentSession.title"
+        @click="startHeaderRename"
+      >
+        {{ currentSession.title.charAt(0).toUpperCase() }}
+      </div>
 
-          <!-- Separator -->
-          <div class="w-px h-5 bg-border/50 shrink-0"></div>
+      <!-- Exit fullscreen (top) -->
+      <button
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+        :title="t('chatView.exitZenMode')"
+        @click="fullscreenStore.exit()"
+      >
+        <Minimize2 class="w-4 h-4" />
+      </button>
 
-          <!-- Claude Code toggle (restricted users) -->
+      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+
+      <!-- Claude Code toggle (restricted users) -->
+      <button
+        v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
+        :class="[
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
+          cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+        ]"
+        :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
+        @click="cc.toggle()"
+      >
+        <Terminal class="w-4 h-4" />
+      </button>
+
+      <!-- LLM dropdown (non-CC) -->
+      <div v-if="!cc.isActive.value" class="zen-llm-anchor relative shrink-0">
+        <button
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+            showZenLlmMenu ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+          ]"
+          :title="t('chat.selectLlm')"
+          @click.stop="showZenLlmMenu = !showZenLlmMenu"
+        >
+          <Brain class="w-4 h-4" />
+        </button>
+        <div
+          v-if="showZenLlmMenu"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[180px] animate-scale-in"
+          @click.stop
+        >
           <button
-            v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
             :class="[
-              'p-1.5 rounded-lg transition-colors shrink-0',
-              cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+              selectedLlmBackend === '' ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
             ]"
-            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-            @click="cc.toggle()"
+            @click="selectedLlmBackend = ''; showZenLlmMenu = false"
           >
-            <Terminal class="w-3.5 h-3.5" />
+            <span>{{ t('chat.defaultLlm') }}</span>
+            <Check v-if="selectedLlmBackend === ''" class="w-3.5 h-3.5 ml-auto text-primary" />
           </button>
-
-          <!-- LLM provider (compact, non-CC) -->
-          <div v-if="!cc.isActive.value" class="hidden sm:flex items-center gap-1 shrink-0">
-            <Brain class="w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              v-model="selectedLlmBackend"
-              class="px-1.5 py-0.5 text-xs bg-transparent rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border-none cursor-pointer text-muted-foreground"
-            >
-              <option value="">{{ t('chat.defaultLlm') }}</option>
-              <option v-for="option in availableLlmOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </div>
-
-          <!-- RAG collections dropdown (non-CC) -->
-          <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
-            <button
-              :class="[
-                'p-1.5 rounded-lg transition-colors',
-                selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-              ]"
-              :title="t('chatView.knowledgeBase')"
-              @click="showRagMenu = !showRagMenu"
-            >
-              <BookOpen class="w-3.5 h-3.5" />
-              <span
-                v-if="selectedCollectionIds.length"
-                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
-              >{{ selectedCollectionIds.length }}</span>
-            </button>
-            <div
-              v-if="showRagMenu"
-              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px]"
-              @click.stop
-            >
-              <label
-                v-for="col in knowledgeCollections"
-                :key="col.id"
-                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
-              >
-                <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
-                <span>{{ col.name }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Share button (non-CC, owner only) -->
-          <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
-            <button
-              class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
-              :title="t('chatView.shareChat')"
-              @click="showShareDialog = true"
-            >
-              <Share2 class="w-3.5 h-3.5" />
-              <span
-                v-if="(currentSession?.share_count ?? 0) > 0"
-                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
-              >{{ currentSession!.share_count }}</span>
-            </button>
-          </div>
-
-          <!-- Fork button (non-CC, read-only) -->
           <button
-            v-if="!cc.isActive.value && isReadOnly"
-            :disabled="forkSessionMutation.isPending.value"
-            class="p-1.5 rounded-lg text-blue-400 hover:bg-secondary/50 transition-colors shrink-0"
-            :title="t('chatView.forkChat')"
-            @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
-          >
-            <Loader2 v-if="forkSessionMutation.isPending.value" class="w-3.5 h-3.5 animate-spin" />
-            <GitFork v-else class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- Export dropdown (non-CC) -->
-          <div v-if="!cc.isActive.value" class="relative hidden sm:block shrink-0">
-            <button
-              class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
-              :title="t('chatView.exportChat')"
-              @click="showExportMenu = !showExportMenu"
-            >
-              <Download class="w-3.5 h-3.5" />
-            </button>
-            <div
-              v-if="showExportMenu"
-              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[160px]"
-              @click.stop
-            >
-              <button
-                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
-                @click="copyChatToClipboard"
-              >
-                <Copy class="w-3.5 h-3.5" />
-                {{ t('chatView.copyChat') }}
-              </button>
-              <button
-                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
-                @click="exportChatMarkdown"
-              >
-                <FileText class="w-3.5 h-3.5" />
-                {{ t('chatView.exportMarkdown') }}
-              </button>
-              <button
-                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
-                @click="exportChatJson"
-              >
-                <Download class="w-3.5 h-3.5" />
-                {{ t('chatView.exportJson') }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Input position toggle -->
-          <button
-            class="hidden sm:inline-flex p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
-            :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
-            @click="toggleInputPosition"
-          >
-            <ArrowDownToLine v-if="inputPosition === 'top'" class="w-3.5 h-3.5" />
-            <ArrowUpToLine v-else class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- Voice mode toggle (non-CC) -->
-          <button
-            v-if="!cc.isActive.value"
+            v-for="option in availableLlmOptions"
+            :key="option.value"
             :class="[
-              'p-1.5 rounded-lg transition-colors shrink-0',
-              voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+              selectedLlmBackend === option.value ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
             ]"
-            :title="voiceMode ? 'Voice mode ON' : 'Voice mode OFF'"
-            @click="voiceMode = !voiceMode"
+            @click="selectedLlmBackend = option.value; showZenLlmMenu = false"
           >
-            <Volume2 v-if="voiceMode" class="w-3.5 h-3.5" />
-            <VolumeX v-else class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- Branch tree toggle (non-CC) -->
-          <button
-            v-if="!cc.isActive.value"
-            :class="[
-              'p-1.5 rounded-lg transition-colors shrink-0',
-              showBranchTree ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-            ]"
-            :title="t('chatView.branchTree')"
-            @click="showBranchTree = !showBranchTree"
-          >
-            <GitBranch class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- CC: Working directory dropdown -->
-          <div v-if="cc.isActive.value" class="relative shrink-0">
-            <button
-              :class="[
-                'p-1.5 rounded-lg transition-colors',
-                cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
-              ]"
-              :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
-              @click="showCcDirMenu = !showCcDirMenu"
-            >
-              <FolderOpen class="w-3.5 h-3.5" />
-            </button>
-            <div
-              v-if="showCcDirMenu"
-              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px]"
-              @click.stop
-            >
-              <button
-                v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
-                :key="dir"
-                :class="[
-                  'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
-                  cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary/30'
-                ]"
-                @click="selectCcDir(dir)"
-              >
-                <FolderOpen class="w-3.5 h-3.5 shrink-0" />
-                <span class="font-mono text-xs">{{ dir }}</span>
-                <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
-              </button>
-            </div>
-          </div>
-
-          <!-- CC: Context files dropdown -->
-          <div v-if="cc.isActive.value && contextFiles.length > 0" class="relative shrink-0">
-            <button
-              :class="[
-                'p-1.5 rounded-lg transition-colors',
-                cc.pendingContextFiles.value.length > 0 ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
-              ]"
-              :title="t('chatView.claudeCode.attachFiles')"
-              @click="showCcFilesMenu = !showCcFilesMenu"
-            >
-              <Paperclip class="w-3.5 h-3.5" />
-              <span
-                v-if="cc.pendingContextFiles.value.length > 0"
-                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-600 text-white flex items-center justify-center border border-background"
-              >{{ cc.pendingContextFiles.value.length }}</span>
-            </button>
-            <div
-              v-if="showCcFilesMenu"
-              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] max-w-[300px]"
-              @click.stop
-            >
-              <label
-                v-for="file in contextFiles"
-                :key="file.name"
-                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  :checked="isCcFileSelected(file.name)"
-                  class="rounded border-border w-3.5 h-3.5 accent-green-600"
-                  @change="toggleCcContextFile(file)"
-                />
-                <span class="truncate text-xs">{{ file.name }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Settings dropdown (simplified — opens full panel) -->
-          <div class="zen-settings-anchor relative shrink-0">
-            <button
-              :class="[
-                'p-1.5 rounded-lg transition-colors',
-                showZenSettings ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-              ]"
-              :title="t('chatView.zenSettings')"
-              @click.stop="showZenSettings = !showZenSettings"
-            >
-              <Settings2 class="w-3.5 h-3.5" />
-            </button>
-
-            <!-- Zen settings dropdown panel (simplified) -->
-            <div
-              v-if="showZenSettings"
-              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-3 px-4 z-50 w-80 max-h-[70vh] overflow-y-auto animate-scale-in"
-              @click.stop
-            >
-              <h4 class="text-xs font-semibold text-muted-foreground uppercase mb-3">{{ t('chatView.zenSettings') }}</h4>
-
-              <!-- Open full settings button -->
-              <button
-                v-if="!isReadOnly && !cc.isActive.value"
-                class="flex items-center gap-2 px-2 py-1.5 text-sm bg-secondary/50 rounded-lg hover:bg-secondary transition-colors w-full mb-3"
-                @click="showSettings = true; showZenSettings = false"
-              >
-                <Settings2 class="w-3.5 h-3.5" />
-                <span>Open full settings</span>
-              </button>
-
-              <!-- System prompt -->
-              <div v-if="!isReadOnly" class="mb-3">
-                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.sessionPrompt') }}</label>
-                <textarea
-                  v-model="customPrompt"
-                  class="w-full min-h-[80px] p-2 text-sm bg-secondary/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono"
-                  :placeholder="t('chatView.promptPlaceholder')"
-                />
-                <button
-                  :disabled="updateSessionMutation.isPending.value"
-                  class="mt-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                  @click="saveSettings"
-                >
-                  {{ t('chatView.save') }}
-                </button>
-              </div>
-
-              <!-- Context files summary -->
-              <div class="mb-1">
-                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.contextFiles') }}</label>
-                <div v-if="contextFiles.length" class="space-y-1">
-                  <div v-for="(file, idx) in contextFiles" :key="idx" class="flex items-center gap-2 px-2 py-1 text-xs bg-secondary/30 rounded-lg">
-                    <FileText class="w-3 h-3 text-muted-foreground shrink-0" />
-                    <span class="truncate flex-1">{{ file.name }}</span>
-                    <button class="p-0.5 text-muted-foreground hover:text-red-500 shrink-0" @click="removeContextFile(idx)">
-                      <X class="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <p v-else class="text-xs text-muted-foreground/50">{{ t('chatView.noContextFiles') }}</p>
-                <div class="flex gap-1 mt-1.5">
-                  <button
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
-                    @click="triggerContextFileUpload"
-                  >
-                    <Paperclip class="w-3 h-3" />
-                    {{ t('chatView.uploadFile') }}
-                  </button>
-                  <button
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
-                    @click="addEmptyContextFile"
-                  >
-                    <Plus class="w-3 h-3" />
-                    {{ t('chatView.emptyFile') }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- New branch / New CC session -->
-          <button
-            v-if="!isReadOnly"
-            :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
-            class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
-            :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
-            @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
-          >
-            <Plus class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- Delete chat / Stop CC -->
-          <button
-            v-if="cc.isActive.value || isSessionOwner"
-            class="p-1.5 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
-            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
-            @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
-          >
-            <Trash2 class="w-3.5 h-3.5" />
-          </button>
-
-          <!-- Exit fullscreen -->
-          <button
-            class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
-            :title="t('chatView.exitZenMode')"
-            @click="fullscreenStore.exit()"
-          >
-            <Minimize2 class="w-3.5 h-3.5" />
+            <span>{{ option.label }}</span>
+            <Check v-if="selectedLlmBackend === option.value" class="w-3.5 h-3.5 ml-auto text-primary" />
           </button>
         </div>
       </div>
+
+      <!-- RAG collections dropdown (non-CC) -->
+      <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
+        <button
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+            selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+          ]"
+          :title="t('chatView.knowledgeBase')"
+          @click="showRagMenu = !showRagMenu"
+        >
+          <BookOpen class="w-4 h-4" />
+          <span
+            v-if="selectedCollectionIds.length"
+            class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
+          >{{ selectedCollectionIds.length }}</span>
+        </button>
+        <div
+          v-if="showRagMenu"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px] animate-scale-in"
+          @click.stop
+        >
+          <label
+            v-for="col in knowledgeCollections"
+            :key="col.id"
+            class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
+          >
+            <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
+            <span>{{ col.name }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Share button (non-CC, owner only) -->
+      <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors"
+          :title="t('chatView.shareChat')"
+          @click="showShareDialog = true"
+        >
+          <Share2 class="w-4 h-4" />
+          <span
+            v-if="(currentSession?.share_count ?? 0) > 0"
+            class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
+          >{{ currentSession!.share_count }}</span>
+        </button>
+      </div>
+
+      <!-- Fork button (non-CC, read-only) -->
+      <button
+        v-if="!cc.isActive.value && isReadOnly"
+        :disabled="forkSessionMutation.isPending.value"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 hover:bg-secondary/50 transition-colors shrink-0"
+        :title="t('chatView.forkChat')"
+        @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
+      >
+        <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
+        <GitFork v-else class="w-4 h-4" />
+      </button>
+
+      <!-- Export dropdown (non-CC) -->
+      <div v-if="!cc.isActive.value" class="relative shrink-0">
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors"
+          :title="t('chatView.exportChat')"
+          @click="showExportMenu = !showExportMenu"
+        >
+          <Download class="w-4 h-4" />
+        </button>
+        <div
+          v-if="showExportMenu"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[160px] animate-scale-in"
+          @click.stop
+        >
+          <button
+            class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+            @click="copyChatToClipboard"
+          >
+            <Copy class="w-3.5 h-3.5" />
+            {{ t('chatView.copyChat') }}
+          </button>
+          <button
+            class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+            @click="exportChatMarkdown"
+          >
+            <FileText class="w-3.5 h-3.5" />
+            {{ t('chatView.exportMarkdown') }}
+          </button>
+          <button
+            class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+            @click="exportChatJson"
+          >
+            <Download class="w-3.5 h-3.5" />
+            {{ t('chatView.exportJson') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+
+      <!-- Input position toggle -->
+      <button
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+        :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
+        @click="toggleInputPosition"
+      >
+        <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
+        <ArrowUpToLine v-else class="w-4 h-4" />
+      </button>
+
+      <!-- Voice mode toggle (non-CC) -->
+      <button
+        v-if="!cc.isActive.value"
+        :class="[
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
+          voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+        ]"
+        :title="voiceMode ? 'Voice mode ON' : 'Voice mode OFF'"
+        @click="voiceMode = !voiceMode"
+      >
+        <Volume2 v-if="voiceMode" class="w-4 h-4" />
+        <VolumeX v-else class="w-4 h-4" />
+      </button>
+
+      <!-- Branch tree toggle (non-CC) -->
+      <button
+        v-if="!cc.isActive.value"
+        :class="[
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
+          showBranchTree ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+        ]"
+        :title="t('chatView.branchTree')"
+        @click="showBranchTree = !showBranchTree"
+      >
+        <GitBranch class="w-4 h-4" />
+      </button>
+
+      <!-- CC: Working directory dropdown -->
+      <div v-if="cc.isActive.value" class="relative shrink-0">
+        <button
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+            cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+          ]"
+          :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
+          @click="showCcDirMenu = !showCcDirMenu"
+        >
+          <FolderOpen class="w-4 h-4" />
+        </button>
+        <div
+          v-if="showCcDirMenu"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] animate-scale-in"
+          @click.stop
+        >
+          <button
+            v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
+            :key="dir"
+            :class="[
+              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+              cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary/30'
+            ]"
+            @click="selectCcDir(dir)"
+          >
+            <FolderOpen class="w-3.5 h-3.5 shrink-0" />
+            <span class="font-mono text-xs">{{ dir }}</span>
+            <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
+          </button>
+        </div>
+      </div>
+
+      <!-- CC: Context files dropdown -->
+      <div v-if="cc.isActive.value && contextFiles.length > 0" class="relative shrink-0">
+        <button
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+            cc.pendingContextFiles.value.length > 0 ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+          ]"
+          :title="t('chatView.claudeCode.attachFiles')"
+          @click="showCcFilesMenu = !showCcFilesMenu"
+        >
+          <Paperclip class="w-4 h-4" />
+          <span
+            v-if="cc.pendingContextFiles.value.length > 0"
+            class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-600 text-white flex items-center justify-center border border-background"
+          >{{ cc.pendingContextFiles.value.length }}</span>
+        </button>
+        <div
+          v-if="showCcFilesMenu"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] max-w-[300px] animate-scale-in"
+          @click.stop
+        >
+          <label
+            v-for="file in contextFiles"
+            :key="file.name"
+            class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="isCcFileSelected(file.name)"
+              class="rounded border-border w-3.5 h-3.5 accent-green-600"
+              @change="toggleCcContextFile(file)"
+            />
+            <span class="truncate text-xs">{{ file.name }}</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+
+      <!-- Settings (opens full side panel) -->
+      <button
+        v-if="!isReadOnly"
+        :class="[
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
+          showSettings ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+        ]"
+        :title="t('chatView.zenSettings')"
+        @click="showSettings = !showSettings"
+      >
+        <Settings2 class="w-4 h-4" />
+      </button>
+
+      <!-- Spacer pushes bottom items down -->
+      <div class="flex-1"></div>
+
+      <!-- New branch / New CC session -->
+      <button
+        v-if="!isReadOnly"
+        :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+        :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
+        @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
+      >
+        <Plus class="w-4 h-4" />
+      </button>
+
+      <!-- Delete chat / Stop CC -->
+      <button
+        v-if="cc.isActive.value || isSessionOwner"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
+        :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
+        @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
+      >
+        <Trash2 class="w-4 h-4" />
+      </button>
+
+      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+
+      <!-- Exit fullscreen -->
+      <button
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+        :title="t('chatView.exitZenMode')"
+        @click="fullscreenStore.exit()"
+      >
+        <Minimize2 class="w-4 h-4" />
+      </button>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col min-w-0">
 
       <!-- Chat Header (hidden in zen mode) -->
       <div v-if="currentSession && !fullscreenStore.isFullscreen" class="p-2 sm:p-4 border-b border-border flex items-center justify-between gap-2 bg-card">
@@ -2300,6 +2271,27 @@ watch(sessions, (newSessions) => {
           fullscreenStore.isFullscreen ? 'zen-messages' : ''
         ]"
       >
+        <!-- Zen mode: inline session title -->
+        <div v-if="fullscreenStore.isFullscreen && currentSession" class="text-center mb-4">
+          <template v-if="editingHeaderTitle">
+            <input
+              v-model="headerTitleValue"
+              class="header-rename-input text-sm font-medium bg-transparent border-b border-border focus:outline-none focus:border-primary text-center max-w-xs mx-auto"
+              @keydown.enter="saveHeaderRename"
+              @keydown.escape="cancelHeaderRename"
+              @blur="saveHeaderRename"
+              @click.stop
+            />
+          </template>
+          <h2
+            v-else
+            class="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors inline-block"
+            @click="startHeaderRename"
+          >
+            {{ currentSession.title }}
+          </h2>
+        </div>
+
         <!-- Claude Code mode messages -->
         <template v-if="cc.isActive.value">
           <div v-if="cc.messages.value.length === 0 && !cc.isProcessing.value" class="h-full flex items-center justify-center text-muted-foreground">
@@ -2659,11 +2651,12 @@ watch(sessions, (newSessions) => {
         </template>
       </div>
 
-      <!-- Branch Tree Panel (hidden in zen mode) -->
+      <!-- Branch Tree Panel -->
       <template v-if="showBranchTree">
         <div
-          class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+          class="w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
           @mousedown="startBranchResize"
+          @touchstart="startBranchTouchResize"
         />
         <BranchTree
           :branches="branchTree"
@@ -2679,8 +2672,9 @@ watch(sessions, (newSessions) => {
       <!-- Settings Panel (slide-out right / fullscreen on mobile) -->
       <div
         v-if="showSettings"
-        class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+        class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
         @mousedown="startSettingsResize"
+        @touchstart="startSettingsTouchResize"
       />
       <!-- Mobile backdrop -->
       <div

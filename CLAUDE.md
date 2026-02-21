@@ -359,7 +359,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 
 **Components** (`admin/src/components/`): Flat structure, no `ui/` subdirectory. UI state components (`ConfirmDialog`, `SearchPalette`, `ToastContainer`, `ThemeToggle`) driven by dedicated Pinia stores. `BranchTree.vue` / `BranchTreeNode.vue` for chat branching. `CrmInboxAmoCRM.vue` — extracted amojo messenger (used as sub-tab in `CrmInbox.vue`). `charts/` for Chart.js wrappers.
 
-**Composables** (`admin/src/composables/`): `useSSE`, `useResponsive`, `useExportImport`, `useSidebarCollapse`, etc.
+**Composables** (`admin/src/composables/`): `useSSE`, `useResponsive`, `useExportImport`, `useSidebarCollapse`, `useResizablePanel` (mouse+touch drag-resize), `useClaudeCode`, etc.
 
 **i18n** (`admin/src/plugins/i18n.ts`): Single file with `ru`, `en`, and `kk` (Kazakh) message objects. Add keys to all three when adding translations.
 
