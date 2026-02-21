@@ -97,9 +97,15 @@ async def main() -> None:
         if allowed:
             logger.info(f"Allowed users: {allowed}")
 
-    # Start news broadcast scheduler (checks every 60 minutes)
-    scheduler_task = asyncio.create_task(news_broadcast_scheduler(bot, interval_minutes=60))
-    logger.info("News broadcast scheduler started")
+    # Start news broadcast scheduler only for the primary bot (standalone mode).
+    # Multi-instance bots (BOT_INSTANCE_ID set) are client bots and should not
+    # broadcast project news — otherwise each bot sends duplicates.
+    scheduler_task = None
+    if not instance_id:
+        scheduler_task = asyncio.create_task(news_broadcast_scheduler(bot, interval_minutes=60))
+        logger.info("News broadcast scheduler started")
+    else:
+        logger.info("Skipping news scheduler (multi-instance bot)")
 
     try:
         await dp.start_polling(
@@ -107,11 +113,12 @@ async def main() -> None:
             allowed_updates=["message", "callback_query", "pre_checkout_query"],
         )
     finally:
-        scheduler_task.cancel()
-        try:
-            await scheduler_task
-        except asyncio.CancelledError:
-            pass
+        if scheduler_task:
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
         router = get_llm_router()
         await router.close()
         await db.close()
