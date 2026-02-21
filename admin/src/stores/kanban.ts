@@ -7,6 +7,7 @@ export const useKanbanStore = defineStore('kanban', () => {
   const loading = ref(false)
   const selectedTaskId = ref<number | null>(null)
   const statusFilter = ref<string>('all')
+  const activeView = ref<'kanban' | 'roadmap'>('kanban')
 
   const filteredTasks = computed(() => {
     if (statusFilter.value === 'all') return tasks.value
@@ -15,9 +16,14 @@ export const useKanbanStore = defineStore('kanban', () => {
 
   const tasksByStatus = computed(() => {
     const map: Record<string, KanbanTask[]> = {}
+    const statuses = ['draft', 'todo', 'in_progress', 'review', 'done']
+    for (const s of statuses) map[s] = []
     for (const t of tasks.value) {
       if (!map[t.status]) map[t.status] = []
       map[t.status].push(t)
+    }
+    for (const s of Object.keys(map)) {
+      map[s].sort((a, b) => a.position - b.position)
     }
     return map
   })
@@ -107,6 +113,7 @@ export const useKanbanStore = defineStore('kanban', () => {
     loading,
     selectedTaskId,
     statusFilter,
+    activeView,
     filteredTasks,
     tasksByStatus,
     selectedTask,

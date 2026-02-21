@@ -27,7 +27,7 @@ interface MockTask {
   updated: string
 }
 
-let nextId = 7
+let nextId = 10
 const tasks: MockTask[] = [
   {
     id: 1,
@@ -81,7 +81,7 @@ const tasks: MockTask[] = [
     created_by: 'admin',
     start_date: null,
     due_date: '2026-02-15',
-    position: 1,
+    position: 0,
     tags: ['контент', 'faq'],
     checklist: [],
     blockers: [],
@@ -121,7 +121,7 @@ const tasks: MockTask[] = [
     created_by: 'admin',
     start_date: null,
     due_date: null,
-    position: 2,
+    position: 0,
     tags: [],
     checklist: [],
     blockers: [],
@@ -139,7 +139,7 @@ const tasks: MockTask[] = [
     created_by: 'admin',
     start_date: '2026-02-15',
     due_date: '2026-03-01',
-    position: 2,
+    position: 1,
     tags: ['документация'],
     checklist: [],
     blockers: [],
@@ -147,9 +147,68 @@ const tasks: MockTask[] = [
     created: '2026-02-12T10:00:00',
     updated: '2026-02-12T10:00:00',
   },
+  {
+    id: 7,
+    title: 'Настроить WhatsApp канал',
+    description: 'Подключить WhatsApp Business API',
+    status: 'in_progress',
+    is_private: false,
+    assignee: 'admin',
+    created_by: 'admin',
+    start_date: '2026-02-10',
+    due_date: '2026-02-20',
+    position: 1,
+    tags: ['интеграция', 'whatsapp'],
+    checklist: [
+      { id: 8, task_id: 7, text: 'Зарегистрировать бизнес-аккаунт', is_done: true, position: 0 },
+      { id: 9, task_id: 7, text: 'Настроить API-ключи', is_done: true, position: 1 },
+      { id: 10, task_id: 7, text: 'Тестовая отправка', is_done: false, position: 2 },
+      { id: 11, task_id: 7, text: 'Обработка входящих', is_done: false, position: 3 },
+    ],
+    blockers: [],
+    dependents: [],
+    created: '2026-02-10T09:00:00',
+    updated: '2026-02-18T14:00:00',
+  },
+  {
+    id: 8,
+    title: 'Добавить аналитику разговоров',
+    description: 'Дашборд со статистикой по чатам',
+    status: 'draft',
+    is_private: true,
+    assignee: null,
+    created_by: 'admin',
+    start_date: null,
+    due_date: null,
+    position: 1,
+    tags: ['аналитика'],
+    checklist: [],
+    blockers: [],
+    dependents: [],
+    created: '2026-02-15T10:00:00',
+    updated: '2026-02-15T10:00:00',
+  },
+  {
+    id: 9,
+    title: 'Проверить SSL-сертификаты',
+    description: 'Убедиться что все сертификаты актуальны',
+    status: 'done',
+    is_private: false,
+    assignee: 'admin',
+    created_by: 'admin',
+    start_date: '2026-01-05',
+    due_date: '2026-01-07',
+    position: 1,
+    tags: ['безопасность'],
+    checklist: [],
+    blockers: [],
+    dependents: [],
+    created: '2026-01-05T08:00:00',
+    updated: '2026-01-07T11:00:00',
+  },
 ]
 
-let nextChecklistId = 8
+let nextChecklistId = 12
 
 export const kanbanRoutes: DemoRoute[] = [
   // GET /admin/kanban/tasks
