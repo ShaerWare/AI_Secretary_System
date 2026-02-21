@@ -10,7 +10,8 @@ import {
   User,
   Languages,
   PanelLeftClose,
-  MessageCircle
+  MessageCircle,
+  Maximize2
 } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -240,6 +241,16 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <h1 class="text-lg md:text-xl font-semibold truncate">{{ currentTitle }}</h1>
             </div>
             <div class="flex items-center gap-2 md:gap-4">
+              <!-- Zen mode (chat page only) -->
+              <button
+                v-if="route.name === 'chat'"
+                class="p-2 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors"
+                :title="t('chatView.zenMode')"
+                @click="chatFullscreenStore.enter()"
+              >
+                <Maximize2 class="w-4 h-4" />
+              </button>
+
               <!-- Language Toggle -->
               <button
                 class="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"

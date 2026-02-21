@@ -1334,6 +1334,13 @@ watch(sessions, (newSessions) => {
             <PanelLeftClose class="w-4 h-4" />
           </button>
           <button
+            class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
+            :title="t('chatView.zenMode')"
+            @click="fullscreenStore.enter()"
+          >
+            <Maximize2 class="w-4 h-4" />
+          </button>
+          <button
             :class="[
               'p-2 rounded-lg transition-colors',
               selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
@@ -1950,15 +1957,6 @@ watch(sessions, (newSessions) => {
               </label>
             </div>
           </div>
-          <!-- Zen (fullscreen) mode toggle -->
-          <button
-            v-if="!cc.isActive.value"
-            class="p-2 rounded-lg hover:bg-secondary transition-colors"
-            :title="t('chatView.zenMode')"
-            @click="fullscreenStore.enter()"
-          >
-            <Maximize2 class="w-4 h-4" />
-          </button>
           <!-- New branch / New CC session -->
           <button
             v-if="!isReadOnly"
@@ -1977,6 +1975,14 @@ watch(sessions, (newSessions) => {
             @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
           >
             <Trash2 class="w-4 h-4" />
+          </button>
+          <!-- Zen (fullscreen) mode toggle -->
+          <button
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="t('chatView.zenMode')"
+            @click="fullscreenStore.enter()"
+          >
+            <Maximize2 class="w-4 h-4" />
           </button>
         </div>
       </div>
