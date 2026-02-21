@@ -1284,6 +1284,13 @@ watch(sessions, (newSessions) => {
             <PanelLeftOpen class="w-4 h-4" />
           </button>
           <button
+            class="p-2 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
+            :title="t('chatView.zenMode')"
+            @click="fullscreenStore.enter()"
+          >
+            <Maximize2 class="w-4 h-4" />
+          </button>
+          <button
             :disabled="createSessionMutation.isPending.value"
             class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             :title="t('chatView.newChat')"
