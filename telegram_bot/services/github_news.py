@@ -535,10 +535,9 @@ async def news_broadcast_scheduler(bot: "Bot", interval_minutes: int = 30) -> No
         except Exception as e:
             logger.error(f"Scheduler error (PR news): {e}")
 
-        try:
-            await check_and_broadcast_commit_news(bot)
-        except Exception as e:
-            logger.error(f"Scheduler error (commit news): {e}")
+        # NOTE: commit-based broadcasting removed — all changes go through PRs
+        # (main is protected), and PR body is the canonical source of ## NEWS.
+        # Having both caused duplicate messages (same NEWS in commit + PR body).
 
         # Wait for next check
         await asyncio.sleep(interval_minutes * 60)
