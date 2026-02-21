@@ -97,15 +97,19 @@ async def main() -> None:
         if allowed:
             logger.info(f"Allowed users: {allowed}")
 
-    # Start news broadcast scheduler only for the primary bot (standalone mode).
-    # Multi-instance bots (BOT_INSTANCE_ID set) are client bots and should not
-    # broadcast project news — otherwise each bot sends duplicates.
+    # Start news broadcast scheduler only for the primary bot:
+    # - standalone mode (no BOT_INSTANCE_ID), OR
+    # - multi-instance bot with sales_funnel_enabled (the main marketing bot)
+    # This prevents duplicate broadcasts when multiple bots are running.
     scheduler_task = None
-    if not instance_id:
+    should_broadcast = not instance_id or (
+        _bot_config is not None and _bot_config.sales_funnel_enabled
+    )
+    if should_broadcast:
         scheduler_task = asyncio.create_task(news_broadcast_scheduler(bot, interval_minutes=60))
         logger.info("News broadcast scheduler started")
     else:
-        logger.info("Skipping news scheduler (multi-instance bot)")
+        logger.info("Skipping news scheduler (not the primary bot)")
 
     try:
         await dp.start_polling(
