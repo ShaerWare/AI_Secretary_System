@@ -134,6 +134,7 @@ class BotConfig:
     payment_currency: str = "RUB"
     yoomoney_token: str | None = None
     auto_start: bool = False
+    sales_funnel_enabled: bool = True
 
     # Merged settings from TelegramSettings for convenience
     stream_edit_interval: float = 1.5
@@ -190,6 +191,7 @@ def load_config_from_file(instance_id: str) -> BotConfig | None:
             payment_currency=instance.get("payment_currency", "RUB"),
             yoomoney_token=instance.get("yoomoney_access_token"),
             auto_start=instance.get("auto_start", False),
+            sales_funnel_enabled=instance.get("sales_funnel_enabled", True),
             admin_ids=set(),
         )
     except Exception as e:
@@ -261,5 +263,6 @@ async def load_config_from_api(instance_id: str, max_retries: int = 5) -> BotCon
         payment_currency=instance.get("payment_currency", "RUB"),
         yoomoney_token=instance.get("yoomoney_access_token"),
         auto_start=instance.get("auto_start", False),
+        sales_funnel_enabled=instance.get("sales_funnel_enabled", True),
         admin_ids=admin_ids,
     )

@@ -498,6 +498,9 @@ class BotInstance(Base):
     )
     knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Sales funnel
+    sales_funnel_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rate_limit_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -622,6 +625,8 @@ class BotInstance(Base):
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
             else None,
+            # Sales funnel
+            "sales_funnel_enabled": self.sales_funnel_enabled,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,

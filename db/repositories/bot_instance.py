@@ -2,6 +2,7 @@
 Bot instance repository for managing Telegram bot instances.
 """
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -129,6 +130,10 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             yookassa_provider_token=kwargs.get("yookassa_provider_token"),
             stars_enabled=kwargs.get("stars_enabled", False),
             payment_success_message=kwargs.get("payment_success_message"),
+            # Sales funnel
+            sales_funnel_enabled=kwargs.get("sales_funnel_enabled", True),
+            # RAG
+            rag_mode=kwargs.get("rag_mode", "all"),
             # Timestamps
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
@@ -148,6 +153,9 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.set_action_buttons(DEFAULT_ACTION_BUTTONS)
         if "payment_products" in kwargs:
             instance.set_payment_products(kwargs["payment_products"])
+        if "knowledge_collection_ids" in kwargs:
+            ids = kwargs["knowledge_collection_ids"]
+            instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         self.session.add(instance)
         await self.session.commit()
@@ -184,6 +192,10 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             "yookassa_provider_token",
             "stars_enabled",
             "payment_success_message",
+            # Sales funnel
+            "sales_funnel_enabled",
+            # RAG
+            "rag_mode",
             # YooMoney
             "yoomoney_client_id",
             "yoomoney_client_secret",
@@ -206,6 +218,9 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.set_action_buttons(kwargs["action_buttons"])
         if "payment_products" in kwargs:
             instance.set_payment_products(kwargs["payment_products"])
+        if "knowledge_collection_ids" in kwargs:
+            ids = kwargs["knowledge_collection_ids"]
+            instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
