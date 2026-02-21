@@ -76,6 +76,74 @@ BM25 — это алгоритм ранжирования, улучшающий 
 
 Эмбеддинги кэшируются в `data/wiki_embeddings.json` (~1.7MB для 573 секций). При перезапуске загружаются из кэша без повторного вычисления.
 
+## Коллекции знаний
+
+Документы группируются в **коллекции** — контейнеры для логического разделения базы знаний.
+
+### Концепция
+
+- Каждая коллекция имеет своё имя, slug, описание и отдельный каталог файлов (`base_dir`)
+- Документы привязываются к коллекции через `collection_id`
+- При первом запуске автоматически создаётся коллекция **«Default»** — все существующие документы попадают в неё
+- Каждая коллекция индексируется отдельно (`CollectionIndex` с собственным BM25-индексом)
+- Коллекцию «Default» нельзя удалить
+
+### Управление коллекциями
+
+Во вкладке Finetune → Cloud AI доступен селектор коллекций (pill-shaped кнопки):
+
+| Действие | Описание |
+|----------|----------|
+| **Выбор коллекции** | Клик по названию — фильтрует таблицу документов |
+| **Создание** | Inline-форма: имя + описание → `POST /admin/wiki-rag/collections` |
+| **Перезагрузка** | Кнопка Reload на коллекции → `POST /admin/wiki-rag/collections/{id}/reload` |
+| **Удаление** | Кнопка Delete (не для Default) → `DELETE /admin/wiki-rag/collections/{id}` |
+
+### Мульти-коллекционный поиск
+
+Функция `retrieve_multi(query, collection_ids, top_k, max_chars)`:
+- Запрашивает каждую коллекцию независимо
+- Объединяет результаты по скору
+- Возвращает top_k лучших секций из всех коллекций
+
+Стандартный `retrieve()` и `search()` принимают опциональный `collection_id` для поиска в конкретной коллекции.
+
+### Per-Instance RAG конфигурация
+
+Каждый бот, виджет и WhatsApp-инстанс может иметь собственную настройку RAG:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `rag_mode` | `"all"` / `"selected"` / `"none"` | Режим RAG |
+| `knowledge_collection_ids` | JSON список | Список ID коллекций (для mode=`selected`) |
+
+**Приоритет разрешения RAG-конфигурации** (в `_resolve_rag_config()`):
+1. Переопределение в запросе (`LLMOverrideConfig`)
+2. Настройки виджета (`WidgetInstance`)
+3. Настройки Telegram-бота (`BotInstance`)
+4. Настройки WhatsApp-бота (`WhatsAppInstance`)
+5. Настройки сессии (`ChatSession`)
+6. По умолчанию: `"all"` + все включённые коллекции
+
+Во фронтенде: RAG mode dropdown + multi-select чекбоксы коллекций в формах редактирования Widget, Telegram и WhatsApp инстансов. В ChatView — селектор RAG mode (сохраняется в localStorage).
+
+### API коллекций
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/admin/wiki-rag/collections` | Список всех коллекций |
+| POST | `/admin/wiki-rag/collections` | Создать коллекцию |
+| GET | `/admin/wiki-rag/collections/{id}` | Получить коллекцию |
+| PUT | `/admin/wiki-rag/collections/{id}` | Обновить коллекцию |
+| DELETE | `/admin/wiki-rag/collections/{id}` | Удалить коллекцию (кроме Default) |
+| POST | `/admin/wiki-rag/collections/{id}/reload` | Перезагрузить индекс коллекции |
+
+### Миграции
+
+- `scripts/migrate_knowledge_collections.py` — таблица `knowledge_collections`, FK в `knowledge_documents`
+- `scripts/migrate_rag_settings.py` — поля `rag_mode` и `knowledge_collection_id` в инстансах
+- `scripts/migrate_multi_collection_rag.py` — миграция на `knowledge_collection_ids` (множественный выбор)
+
 ## Управление документами
 
 Левая панель отображает все документы в базе:

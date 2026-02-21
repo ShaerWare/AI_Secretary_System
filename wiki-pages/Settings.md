@@ -77,6 +77,38 @@
 
 Импорт использует стратегию merge (не перезаписывает всё), чувствительные данные (API ключи) маскируются при экспорте.
 
+## Режимы развёртывания (Deployment Modes)
+
+Система поддерживает три режима, определяемых переменной окружения `DEPLOYMENT_MODE`:
+
+| Режим | Описание |
+|-------|----------|
+| **full** (по умолчанию) | Все сервисы: локальный LLM (vLLM), TTS (XTTS/Piper), STT, GSM. Требует GPU |
+| **cloud** | Только облачные LLM. GPU/TTS/STT/GSM сервисы не загружаются, hardware-роутеры не регистрируются |
+| **local** | Идентичен `full`, для явного указания в конфигурации |
+
+### Бэкенд
+
+В режиме `cloud`:
+- Роутеры `services`, `monitor`, `gsm`, `stt`, `tts` **не регистрируются**
+- TTS/STT/GPU инициализация **пропускается**
+- Эндпоинт `/health` включает `deployment_mode` в ответ и не требует TTS для healthy-статуса
+- `GET /admin/deployment-mode` возвращает текущий режим
+- `/auth/me` включает `deployment_mode` в ответ
+
+### Фронтенд
+
+- Store `auth.ts` запрашивает `GET /admin/deployment-mode` и предоставляет `isCloudMode` computed
+- Маршруты и навигация с `meta.localOnly: true` **скрываются** в облачном режиме:
+  - Dashboard, Services, TTS, Monitoring, Models, GSM
+- Облачные пользователи перенаправляются на `/chat`
+
+### Переменная окружения
+
+```bash
+DEPLOYMENT_MODE=full    # full | cloud | local
+```
+
 ## О программе (About)
 
 Доступна через навигацию:

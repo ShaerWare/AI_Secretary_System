@@ -20,6 +20,7 @@
 
 ### Каналы
 * [[Chat]]
+* [[Chat-Sharing]]
 * [[Telegram]]
 * [[WhatsApp]]
 * [[Widget]]
@@ -30,6 +31,7 @@
 * [[Sales]]
 * [[CRM]]
 * [[Payments]]
+* [[Kanban]]
 
 ### Система
 * [[Settings]]
@@ -39,6 +41,7 @@
 
 ### Интеграции
 * [[Cloud-LLM-Providers]]
+* [[Claude-Code]]
 * [[VLESS-Proxy]]
 
 ### Справка
