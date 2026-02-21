@@ -152,9 +152,9 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (21 routers, ~390 endpoints) │
+│  orchestrator.py + app/routers/ (23 routers, ~400 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │        Vue 3 Admin Panel (20 views, PWA)                │  │
+│  │        Vue 3 Admin Panel (21 views, PWA)                │  │
 │  │                admin/dist/                              │  │
 │  └────────────────────────────────────────────────────────┘  │
 └────────────┬──────────────┬──────────────┬───────────────────┘
@@ -181,7 +181,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 ### Key Architectural Decisions
 
-**Global state in orchestrator.py** (~3670 lines, ~109 endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
+**Global state in orchestrator.py** (~3670 lines, ~100 legacy endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
 
 **ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
 
@@ -257,6 +257,12 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **Chat session source filtering**: `GET /admin/chat/sessions` accepts `source` and `exclude_source` query params for filtering sessions by origin. Values: `admin`, `telegram`, `widget`, `whatsapp`. The `telegram` value maps to `telegram_bot` in DB transparently. `ChatView` (`/admin/#/chat`) uses `listSessions('admin')` to show only admin-created chats (grouped sessions UI was removed). CRM Inbox uses `listSessions(source, 'admin')` to show non-admin chats with source filtering. `list_sessions_grouped()` includes `whatsapp` key and normalizes `telegram_bot` → `telegram` for the frontend.
 
 **Anti-tool-call prompt injection**: `_finalize_prompt()` in `app/routers/chat.py` appends `_NO_TOOLS_SUFFIX` to every system prompt before sending to LLM. Prevents Claude bridge from hallucinating fake tool calls (`filesystem read_file`, `function_calls`) as text, which caused chat responses to hang. Applied to all 4 chat endpoints (send, stream, edit, regenerate).
+
+**Kanban/Tasks** (`app/routers/kanban.py`): Project task management board with Gantt roadmap. `KanbanTask` model with status (`todo`/`in_progress`/`review`/`done`), assignee, dates, tags (JSON), `is_private`, `position` for drag-reorder. `KanbanTaskDependency` (blocker → dependent), `KanbanChecklistItem` (per-task checklists). `KanbanTaskStatus` enum. 10 endpoints: CRUD, reorder, dependency management, checklist items. Frontend: `KanbanView.vue` with `KanbanBoard.vue` (drag & drop columns), `KanbanCard.vue`, `KanbanCardDetail.vue` (side panel), `KanbanTaskForm.vue`, `KanbanRoadmap.vue` (Gantt-style timeline), `KanbanStatusBadge.vue`. Migration: `scripts/migrate_kanban.py`.
+
+**Claude Code Web UI** (`app/routers/claude_code.py`): WebSocket-based terminal for Claude Code CLI. WebSocket at `/admin/claude-code/ws?token=<jwt>` streams structured events (text_delta, thinking_delta, tool_use_start, tool_result, turn_complete). REST endpoints for session management (list/get/delete). `ClaudeCodeSession` model tracks sessions in DB. One active WebSocket per user. Admin-only. Frontend: `useClaudeCode` composable.
+
+**Chat session sharing**: `ChatSessionShare` model (`chat_session_shares` table) enables sharing chat sessions between users. `ChatShareDialog.vue` component in frontend.
 
 **Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler).
 

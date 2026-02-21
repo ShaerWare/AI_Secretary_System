@@ -1621,7 +1621,6 @@ watch(sessions, (newSessions) => {
           </div>
           <!-- Input position toggle (hidden on small screens) -->
           <button
-            v-if="!cc.isActive.value"
             class="hidden sm:inline-flex p-2 rounded-lg hover:bg-secondary transition-colors"
             :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
             @click="toggleInputPosition"
