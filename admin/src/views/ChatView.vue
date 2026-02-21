@@ -523,6 +523,12 @@ function isNearBottom(): boolean {
   return scrollHeight - scrollTop - clientHeight < 150
 }
 
+function scrollToTop() {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
 function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
@@ -2253,6 +2259,21 @@ watch(sessions, (newSessions) => {
             <Send v-if="!isStreaming" class="w-5 h-5" />
             <Loader2 v-else class="w-5 h-5 animate-spin" />
           </button>
+          <!-- Scroll up/down buttons -->
+          <button
+            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
+            title="Scroll to top"
+            @click="scrollToTop"
+          >
+            <ArrowUpToLine class="w-5 h-5" />
+          </button>
+          <button
+            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
+            title="Scroll to bottom"
+            @click="scrollToBottom"
+          >
+            <ArrowDownToLine class="w-5 h-5" />
+          </button>
         </div>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -2262,7 +2283,7 @@ watch(sessions, (newSessions) => {
       </div>
 
       <!-- Messages + Branch Tree row -->
-      <div class="flex-1 flex overflow-hidden">
+      <div class="flex-1 flex overflow-hidden relative">
       <!-- Messages -->
       <div
         ref="messagesContainer"
@@ -2271,7 +2292,7 @@ watch(sessions, (newSessions) => {
           fullscreenStore.isFullscreen ? 'zen-messages' : ''
         ]"
       >
-        <!-- Zen mode: inline session title -->
+        <!-- Zen mode: inline session title + new chat button -->
         <div v-if="fullscreenStore.isFullscreen && currentSession" class="text-center mb-4">
           <template v-if="editingHeaderTitle">
             <input
@@ -2290,6 +2311,16 @@ watch(sessions, (newSessions) => {
           >
             {{ currentSession.title }}
           </h2>
+          <div class="mt-2">
+            <button
+              :disabled="createSessionMutation.isPending.value"
+              class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              @click="createNewChat"
+            >
+              <Plus class="w-3.5 h-3.5" />
+              {{ t('chatView.newChat') }}
+            </button>
+          </div>
         </div>
 
         <!-- Claude Code mode messages -->
