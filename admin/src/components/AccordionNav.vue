@@ -21,7 +21,8 @@ import {
   ShoppingCart,
   Users,
   Settings,
-  Info
+  Info,
+  ClipboardList
 } from 'lucide-vue-next'
 import { markRaw } from 'vue'
 import WhatsAppIcon from './WhatsAppIcon.vue'
@@ -88,6 +89,7 @@ const allNavGroups = computed(() => [
       { path: '/faq', nameKey: 'nav.faq', icon: MessageSquare },
       { path: '/sales', nameKey: 'nav.sales', icon: ShoppingCart, minRole: 'user' as UserRole },
       { path: '/crm', nameKey: 'nav.crm', icon: Users, minRole: 'user' as UserRole },
+      { path: '/kanban', nameKey: 'nav.kanban', icon: ClipboardList, minRole: 'user' as UserRole },
     ]
   },
   {

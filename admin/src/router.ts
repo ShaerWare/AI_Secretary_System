@@ -18,6 +18,7 @@ import UsageView from './views/UsageView.vue'
 import SettingsView from './views/SettingsView.vue'
 import LoginView from './views/LoginView.vue'
 import CrmView from './views/CrmView.vue'
+import KanbanView from './views/KanbanView.vue'
 import SalesView from './views/SalesView.vue'
 import AboutView from './views/AboutView.vue'
 
@@ -131,6 +132,12 @@ const router = createRouter({
       name: 'crm',
       component: CrmView,
       meta: { title: 'CRM', icon: 'Users', minRole: 'user', excludeRoles: ['web'] }
+    },
+    {
+      path: '/kanban',
+      name: 'kanban',
+      component: KanbanView,
+      meta: { title: 'Kanban', icon: 'ClipboardList', minRole: 'user' }
     },
     {
       path: '/sales',

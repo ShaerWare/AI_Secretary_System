@@ -26,6 +26,7 @@ from db.repositories import (
     FAQRepository,
     GSMCallLogRepository,
     GSMSMSLogRepository,
+    KanbanRepository,
     KnowledgeCollectionRepository,
     KnowledgeDocumentRepository,
     PaymentRepository,
@@ -1481,6 +1482,72 @@ async_knowledge_doc_manager = AsyncKnowledgeDocManager()
 async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
 async_chat_share_manager = AsyncChatShareManager()
 async_claude_code_manager = AsyncClaudeCodeManager()
+
+
+# ============== Kanban Manager ==============
+
+
+class AsyncKanbanManager:
+    """Async kanban task manager."""
+
+    async def get_visible_tasks(self, current_user: str, is_admin: bool) -> list:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.get_visible_tasks(current_user, is_admin)
+
+    async def get_task(self, task_id: int) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            task = await repo.get_task_with_relations(task_id)
+            return task.to_dict() if task else None
+
+    async def create_task(self, **kwargs) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.create_task(**kwargs)
+
+    async def update_task(self, task_id: int, **kwargs) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.update_task(task_id, **kwargs)
+
+    async def delete_task(self, task_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.delete_by_id(task_id)
+
+    async def reorder(self, task_id: int, new_status: str, new_position: int) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.reorder(task_id, new_status, new_position)
+
+    async def add_dependency(self, blocker_id: int, dependent_id: int) -> None:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            await repo.add_dependency(blocker_id, dependent_id)
+
+    async def remove_dependency(self, blocker_id: int, dependent_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.remove_dependency(blocker_id, dependent_id)
+
+    async def add_checklist_item(self, task_id: int, text: str, position: int = 0) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.add_checklist_item(task_id, text, position)
+
+    async def toggle_checklist_item(self, item_id: int) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.toggle_checklist_item(item_id)
+
+    async def delete_checklist_item(self, item_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.delete_checklist_item(item_id)
+
+
+async_kanban_manager = AsyncKanbanManager()
 
 
 # ============== Initialization Function ==============
