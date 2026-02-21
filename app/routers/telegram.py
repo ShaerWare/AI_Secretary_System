@@ -69,6 +69,11 @@ class BotInstanceCreateRequest(BaseModel):
     stars_enabled: bool = False
     payment_products: Optional[list] = None
     payment_success_message: Optional[str] = None
+    # Sales funnel
+    sales_funnel_enabled: bool = True
+    # RAG
+    rag_mode: str = "all"
+    knowledge_collection_ids: Optional[List[int]] = None
     # YooMoney OAuth2
     yoomoney_client_id: Optional[str] = None
     yoomoney_client_secret: Optional[str] = None
@@ -99,6 +104,11 @@ class BotInstanceUpdateRequest(BaseModel):
     stars_enabled: Optional[bool] = None
     payment_products: Optional[list] = None
     payment_success_message: Optional[str] = None
+    # Sales funnel
+    sales_funnel_enabled: Optional[bool] = None
+    # RAG
+    rag_mode: Optional[str] = None
+    knowledge_collection_ids: Optional[List[int]] = None
     # YooMoney OAuth2
     yoomoney_client_id: Optional[str] = None
     yoomoney_client_secret: Optional[str] = None

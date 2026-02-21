@@ -36,6 +36,8 @@ async def main() -> None:
     # Check for multi-instance mode
     instance_id = get_bot_instance_id()
 
+    skip_sales = False
+
     if instance_id:
         # Multi-instance mode: try pre-fetched config file first, then API
         logger.info(f"Multi-instance mode: loading config for {instance_id}")
@@ -51,7 +53,13 @@ async def main() -> None:
         if bot_config:
             set_bot_config(bot_config)
             bot_token = bot_config.bot_token
-            set_action_buttons(bot_config.action_buttons or DEFAULT_ACTION_BUTTONS)
+            if bot_config.sales_funnel_enabled:
+                set_action_buttons(bot_config.action_buttons or DEFAULT_ACTION_BUTTONS)
+            else:
+                skip_sales = True
+                # Use bot's own action_buttons (may contain URL buttons)
+                set_action_buttons(bot_config.action_buttons or [])
+                logger.info("Sales funnel disabled for this bot instance")
             logger.info(f"Loaded config for bot: {bot_config.name}")
             logger.info(f"LLM backend: {bot_config.llm_backend}")
             logger.info(f"Action buttons: {len(get_action_buttons())} configured")
@@ -74,7 +82,7 @@ async def main() -> None:
     logger.info("Sales DB initialized")
 
     # Register routers (pass action_buttons for keyboard building)
-    dp.include_router(get_main_router())
+    dp.include_router(get_main_router(skip_sales=skip_sales))
 
     logger.info("Starting Telegram bot (polling)…")
 
