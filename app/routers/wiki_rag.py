@@ -505,7 +505,7 @@ async def get_document(doc_id: int, user: User = Depends(get_current_user)):
     if file_path.exists():
         try:
             full_content = file_path.read_text(encoding="utf-8")
-            content_preview = full_content[:2000]
+            content_preview = full_content
         except Exception:
             pass
 

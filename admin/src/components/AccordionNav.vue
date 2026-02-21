@@ -17,7 +17,7 @@ import {
   Send,
   Code2,
   Phone,
-  MessageSquare,
+  BookOpen,
   ShoppingCart,
   Users,
   Settings,
@@ -86,7 +86,6 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.business',
     icon: ShoppingCart,
     items: [
-      { path: '/faq', nameKey: 'nav.faq', icon: MessageSquare },
       { path: '/sales', nameKey: 'nav.sales', icon: ShoppingCart, minRole: 'user' as UserRole },
       { path: '/crm', nameKey: 'nav.crm', icon: Users, minRole: 'user' as UserRole },
       { path: '/kanban', nameKey: 'nav.kanban', icon: ClipboardList, minRole: 'user' as UserRole },
@@ -97,6 +96,7 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.system',
     icon: Settings,
     items: [
+      { path: '/wiki', nameKey: 'nav.wiki', icon: BookOpen },
       { path: '/settings', nameKey: 'common.settings', icon: Settings, minRole: 'user' as UserRole },
       { path: '/about', nameKey: 'nav.about', icon: Info },
     ]

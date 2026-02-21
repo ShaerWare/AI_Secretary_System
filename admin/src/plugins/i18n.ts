@@ -10,6 +10,7 @@ const messages = {
       llm: 'LLM',
       tts: 'Голос',
       faq: 'FAQ',
+      wiki: 'Wiki',
       finetune: 'Обучение',
       monitoring: 'Мониторинг',
       models: 'Модели',
@@ -152,7 +153,17 @@ const messages = {
       createPreset: 'Создать пресет',
       speed: 'Скорость'
     },
-    // FAQ
+    // Wiki
+    wiki: {
+      title: 'Wiki проекта',
+      search: 'Поиск по страницам...',
+      noPages: 'Страницы не найдены',
+      sections: 'разделов',
+      back: 'К списку',
+      loading: 'Загрузка...',
+      selectPage: 'Выберите страницу для чтения'
+    },
+    // FAQ (kept for backend)
     faq: {
       title: 'Редактор FAQ',
       addEntry: 'Добавить запись',
@@ -1070,6 +1081,7 @@ const messages = {
       llm: 'LLM',
       tts: 'TTS',
       faq: 'FAQ',
+      wiki: 'Wiki',
       finetune: 'Fine-tune',
       monitoring: 'Monitoring',
       models: 'Models',
@@ -1212,7 +1224,17 @@ const messages = {
       createPreset: 'Create Preset',
       speed: 'Speed'
     },
-    // FAQ
+    // Wiki
+    wiki: {
+      title: 'Project Wiki',
+      search: 'Search pages...',
+      noPages: 'No pages found',
+      sections: 'sections',
+      back: 'Back to list',
+      loading: 'Loading...',
+      selectPage: 'Select a page to read'
+    },
+    // FAQ (kept for backend)
     faq: {
       title: 'FAQ Editor',
       addEntry: 'Add Entry',
@@ -2130,6 +2152,7 @@ const messages = {
       llm: 'LLM',
       tts: 'Дауыс',
       faq: 'FAQ',
+      wiki: 'Wiki',
       finetune: 'Оқыту',
       monitoring: 'Мониторинг',
       models: 'Модельдер',
@@ -2271,7 +2294,17 @@ const messages = {
       createPreset: 'Пресет жасау',
       speed: 'Жылдамдық'
     },
-    // FAQ
+    // Wiki
+    wiki: {
+      title: 'Жоба Wiki',
+      search: 'Беттерді іздеу...',
+      noPages: 'Беттер табылмады',
+      sections: 'бөлімдер',
+      back: 'Тізімге',
+      loading: 'Жүктелуде...',
+      selectPage: 'Оқу үшін бетті таңдаңыз'
+    },
+    // FAQ (kept for backend)
     faq: {
       title: 'FAQ редакторы',
       addEntry: 'Жазба қосу',

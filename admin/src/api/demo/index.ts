@@ -6,6 +6,7 @@ import { monitorRoutes } from './monitor'
 import { llmRoutes, initLlmData } from './llm'
 import { ttsRoutes, createMinimalWav } from './tts'
 import { faqRoutes, initFaqData } from './faq'
+import { wikiRoutes } from './wiki'
 import { chatRoutes, initChatData } from './chat'
 import { telegramRoutes, initTelegramData } from './telegram'
 import { widgetRoutes, initWidgetData } from './widget'
@@ -32,6 +33,7 @@ const allRoutes: DemoRoute[] = [
   ...whatsappRoutes,
   ...widgetRoutes,
   ...chatRoutes,
+  ...wikiRoutes,
   ...faqRoutes,
   ...llmRoutes,
   ...ttsRoutes,

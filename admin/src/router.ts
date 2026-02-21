@@ -62,10 +62,10 @@ const router = createRouter({
       meta: { title: 'TTS', icon: 'Mic', minRole: 'user', excludeRoles: ['web'], localOnly: true }
     },
     {
-      path: '/faq',
-      name: 'faq',
+      path: '/wiki',
+      name: 'wiki',
       component: FaqView,
-      meta: { title: 'FAQ', icon: 'MessageSquare' }
+      meta: { title: 'Wiki', icon: 'BookOpen' }
     },
     {
       path: '/finetune',
