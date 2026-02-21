@@ -1502,7 +1502,7 @@ watch(sessions, (newSessions) => {
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Zen Mode: Floating Toolbar -->
       <div v-if="fullscreenStore.isFullscreen && currentSession" class="zen-toolbar-enter relative flex items-center justify-center px-4 py-3">
-        <div class="zen-glass rounded-2xl px-4 py-2 flex items-center gap-3 shadow-lg max-w-2xl w-full">
+        <div class="zen-glass rounded-2xl px-4 py-2 flex items-center gap-2 shadow-lg max-w-4xl w-full">
           <!-- Session title -->
           <div class="flex-1 min-w-0">
             <template v-if="editingHeaderTitle">
@@ -1525,7 +1525,23 @@ watch(sessions, (newSessions) => {
             </template>
           </div>
 
-          <!-- LLM provider (compact) -->
+          <!-- Separator -->
+          <div class="w-px h-5 bg-border/50 shrink-0"></div>
+
+          <!-- Claude Code toggle (restricted users) -->
+          <button
+            v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
+            :class="[
+              'p-1.5 rounded-lg transition-colors shrink-0',
+              cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
+            @click="cc.toggle()"
+          >
+            <Terminal class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- LLM provider (compact, non-CC) -->
           <div v-if="!cc.isActive.value" class="hidden sm:flex items-center gap-1 shrink-0">
             <Brain class="w-3.5 h-3.5 text-muted-foreground" />
             <select
@@ -1539,20 +1555,211 @@ watch(sessions, (newSessions) => {
             </select>
           </div>
 
-          <!-- RAG badge -->
+          <!-- RAG collections dropdown (non-CC) -->
+          <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
+            <button
+              :class="[
+                'p-1.5 rounded-lg transition-colors',
+                selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+              ]"
+              :title="t('chatView.knowledgeBase')"
+              @click="showRagMenu = !showRagMenu"
+            >
+              <BookOpen class="w-3.5 h-3.5" />
+              <span
+                v-if="selectedCollectionIds.length"
+                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
+              >{{ selectedCollectionIds.length }}</span>
+            </button>
+            <div
+              v-if="showRagMenu"
+              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px]"
+              @click.stop
+            >
+              <label
+                v-for="col in knowledgeCollections"
+                :key="col.id"
+                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
+              >
+                <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
+                <span>{{ col.name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Share button (non-CC, owner only) -->
+          <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
+            <button
+              class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
+              :title="t('chatView.shareChat')"
+              @click="showShareDialog = true"
+            >
+              <Share2 class="w-3.5 h-3.5" />
+              <span
+                v-if="(currentSession?.share_count ?? 0) > 0"
+                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
+              >{{ currentSession!.share_count }}</span>
+            </button>
+          </div>
+
+          <!-- Fork button (non-CC, read-only) -->
           <button
-            v-if="!cc.isActive.value && knowledgeCollections.length"
-            :class="[
-              'p-1.5 rounded-lg transition-colors shrink-0',
-              selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-            ]"
-            :title="t('chatView.knowledgeBase')"
-            @click="showRagMenu = !showRagMenu"
+            v-if="!cc.isActive.value && isReadOnly"
+            :disabled="forkSessionMutation.isPending.value"
+            class="p-1.5 rounded-lg text-blue-400 hover:bg-secondary/50 transition-colors shrink-0"
+            :title="t('chatView.forkChat')"
+            @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
           >
-            <BookOpen class="w-3.5 h-3.5" />
+            <Loader2 v-if="forkSessionMutation.isPending.value" class="w-3.5 h-3.5 animate-spin" />
+            <GitFork v-else class="w-3.5 h-3.5" />
           </button>
 
-          <!-- Settings dropdown -->
+          <!-- Export dropdown (non-CC) -->
+          <div v-if="!cc.isActive.value" class="relative hidden sm:block shrink-0">
+            <button
+              class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
+              :title="t('chatView.exportChat')"
+              @click="showExportMenu = !showExportMenu"
+            >
+              <Download class="w-3.5 h-3.5" />
+            </button>
+            <div
+              v-if="showExportMenu"
+              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[160px]"
+              @click.stop
+            >
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+                @click="copyChatToClipboard"
+              >
+                <Copy class="w-3.5 h-3.5" />
+                {{ t('chatView.copyChat') }}
+              </button>
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+                @click="exportChatMarkdown"
+              >
+                <FileText class="w-3.5 h-3.5" />
+                {{ t('chatView.exportMarkdown') }}
+              </button>
+              <button
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2"
+                @click="exportChatJson"
+              >
+                <Download class="w-3.5 h-3.5" />
+                {{ t('chatView.exportJson') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Input position toggle -->
+          <button
+            class="hidden sm:inline-flex p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+            :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
+            @click="toggleInputPosition"
+          >
+            <ArrowDownToLine v-if="inputPosition === 'top'" class="w-3.5 h-3.5" />
+            <ArrowUpToLine v-else class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Voice mode toggle (non-CC) -->
+          <button
+            v-if="!cc.isActive.value"
+            :class="[
+              'p-1.5 rounded-lg transition-colors shrink-0',
+              voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="voiceMode ? 'Voice mode ON' : 'Voice mode OFF'"
+            @click="voiceMode = !voiceMode"
+          >
+            <Volume2 v-if="voiceMode" class="w-3.5 h-3.5" />
+            <VolumeX v-else class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Branch tree toggle (non-CC) -->
+          <button
+            v-if="!cc.isActive.value"
+            :class="[
+              'p-1.5 rounded-lg transition-colors shrink-0',
+              showBranchTree ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="t('chatView.branchTree')"
+            @click="showBranchTree = !showBranchTree"
+          >
+            <GitBranch class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- CC: Working directory dropdown -->
+          <div v-if="cc.isActive.value" class="relative shrink-0">
+            <button
+              :class="[
+                'p-1.5 rounded-lg transition-colors',
+                cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+              ]"
+              :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
+              @click="showCcDirMenu = !showCcDirMenu"
+            >
+              <FolderOpen class="w-3.5 h-3.5" />
+            </button>
+            <div
+              v-if="showCcDirMenu"
+              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px]"
+              @click.stop
+            >
+              <button
+                v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
+                :key="dir"
+                :class="[
+                  'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+                  cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary/30'
+                ]"
+                @click="selectCcDir(dir)"
+              >
+                <FolderOpen class="w-3.5 h-3.5 shrink-0" />
+                <span class="font-mono text-xs">{{ dir }}</span>
+                <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
+              </button>
+            </div>
+          </div>
+
+          <!-- CC: Context files dropdown -->
+          <div v-if="cc.isActive.value && contextFiles.length > 0" class="relative shrink-0">
+            <button
+              :class="[
+                'p-1.5 rounded-lg transition-colors',
+                cc.pendingContextFiles.value.length > 0 ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+              ]"
+              :title="t('chatView.claudeCode.attachFiles')"
+              @click="showCcFilesMenu = !showCcFilesMenu"
+            >
+              <Paperclip class="w-3.5 h-3.5" />
+              <span
+                v-if="cc.pendingContextFiles.value.length > 0"
+                class="absolute -top-1 -right-1 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-600 text-white flex items-center justify-center border border-background"
+              >{{ cc.pendingContextFiles.value.length }}</span>
+            </button>
+            <div
+              v-if="showCcFilesMenu"
+              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] max-w-[300px]"
+              @click.stop
+            >
+              <label
+                v-for="file in contextFiles"
+                :key="file.name"
+                class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  :checked="isCcFileSelected(file.name)"
+                  class="rounded border-border w-3.5 h-3.5 accent-green-600"
+                  @change="toggleCcContextFile(file)"
+                />
+                <span class="truncate text-xs">{{ file.name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Settings dropdown (simplified — opens full panel) -->
           <div class="zen-settings-anchor relative shrink-0">
             <button
               :class="[
@@ -1565,7 +1772,7 @@ watch(sessions, (newSessions) => {
               <Settings2 class="w-3.5 h-3.5" />
             </button>
 
-            <!-- Zen settings dropdown panel -->
+            <!-- Zen settings dropdown panel (simplified) -->
             <div
               v-if="showZenSettings"
               class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-3 px-4 z-50 w-80 max-h-[70vh] overflow-y-auto animate-scale-in"
@@ -1573,63 +1780,15 @@ watch(sessions, (newSessions) => {
             >
               <h4 class="text-xs font-semibold text-muted-foreground uppercase mb-3">{{ t('chatView.zenSettings') }}</h4>
 
-              <!-- LLM Provider -->
-              <div v-if="!cc.isActive.value" class="mb-3">
-                <label class="text-xs text-muted-foreground mb-1 block">LLM</label>
-                <select
-                  v-model="selectedLlmBackend"
-                  class="w-full px-2 py-1.5 text-sm bg-secondary/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border-none"
-                >
-                  <option value="">{{ t('chat.defaultLlm') }}</option>
-                  <option v-for="option in availableLlmOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- Knowledge Base -->
-              <div v-if="!cc.isActive.value && knowledgeCollections.length" class="mb-3">
-                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.knowledgeBase') }}</label>
-                <div class="space-y-1">
-                  <label
-                    v-for="col in knowledgeCollections"
-                    :key="col.id"
-                    class="flex items-center gap-2 px-2 py-1 text-sm rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
-                  >
-                    <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
-                    <span>{{ col.name }}</span>
-                  </label>
-                </div>
-              </div>
-
-              <!-- Input position -->
-              <div class="mb-3">
-                <label class="text-xs text-muted-foreground mb-1 block">Input</label>
-                <button
-                  class="flex items-center gap-2 px-2 py-1.5 text-sm bg-secondary/50 rounded-lg hover:bg-secondary transition-colors w-full"
-                  @click="toggleInputPosition"
-                >
-                  <ArrowDownToLine v-if="inputPosition === 'top'" class="w-3.5 h-3.5" />
-                  <ArrowUpToLine v-else class="w-3.5 h-3.5" />
-                  <span>{{ inputPosition === 'top' ? 'Move to bottom' : 'Move to top' }}</span>
-                </button>
-              </div>
-
-              <!-- Voice mode -->
-              <div v-if="!cc.isActive.value" class="mb-3">
-                <label class="text-xs text-muted-foreground mb-1 block">Voice</label>
-                <button
-                  :class="[
-                    'flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg w-full transition-colors',
-                    voiceMode ? 'bg-primary/20 text-primary' : 'bg-secondary/50 hover:bg-secondary'
-                  ]"
-                  @click="voiceMode = !voiceMode"
-                >
-                  <Volume2 v-if="voiceMode" class="w-3.5 h-3.5" />
-                  <VolumeX v-else class="w-3.5 h-3.5" />
-                  <span>{{ voiceMode ? 'ON' : 'OFF' }}</span>
-                </button>
-              </div>
+              <!-- Open full settings button -->
+              <button
+                v-if="!isReadOnly && !cc.isActive.value"
+                class="flex items-center gap-2 px-2 py-1.5 text-sm bg-secondary/50 rounded-lg hover:bg-secondary transition-colors w-full mb-3"
+                @click="showSettings = true; showZenSettings = false"
+              >
+                <Settings2 class="w-3.5 h-3.5" />
+                <span>Open full settings</span>
+              </button>
 
               <!-- System prompt -->
               <div v-if="!isReadOnly" class="mb-3">
@@ -1680,6 +1839,27 @@ watch(sessions, (newSessions) => {
               </div>
             </div>
           </div>
+
+          <!-- New branch / New CC session -->
+          <button
+            v-if="!isReadOnly"
+            :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
+            class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+            :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
+            @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
+          >
+            <Plus class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Delete chat / Stop CC -->
+          <button
+            v-if="cc.isActive.value || isSessionOwner"
+            class="p-1.5 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
+            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
+            @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+          </button>
 
           <!-- Exit fullscreen -->
           <button
@@ -2480,7 +2660,7 @@ watch(sessions, (newSessions) => {
       </div>
 
       <!-- Branch Tree Panel (hidden in zen mode) -->
-      <template v-if="showBranchTree && !fullscreenStore.isFullscreen">
+      <template v-if="showBranchTree">
         <div
           class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
           @mousedown="startBranchResize"
@@ -2496,20 +2676,20 @@ watch(sessions, (newSessions) => {
         />
       </template>
 
-      <!-- Settings Panel (slide-out right / fullscreen on mobile, hidden in zen mode) -->
+      <!-- Settings Panel (slide-out right / fullscreen on mobile) -->
       <div
-        v-if="showSettings && !fullscreenStore.isFullscreen"
+        v-if="showSettings"
         class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
         @mousedown="startSettingsResize"
       />
       <!-- Mobile backdrop -->
       <div
-        v-if="showSettings && !fullscreenStore.isFullscreen"
+        v-if="showSettings"
         class="md:hidden fixed inset-0 bg-black/50 z-40"
         @click="showSettings = false"
       />
       <div
-        v-if="showSettings && !fullscreenStore.isFullscreen"
+        v-if="showSettings"
         class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
         :style="{ '--settings-w': settingsWidth + 'px' }"
       >
