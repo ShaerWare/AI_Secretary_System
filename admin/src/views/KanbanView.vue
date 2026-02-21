@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ClipboardList, Plus, RefreshCw } from 'lucide-vue-next'
+import { ClipboardList, Plus, RefreshCw, LayoutGrid, ChartGantt } from 'lucide-vue-next'
 import { useKanbanStore } from '@/stores/kanban'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
@@ -10,6 +10,10 @@ import type { KanbanTask, TaskCreateData, TaskUpdateData } from '@/api'
 import KanbanBoard from '@/components/kanban/KanbanBoard.vue'
 import KanbanTaskForm from '@/components/kanban/KanbanTaskForm.vue'
 import KanbanCardDetail from '@/components/kanban/KanbanCardDetail.vue'
+
+const KanbanRoadmap = defineAsyncComponent(
+  () => import('@/components/kanban/KanbanRoadmap.vue'),
+)
 
 const { t } = useI18n()
 const kanbanStore = useKanbanStore()
@@ -78,6 +82,21 @@ async function handleDelete(id: number) {
   } catch (e) {
     toast.error((e as Error).message)
   }
+}
+
+async function handleDateChange(taskId: number, startDate: string, endDate: string) {
+  try {
+    await kanbanStore.updateTask(taskId, { start_date: startDate, due_date: endDate })
+    toast.success(t('kanban.taskUpdated'))
+  } catch (e) {
+    toast.error((e as Error).message)
+    await kanbanStore.fetchTasks()
+  }
+}
+
+function handleGanttClick(taskId: number) {
+  const task = kanbanStore.tasks.find((t) => t.id === taskId)
+  if (task) openDetail(task)
 }
 
 async function handleReorder(taskId: number, newStatus: string, newPosition: number) {
@@ -156,6 +175,34 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <!-- View toggle -->
+        <div class="flex rounded-lg border border-border overflow-hidden">
+          <button
+            class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors"
+            :class="
+              kanbanStore.activeView === 'kanban'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card text-muted-foreground hover:bg-muted'
+            "
+            @click="kanbanStore.activeView = 'kanban'"
+          >
+            <LayoutGrid class="w-4 h-4" />
+            {{ t('kanban.viewKanban') }}
+          </button>
+          <button
+            class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors"
+            :class="
+              kanbanStore.activeView === 'roadmap'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card text-muted-foreground hover:bg-muted'
+            "
+            @click="kanbanStore.activeView = 'roadmap'"
+          >
+            <ChartGantt class="w-4 h-4" />
+            {{ t('kanban.viewRoadmap') }}
+          </button>
+        </div>
+
         <button
           class="p-2 rounded-lg border border-border hover:bg-muted transition-colors"
           :disabled="kanbanStore.loading"
@@ -176,12 +223,23 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
 
     <!-- Kanban Board -->
     <KanbanBoard
+      v-if="kanbanStore.activeView === 'kanban'"
       :tasks-by-status="kanbanStore.tasksByStatus"
       :loading="kanbanStore.loading"
       :disabled="authStore.isGuest"
       @reorder="handleReorder"
       @click-task="openDetail"
       @create-task="openCreate"
+    />
+
+    <!-- Gantt Roadmap -->
+    <KanbanRoadmap
+      v-else
+      :tasks="kanbanStore.ganttTasks"
+      :loading="kanbanStore.loading"
+      :disabled="authStore.isGuest"
+      @click-task="handleGanttClick"
+      @date-change="handleDateChange"
     />
 
     <!-- Modals -->

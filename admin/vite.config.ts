@@ -39,7 +39,8 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             'vendor': ['vue', 'vue-router', 'pinia'],
             'ui': ['radix-vue', 'lucide-vue-next'],
-            'charts': ['chart.js', 'vue-chartjs']
+            'charts': ['chart.js', 'vue-chartjs'],
+            'gantt': ['frappe-gantt']
           }
         }
       }

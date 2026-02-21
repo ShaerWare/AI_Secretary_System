@@ -28,6 +28,45 @@ export const useKanbanStore = defineStore('kanban', () => {
     return map
   })
 
+  const ganttTasks = computed(() => {
+    return tasks.value
+      .filter((t) => t.start_date || t.due_date || t.created)
+      .map((t) => {
+        const start =
+          t.start_date || t.created?.split('T')[0] || new Date().toISOString().split('T')[0]
+        let end = t.due_date
+        if (!end) {
+          const d = new Date(start)
+          d.setDate(d.getDate() + 7)
+          end = d.toISOString().split('T')[0]
+        }
+        if (end < start) end = start
+
+        const total = t.checklist.length
+        const done = t.checklist.filter((c) => c.is_done).length
+        const progress =
+          total > 0 ? Math.round((done / total) * 100) : t.status === 'done' ? 100 : 0
+
+        const STATUS_CLASS: Record<string, string> = {
+          draft: 'gantt-bar-draft',
+          todo: 'gantt-bar-todo',
+          in_progress: 'gantt-bar-in-progress',
+          review: 'gantt-bar-review',
+          done: 'gantt-bar-done',
+        }
+
+        return {
+          id: String(t.id),
+          name: t.title,
+          start,
+          end,
+          progress,
+          dependencies: t.blockers.map(String).join(', '),
+          custom_class: STATUS_CLASS[t.status] || '',
+        }
+      })
+  })
+
   const selectedTask = computed(() =>
     selectedTaskId.value ? tasks.value.find((t) => t.id === selectedTaskId.value) || null : null
   )
@@ -116,6 +155,7 @@ export const useKanbanStore = defineStore('kanban', () => {
     activeView,
     filteredTasks,
     tasksByStatus,
+    ganttTasks,
     selectedTask,
     fetchTasks,
     createTask,

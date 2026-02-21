@@ -1,3 +1,5 @@
+@import '../../node_modules/frappe-gantt/dist/frappe-gantt.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -352,6 +354,87 @@
 .chat-markdown img {
   max-width: 100%;
   border-radius: 0.5rem;
+}
+
+/* frappe-gantt dark mode overrides */
+.dark {
+  --g-header-background: hsl(222.2 84% 4.9%);
+  --g-text-dark: hsl(210 40% 98%);
+  --g-text-muted: hsl(215 20.2% 65.1%);
+  --g-text-light: hsl(210 40% 98%);
+  --g-border-color: hsl(217.2 32.6% 17.5%);
+  --g-row-border-color: hsl(217.2 32.6% 17.5%);
+  --g-row-color: hsl(222.2 84% 6%);
+  --g-tick-color: hsl(217.2 32.6% 17.5%);
+  --g-tick-color-thick: hsl(217.2 32.6% 22%);
+  --g-bar-color: hsl(217.2 32.6% 17.5%);
+  --g-bar-border: hsl(217.2 32.6% 22%);
+  --g-progress-color: hsl(217.2 91.2% 59.8%);
+  --g-arrow-color: hsl(215 20.2% 65.1%);
+  --g-today-highlight: hsl(210 40% 98%);
+  --g-weekend-highlight-color: hsl(217.2 32.6% 12%);
+  --g-handle-color: hsl(210 40% 98%);
+  --g-actions-background: hsl(222.2 84% 4.9%);
+  --g-popup-actions: hsl(217.2 32.6% 17.5%);
+  --g-expected-progress: hsl(217.2 32.6% 25%);
+}
+
+/* frappe-gantt night-eyes mode overrides */
+.night-eyes {
+  --g-header-background: hsl(25 20% 8%);
+  --g-text-dark: hsl(30 25% 85%);
+  --g-text-muted: hsl(30 15% 55%);
+  --g-text-light: hsl(30 25% 85%);
+  --g-border-color: hsl(25 15% 20%);
+  --g-row-border-color: hsl(25 15% 20%);
+  --g-row-color: hsl(25 18% 10%);
+  --g-tick-color: hsl(25 15% 20%);
+  --g-tick-color-thick: hsl(25 15% 25%);
+  --g-bar-color: hsl(25 15% 18%);
+  --g-bar-border: hsl(25 15% 22%);
+  --g-progress-color: hsl(35 80% 55%);
+  --g-arrow-color: hsl(30 15% 55%);
+  --g-today-highlight: hsl(30 25% 85%);
+  --g-weekend-highlight-color: hsl(25 15% 12%);
+  --g-handle-color: hsl(30 25% 85%);
+  --g-actions-background: hsl(25 20% 8%);
+  --g-popup-actions: hsl(25 15% 18%);
+  --g-expected-progress: hsl(25 15% 25%);
+}
+
+/* frappe-gantt status-colored bars */
+.gantt-bar-draft .bar { fill: #a1a1aa; }
+.gantt-bar-draft .bar-progress { fill: #71717a; }
+.gantt-bar-todo .bar { fill: #3b82f6; }
+.gantt-bar-todo .bar-progress { fill: #2563eb; }
+.gantt-bar-in-progress .bar { fill: #f59e0b; }
+.gantt-bar-in-progress .bar-progress { fill: #d97706; }
+.gantt-bar-review .bar { fill: #a855f7; }
+.gantt-bar-review .bar-progress { fill: #9333ea; }
+.gantt-bar-done .bar { fill: #22c55e; }
+.gantt-bar-done .bar-progress { fill: #16a34a; }
+
+/* frappe-gantt popup styling */
+.gantt-popup {
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.gantt-popup-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.gantt-popup-dates {
+  color: hsl(var(--muted-foreground));
+}
+.gantt-popup-progress {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+/* Hide drag handles in readonly mode */
+.gantt-container[data-readonly] .handle-group {
+  display: none;
 }
 
 /* Reduced motion preference */
