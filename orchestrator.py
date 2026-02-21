@@ -47,6 +47,7 @@ from app.routers import (
     faq,
     github_webhook,
     gsm,
+    kanban,
     legal,
     llm,
     monitor,
@@ -434,6 +435,7 @@ app.include_router(wiki_rag.router)
 app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
 app.include_router(claude_code.router)
+app.include_router(kanban.router)
 
 # Hardware/GPU routers — skip in cloud mode
 if DEPLOYMENT_MODE != "cloud":
