@@ -51,17 +51,21 @@ import {
   Terminal,
   StopCircle,
   ChevronDown,
-  FolderOpen
+  FolderOpen,
+  Maximize2,
+  Minimize2
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
+import { useChatFullscreenStore } from '@/stores/chatFullscreen'
 
 const { t } = useI18n()
 const confirmStore = useConfirmStore()
 const toastStore = useToastStore()
 const authStore = useAuthStore()
+const fullscreenStore = useChatFullscreenStore()
 
 const queryClient = useQueryClient()
 
@@ -104,6 +108,7 @@ const showRagMenu = ref(false)
 const showCcDirMenu = ref(false)
 const showCcFilesMenu = ref(false)
 const showShareDialog = ref(false)
+const showZenSettings = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
   (localStorage.getItem('chat-input-position') as 'top' | 'bottom') || 'top'
 )
@@ -1188,6 +1193,8 @@ function toggleRecording() {
 // Cleanup on unmount
 onUnmounted(() => {
   document.removeEventListener('click', handleGlobalClick)
+  document.removeEventListener('keydown', handleEscapeKey)
+  fullscreenStore.exit()
   stopSpeaking()
   stopRecording()
   if (audioUrl.value) {
@@ -1217,11 +1224,30 @@ function handleGlobalClick(e: MouseEvent) {
   if (showCcFilesMenu.value && !target.closest('.relative')) {
     showCcFilesMenu.value = false
   }
+  if (showZenSettings.value && !target.closest('.zen-settings-anchor')) {
+    showZenSettings.value = false
+  }
+}
+
+// Zen mode: restore from localStorage
+if (localStorage.getItem('chat-fullscreen') === 'true') {
+  fullscreenStore.enter()
+}
+watch(() => fullscreenStore.isFullscreen, (val) => {
+  localStorage.setItem('chat-fullscreen', val ? 'true' : 'false')
+  if (!val) showZenSettings.value = false
+})
+
+function handleEscapeKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && fullscreenStore.isFullscreen) {
+    fullscreenStore.exit()
+  }
 }
 
 // Initialize: select first session or create new
 onMounted(() => {
   document.addEventListener('click', handleGlobalClick)
+  document.addEventListener('keydown', handleEscapeKey)
   if (sessions.value.length > 0) {
     currentSessionId.value = sessions.value[0].id
   }
@@ -1238,9 +1264,10 @@ watch(sessions, (newSessions) => {
   <!-- Hidden audio element for TTS playback -->
   <audio ref="audioRef" :src="audioUrl || undefined" class="hidden" @ended="onAudioEnded" />
 
-  <div class="flex h-full">
-    <!-- Sidebar: Chat List -->
+  <div :class="['flex h-full', fullscreenStore.isFullscreen ? 'zen-enter' : '']">
+    <!-- Sidebar: Chat List (hidden in zen mode) -->
     <div
+      v-if="!fullscreenStore.isFullscreen"
       :class="[
         'border-r border-border bg-card flex flex-col transition-all',
         showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
@@ -1436,20 +1463,21 @@ watch(sessions, (newSessions) => {
 
     <!-- Sidebar resize handle (desktop only) -->
     <div
-      v-if="!sidebarCollapsed"
+      v-if="!sidebarCollapsed && !fullscreenStore.isFullscreen"
       class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
       @mousedown="startSidebarResize"
     />
 
     <!-- Mobile sidebar backdrop -->
     <div
-      v-if="showSidebar"
+      v-if="showSidebar && !fullscreenStore.isFullscreen"
       class="md:hidden fixed inset-0 bg-black/50 z-30"
       @click="showSidebar = false"
     />
 
     <!-- Mobile sidebar toggle -->
     <button
+      v-if="!fullscreenStore.isFullscreen"
       class="md:hidden fixed left-4 bottom-24 z-50 p-3 bg-primary text-primary-foreground rounded-full shadow-lg"
       @click="showSidebar = !showSidebar"
     >
@@ -1458,8 +1486,200 @@ watch(sessions, (newSessions) => {
 
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
-      <!-- Chat Header -->
-      <div v-if="currentSession" class="p-2 sm:p-4 border-b border-border flex items-center justify-between gap-2 bg-card">
+      <!-- Zen Mode: Floating Toolbar -->
+      <div v-if="fullscreenStore.isFullscreen && currentSession" class="zen-toolbar-enter relative flex items-center justify-center px-4 py-3">
+        <div class="zen-glass rounded-2xl px-4 py-2 flex items-center gap-3 shadow-lg max-w-2xl w-full">
+          <!-- Session title -->
+          <div class="flex-1 min-w-0">
+            <template v-if="editingHeaderTitle">
+              <input
+                v-model="headerTitleValue"
+                class="header-rename-input w-full text-sm font-medium bg-transparent border-b border-border focus:outline-none focus:border-primary"
+                @keydown.enter="saveHeaderRename"
+                @keydown.escape="cancelHeaderRename"
+                @blur="saveHeaderRename"
+                @click.stop
+              />
+            </template>
+            <template v-else>
+              <h2
+                class="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                @click="startHeaderRename"
+              >
+                {{ currentSession.title }}
+              </h2>
+            </template>
+          </div>
+
+          <!-- LLM provider (compact) -->
+          <div v-if="!cc.isActive.value" class="hidden sm:flex items-center gap-1 shrink-0">
+            <Brain class="w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              v-model="selectedLlmBackend"
+              class="px-1.5 py-0.5 text-xs bg-transparent rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border-none cursor-pointer text-muted-foreground"
+            >
+              <option value="">{{ t('chat.defaultLlm') }}</option>
+              <option v-for="option in availableLlmOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- RAG badge -->
+          <button
+            v-if="!cc.isActive.value && knowledgeCollections.length"
+            :class="[
+              'p-1.5 rounded-lg transition-colors shrink-0',
+              selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="t('chatView.knowledgeBase')"
+            @click="showRagMenu = !showRagMenu"
+          >
+            <BookOpen class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Settings dropdown -->
+          <div class="zen-settings-anchor relative shrink-0">
+            <button
+              :class="[
+                'p-1.5 rounded-lg transition-colors',
+                showZenSettings ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
+              ]"
+              :title="t('chatView.zenSettings')"
+              @click.stop="showZenSettings = !showZenSettings"
+            >
+              <Settings2 class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Zen settings dropdown panel -->
+            <div
+              v-if="showZenSettings"
+              class="absolute right-0 top-full mt-2 zen-glass rounded-xl shadow-2xl py-3 px-4 z-50 w-80 max-h-[70vh] overflow-y-auto animate-scale-in"
+              @click.stop
+            >
+              <h4 class="text-xs font-semibold text-muted-foreground uppercase mb-3">{{ t('chatView.zenSettings') }}</h4>
+
+              <!-- LLM Provider -->
+              <div v-if="!cc.isActive.value" class="mb-3">
+                <label class="text-xs text-muted-foreground mb-1 block">LLM</label>
+                <select
+                  v-model="selectedLlmBackend"
+                  class="w-full px-2 py-1.5 text-sm bg-secondary/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border-none"
+                >
+                  <option value="">{{ t('chat.defaultLlm') }}</option>
+                  <option v-for="option in availableLlmOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Knowledge Base -->
+              <div v-if="!cc.isActive.value && knowledgeCollections.length" class="mb-3">
+                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.knowledgeBase') }}</label>
+                <div class="space-y-1">
+                  <label
+                    v-for="col in knowledgeCollections"
+                    :key="col.id"
+                    class="flex items-center gap-2 px-2 py-1 text-sm rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
+                  >
+                    <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
+                    <span>{{ col.name }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Input position -->
+              <div class="mb-3">
+                <label class="text-xs text-muted-foreground mb-1 block">Input</label>
+                <button
+                  class="flex items-center gap-2 px-2 py-1.5 text-sm bg-secondary/50 rounded-lg hover:bg-secondary transition-colors w-full"
+                  @click="toggleInputPosition"
+                >
+                  <ArrowDownToLine v-if="inputPosition === 'top'" class="w-3.5 h-3.5" />
+                  <ArrowUpToLine v-else class="w-3.5 h-3.5" />
+                  <span>{{ inputPosition === 'top' ? 'Move to bottom' : 'Move to top' }}</span>
+                </button>
+              </div>
+
+              <!-- Voice mode -->
+              <div v-if="!cc.isActive.value" class="mb-3">
+                <label class="text-xs text-muted-foreground mb-1 block">Voice</label>
+                <button
+                  :class="[
+                    'flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg w-full transition-colors',
+                    voiceMode ? 'bg-primary/20 text-primary' : 'bg-secondary/50 hover:bg-secondary'
+                  ]"
+                  @click="voiceMode = !voiceMode"
+                >
+                  <Volume2 v-if="voiceMode" class="w-3.5 h-3.5" />
+                  <VolumeX v-else class="w-3.5 h-3.5" />
+                  <span>{{ voiceMode ? 'ON' : 'OFF' }}</span>
+                </button>
+              </div>
+
+              <!-- System prompt -->
+              <div v-if="!isReadOnly" class="mb-3">
+                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.sessionPrompt') }}</label>
+                <textarea
+                  v-model="customPrompt"
+                  class="w-full min-h-[80px] p-2 text-sm bg-secondary/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono"
+                  :placeholder="t('chatView.promptPlaceholder')"
+                />
+                <button
+                  :disabled="updateSessionMutation.isPending.value"
+                  class="mt-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  @click="saveSettings"
+                >
+                  {{ t('chatView.save') }}
+                </button>
+              </div>
+
+              <!-- Context files summary -->
+              <div class="mb-1">
+                <label class="text-xs text-muted-foreground mb-1 block">{{ t('chatView.contextFiles') }}</label>
+                <div v-if="contextFiles.length" class="space-y-1">
+                  <div v-for="(file, idx) in contextFiles" :key="idx" class="flex items-center gap-2 px-2 py-1 text-xs bg-secondary/30 rounded-lg">
+                    <FileText class="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span class="truncate flex-1">{{ file.name }}</span>
+                    <button class="p-0.5 text-muted-foreground hover:text-red-500 shrink-0" @click="removeContextFile(idx)">
+                      <X class="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-muted-foreground/50">{{ t('chatView.noContextFiles') }}</p>
+                <div class="flex gap-1 mt-1.5">
+                  <button
+                    class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
+                    @click="triggerContextFileUpload"
+                  >
+                    <Paperclip class="w-3 h-3" />
+                    {{ t('chatView.uploadFile') }}
+                  </button>
+                  <button
+                    class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
+                    @click="addEmptyContextFile"
+                  >
+                    <Plus class="w-3 h-3" />
+                    {{ t('chatView.emptyFile') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Exit fullscreen -->
+          <button
+            class="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+            :title="t('chatView.exitZenMode')"
+            @click="fullscreenStore.exit()"
+          >
+            <Minimize2 class="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat Header (hidden in zen mode) -->
+      <div v-if="currentSession && !fullscreenStore.isFullscreen" class="p-2 sm:p-4 border-b border-border flex items-center justify-between gap-2 bg-card">
         <div class="flex-1 min-w-0">
           <template v-if="editingHeaderTitle">
             <input
@@ -1730,6 +1950,15 @@ watch(sessions, (newSessions) => {
               </label>
             </div>
           </div>
+          <!-- Zen (fullscreen) mode toggle -->
+          <button
+            v-if="!cc.isActive.value"
+            class="p-2 rounded-lg hover:bg-secondary transition-colors"
+            :title="t('chatView.zenMode')"
+            @click="fullscreenStore.enter()"
+          >
+            <Maximize2 class="w-4 h-4" />
+          </button>
           <!-- New branch / New CC session -->
           <button
             v-if="!isReadOnly"
@@ -1764,7 +1993,11 @@ watch(sessions, (newSessions) => {
       <!-- Input Area: Claude Code mode -->
       <div
         v-if="cc.isActive.value"
-        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
+        :class="[
+          'p-4',
+          fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
+          inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
+        ]"
       >
         <!-- CC status bar -->
         <div v-if="cc.isConnected.value" class="flex items-center gap-2 mb-2 text-xs text-green-500">
@@ -1808,9 +2041,19 @@ watch(sessions, (newSessions) => {
       <!-- Input Area: Normal chat mode -->
       <div
         v-else-if="currentSession && !isReadOnly"
-        :class="['p-4 bg-card', inputPosition === 'bottom' ? 'border-t border-border order-last pb-24' : 'border-b border-border']"
+        :class="[
+          'p-4',
+          fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
+          inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
+        ]"
       >
-        <div :class="['flex gap-3', inputPosition === 'bottom' ? 'items-stretch' : 'items-end']">
+        <div
+          :class="[
+            'flex gap-3',
+            inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
+            fullscreenStore.isFullscreen ? 'max-w-3xl mx-auto' : ''
+          ]"
+        >
           <textarea
             ref="messageInputRef"
             v-model="inputMessage"
@@ -1859,7 +2102,10 @@ watch(sessions, (newSessions) => {
       <!-- Messages -->
       <div
         ref="messagesContainer"
-        class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+        :class="[
+          'flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4',
+          fullscreenStore.isFullscreen ? 'zen-messages' : ''
+        ]"
       >
         <!-- Claude Code mode messages -->
         <template v-if="cc.isActive.value">
@@ -2220,8 +2466,8 @@ watch(sessions, (newSessions) => {
         </template>
       </div>
 
-      <!-- Branch Tree Panel -->
-      <template v-if="showBranchTree">
+      <!-- Branch Tree Panel (hidden in zen mode) -->
+      <template v-if="showBranchTree && !fullscreenStore.isFullscreen">
         <div
           class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
           @mousedown="startBranchResize"
@@ -2237,20 +2483,20 @@ watch(sessions, (newSessions) => {
         />
       </template>
 
-      <!-- Settings Panel (slide-out right / fullscreen on mobile) -->
+      <!-- Settings Panel (slide-out right / fullscreen on mobile, hidden in zen mode) -->
       <div
-        v-if="showSettings"
+        v-if="showSettings && !fullscreenStore.isFullscreen"
         class="hidden md:block w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
         @mousedown="startSettingsResize"
       />
       <!-- Mobile backdrop -->
       <div
-        v-if="showSettings"
+        v-if="showSettings && !fullscreenStore.isFullscreen"
         class="md:hidden fixed inset-0 bg-black/50 z-40"
         @click="showSettings = false"
       />
       <div
-        v-if="showSettings"
+        v-if="showSettings && !fullscreenStore.isFullscreen"
         class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
         :style="{ '--settings-w': settingsWidth + 'px' }"
       >
@@ -2472,5 +2718,16 @@ watch(sessions, (newSessions) => {
   .settings-panel {
     width: var(--settings-w);
   }
+}
+
+/* Zen mode: centered messages */
+.zen-messages {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.zen-messages > * {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
 }
 </style>

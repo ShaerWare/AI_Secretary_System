@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
 import { useSearchStore } from './stores/search'
 import { useThemeStore } from './stores/theme'
+import { useChatFullscreenStore } from './stores/chatFullscreen'
 import { useResizablePanel } from './composables/useResizablePanel'
 import { setLocale, getLocale } from './plugins/i18n'
 import ToastContainer from './components/ToastContainer.vue'
@@ -32,6 +33,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 const searchStore = useSearchStore()
 const themeStore = useThemeStore()
+const chatFullscreenStore = useChatFullscreenStore()
+
+const isFullscreenChat = computed(() => chatFullscreenStore.isFullscreen && route.name === 'chat')
 
 const sidebarOpen = ref(false)
 const mobileMenuOpen = ref(false)
@@ -101,13 +105,14 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
       <div class="flex h-screen overflow-hidden bg-background">
         <!-- Mobile Overlay -->
         <div
-          v-if="mobileMenuOpen && isMobile"
+          v-if="mobileMenuOpen && isMobile && !isFullscreenChat"
           class="fixed inset-0 bg-black/50 z-40 md:hidden"
           @click="mobileMenuOpen = false"
         />
 
         <!-- Sidebar -->
         <aside
+          v-if="!isFullscreenChat"
           :class="[
             'flex flex-col bg-card border-r border-border z-50 flex-shrink-0',
             isMobile ? 'fixed inset-y-0 left-0 transition-all duration-300' : '',
@@ -214,7 +219,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
 
         <!-- Sidebar resize handle (desktop only) -->
         <div
-          v-if="sidebarOpen && !isMobile"
+          v-if="sidebarOpen && !isMobile && !isFullscreenChat"
           class="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
           @mousedown="startMainSidebarResize"
         />
@@ -222,7 +227,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
         <!-- Main Content -->
         <main class="flex-1 flex flex-col overflow-hidden">
           <!-- Header -->
-          <header class="flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-card">
+          <header v-if="!isFullscreenChat" class="flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-card">
             <div class="flex items-center gap-3">
               <!-- Mobile Menu Button -->
               <button

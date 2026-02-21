@@ -326,6 +326,9 @@ const messages = {
         remove: 'Удалить',
         noShares: 'Нет совместного доступа',
       },
+      zenMode: 'Фокус-режим',
+      exitZenMode: 'Выйти из фокус-режима',
+      zenSettings: 'Настройки чата',
       claudeCode: {
         enable: 'Включить Claude Code',
         disable: 'Выключить Claude Code',
@@ -1383,6 +1386,9 @@ const messages = {
         remove: 'Remove',
         noShares: 'No shares yet',
       },
+      zenMode: 'Focus mode',
+      exitZenMode: 'Exit focus mode',
+      zenSettings: 'Chat settings',
       claudeCode: {
         enable: 'Enable Claude Code',
         disable: 'Disable Claude Code',
@@ -2439,6 +2445,9 @@ const messages = {
         remove: 'Жою',
         noShares: 'Бөлісу жоқ',
       },
+      zenMode: 'Фокус режимі',
+      exitZenMode: 'Фокус режимінен шығу',
+      zenSettings: 'Чат параметрлері',
       claudeCode: {
         enable: 'Claude Code қосу',
         disable: 'Claude Code өшіру',
