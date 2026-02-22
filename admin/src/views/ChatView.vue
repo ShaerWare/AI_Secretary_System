@@ -448,6 +448,7 @@ const switchBranchMutation = useMutation({
 const newBranchMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
   onSuccess: async () => {
+    showBranchTree.value = true
     await refetchSession()
     await refetchBranches()
   },
@@ -455,6 +456,12 @@ const newBranchMutation = useMutation({
 
 function startNewBranch() {
   if (!currentSessionId.value) return
+  newBranchMutation.mutate(currentSessionId.value)
+}
+
+function startNewBranchAndShowTree() {
+  if (!currentSessionId.value) return
+  showBranchTree.value = true
   newBranchMutation.mutate(currentSessionId.value)
 }
 
@@ -2162,7 +2169,7 @@ watch(sessions, (newSessions) => {
       <div
         v-if="cc.isActive.value"
         :class="[
-          'p-4',
+          'p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -2203,6 +2210,16 @@ watch(sessions, (newSessions) => {
           >
             <Send class="w-5 h-5" />
           </button>
+          <!-- New branch button (yellow) -->
+          <button
+            v-if="currentSessionId"
+            :disabled="newBranchMutation.isPending.value"
+            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranchAndShowTree"
+          >
+            <Plus class="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -2210,7 +2227,7 @@ watch(sessions, (newSessions) => {
       <div
         v-else-if="currentSession && !isReadOnly"
         :class="[
-          'p-4',
+          'p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -2272,6 +2289,16 @@ watch(sessions, (newSessions) => {
           >
             <ArrowDownToLine class="w-5 h-5" />
           </button>
+          <!-- New branch button (yellow) -->
+          <button
+            v-if="currentSessionId"
+            :disabled="newBranchMutation.isPending.value"
+            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranchAndShowTree"
+          >
+            <Plus class="w-5 h-5" />
+          </button>
         </div>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -2281,7 +2308,7 @@ watch(sessions, (newSessions) => {
       </div>
 
       <!-- Messages + Branch Tree row -->
-      <div class="flex-1 flex overflow-hidden relative">
+      <div class="flex-1 flex overflow-hidden relative min-h-0">
       <!-- Messages -->
       <div
         ref="messagesContainer"

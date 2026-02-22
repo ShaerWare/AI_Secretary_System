@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Link, User, Calendar, CheckSquare } from 'lucide-vue-next'
+import { Link, User, Calendar, CheckSquare, ExternalLink } from 'lucide-vue-next'
 import type { KanbanTask } from '@/api'
 
 const props = defineProps<{
@@ -45,6 +45,11 @@ const isOverdue = computed(() => {
     <!-- Title row -->
     <div class="flex items-start gap-2">
       <span class="font-medium text-sm truncate flex-1">{{ task.title }}</span>
+      <ExternalLink
+        v-if="task.github_issue_number"
+        class="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground mt-0.5"
+        :title="`#${task.github_issue_number}`"
+      />
       <Link
         v-if="task.blockers.length > 0"
         class="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground mt-0.5"

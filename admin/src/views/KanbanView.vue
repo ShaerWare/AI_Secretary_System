@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ClipboardList, Plus, RefreshCw, LayoutGrid, ChartGantt } from 'lucide-vue-next'
+import {
+  ClipboardList,
+  Plus,
+  RefreshCw,
+  LayoutGrid,
+  ChartGantt,
+  Github,
+  ChevronDown,
+  FolderOpen,
+  Settings,
+} from 'lucide-vue-next'
 import { useKanbanStore } from '@/stores/kanban'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
@@ -10,6 +20,7 @@ import type { KanbanTask, TaskCreateData, TaskUpdateData } from '@/api'
 import KanbanBoard from '@/components/kanban/KanbanBoard.vue'
 import KanbanTaskForm from '@/components/kanban/KanbanTaskForm.vue'
 import KanbanCardDetail from '@/components/kanban/KanbanCardDetail.vue'
+import KanbanProjectForm from '@/components/kanban/KanbanProjectForm.vue'
 
 const KanbanRoadmap = defineAsyncComponent(
   () => import('@/components/kanban/KanbanRoadmap.vue'),
@@ -26,7 +37,13 @@ const editingTask = ref<KanbanTask | null>(null)
 const showDetail = ref(false)
 const detailTask = ref<KanbanTask | null>(null)
 
-onMounted(() => {
+// Project selector
+const showProjectSelect = ref(false)
+const showProjectForm = ref(false)
+const editingProject = ref<(typeof kanbanStore.projects)[0] | null>(null)
+
+onMounted(async () => {
+  await kanbanStore.fetchProjects()
   kanbanStore.fetchTasks()
 })
 
@@ -38,6 +55,20 @@ function openCreate() {
 function openDetail(task: KanbanTask) {
   detailTask.value = kanbanStore.tasks.find((t) => t.id === task.id) || task
   showDetail.value = true
+}
+
+function openProjectCreate() {
+  editingProject.value = null
+  showProjectForm.value = true
+  showProjectSelect.value = false
+}
+
+function openProjectEdit() {
+  if (kanbanStore.currentProject) {
+    editingProject.value = kanbanStore.currentProject
+    showProjectForm.value = true
+    showProjectSelect.value = false
+  }
 }
 
 async function handleCreate(data: TaskCreateData) {
@@ -72,7 +103,7 @@ async function handleDetailUpdate(id: number, data: Record<string, unknown>) {
 async function handleDelete(id: number) {
   const confirmed = await confirmStore.confirmDelete(
     kanbanStore.tasks.find((t) => t.id === id)?.title || '',
-    t('kanban.task')
+    t('kanban.task'),
   )
   if (!confirmed) return
   try {
@@ -160,6 +191,59 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
     toast.error((e as Error).message)
   }
 }
+
+async function handleSync() {
+  if (!kanbanStore.currentProject) return
+  try {
+    const result = await kanbanStore.syncProject(kanbanStore.currentProject.id)
+    toast.success(
+      `${t('kanban.syncSuccess')}: ${result.created} ${t('kanban.created')}, ${result.updated} ${t('kanban.updated')}`,
+    )
+  } catch (e) {
+    toast.error(t('kanban.syncFailed'))
+  }
+}
+
+async function handleProjectCreate(data: Record<string, unknown>) {
+  try {
+    await kanbanStore.createProject(data as unknown as Parameters<typeof kanbanStore.createProject>[0])
+    showProjectForm.value = false
+    toast.success(t('kanban.projectCreated'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function handleProjectUpdate(id: number, data: Record<string, unknown>) {
+  try {
+    await kanbanStore.updateProject(
+      id,
+      data as Parameters<typeof kanbanStore.updateProject>[1],
+    )
+    showProjectForm.value = false
+    toast.success(t('kanban.projectUpdated'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function handleProjectDelete(id: number) {
+  const project = kanbanStore.projects.find((p) => p.id === id)
+  const confirmed = await confirmStore.confirmDelete(project?.name || '', t('kanban.project'))
+  if (!confirmed) return
+  try {
+    await kanbanStore.deleteProject(id)
+    showProjectForm.value = false
+    toast.success(t('kanban.projectDeleted'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+function selectProject(id: number | null) {
+  kanbanStore.selectProject(id)
+  showProjectSelect.value = false
+}
 </script>
 
 <template>
@@ -173,8 +257,79 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
         <div>
           <h1 class="text-2xl font-bold">{{ t('kanban.title') }}</h1>
         </div>
+
+        <!-- Project selector -->
+        <div class="relative ml-2">
+          <button
+            class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
+            @click="showProjectSelect = !showProjectSelect"
+          >
+            <Github v-if="kanbanStore.currentProject" class="w-4 h-4" />
+            <FolderOpen v-else class="w-4 h-4" />
+            <span class="max-w-[200px] truncate">
+              {{ kanbanStore.currentProject?.name || t('kanban.localTasks') }}
+            </span>
+            <ChevronDown class="w-3 h-3" />
+          </button>
+          <div
+            v-if="showProjectSelect"
+            class="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-10 min-w-[240px]"
+          >
+            <button
+              class="w-full text-left px-4 py-2 hover:bg-secondary/50 first:rounded-t-lg text-sm flex items-center gap-2"
+              :class="{ 'bg-secondary/30': kanbanStore.selectedProjectId === null }"
+              @click="selectProject(null)"
+            >
+              <FolderOpen class="w-4 h-4 text-muted-foreground" />
+              {{ t('kanban.localTasks') }}
+            </button>
+            <button
+              v-for="project in kanbanStore.projects"
+              :key="project.id"
+              class="w-full text-left px-4 py-2 hover:bg-secondary/50 text-sm flex items-center gap-2"
+              :class="{ 'bg-secondary/30': kanbanStore.selectedProjectId === project.id }"
+              @click="selectProject(project.id)"
+            >
+              <Github class="w-4 h-4 text-muted-foreground" />
+              <span class="truncate">{{ project.name }}</span>
+              <span class="text-xs text-muted-foreground ml-auto">
+                {{ project.github_owner }}/{{ project.github_repo }}
+              </span>
+            </button>
+            <div v-if="authStore.isAdmin" class="border-t border-border">
+              <button
+                class="w-full text-left px-4 py-2 hover:bg-secondary/50 last:rounded-b-lg text-sm text-primary flex items-center gap-2"
+                @click="openProjectCreate"
+              >
+                <Plus class="w-4 h-4" />
+                {{ t('kanban.addProject') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit project button -->
+        <button
+          v-if="kanbanStore.currentProject && authStore.isAdmin"
+          class="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+          :title="t('kanban.editProject')"
+          @click="openProjectEdit"
+        >
+          <Settings class="w-4 h-4" />
+        </button>
       </div>
       <div class="flex items-center gap-2">
+        <!-- Sync button (GitHub projects only) -->
+        <button
+          v-if="kanbanStore.currentProject && !authStore.isGuest"
+          class="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
+          :disabled="kanbanStore.syncing"
+          @click="handleSync"
+        >
+          <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': kanbanStore.syncing }" />
+          {{ t('kanban.syncGithub') }}
+        </button>
+
         <!-- View toggle -->
         <div class="flex rounded-lg border border-border overflow-hidden">
           <button
@@ -227,6 +382,7 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
       :tasks-by-status="kanbanStore.tasksByStatus"
       :loading="kanbanStore.loading"
       :disabled="authStore.isGuest"
+      :is-github-project="!!kanbanStore.currentProject"
       @reorder="handleReorder"
       @click-task="openDetail"
       @create-task="openCreate"
@@ -255,6 +411,7 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
       :visible="showDetail"
       :task="detailTask"
       :all-tasks="kanbanStore.tasks"
+      :current-project="kanbanStore.currentProject"
       @close="showDetail = false"
       @update="handleDetailUpdate"
       @delete="handleDelete"
@@ -264,5 +421,23 @@ async function handleRemoveDependency(blockerId: number, dependentId: number) {
       @add-dependency="handleAddDependency"
       @remove-dependency="handleRemoveDependency"
     />
+
+    <KanbanProjectForm
+      :visible="showProjectForm"
+      :project="editingProject"
+      @close="showProjectForm = false"
+      @create="handleProjectCreate"
+      @update="handleProjectUpdate"
+      @delete="handleProjectDelete"
+    />
   </div>
+
+  <!-- Click-away for project selector -->
+  <Teleport to="body">
+    <div
+      v-if="showProjectSelect"
+      class="fixed inset-0 z-[5]"
+      @click="showProjectSelect = false"
+    />
+  </Teleport>
 </template>

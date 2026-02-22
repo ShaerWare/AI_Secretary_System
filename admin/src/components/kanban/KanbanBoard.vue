@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, Plus, RotateCcw, Loader2 } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
@@ -10,6 +10,7 @@ const props = defineProps<{
   tasksByStatus: Record<string, KanbanTask[]>
   loading: boolean
   disabled: boolean
+  isGithubProject?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +21,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const STATUSES = ['draft', 'todo', 'in_progress', 'review', 'done'] as const
+const ALL_STATUSES = ['draft', 'todo', 'in_progress', 'review', 'done'] as const
+
+const STATUSES = computed(() =>
+  props.isGithubProject ? ALL_STATUSES.filter((s) => s !== 'draft') : [...ALL_STATUSES],
+)
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-zinc-400',
@@ -35,15 +40,15 @@ const STATUS_COLORS: Record<string, string> = {
 const columnTasks = ref<Record<string, KanbanTask[]>>({})
 
 watch(
-  () => props.tasksByStatus,
-  (val) => {
+  [() => props.tasksByStatus, STATUSES],
+  ([val]) => {
     const copy: Record<string, KanbanTask[]> = {}
-    for (const s of STATUSES) {
+    for (const s of STATUSES.value) {
       copy[s] = val[s] ? val[s].map((t) => ({ ...t })) : []
     }
     columnTasks.value = copy
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 )
 
 // ============== Drag & drop ==============
@@ -359,7 +364,7 @@ onUnmounted(() => {
 
         <!-- Resize handle between columns -->
         <div
-          v-if="idx < STATUSES.length - 1 && !isCollapsed(status) && !isCollapsed(STATUSES[idx + 1])"
+          v-if="idx < STATUSES.length - 1 && !isCollapsed(status as string) && !isCollapsed(STATUSES[idx + 1] as string)"
           class="kanban-resize-handle flex-shrink-0"
           @pointerdown="onResizeStart($event, status)"
         >

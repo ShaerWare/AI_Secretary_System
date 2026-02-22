@@ -1,5 +1,6 @@
 """Repository for kanban task management."""
 
+import json
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -31,12 +32,27 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         return result.scalar_one_or_none()
 
     async def get_visible_tasks(self, current_user: str, is_admin: bool) -> List[dict]:
-        """Get tasks visible to the user.
+        """Get tasks visible to the user (local tasks only, project_id IS NULL).
 
         Admin sees all tasks.
         Others see their own tasks + non-draft public tasks.
         """
+        return await self.get_visible_tasks_for_project(None, current_user, is_admin)
+
+    async def get_visible_tasks_for_project(
+        self, project_id: Optional[int], current_user: str, is_admin: bool
+    ) -> List[dict]:
+        """Get tasks visible to the user, filtered by project.
+
+        project_id=None -> local tasks (project_id IS NULL)
+        project_id=N -> tasks for that project
+        """
         stmt = select(KanbanTask).options(*self._load_options())
+
+        if project_id is None:
+            stmt = stmt.where(KanbanTask.project_id.is_(None))
+        else:
+            stmt = stmt.where(KanbanTask.project_id == project_id)
 
         if not is_admin:
             stmt = stmt.where(
@@ -192,3 +208,41 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         await self.session.delete(item)
         await self.session.commit()
         return True
+
+    async def find_by_github_issue(
+        self, project_id: int, issue_number: int
+    ) -> Optional[KanbanTask]:
+        """Find task by project and GitHub issue number."""
+        result = await self.session.execute(
+            select(KanbanTask)
+            .options(*self._load_options())
+            .where(
+                KanbanTask.project_id == project_id,
+                KanbanTask.github_issue_number == issue_number,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_from_github(self, project_id: int, issue_number: int, **fields) -> dict:
+        """Find existing task by (project_id, issue_number), update or create."""
+        task = await self.find_by_github_issue(project_id, issue_number)
+        if task:
+            for key, value in fields.items():
+                if hasattr(task, key):
+                    setattr(task, key, value)
+            await self.session.commit()
+            task = await self.get_task_with_relations(task.id)
+            return task.to_dict()
+        else:
+            tags_raw = fields.pop("tags", None)
+            tags_json = json.dumps(tags_raw, ensure_ascii=False) if tags_raw else None
+            task = KanbanTask(
+                project_id=project_id,
+                github_issue_number=issue_number,
+                tags=tags_json,
+                **fields,
+            )
+            self.session.add(task)
+            await self.session.commit()
+            task = await self.get_task_with_relations(task.id)
+            return task.to_dict()
