@@ -137,6 +137,59 @@ class UserSession(Base):
         }
 
 
+# ============== Roles & Permissions ==============
+
+
+class Role(Base):
+    """RBAC role with associated permissions."""
+
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    permissions: Mapped[list["RolePermission"]] = relationship(
+        "RolePermission", back_populates="role", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    def to_dict(self, include_permissions: bool = True) -> dict:
+        result: dict[str, Any] = {
+            "id": self.id,
+            "name": self.name,
+            "display_name": self.display_name,
+            "description": self.description,
+            "is_system": self.is_system,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+        if include_permissions and self.permissions:
+            result["permissions"] = {p.module: p.level for p in self.permissions}
+        return result
+
+
+class RolePermission(Base):
+    """Single module-level permission entry for a role."""
+
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        Index("ix_role_permissions_role_module", "role_id", "module", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("roles.id", ondelete="CASCADE"), index=True
+    )
+    module: Mapped[str] = mapped_column(String(50))
+    level: Mapped[str] = mapped_column(String(10))  # "view", "edit", "manage"
+
+    role: Mapped["Role"] = relationship("Role", back_populates="permissions")
+
+
 # ============== Chat ==============
 
 

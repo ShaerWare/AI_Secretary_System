@@ -31,6 +31,7 @@ from db.repositories import (
     KnowledgeDocumentRepository,
     PaymentRepository,
     PresetRepository,
+    RoleRepository,
     TelegramRepository,
     UserRepository,
     UserSessionRepository,
@@ -1620,6 +1621,69 @@ class AsyncKanbanManager:
 
 
 async_kanban_manager = AsyncKanbanManager()
+
+
+# ============== Role Manager ==============
+
+
+class AsyncRoleManager:
+    """Async role manager for RBAC."""
+
+    async def get_by_name(self, name: str) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            role = await repo.get_by_name(name)
+            return role.to_dict() if role else None
+
+    async def get_with_permissions(self, role_id: int) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            role = await repo.get_with_permissions(role_id)
+            return role.to_dict() if role else None
+
+    async def get_all_with_permissions(self) -> List[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            roles = await repo.get_all_with_permissions()
+            return [r.to_dict() for r in roles]
+
+    async def create_role(
+        self,
+        name: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        is_system: bool = False,
+        permissions: Optional[Dict[str, str]] = None,
+    ) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            role = await repo.create_role(name, display_name, description, is_system, permissions)
+            return role.to_dict()
+
+    async def update_role(
+        self,
+        role_id: int,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        permissions: Optional[Dict[str, str]] = None,
+    ) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            role = await repo.update_role(role_id, display_name, description, permissions)
+            return role.to_dict() if role else None
+
+    async def delete_role(self, role_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            return await repo.delete_role(role_id)
+
+    async def count(self) -> int:
+        async with AsyncSessionLocal() as session:
+            repo = RoleRepository(session)
+            return await repo.count()
+
+
+async_role_manager = AsyncRoleManager()
 
 
 # ============== Initialization Function ==============

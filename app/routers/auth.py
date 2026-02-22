@@ -16,6 +16,7 @@ from auth_manager import (
     create_session,
     get_auth_status,
     get_current_user,
+    get_user_permissions,
     revoke_session,
 )
 from db.integration import async_audit_logger, async_session_manager, async_user_manager
@@ -163,6 +164,20 @@ async def delete_session(
         action="revoke", resource="session", user_id=user.username, details={"jti": jti}
     )
     return {"message": "Session revoked"}
+
+
+@router.get("/permissions")
+async def get_permissions(user: User = Depends(get_current_user)):
+    """Get effective permissions for the current user."""
+    permissions = await get_user_permissions(user)
+
+    # Filter out modules unavailable in cloud mode
+    deployment_mode = os.getenv("DEPLOYMENT_MODE", "full").lower()
+    if deployment_mode == "cloud":
+        for module in ("speech", "gsm", "system"):
+            permissions.pop(module, None)
+
+    return permissions
 
 
 @router.get("/status")
