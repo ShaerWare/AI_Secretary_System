@@ -977,6 +977,21 @@ async def startup_event():
         # Auto-start bridge if enabled claude_bridge provider exists
         await _auto_start_bridge_if_needed()
 
+        # Start background session cleanup (hourly)
+        async def _cleanup_expired_sessions():
+            while True:
+                await asyncio.sleep(3600)
+                try:
+                    from db.integration import async_session_manager
+
+                    count = await async_session_manager.cleanup_expired(days=7)
+                    if count > 0:
+                        logger.info(f"Cleaned up {count} expired sessions")
+                except Exception as e:
+                    logger.warning(f"Session cleanup error: {e}")
+
+        asyncio.get_event_loop().create_task(_cleanup_expired_sessions())
+
         logger.info("✅ Основные сервисы загружены успешно")
 
     except Exception as e:
@@ -1516,7 +1531,7 @@ async def admin_login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token, expires_in = create_access_token(user.username, user.role, user.id)
+    token, expires_in, _jti = create_access_token(user.username, user.role, user.id)
 
     # Audit log
     await async_audit_logger.log(
