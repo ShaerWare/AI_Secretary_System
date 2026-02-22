@@ -55,7 +55,9 @@ async def main():
 
     issues = json.loads(result.stdout)
     issues.sort(key=lambda x: x["number"])  # ascending by number
-    print(f"Found {len(issues)} issues ({sum(1 for i in issues if i['state'] == 'OPEN')} open, {sum(1 for i in issues if i['state'] == 'CLOSED')} closed)")
+    print(
+        f"Found {len(issues)} issues ({sum(1 for i in issues if i['state'] == 'OPEN')} open, {sum(1 for i in issues if i['state'] == 'CLOSED')} closed)"
+    )
 
     if dry_run:
         print("\n=== DRY RUN — no changes will be made ===\n")
@@ -132,7 +134,9 @@ async def main():
         # Print summary
         tags_str = ", ".join(tags) if tags else "-"
         ck_str = f", {len(checklist_items)} checklist items" if checklist_items else ""
-        print(f"  {'[DRY]' if dry_run else '[CREATE]'} #{num} → {status} | tags: [{tags_str}]{ck_str}")
+        print(
+            f"  {'[DRY]' if dry_run else '[CREATE]'} #{num} → {status} | tags: [{tags_str}]{ck_str}"
+        )
 
         if dry_run:
             gh_to_kanban[num] = num  # placeholder
