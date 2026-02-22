@@ -72,8 +72,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(128))
-    salt: Mapped[str] = mapped_column(String(64))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    salt: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="user")  # guest, user, admin
     display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", index=True)

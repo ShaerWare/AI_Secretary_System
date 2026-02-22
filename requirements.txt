@@ -30,6 +30,7 @@ requests==2.31.0
 aiohttp==3.9.1
 
 # Utils
+bcrypt>=4.0.0
 python-dotenv==1.0.0
 pydantic>=2.7.0
 numpy==1.24.3

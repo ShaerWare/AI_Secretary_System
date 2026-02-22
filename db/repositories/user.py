@@ -2,8 +2,7 @@
 Repository for user management (authentication, CRUD).
 """
 
-import hashlib
-import secrets
+import logging
 from datetime import datetime
 from typing import List, Optional
 
@@ -12,24 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import User
 from db.repositories.base import BaseRepository
+from utils.password import hash_password, needs_rehash, verify_password
 
+
+logger = logging.getLogger(__name__)
 
 VALID_ROLES = ("guest", "web", "user", "admin")
-
-
-def generate_salt() -> str:
-    """Generate a random 32-byte hex salt."""
-    return secrets.token_hex(32)
-
-
-def hash_password(password: str, salt: str) -> str:
-    """Hash password with salt using SHA-256."""
-    return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
-
-
-def verify_password(password: str, salt: str, password_hash: str) -> bool:
-    """Verify password against stored hash."""
-    return hash_password(password, salt) == password_hash
 
 
 class UserRepository(BaseRepository[User]):
@@ -51,8 +38,15 @@ class UserRepository(BaseRepository[User]):
         if not user:
             return None
 
-        if not verify_password(password, user.salt, user.password_hash):
+        if not verify_password(password, user.password_hash, user.salt):
             return None
+
+        # Lazy-rehash: upgrade SHA-256 → bcrypt on successful login
+        if needs_rehash(user.password_hash):
+            new_hash, new_salt = hash_password(password)
+            user.password_hash = new_hash
+            user.salt = new_salt
+            logger.info(f"Rehashed password to bcrypt for user '{username}'")
 
         # Update last_login
         user.last_login = datetime.utcnow()
@@ -71,8 +65,7 @@ class UserRepository(BaseRepository[User]):
         if role not in VALID_ROLES:
             raise ValueError(f"Invalid role: {role}. Must be one of {VALID_ROLES}")
 
-        salt = generate_salt()
-        pw_hash = hash_password(password, salt)
+        pw_hash, salt = hash_password(password)
 
         user = User(
             username=username,
@@ -93,9 +86,9 @@ class UserRepository(BaseRepository[User]):
         if not user:
             return False
 
-        salt = generate_salt()
+        pw_hash, salt = hash_password(new_password)
+        user.password_hash = pw_hash
         user.salt = salt
-        user.password_hash = hash_password(new_password, salt)
         user.updated = datetime.utcnow()
         await self.session.commit()
         return True
