@@ -293,11 +293,11 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - `Depends(require_admin)` — admin only (vLLM, GSM, backups, models)
 - Data isolation: `owner_id = None if user.role == "admin" else user.id` in routers
 
-**4 roles** (`VALID_ROLES` in `db/repositories/user.py`):
-- `admin` — full access, sees all resources
-- `user` — read + write own resources, full admin panel
-- `web` — same backend access as `user`, but frontend hides: Dashboard, Services, TTS, Monitoring, Audit, Usage (via `excludeRoles`). Models hidden via `minRole: 'admin'`. Landing page: `/chat`
-- `guest` — read-only (demo access)
+**4 legacy roles** (`VALID_ROLES` in `db/repositories/user.py`), mapped to RBAC roles via `get_role_for_legacy()`:
+- `admin` → RBAC `admin` — full access, sees all resources
+- `user` → RBAC `operator` — read + write own resources, full admin panel
+- `web` → RBAC `operator` — same backend access as `user`, but frontend hides: Dashboard, Services, TTS, Monitoring, Audit, Usage (via `excludeRoles`). Models hidden via `minRole: 'admin'`. Landing page: `/chat`
+- `guest` → RBAC `viewer` — read-only (demo access)
 - Frontend role exclusion: routes/nav items support `excludeRoles: ['web']` meta for per-role hiding
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web`
 

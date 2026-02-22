@@ -5,7 +5,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_manager import User, require_admin
+from auth_manager import User, invalidate_permissions_cache, require_admin
 from db.integration import async_audit_logger, async_role_manager
 
 
@@ -101,6 +101,8 @@ async def update_role(role_id: int, body: RoleUpdate, user: User = Depends(requi
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
+    invalidate_permissions_cache()
+
     await async_audit_logger.log(
         action="update",
         resource="role",
@@ -121,6 +123,7 @@ async def delete_role(role_id: int, user: User = Depends(require_admin)):
         raise HTTPException(status_code=400, detail="Cannot delete a system role")
 
     await async_role_manager.delete_role(role_id)
+    invalidate_permissions_cache()
 
     await async_audit_logger.log(
         action="delete",
