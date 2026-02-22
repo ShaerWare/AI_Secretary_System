@@ -102,23 +102,28 @@ watch(
   { deep: true }
 )
 
-// Column resize drag
+// Column resize drag (PointerEvent — works for mouse + touch)
 const resizingStatus = ref<string | null>(null)
+const resizePointerId = ref<number | null>(null)
 const resizeStartX = ref(0)
 const resizeStartWidth = ref(0)
 
-function onResizeStart(e: MouseEvent, status: string) {
+function onResizeStart(e: PointerEvent, status: string) {
   e.preventDefault()
+  e.stopPropagation()
   resizingStatus.value = status
+  resizePointerId.value = e.pointerId
   resizeStartX.value = e.clientX
   resizeStartWidth.value = getColumnWidth(status)
-  document.addEventListener('mousemove', onResizeMove)
-  document.addEventListener('mouseup', onResizeEnd)
+  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  document.addEventListener('pointermove', onResizeMove)
+  document.addEventListener('pointerup', onResizeEnd)
+  document.addEventListener('pointercancel', onResizeEnd)
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 }
 
-function onResizeMove(e: MouseEvent) {
+function onResizeMove(e: PointerEvent) {
   if (resizingStatus.value === null) return
   const delta = e.clientX - resizeStartX.value
   const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, resizeStartWidth.value + delta))
@@ -127,8 +132,10 @@ function onResizeMove(e: MouseEvent) {
 
 function onResizeEnd() {
   resizingStatus.value = null
-  document.removeEventListener('mousemove', onResizeMove)
-  document.removeEventListener('mouseup', onResizeEnd)
+  resizePointerId.value = null
+  document.removeEventListener('pointermove', onResizeMove)
+  document.removeEventListener('pointerup', onResizeEnd)
+  document.removeEventListener('pointercancel', onResizeEnd)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
   saveColumnWidths()
@@ -173,7 +180,7 @@ function columnCount(status: string): number {
   return columnTasks.value[status]?.length || 0
 }
 
-// ============== Drag-to-scroll ==============
+// ============== Drag-to-scroll (mouse only — touch uses native scroll) ==============
 
 const boardContainer = ref<HTMLElement | null>(null)
 const isDragScrolling = ref(false)
@@ -194,6 +201,8 @@ function isCardElement(el: HTMLElement | null): boolean {
 }
 
 function onBoardPointerDown(e: PointerEvent) {
+  // Only enable drag-to-scroll for mouse — touch devices use native scroll
+  if (e.pointerType !== 'mouse') return
   if (isCardElement(e.target as HTMLElement)) return
   const board = boardContainer.value
   if (!board) return
@@ -236,8 +245,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  document.removeEventListener('mousemove', onResizeMove)
-  document.removeEventListener('mouseup', onResizeEnd)
+  document.removeEventListener('pointermove', onResizeMove)
+  document.removeEventListener('pointerup', onResizeEnd)
+  document.removeEventListener('pointercancel', onResizeEnd)
 })
 </script>
 
@@ -351,7 +361,7 @@ onUnmounted(() => {
         <div
           v-if="idx < STATUSES.length - 1 && !isCollapsed(status) && !isCollapsed(STATUSES[idx + 1])"
           class="kanban-resize-handle flex-shrink-0"
-          @mousedown="onResizeStart($event, status)"
+          @pointerdown="onResizeStart($event, status)"
         >
           <div class="kanban-resize-line" />
         </div>
@@ -375,6 +385,7 @@ onUnmounted(() => {
   scrollbar-width: none;
   cursor: grab;
   padding-bottom: 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 .kanban-board::-webkit-scrollbar {
   display: none;
@@ -384,6 +395,14 @@ onUnmounted(() => {
   user-select: none;
 }
 
+/* On touch devices, let native scroll work */
+@media (pointer: coarse) {
+  .kanban-board {
+    cursor: auto;
+    touch-action: pan-x pan-y;
+  }
+}
+
 .kanban-column {
   height: 100%;
 }
@@ -391,6 +410,7 @@ onUnmounted(() => {
 .kanban-column-body {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 .kanban-column-body::-webkit-scrollbar {
   width: 4px;
@@ -408,6 +428,14 @@ onUnmounted(() => {
   justify-content: center;
   position: relative;
   z-index: 5;
+  touch-action: none;
+  user-select: none;
+}
+
+@media (pointer: coarse) {
+  .kanban-resize-handle {
+    width: 28px;
+  }
 }
 
 .kanban-resize-handle:hover .kanban-resize-line,
