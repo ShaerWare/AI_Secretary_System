@@ -448,7 +448,6 @@ const switchBranchMutation = useMutation({
 const newBranchMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
   onSuccess: async () => {
-    showBranchTree.value = true
     await refetchSession()
     await refetchBranches()
   },
@@ -456,12 +455,6 @@ const newBranchMutation = useMutation({
 
 function startNewBranch() {
   if (!currentSessionId.value) return
-  newBranchMutation.mutate(currentSessionId.value)
-}
-
-function startNewBranchAndShowTree() {
-  if (!currentSessionId.value) return
-  showBranchTree.value = true
   newBranchMutation.mutate(currentSessionId.value)
 }
 
@@ -1820,13 +1813,12 @@ watch(sessions, (newSessions) => {
       <!-- Spacer pushes bottom items down -->
       <div class="flex-1"></div>
 
-      <!-- New branch / New CC session -->
+      <!-- New CC session -->
       <button
-        v-if="!isReadOnly"
-        :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
+        v-if="!isReadOnly && cc.isActive.value"
         class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
-        :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
-        @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
+        :title="t('chatView.claudeCode.newSession')"
+        @click="cc.newSession()"
       >
         <Plus class="w-4 h-4" />
       </button>
@@ -2128,13 +2120,12 @@ watch(sessions, (newSessions) => {
               </label>
             </div>
           </div>
-          <!-- New branch / New CC session -->
+          <!-- New CC session -->
           <button
-            v-if="!isReadOnly"
-            :disabled="!cc.isActive.value && newBranchMutation.isPending.value"
+            v-if="!isReadOnly && cc.isActive.value"
             class="p-2 rounded-lg hover:bg-secondary transition-colors"
-            :title="cc.isActive.value ? t('chatView.claudeCode.newSession') : t('chatView.newBranch')"
-            @click="cc.isActive.value ? cc.newSession() : startNewBranch()"
+            :title="t('chatView.claudeCode.newSession')"
+            @click="cc.newSession()"
           >
             <Plus class="w-4 h-4" />
           </button>
@@ -2281,15 +2272,6 @@ watch(sessions, (newSessions) => {
           >
             <ArrowDownToLine class="w-5 h-5" />
           </button>
-          <!-- New branch button (yellow) -->
-          <button
-            v-if="currentSessionId && !cc.isActive.value"
-            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranchAndShowTree"
-          >
-            <Plus class="w-5 h-5" />
-          </button>
         </div>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -2327,16 +2309,6 @@ watch(sessions, (newSessions) => {
           >
             {{ currentSession.title }}
           </h2>
-          <div class="mt-2">
-            <button
-              :disabled="newBranchMutation.isPending.value"
-              class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              @click="startNewBranchAndShowTree()"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              {{ t('chatView.newBranch') }}
-            </button>
-          </div>
         </div>
 
         <!-- Claude Code mode messages -->
@@ -2633,15 +2605,6 @@ watch(sessions, (newSessions) => {
                     @click="regenerateResponse(message.id)"
                   >
                     <RefreshCw class="w-3 h-3" />
-                  </button>
-                  <button
-                    v-if="!isReadOnly"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
-                    :title="t('chatView.newBranch')"
-                    :disabled="newBranchMutation.isPending.value"
-                    @click="startNewBranch"
-                  >
-                    <Plus class="w-3 h-3" />
                   </button>
                   <button
                     v-if="!isReadOnly"
