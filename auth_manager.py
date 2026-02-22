@@ -348,6 +348,35 @@ def verify_ownership(user: User, record_owner_id: Optional[int]) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
+# ============== RBAC Helpers ==============
+
+_LEVEL_ORDER = {"view": 1, "edit": 2, "manage": 3}
+
+
+def level_gte(user_level: str, required_level: str) -> bool:
+    """Check if user_level is >= required_level in the permission hierarchy."""
+    return _LEVEL_ORDER.get(user_level, 0) >= _LEVEL_ORDER.get(required_level, 0)
+
+
+_LEGACY_ROLE_MAP = {"admin": "admin", "user": "operator", "web": "operator", "guest": "viewer"}
+
+
+def get_role_for_legacy(legacy_role: str) -> str:
+    """Map legacy role string to new RBAC role name."""
+    return _LEGACY_ROLE_MAP.get(legacy_role, "viewer")
+
+
+async def get_user_permissions(user: User) -> Dict[str, str]:
+    """Get permissions dict for user. Uses legacy role → role mapping."""
+    from db.integration import async_role_manager
+
+    role_name = get_role_for_legacy(user.role)
+    role = await async_role_manager.get_by_name(role_name)
+    if not role:
+        return {}
+    return role.get("permissions", {})
+
+
 # ============== Status ==============
 
 AUTH_ENABLED = os.getenv("ADMIN_AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
