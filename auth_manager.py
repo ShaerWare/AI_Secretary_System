@@ -19,6 +19,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
+from utils.password import verify_password as _verify_legacy_password
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,19 +110,7 @@ _session_cache = SessionCache()
 
 
 # ============== Password Helpers ==============
-
-
-def hash_password(password: str, salt: str = "") -> str:
-    """Hash a password. If salt provided, uses salted hash (new system).
-    If no salt, uses plain SHA-256 (legacy compat)."""
-    if salt:
-        return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against legacy unsalted hash."""
-    return hash_password(password) == password_hash
+# Centralized in utils/password.py. Legacy env-var fallback uses _verify_legacy_password.
 
 
 # ============== Token Management ==============
@@ -241,7 +231,7 @@ async def authenticate_user(username: str, password: str) -> Optional[User]:
         logger.warning(f"DB auth failed, trying legacy: {e}")
 
     # Fallback: legacy env-var admin (when no users in DB or DB unavailable)
-    if username == _LEGACY_USERNAME and verify_password(password, _LEGACY_PASSWORD_HASH):
+    if username == _LEGACY_USERNAME and _verify_legacy_password(password, _LEGACY_PASSWORD_HASH):
         return User(id=0, username=username, role="admin")
 
     return None
