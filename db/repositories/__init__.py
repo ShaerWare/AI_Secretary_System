@@ -30,6 +30,7 @@ from db.repositories.consent import ConsentRepository
 from db.repositories.faq import FAQRepository
 from db.repositories.gsm import GSMCallLogRepository, GSMSMSLogRepository
 from db.repositories.kanban import KanbanRepository
+from db.repositories.kanban_project import KanbanProjectRepository
 from db.repositories.knowledge_collection import KnowledgeCollectionRepository
 from db.repositories.knowledge_document import KnowledgeDocumentRepository
 from db.repositories.payment import PaymentRepository
@@ -71,6 +72,7 @@ __all__ = [
     "FAQRepository",
     "GSMCallLogRepository",
     "GSMSMSLogRepository",
+    "KanbanProjectRepository",
     "KanbanRepository",
     "KnowledgeCollectionRepository",
     "KnowledgeDocumentRepository",

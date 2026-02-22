@@ -1,14 +1,17 @@
 """Kanban task management API endpoints."""
 
 import json
-from typing import List, Optional
+import logging
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth_manager import User, get_current_user, require_admin, require_not_guest
-from db.integration import async_audit_logger, async_kanban_manager
+from db.integration import async_audit_logger, async_kanban_manager, async_kanban_project_manager
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/kanban", tags=["kanban"])
 
@@ -52,14 +55,161 @@ class ChecklistItemCreate(BaseModel):
     position: int = 0
 
 
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    github_owner: str = Field(..., min_length=1, max_length=100)
+    github_repo: str = Field(..., min_length=1, max_length=100)
+    github_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    label_mapping: Optional[Dict[str, str]] = None
+    sync_enabled: bool = True
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    github_owner: Optional[str] = Field(None, min_length=1, max_length=100)
+    github_repo: Optional[str] = Field(None, min_length=1, max_length=100)
+    github_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    label_mapping: Optional[Dict[str, str]] = None
+    sync_enabled: Optional[bool] = None
+
+
+# ============== Project Endpoints ==============
+
+
+@router.get("/projects")
+async def get_projects(user: User = Depends(get_current_user)):
+    """Get all kanban projects."""
+    projects = await async_kanban_project_manager.get_all_projects()
+    return {"projects": projects}
+
+
+@router.post("/projects")
+async def create_project(request: ProjectCreate, user: User = Depends(require_admin)):
+    """Create a new kanban project (admin only)."""
+    kwargs = {
+        "name": request.name,
+        "github_owner": request.github_owner,
+        "github_repo": request.github_repo,
+        "sync_enabled": request.sync_enabled,
+    }
+    if request.github_token:
+        kwargs["github_token"] = request.github_token
+    if request.webhook_secret:
+        kwargs["webhook_secret"] = request.webhook_secret
+    if request.label_mapping:
+        kwargs["label_mapping"] = json.dumps(request.label_mapping, ensure_ascii=False)
+
+    project = await async_kanban_project_manager.create_project(**kwargs)
+    await async_audit_logger.log(
+        action="create",
+        resource="kanban_project",
+        resource_id=str(project["id"]),
+        user_id=user.username,
+    )
+    return {"project": project}
+
+
+@router.patch("/projects/{project_id}")
+async def update_project(
+    project_id: int, request: ProjectUpdate, user: User = Depends(require_admin)
+):
+    """Update a kanban project (admin only)."""
+    existing = await async_kanban_project_manager.get_project(project_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    update_data = {}
+    if request.name is not None:
+        update_data["name"] = request.name
+    if request.github_owner is not None:
+        update_data["github_owner"] = request.github_owner
+    if request.github_repo is not None:
+        update_data["github_repo"] = request.github_repo
+    if request.github_token is not None:
+        update_data["github_token"] = request.github_token
+    if request.webhook_secret is not None:
+        update_data["webhook_secret"] = request.webhook_secret
+    if request.label_mapping is not None:
+        update_data["label_mapping"] = json.dumps(request.label_mapping, ensure_ascii=False)
+    if request.sync_enabled is not None:
+        update_data["sync_enabled"] = request.sync_enabled
+
+    project = await async_kanban_project_manager.update_project(project_id, **update_data)
+    await async_audit_logger.log(
+        action="update",
+        resource="kanban_project",
+        resource_id=str(project_id),
+        user_id=user.username,
+    )
+    return {"project": project}
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project(project_id: int, user: User = Depends(require_admin)):
+    """Delete a kanban project (admin only)."""
+    existing = await async_kanban_project_manager.get_project(project_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    await async_kanban_project_manager.delete_project(project_id)
+    await async_audit_logger.log(
+        action="delete",
+        resource="kanban_project",
+        resource_id=str(project_id),
+        user_id=user.username,
+    )
+    return {"status": "deleted"}
+
+
+@router.post("/projects/{project_id}/sync")
+async def sync_project(project_id: int, user: User = Depends(require_not_guest)):
+    """Trigger full sync of GitHub issues for a project."""
+    existing = await async_kanban_project_manager.get_project(project_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.github_kanban_sync import sync_all_issues
+
+    try:
+        result = await sync_all_issues(project_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Sync failed for project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail="Sync failed")
+
+    return result
+
+
 # ============== Task Endpoints ==============
 
 
+async def _push_github_status(task: dict, new_status: str):
+    """Background task: push status change to GitHub if task is linked."""
+    project_id = task.get("project_id")
+    issue_number = task.get("github_issue_number")
+    if not project_id or not issue_number:
+        return
+    try:
+        from app.services.github_kanban_sync import push_status_to_github
+
+        await push_status_to_github(project_id, issue_number, new_status)
+    except Exception as e:
+        logger.error(f"Failed to push status to GitHub: {e}")
+
+
 @router.get("/tasks")
-async def get_tasks(user: User = Depends(get_current_user)):
-    """Get all tasks visible to the current user."""
+async def get_tasks(
+    user: User = Depends(get_current_user),
+    project_id: Optional[int] = Query(None),
+):
+    """Get tasks visible to the current user, optionally filtered by project."""
     is_admin = user.role == "admin"
-    tasks = await async_kanban_manager.get_visible_tasks(user.username, is_admin)
+    tasks = await async_kanban_manager.get_visible_tasks_for_project(
+        project_id, user.username, is_admin
+    )
     return {"tasks": tasks}
 
 
@@ -86,7 +236,12 @@ async def create_task(request: TaskCreate, user: User = Depends(require_not_gues
 
 
 @router.patch("/tasks/{task_id}")
-async def update_task(task_id: int, request: TaskUpdate, user: User = Depends(require_not_guest)):
+async def update_task(
+    task_id: int,
+    request: TaskUpdate,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(require_not_guest),
+):
     """Update a task. Non-admin can only edit own tasks."""
     existing = await async_kanban_manager.get_task(task_id)
     if not existing:
@@ -120,6 +275,15 @@ async def update_task(task_id: int, request: TaskUpdate, user: User = Depends(re
         resource_id=str(task_id),
         user_id=user.username,
     )
+
+    # Push status change to GitHub in background
+    if (
+        request.status is not None
+        and existing.get("project_id")
+        and existing.get("github_issue_number")
+    ):
+        background_tasks.add_task(_push_github_status, existing, request.status)
+
     return {"task": task}
 
 
@@ -144,13 +308,26 @@ async def delete_task(task_id: int, user: User = Depends(require_admin)):
 
 
 @router.post("/reorder")
-async def reorder_task(request: TaskReorder, user: User = Depends(require_not_guest)):
+async def reorder_task(
+    request: TaskReorder,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(require_not_guest),
+):
     """Reorder a task (update status + position)."""
+    # Get existing task before reorder (for GitHub push check)
+    existing = await async_kanban_manager.get_task(request.task_id)
+
     task = await async_kanban_manager.reorder(
         request.task_id, request.new_status, request.new_position
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # Push status change to GitHub in background
+    if existing and existing.get("project_id") and existing.get("github_issue_number"):
+        if existing.get("status") != request.new_status:
+            background_tasks.add_task(_push_github_status, existing, request.new_status)
+
     return {"task": task}
 
 

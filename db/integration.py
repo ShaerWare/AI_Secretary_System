@@ -26,6 +26,7 @@ from db.repositories import (
     FAQRepository,
     GSMCallLogRepository,
     GSMSMSLogRepository,
+    KanbanProjectRepository,
     KanbanRepository,
     KnowledgeCollectionRepository,
     KnowledgeDocumentRepository,
@@ -1619,8 +1620,96 @@ class AsyncKanbanManager:
             repo = KanbanRepository(session)
             return await repo.delete_checklist_item(item_id)
 
+    async def get_visible_tasks_for_project(
+        self, project_id, current_user: str, is_admin: bool
+    ) -> list:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.get_visible_tasks_for_project(project_id, current_user, is_admin)
+
+    async def find_by_github_issue(self, project_id: int, issue_number: int):
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            task = await repo.find_by_github_issue(project_id, issue_number)
+            return task.to_dict() if task else None
+
+    async def upsert_from_github(self, project_id: int, issue_number: int, **fields) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanRepository(session)
+            return await repo.upsert_from_github(project_id, issue_number, **fields)
+
 
 async_kanban_manager = AsyncKanbanManager()
+
+
+# ============== Kanban Project Manager ==============
+
+
+class AsyncKanbanProjectManager:
+    """Async kanban project manager."""
+
+    async def get_all_projects(self) -> list:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            return await repo.get_all_projects()
+
+    async def get_project(self, project_id: int) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            project = await repo.get_project_with_token(project_id)
+            return project.to_dict() if project else None
+
+    async def get_project_with_token(self, project_id: int):
+        """Returns ORM object with raw token for sync operations."""
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            project = await repo.get_project_with_token(project_id)
+            if not project:
+                return None
+            # Return a plain dict with token included (for internal use only)
+            d = project.to_dict()
+            d["github_token"] = project.github_token
+            d["webhook_secret"] = project.webhook_secret
+            d["_label_mapping"] = project.get_label_mapping()
+            d["_reverse_label_mapping"] = project.get_reverse_label_mapping()
+            return d
+
+    async def get_by_repo(self, owner: str, repo: str):
+        """Find project by GitHub owner/repo. Returns dict with token."""
+        async with AsyncSessionLocal() as session:
+            repo_obj = KanbanProjectRepository(session)
+            project = await repo_obj.get_by_repo(owner, repo)
+            if not project:
+                return None
+            d = project.to_dict()
+            d["github_token"] = project.github_token
+            d["webhook_secret"] = project.webhook_secret
+            d["_label_mapping"] = project.get_label_mapping()
+            d["_reverse_label_mapping"] = project.get_reverse_label_mapping()
+            return d
+
+    async def create_project(self, **kwargs) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            return await repo.create_project(**kwargs)
+
+    async def update_project(self, project_id: int, **kwargs) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            return await repo.update_project(project_id, **kwargs)
+
+    async def delete_project(self, project_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            return await repo.delete_by_id(project_id)
+
+    async def update_last_synced(self, project_id: int) -> None:
+        async with AsyncSessionLocal() as session:
+            repo = KanbanProjectRepository(session)
+            await repo.update_last_synced(project_id)
+
+
+async_kanban_project_manager = AsyncKanbanProjectManager()
 
 
 # ============== Role Manager ==============

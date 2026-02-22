@@ -20,12 +20,49 @@ interface MockTask {
   due_date: string | null
   position: number
   tags: string[]
+  project_id: number | null
+  github_issue_number: number | null
   checklist: MockChecklistItem[]
   blockers: number[]
   dependents: number[]
   created: string
   updated: string
 }
+
+interface MockProject {
+  id: number
+  name: string
+  github_owner: string
+  github_repo: string
+  has_token: boolean
+  webhook_secret_set: boolean
+  label_mapping: Record<string, string>
+  sync_enabled: boolean
+  last_synced: string | null
+  created: string | null
+  updated: string | null
+}
+
+let nextProjectId = 2
+const projects: MockProject[] = [
+  {
+    id: 1,
+    name: 'AI Secretary System',
+    github_owner: 'ShaerWare',
+    github_repo: 'AI_Secretary_System',
+    has_token: true,
+    webhook_secret_set: true,
+    label_mapping: {
+      todo: 'status:todo',
+      in_progress: 'status:in_progress',
+      review: 'status:review',
+    },
+    sync_enabled: true,
+    last_synced: '2026-02-22T10:00:00',
+    created: '2026-02-20T08:00:00',
+    updated: '2026-02-22T10:00:00',
+  },
+]
 
 let nextId = 10
 const tasks: MockTask[] = [
@@ -41,6 +78,8 @@ const tasks: MockTask[] = [
     due_date: '2026-01-20',
     position: 0,
     tags: ['интеграция', 'telegram'],
+    project_id: null,
+    github_issue_number: null,
     checklist: [
       { id: 1, task_id: 1, text: 'Получить токен бота', is_done: true, position: 0 },
       { id: 2, task_id: 1, text: 'Настроить вебхук', is_done: true, position: 1 },
@@ -62,6 +101,8 @@ const tasks: MockTask[] = [
     due_date: '2026-02-01',
     position: 0,
     tags: ['тестирование'],
+    project_id: null,
+    github_issue_number: null,
     checklist: [
       { id: 3, task_id: 2, text: 'Тест отправки сообщений', is_done: true, position: 0 },
       { id: 4, task_id: 2, text: 'Тест голосовых сообщений', is_done: false, position: 1 },
@@ -83,6 +124,8 @@ const tasks: MockTask[] = [
     due_date: '2026-02-15',
     position: 0,
     tags: ['контент', 'faq'],
+    project_id: null,
+    github_issue_number: null,
     checklist: [],
     blockers: [],
     dependents: [],
@@ -101,6 +144,8 @@ const tasks: MockTask[] = [
     due_date: '2026-02-10',
     position: 0,
     tags: ['виджет', 'сайт'],
+    project_id: null,
+    github_issue_number: null,
     checklist: [
       { id: 5, task_id: 4, text: 'Сгенерировать код виджета', is_done: true, position: 0 },
       { id: 6, task_id: 4, text: 'Встроить на сайт', is_done: true, position: 1 },
@@ -123,6 +168,8 @@ const tasks: MockTask[] = [
     due_date: null,
     position: 0,
     tags: [],
+    project_id: null,
+    github_issue_number: null,
     checklist: [],
     blockers: [],
     dependents: [],
@@ -141,81 +188,175 @@ const tasks: MockTask[] = [
     due_date: '2026-03-01',
     position: 1,
     tags: ['документация'],
+    project_id: null,
+    github_issue_number: null,
     checklist: [],
     blockers: [],
     dependents: [],
     created: '2026-02-12T10:00:00',
     updated: '2026-02-12T10:00:00',
   },
+  // GitHub-linked tasks
   {
     id: 7,
-    title: 'Настроить WhatsApp канал',
-    description: 'Подключить WhatsApp Business API',
+    title: 'Implement multi-project kanban',
+    description: 'Add KanbanProject model and bidirectional GitHub sync',
     status: 'in_progress',
     is_private: false,
     assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-02-10',
-    due_date: '2026-02-20',
-    position: 1,
-    tags: ['интеграция', 'whatsapp'],
+    created_by: 'github',
+    start_date: '2026-02-20',
+    due_date: '2026-02-25',
+    position: 0,
+    tags: ['enhancement'],
+    project_id: 1,
+    github_issue_number: 42,
     checklist: [
-      { id: 8, task_id: 7, text: 'Зарегистрировать бизнес-аккаунт', is_done: true, position: 0 },
-      { id: 9, task_id: 7, text: 'Настроить API-ключи', is_done: true, position: 1 },
-      { id: 10, task_id: 7, text: 'Тестовая отправка', is_done: false, position: 2 },
-      { id: 11, task_id: 7, text: 'Обработка входящих', is_done: false, position: 3 },
+      { id: 8, task_id: 7, text: 'DB models', is_done: true, position: 0 },
+      { id: 9, task_id: 7, text: 'API endpoints', is_done: true, position: 1 },
+      { id: 10, task_id: 7, text: 'Frontend UI', is_done: false, position: 2 },
     ],
     blockers: [],
     dependents: [],
-    created: '2026-02-10T09:00:00',
-    updated: '2026-02-18T14:00:00',
+    created: '2026-02-20T09:00:00',
+    updated: '2026-02-22T14:00:00',
   },
   {
     id: 8,
-    title: 'Добавить аналитику разговоров',
-    description: 'Дашборд со статистикой по чатам',
-    status: 'draft',
-    is_private: true,
+    title: 'Fix widget loading on mobile',
+    description: 'Widget does not load properly on iOS Safari',
+    status: 'todo',
+    is_private: false,
     assignee: null,
-    created_by: 'admin',
+    created_by: 'github',
     start_date: null,
     due_date: null,
     position: 1,
-    tags: ['аналитика'],
+    tags: ['bug'],
+    project_id: 1,
+    github_issue_number: 38,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-02-15T10:00:00',
-    updated: '2026-02-15T10:00:00',
+    created: '2026-02-18T10:00:00',
+    updated: '2026-02-18T10:00:00',
   },
   {
     id: 9,
-    title: 'Проверить SSL-сертификаты',
-    description: 'Убедиться что все сертификаты актуальны',
+    title: 'Add WhatsApp channel support',
+    description: 'Integrate WhatsApp Business API',
     status: 'done',
     is_private: false,
     assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-01-05',
-    due_date: '2026-01-07',
-    position: 1,
-    tags: ['безопасность'],
+    created_by: 'github',
+    start_date: '2026-02-10',
+    due_date: '2026-02-20',
+    position: 0,
+    tags: ['feature'],
+    project_id: 1,
+    github_issue_number: 35,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-01-05T08:00:00',
-    updated: '2026-01-07T11:00:00',
+    created: '2026-02-10T08:00:00',
+    updated: '2026-02-20T16:00:00',
   },
 ]
 
 let nextChecklistId = 12
 
 export const kanbanRoutes: DemoRoute[] = [
+  // GET /admin/kanban/projects
+  {
+    method: 'GET',
+    pattern: /^\/admin\/kanban\/projects$/,
+    handler: () => ({ projects }),
+  },
+  // POST /admin/kanban/projects
+  {
+    method: 'POST',
+    pattern: /^\/admin\/kanban\/projects$/,
+    handler: ({ body }) => {
+      const b = body as Record<string, unknown>
+      const project: MockProject = {
+        id: nextProjectId++,
+        name: (b.name as string) || 'New Project',
+        github_owner: (b.github_owner as string) || '',
+        github_repo: (b.github_repo as string) || '',
+        has_token: !!(b.github_token as string),
+        webhook_secret_set: !!(b.webhook_secret as string),
+        label_mapping: (b.label_mapping as Record<string, string>) || {
+          todo: 'status:todo',
+          in_progress: 'status:in_progress',
+          review: 'status:review',
+        },
+        sync_enabled: (b.sync_enabled as boolean) ?? true,
+        last_synced: null,
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      }
+      projects.push(project)
+      return { project }
+    },
+  },
+  // PATCH /admin/kanban/projects/:id
+  {
+    method: 'PATCH',
+    pattern: /^\/admin\/kanban\/projects\/(\d+)$/,
+    handler: ({ matches, body }) => {
+      const id = Number(matches[1])
+      const project = projects.find((p) => p.id === id)
+      if (!project) throw new Error('Project not found')
+      const b = body as Record<string, unknown>
+      if (b.name !== undefined) project.name = b.name as string
+      if (b.github_owner !== undefined) project.github_owner = b.github_owner as string
+      if (b.github_repo !== undefined) project.github_repo = b.github_repo as string
+      if (b.github_token !== undefined) project.has_token = !!(b.github_token as string)
+      if (b.webhook_secret !== undefined)
+        project.webhook_secret_set = !!(b.webhook_secret as string)
+      if (b.label_mapping !== undefined)
+        project.label_mapping = b.label_mapping as Record<string, string>
+      if (b.sync_enabled !== undefined) project.sync_enabled = b.sync_enabled as boolean
+      project.updated = new Date().toISOString()
+      return { project }
+    },
+  },
+  // DELETE /admin/kanban/projects/:id
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/kanban\/projects\/(\d+)$/,
+    handler: ({ matches }) => {
+      const id = Number(matches[1])
+      const idx = projects.findIndex((p) => p.id === id)
+      if (idx === -1) throw new Error('Project not found')
+      projects.splice(idx, 1)
+      return { status: 'deleted' }
+    },
+  },
+  // POST /admin/kanban/projects/:id/sync
+  {
+    method: 'POST',
+    pattern: /^\/admin\/kanban\/projects\/(\d+)\/sync$/,
+    handler: ({ matches }) => {
+      const id = Number(matches[1])
+      const project = projects.find((p) => p.id === id)
+      if (!project) throw new Error('Project not found')
+      project.last_synced = new Date().toISOString()
+      return { created: 0, updated: 3, total: 3 }
+    },
+  },
   // GET /admin/kanban/tasks
   {
     method: 'GET',
     pattern: /^\/admin\/kanban\/tasks$/,
-    handler: () => ({ tasks }),
+    handler: ({ searchParams }) => {
+      const projectIdStr = searchParams.get('project_id')
+      if (projectIdStr !== null) {
+        const projectId = Number(projectIdStr)
+        return { tasks: tasks.filter((t) => t.project_id === projectId) }
+      }
+      return { tasks: tasks.filter((t) => t.project_id === null) }
+    },
   },
   // POST /admin/kanban/tasks
   {
@@ -223,7 +364,7 @@ export const kanbanRoutes: DemoRoute[] = [
     pattern: /^\/admin\/kanban\/tasks$/,
     handler: ({ body }) => {
       const b = body as Record<string, unknown>
-      const task = {
+      const task: MockTask = {
         id: nextId++,
         title: (b.title as string) || 'Новая задача',
         description: (b.description as string) || null,
@@ -235,6 +376,8 @@ export const kanbanRoutes: DemoRoute[] = [
         due_date: (b.due_date as string) || null,
         position: tasks.length,
         tags: (b.tags as string[]) || [],
+        project_id: null,
+        github_issue_number: null,
         checklist: [],
         blockers: [],
         dependents: [],

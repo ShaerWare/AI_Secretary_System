@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { kanbanApi, type KanbanTask, type TaskCreateData, type TaskUpdateData } from '@/api'
+import {
+  kanbanApi,
+  type KanbanTask,
+  type KanbanProject,
+  type TaskCreateData,
+  type TaskUpdateData,
+  type ProjectCreateData,
+  type ProjectUpdateData,
+} from '@/api'
 
 export const useKanbanStore = defineStore('kanban', () => {
   const tasks = ref<KanbanTask[]>([])
@@ -8,6 +16,17 @@ export const useKanbanStore = defineStore('kanban', () => {
   const selectedTaskId = ref<number | null>(null)
   const statusFilter = ref<string>('all')
   const activeView = ref<'kanban' | 'roadmap'>('kanban')
+
+  // Project state
+  const projects = ref<KanbanProject[]>([])
+  const selectedProjectId = ref<number | null>(null)
+  const syncing = ref(false)
+
+  const currentProject = computed(() =>
+    selectedProjectId.value != null
+      ? projects.value.find((p) => p.id === selectedProjectId.value) || null
+      : null,
+  )
 
   const filteredTasks = computed(() => {
     if (statusFilter.value === 'all') return tasks.value
@@ -68,13 +87,63 @@ export const useKanbanStore = defineStore('kanban', () => {
   })
 
   const selectedTask = computed(() =>
-    selectedTaskId.value ? tasks.value.find((t) => t.id === selectedTaskId.value) || null : null
+    selectedTaskId.value ? tasks.value.find((t) => t.id === selectedTaskId.value) || null : null,
   )
 
+  // Project actions
+  async function fetchProjects() {
+    const res = await kanbanApi.getProjects()
+    projects.value = res.projects
+  }
+
+  async function selectProject(id: number | null) {
+    selectedProjectId.value = id
+    await fetchTasks()
+  }
+
+  async function createProject(data: ProjectCreateData) {
+    const res = await kanbanApi.createProject(data)
+    projects.value.push(res.project)
+    return res.project
+  }
+
+  async function updateProject(id: number, data: ProjectUpdateData) {
+    const res = await kanbanApi.updateProject(id, data)
+    const idx = projects.value.findIndex((p) => p.id === id)
+    if (idx !== -1) projects.value[idx] = res.project
+    return res.project
+  }
+
+  async function deleteProject(id: number) {
+    await kanbanApi.deleteProject(id)
+    projects.value = projects.value.filter((p) => p.id !== id)
+    if (selectedProjectId.value === id) {
+      selectedProjectId.value = null
+      await fetchTasks()
+    }
+  }
+
+  async function syncProject(id: number) {
+    syncing.value = true
+    try {
+      const result = await kanbanApi.syncProject(id)
+      await fetchTasks()
+      // Update last_synced in local state
+      const idx = projects.value.findIndex((p) => p.id === id)
+      if (idx !== -1) {
+        projects.value[idx] = { ...projects.value[idx], last_synced: new Date().toISOString() }
+      }
+      return result
+    } finally {
+      syncing.value = false
+    }
+  }
+
+  // Task actions
   async function fetchTasks() {
     loading.value = true
     try {
-      const res = await kanbanApi.getTasks()
+      const res = await kanbanApi.getTasks(selectedProjectId.value)
       tasks.value = res.tasks
     } finally {
       loading.value = false
@@ -153,10 +222,20 @@ export const useKanbanStore = defineStore('kanban', () => {
     selectedTaskId,
     statusFilter,
     activeView,
+    projects,
+    selectedProjectId,
+    syncing,
+    currentProject,
     filteredTasks,
     tasksByStatus,
     ganttTasks,
     selectedTask,
+    fetchProjects,
+    selectProject,
+    createProject,
+    updateProject,
+    deleteProject,
+    syncProject,
     fetchTasks,
     createTask,
     updateTask,

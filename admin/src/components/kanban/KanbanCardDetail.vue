@@ -11,8 +11,9 @@ import {
   Unlink,
   Calendar,
   User,
+  ExternalLink,
 } from 'lucide-vue-next'
-import type { KanbanTask } from '@/api'
+import type { KanbanTask, KanbanProject } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import KanbanStatusBadge from './KanbanStatusBadge.vue'
 
@@ -20,6 +21,7 @@ const props = defineProps<{
   visible: boolean
   task: KanbanTask | null
   allTasks: KanbanTask[]
+  currentProject?: KanbanProject | null
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +45,11 @@ const showAddDependency = ref(false)
 const selectedDependencyId = ref<number | null>(null)
 
 const isAdmin = computed(() => authStore.isAdmin)
+
+const githubIssueUrl = computed(() => {
+  if (!props.task?.github_issue_number || !props.currentProject) return null
+  return `https://github.com/${props.currentProject.github_owner}/${props.currentProject.github_repo}/issues/${props.task.github_issue_number}`
+})
 
 const availableBlockers = computed(() => {
   if (!props.task) return []
@@ -93,12 +100,24 @@ function getTaskTitle(id: number): string {
             <h3 class="text-lg font-semibold truncate">{{ task.title }}</h3>
             <KanbanStatusBadge :status="task.status" />
           </div>
-          <button
-            class="p-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0"
-            @click="emit('close')"
-          >
-            <X class="w-5 h-5" />
-          </button>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <a
+              v-if="githubIssueUrl"
+              :href="githubIssueUrl"
+              target="_blank"
+              rel="noopener"
+              class="p-1 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              :title="t('kanban.viewOnGithub')"
+            >
+              <ExternalLink class="w-5 h-5" />
+            </a>
+            <button
+              class="p-1 rounded-lg hover:bg-muted transition-colors"
+              @click="emit('close')"
+            >
+              <X class="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div class="p-4 space-y-6">

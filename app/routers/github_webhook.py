@@ -139,6 +139,43 @@ async def _broadcast_to_subscribers(
     return len(user_ids)
 
 
+async def _handle_issue_event(payload: bytes, signature: Optional[str]) -> dict:
+    """Handle GitHub issues webhook events for kanban sync."""
+    try:
+        event_data = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    repo_data = event_data.get("repository", {})
+    full_name = repo_data.get("full_name", "")
+    if "/" not in full_name:
+        return {"status": "ignored", "reason": "no repo"}
+
+    owner, repo = full_name.split("/", 1)
+
+    from db.integration import async_kanban_project_manager
+
+    project = await async_kanban_project_manager.get_by_repo(owner, repo)
+    if not project:
+        return {"status": "ignored", "reason": "no matching kanban project"}
+
+    if not project.get("sync_enabled", True):
+        return {"status": "ignored", "reason": "sync disabled"}
+
+    # Verify HMAC if webhook_secret is set
+    if project.get("webhook_secret") and signature:
+        if not await _verify_signature(payload, signature, project["webhook_secret"]):
+            logger.warning(f"Invalid signature for kanban project {project['id']}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+    from app.services.github_kanban_sync import handle_issue_webhook
+
+    result = await handle_issue_webhook(event_data, project)
+    if result:
+        return {"status": "processed", "task_id": result.get("id")}
+    return {"status": "ignored", "reason": "unsupported action"}
+
+
 @router.post("/webhooks/github")
 async def handle_github_webhook(
     request: Request,
@@ -154,7 +191,11 @@ async def handle_github_webhook(
     if not x_github_event:
         raise HTTPException(status_code=400, detail="Missing X-GitHub-Event header")
 
-    # Only process pull_request events
+    # Handle issues events for kanban sync
+    if x_github_event == "issues":
+        return await _handle_issue_event(payload, x_hub_signature_256)
+
+    # Only process pull_request events below
     if x_github_event != "pull_request":
         return {"status": "ignored", "event": x_github_event}
 
