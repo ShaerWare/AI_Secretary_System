@@ -72,6 +72,7 @@ class User(BaseModel):
     id: int
     username: str
     role: str
+    permissions: Dict[str, str] = {}
 
 
 # ============== Security ==============
@@ -107,6 +108,37 @@ class SessionCache:
 
 
 _session_cache = SessionCache()
+
+
+# ============== Permissions Cache ==============
+
+
+class PermissionsCache:
+    """In-memory cache mapping role_name → permissions dict."""
+
+    def __init__(self) -> None:
+        self._cache: Dict[str, Dict[str, str]] = {}
+
+    async def get(self, role_name: str) -> Dict[str, str]:
+        """Get permissions for role, loading from DB on cache miss."""
+        if role_name in self._cache:
+            return self._cache[role_name]
+        from db.integration import async_role_manager
+
+        role = await async_role_manager.get_by_name(role_name)
+        perms = role.get("permissions", {}) if role else {}
+        self._cache[role_name] = perms
+        return perms
+
+    def invalidate(self, role_name: Optional[str] = None) -> None:
+        """Clear cache. If role_name given, clear only that entry."""
+        if role_name:
+            self._cache.pop(role_name, None)
+        else:
+            self._cache.clear()
+
+
+_permissions_cache = PermissionsCache()
 
 
 # ============== Password Helpers ==============
@@ -340,6 +372,24 @@ def require_not_guest(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_permission(module: str, min_level: str):
+    """FastAPI Depends factory: checks user has >= min_level for module."""
+
+    async def _dependency(user: User = Depends(get_current_user)) -> User:
+        role_name = get_role_for_legacy(user.role)
+        perms = await _permissions_cache.get(role_name)
+        user.permissions = perms
+        user_level = perms.get(module, "")
+        if not level_gte(user_level, min_level):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: requires {module}:{min_level}",
+            )
+        return user
+
+    return _dependency
+
+
 def verify_ownership(user: User, record_owner_id: Optional[int]) -> None:
     """Raise 404 if user doesn't own the record (admin bypasses)."""
     if user.role == "admin":
@@ -366,15 +416,20 @@ def get_role_for_legacy(legacy_role: str) -> str:
     return _LEGACY_ROLE_MAP.get(legacy_role, "viewer")
 
 
-async def get_user_permissions(user: User) -> Dict[str, str]:
-    """Get permissions dict for user. Uses legacy role → role mapping."""
-    from db.integration import async_role_manager
+def user_has_level(user: User, module: str, min_level: str) -> bool:
+    """Check if user has >= min_level for module. Requires permissions pre-loaded."""
+    return level_gte(user.permissions.get(module, ""), min_level)
 
+
+async def get_user_permissions(user: User) -> Dict[str, str]:
+    """Get permissions dict for user. Uses cache."""
     role_name = get_role_for_legacy(user.role)
-    role = await async_role_manager.get_by_name(role_name)
-    if not role:
-        return {}
-    return role.get("permissions", {})
+    return await _permissions_cache.get(role_name)
+
+
+def invalidate_permissions_cache(role_name: Optional[str] = None) -> None:
+    """Clear permissions cache. Called when roles are modified."""
+    _permissions_cache.invalidate(role_name)
 
 
 # ============== Status ==============
