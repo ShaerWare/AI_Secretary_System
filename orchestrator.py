@@ -652,9 +652,22 @@ async def _seed_system_roles():
             return
 
         ALL_MODULES = [
-            "dashboard", "chat", "llm", "speech", "faq", "wiki",
-            "channels", "sales", "kanban", "gsm", "system", "audit",
-            "usage", "settings", "users", "claude_code",
+            "dashboard",
+            "chat",
+            "llm",
+            "speech",
+            "faq",
+            "wiki",
+            "channels",
+            "sales",
+            "kanban",
+            "gsm",
+            "system",
+            "audit",
+            "usage",
+            "settings",
+            "users",
+            "claude_code",
         ]
 
         SYSTEM_ROLES = [
@@ -675,10 +688,19 @@ async def _seed_system_roles():
                 "display_name": "Operator",
                 "description": "Day-to-day operations: chat, content, channels",
                 "permissions": {
-                    **dict.fromkeys([
-                        "chat", "llm", "speech", "faq", "wiki",
-                        "channels", "sales", "kanban",
-                    ], "edit"),
+                    **dict.fromkeys(
+                        [
+                            "chat",
+                            "llm",
+                            "speech",
+                            "faq",
+                            "wiki",
+                            "channels",
+                            "sales",
+                            "kanban",
+                        ],
+                        "edit",
+                    ),
                     **dict.fromkeys(["audit", "usage", "dashboard"], "view"),
                 },
             },
@@ -686,10 +708,18 @@ async def _seed_system_roles():
                 "name": "viewer",
                 "display_name": "Viewer",
                 "description": "Read-only access to key modules",
-                "permissions": dict.fromkeys([
-                    "dashboard", "chat", "llm", "faq", "wiki",
-                    "kanban", "audit",
-                ], "view"),
+                "permissions": dict.fromkeys(
+                    [
+                        "dashboard",
+                        "chat",
+                        "llm",
+                        "faq",
+                        "wiki",
+                        "kanban",
+                        "audit",
+                    ],
+                    "view",
+                ),
             },
         ]
 

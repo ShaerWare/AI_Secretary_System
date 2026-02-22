@@ -176,9 +176,7 @@ class RolePermission(Base):
     """Single module-level permission entry for a role."""
 
     __tablename__ = "role_permissions"
-    __table_args__ = (
-        Index("ix_role_permissions_role_module", "role_id", "module", unique=True),
-    )
+    __table_args__ = (Index("ix_role_permissions_role_module", "role_id", "module", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(

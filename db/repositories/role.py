@@ -54,8 +54,7 @@ class RoleRepository(BaseRepository[Role]):
         )
         if permissions:
             role.permissions = [
-                RolePermission(module=module, level=level)
-                for module, level in permissions.items()
+                RolePermission(module=module, level=level) for module, level in permissions.items()
             ]
         self.session.add(role)
         await self.session.commit()
