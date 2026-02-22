@@ -33,6 +33,7 @@ from db.repositories import (
     PresetRepository,
     TelegramRepository,
     UserRepository,
+    UserSessionRepository,
     WhatsAppInstanceRepository,
     WidgetInstanceRepository,
 )
@@ -1054,6 +1055,59 @@ class AsyncGSMManager:
             return await repo.count_sms()
 
 
+# ============== User Session Manager ==============
+
+
+class AsyncUserSessionManager:
+    """Async manager for user session tracking and revocation."""
+
+    async def create_session(
+        self,
+        user_id: int,
+        jti: str,
+        ip_address: Optional[str],
+        user_agent: Optional[str],
+        expires_at: "datetime",
+    ) -> dict:
+        """Create a new session record."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.create_session(user_id, jti, ip_address, user_agent, expires_at)
+
+    async def get_by_jti(self, jti: str):
+        """Get session by JTI with user join."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.get_by_jti(jti)
+
+    async def get_active_for_user(self, user_id: int) -> List[dict]:
+        """Get active sessions for a user."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.get_active_for_user(user_id)
+
+    async def revoke_by_jti(self, jti: str) -> bool:
+        """Revoke a single session."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.revoke_by_jti(jti)
+
+    async def revoke_all_for_user(self, user_id: int) -> int:
+        """Revoke all sessions for a user."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.revoke_all_for_user(user_id)
+
+    async def cleanup_expired(self, days: int = 7) -> int:
+        """Delete old expired sessions."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            return await repo.cleanup_expired(days)
+
+
+async_session_manager = AsyncUserSessionManager()
+
+
 # ============== User Manager ==============
 
 
@@ -1093,10 +1147,13 @@ class AsyncUserManager:
             return await repo.create_user(username, password, role, display_name)
 
     async def update_password(self, user_id: int, new_password: str) -> bool:
-        """Update user password."""
+        """Update user password. Revokes all existing sessions."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.update_password(user_id, new_password)
+            result = await repo.update_password(user_id, new_password)
+        if result:
+            await self._revoke_user_sessions(user_id)
+        return result
 
     async def update_profile(
         self, user_id: int, display_name: Optional[str] = None
@@ -1107,16 +1164,31 @@ class AsyncUserManager:
             return await repo.update_profile(user_id, display_name)
 
     async def set_role(self, user_id: int, role: str) -> bool:
-        """Change user role."""
+        """Change user role. Revokes all existing sessions."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.set_role(user_id, role)
+            result = await repo.set_role(user_id, role)
+        if result:
+            await self._revoke_user_sessions(user_id)
+        return result
 
     async def set_active(self, user_id: int, active: bool) -> bool:
-        """Enable or disable user."""
+        """Enable or disable user. Revokes sessions on deactivation."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.set_active(user_id, active)
+            result = await repo.set_active(user_id, active)
+        if result and not active:
+            await self._revoke_user_sessions(user_id)
+        return result
+
+    async def _revoke_user_sessions(self, user_id: int) -> None:
+        """Revoke all sessions and clear cache for a user."""
+        from auth_manager import revoke_all_user_sessions
+
+        try:
+            await revoke_all_user_sessions(user_id)
+        except Exception as e:
+            logger.warning(f"Failed to revoke sessions for user {user_id}: {e}")
 
     async def list_users(self, include_inactive: bool = False) -> List[dict]:
         """List all users."""

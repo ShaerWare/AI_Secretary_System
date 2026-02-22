@@ -3,6 +3,7 @@ Authentication Manager for Admin Panel
 
 Multi-user JWT-based authentication with DB-backed users and role-based access.
 Roles: guest, user, admin.
+Session-based token management with in-memory cache and revocation support.
 """
 
 import hashlib
@@ -11,6 +12,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+from uuid import uuid4
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -61,6 +63,7 @@ class TokenPayload(BaseModel):
     role: str
     exp: int  # expiration timestamp
     iat: int  # issued at timestamp
+    jti: str = ""  # JWT ID for session tracking
 
 
 class User(BaseModel):
@@ -72,6 +75,36 @@ class User(BaseModel):
 # ============== Security ==============
 
 security = HTTPBearer(auto_error=False)
+
+
+# ============== Session Cache ==============
+
+
+class SessionCache:
+    """In-memory cache mapping JTI → user_id for fast session validation."""
+
+    def __init__(self) -> None:
+        self._cache: Dict[str, int] = {}  # jti → user_id
+
+    def get(self, jti: str) -> Optional[int]:
+        return self._cache.get(jti)
+
+    def put(self, jti: str, user_id: int) -> None:
+        self._cache[jti] = user_id
+
+    def remove(self, jti: str) -> None:
+        self._cache.pop(jti, None)
+
+    def remove_all_for_user(self, user_id: int) -> None:
+        to_remove = [jti for jti, uid in self._cache.items() if uid == user_id]
+        for jti in to_remove:
+            del self._cache[jti]
+
+    def size(self) -> int:
+        return len(self._cache)
+
+
+_session_cache = SessionCache()
 
 
 # ============== Password Helpers ==============
@@ -93,15 +126,18 @@ def verify_password(password: str, password_hash: str) -> bool:
 # ============== Token Management ==============
 
 
-def create_access_token(username: str, role: str = "admin", user_id: int = 0) -> tuple[str, int]:
-    """Create a JWT access token.
+def create_access_token(
+    username: str, role: str = "admin", user_id: int = 0
+) -> tuple[str, int, str]:
+    """Create a JWT access token with a unique JTI.
 
     Returns:
-        tuple: (token, expires_in_seconds)
+        tuple: (token, expires_in_seconds, jti)
     """
     now = datetime.utcnow()
     expires = now + timedelta(hours=JWT_EXPIRATION_HOURS)
     expires_in = int((expires - now).total_seconds())
+    jti = str(uuid4())
 
     payload = {
         "sub": username,
@@ -109,10 +145,11 @@ def create_access_token(username: str, role: str = "admin", user_id: int = 0) ->
         "role": role,
         "exp": int(expires.timestamp()),
         "iat": int(now.timestamp()),
+        "jti": jti,
     }
 
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    return token, expires_in
+    return token, expires_in, jti
 
 
 def decode_token(token: str) -> Optional[TokenPayload]:
@@ -122,6 +159,9 @@ def decode_token(token: str) -> Optional[TokenPayload]:
         # Backward compat: old tokens may not have user_id
         if "user_id" not in payload:
             payload["user_id"] = 0
+        # Backward compat: old tokens may not have jti
+        if "jti" not in payload:
+            payload["jti"] = ""
         return TokenPayload(**payload)
     except jwt.ExpiredSignatureError:
         logger.debug("Token expired")
@@ -129,6 +169,50 @@ def decode_token(token: str) -> Optional[TokenPayload]:
     except jwt.InvalidTokenError as e:
         logger.debug(f"Invalid token: {e}")
         return None
+
+
+# ============== Session Management ==============
+
+
+async def create_session(
+    username: str,
+    role: str,
+    user_id: int,
+    ip: Optional[str],
+    user_agent: Optional[str],
+) -> LoginResponse:
+    """Create a new session: generate token, persist to DB, populate cache."""
+    from db.integration import async_session_manager
+
+    token, expires_in, jti = create_access_token(username, role, user_id)
+    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+    await async_session_manager.create_session(
+        user_id=user_id,
+        jti=jti,
+        ip_address=ip,
+        user_agent=user_agent,
+        expires_at=expires_at,
+    )
+    _session_cache.put(jti, user_id)
+
+    return LoginResponse(access_token=token, token_type="bearer", expires_in=expires_in)
+
+
+async def revoke_session(jti: str) -> bool:
+    """Revoke a single session by JTI."""
+    from db.integration import async_session_manager
+
+    _session_cache.remove(jti)
+    return await async_session_manager.revoke_by_jti(jti)
+
+
+async def revoke_all_user_sessions(user_id: int) -> int:
+    """Revoke all sessions for a user."""
+    from db.integration import async_session_manager
+
+    _session_cache.remove_all_for_user(user_id)
+    return await async_session_manager.revoke_all_for_user(user_id)
 
 
 # ============== Authentication ==============
@@ -163,6 +247,45 @@ async def authenticate_user(username: str, password: str) -> Optional[User]:
     return None
 
 
+# ============== Session Validation Helpers ==============
+
+
+async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
+    """Validate a decoded token against the session cache/DB.
+
+    Returns User if session is valid, None otherwise.
+    """
+    jti = token_payload.jti
+
+    # Tokens without jti are pre-session-management tokens — reject
+    if not jti:
+        return None
+
+    user_id = token_payload.user_id
+
+    # Check in-memory cache first
+    cached_uid = _session_cache.get(jti)
+    if cached_uid is not None:
+        if cached_uid != user_id:
+            return None
+        return User(id=user_id, username=token_payload.sub, role=token_payload.role)
+
+    # Cache miss — check DB
+    from db.integration import async_session_manager
+
+    db_session = await async_session_manager.get_by_jti(jti)
+    if db_session is None:
+        return None
+    if db_session.revoked_at is not None:
+        return None
+    if db_session.user is None or not db_session.user.is_active:
+        return None
+
+    # Valid session — populate cache
+    _session_cache.put(jti, user_id)
+    return User(id=user_id, username=token_payload.sub, role=token_payload.role)
+
+
 # ============== FastAPI Dependencies ==============
 
 
@@ -185,7 +308,15 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return User(id=token_payload.user_id, username=token_payload.sub, role=token_payload.role)
+    user = await _validate_session(token_payload)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session revoked or user deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
 
 
 async def get_optional_user(
@@ -199,7 +330,7 @@ async def get_optional_user(
     if token_payload is None:
         return None
 
-    return User(id=token_payload.user_id, username=token_payload.sub, role=token_payload.role)
+    return await _validate_session(token_payload)
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
@@ -237,4 +368,5 @@ def get_auth_status() -> Dict:
     return {
         "enabled": AUTH_ENABLED,
         "jwt_expiration_hours": JWT_EXPIRATION_HOURS,
+        "active_sessions": _session_cache.size(),
     }

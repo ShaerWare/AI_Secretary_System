@@ -105,6 +105,38 @@ class User(Base):
         return result
 
 
+class UserSession(Base):
+    """User login session for token revocation and session management."""
+
+    __tablename__ = "user_sessions"
+    __table_args__ = (Index("ix_user_sessions_user_revoked", "user_id", "revoked_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    token_jti: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship("User", backref="sessions")
+
+    def to_dict(self) -> dict:
+        return {
+            "token_jti": self.token_jti,
+            "ip_address": self.ip_address,
+            "user_agent": self.user_agent,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
+        }
+
+
 # ============== Chat ==============
 
 

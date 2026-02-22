@@ -1,5 +1,5 @@
 # app/routers/auth.py
-"""Authentication router - login, user info, auth status, profile management."""
+"""Authentication router - login, user info, auth status, profile management, session management."""
 
 import os
 
@@ -13,11 +13,12 @@ from auth_manager import (
     UpdateProfileRequest,
     User,
     authenticate_user,
-    create_access_token,
+    create_session,
     get_auth_status,
     get_current_user,
+    revoke_session,
 )
-from db.integration import async_audit_logger, async_user_manager
+from db.integration import async_audit_logger, async_session_manager, async_user_manager
 
 
 router = APIRouter(prefix="/admin/auth", tags=["auth"])
@@ -26,19 +27,28 @@ router = APIRouter(prefix="/admin/auth", tags=["auth"])
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit(RATE_LIMIT_AUTH)
 async def admin_login(request: Request, login_request: LoginRequest):
-    """Authenticate user and return JWT token."""
+    """Authenticate user and return JWT token with session tracking."""
     user = await authenticate_user(login_request.username, login_request.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token, expires_in = create_access_token(user.username, user.role, user.id)
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    response = await create_session(
+        username=user.username,
+        role=user.role,
+        user_id=user.id,
+        ip=ip,
+        user_agent=user_agent,
+    )
 
     # Audit log
     await async_audit_logger.log(
         action="login", resource="auth", user_id=user.username, details={"role": user.role}
     )
 
-    return LoginResponse(access_token=token, token_type="bearer", expires_in=expires_in)
+    return response
 
 
 @router.get("/me")
@@ -88,10 +98,11 @@ async def admin_update_profile(
 
 @router.post("/change-password")
 async def admin_change_password(
+    http_request: Request,
     request: ChangePasswordRequest,
     user: User = Depends(get_current_user),
 ):
-    """Change current user's password."""
+    """Change current user's password. Revokes all sessions and issues a new token."""
     if user.role == "guest":
         raise HTTPException(status_code=403, detail="Guest cannot change password")
 
@@ -100,13 +111,58 @@ async def admin_change_password(
     if not auth_result:
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-    # Update password
+    # Update password (this also revokes all sessions via hook)
     success = await async_user_manager.update_password(user.id, request.new_password)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update password")
 
+    # Create a fresh session for the current user (re-login)
+    ip = http_request.client.host if http_request.client else None
+    user_agent = http_request.headers.get("user-agent")
+    new_login = await create_session(
+        username=user.username,
+        role=user.role,
+        user_id=user.id,
+        ip=ip,
+        user_agent=user_agent,
+    )
+
     await async_audit_logger.log(action="update", resource="password", user_id=user.username)
-    return {"message": "Password updated successfully"}
+    return {
+        "message": "Password updated successfully",
+        "access_token": new_login.access_token,
+        "token_type": new_login.token_type,
+        "expires_in": new_login.expires_in,
+    }
+
+
+@router.get("/sessions")
+async def list_sessions(user: User = Depends(get_current_user)):
+    """List active sessions for the current user."""
+    sessions = await async_session_manager.get_active_for_user(user.id)
+    return sessions
+
+
+@router.delete("/sessions/{jti}")
+async def delete_session(
+    jti: str,
+    user: User = Depends(get_current_user),
+):
+    """Revoke a specific session. Users can revoke their own sessions; admins can revoke any."""
+    # Check ownership: non-admins can only revoke their own sessions
+    if user.role != "admin":
+        db_session = await async_session_manager.get_by_jti(jti)
+        if db_session is None or db_session.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    revoked = await revoke_session(jti)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Session not found or already revoked")
+
+    await async_audit_logger.log(
+        action="revoke", resource="session", user_id=user.username, details={"jti": jti}
+    )
+    return {"message": "Session revoked"}
 
 
 @router.get("/status")
