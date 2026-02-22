@@ -120,7 +120,9 @@ class MultiBotManager:
             try:
                 from auth_manager import create_access_token
 
-                token, _, _ = create_access_token(username="__internal_bot__", role="admin", user_id=0)
+                token, _, _ = create_access_token(
+                    username="__internal_bot__", role="admin", user_id=0
+                )
                 env["BOT_INTERNAL_TOKEN"] = token
             except Exception as e:
                 logger.warning(f"Could not generate internal token: {e}")
