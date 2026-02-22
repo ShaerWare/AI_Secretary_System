@@ -448,6 +448,7 @@ const switchBranchMutation = useMutation({
 const newBranchMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
   onSuccess: async () => {
+    showBranchTree.value = true
     await refetchSession()
     await refetchBranches()
   },
@@ -455,6 +456,12 @@ const newBranchMutation = useMutation({
 
 function startNewBranch() {
   if (!currentSessionId.value) return
+  newBranchMutation.mutate(currentSessionId.value)
+}
+
+function startNewBranchAndShowTree() {
+  if (!currentSessionId.value) return
+  showBranchTree.value = true
   newBranchMutation.mutate(currentSessionId.value)
 }
 
@@ -2274,6 +2281,15 @@ watch(sessions, (newSessions) => {
           >
             <ArrowDownToLine class="w-5 h-5" />
           </button>
+          <!-- New branch button (yellow) -->
+          <button
+            v-if="currentSessionId && !cc.isActive.value"
+            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranchAndShowTree"
+          >
+            <Plus class="w-5 h-5" />
+          </button>
         </div>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -2313,12 +2329,12 @@ watch(sessions, (newSessions) => {
           </h2>
           <div class="mt-2">
             <button
-              :disabled="createSessionMutation.isPending.value"
+              :disabled="newBranchMutation.isPending.value"
               class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              @click="createNewChat"
+              @click="startNewBranchAndShowTree()"
             >
               <Plus class="w-3.5 h-3.5" />
-              {{ t('chatView.newChat') }}
+              {{ t('chatView.newBranch') }}
             </button>
           </div>
         </div>
