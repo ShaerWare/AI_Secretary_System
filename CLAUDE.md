@@ -152,7 +152,7 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (23 routers, ~400 endpoints) │
+│  orchestrator.py + app/routers/ (24 routers, ~400 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (21 views, PWA)                │  │
 │  │                admin/dist/                              │  │
