@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_manager import User, get_current_user, require_admin, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from db.integration import async_audit_logger, async_kanban_manager, async_kanban_project_manager
 
 
@@ -79,14 +79,16 @@ class ProjectUpdate(BaseModel):
 
 
 @router.get("/projects")
-async def get_projects(user: User = Depends(get_current_user)):
+async def get_projects(user: User = Depends(require_permission("kanban", "view"))):
     """Get all kanban projects."""
     projects = await async_kanban_project_manager.get_all_projects()
     return {"projects": projects}
 
 
 @router.post("/projects")
-async def create_project(request: ProjectCreate, user: User = Depends(require_admin)):
+async def create_project(
+    request: ProjectCreate, user: User = Depends(require_permission("kanban", "manage"))
+):
     """Create a new kanban project (admin only)."""
     kwargs = {
         "name": request.name,
@@ -113,7 +115,9 @@ async def create_project(request: ProjectCreate, user: User = Depends(require_ad
 
 @router.patch("/projects/{project_id}")
 async def update_project(
-    project_id: int, request: ProjectUpdate, user: User = Depends(require_admin)
+    project_id: int,
+    request: ProjectUpdate,
+    user: User = Depends(require_permission("kanban", "manage")),
 ):
     """Update a kanban project (admin only)."""
     existing = await async_kanban_project_manager.get_project(project_id)
@@ -147,7 +151,9 @@ async def update_project(
 
 
 @router.delete("/projects/{project_id}")
-async def delete_project(project_id: int, user: User = Depends(require_admin)):
+async def delete_project(
+    project_id: int, user: User = Depends(require_permission("kanban", "manage"))
+):
     """Delete a kanban project (admin only)."""
     existing = await async_kanban_project_manager.get_project(project_id)
     if not existing:
@@ -164,7 +170,7 @@ async def delete_project(project_id: int, user: User = Depends(require_admin)):
 
 
 @router.post("/projects/{project_id}/sync")
-async def sync_project(project_id: int, user: User = Depends(require_not_guest)):
+async def sync_project(project_id: int, user: User = Depends(require_permission("kanban", "edit"))):
     """Trigger full sync of GitHub issues for a project."""
     existing = await async_kanban_project_manager.get_project(project_id)
     if not existing:
@@ -202,11 +208,11 @@ async def _push_github_status(task: dict, new_status: str):
 
 @router.get("/tasks")
 async def get_tasks(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kanban", "view")),
     project_id: Optional[int] = Query(None),
 ):
     """Get tasks visible to the current user, optionally filtered by project."""
-    is_admin = user.role == "admin"
+    is_admin = user_has_level(user, "kanban", "manage")
     tasks = await async_kanban_manager.get_visible_tasks_for_project(
         project_id, user.username, is_admin
     )
@@ -214,7 +220,9 @@ async def get_tasks(
 
 
 @router.post("/tasks")
-async def create_task(request: TaskCreate, user: User = Depends(require_not_guest)):
+async def create_task(
+    request: TaskCreate, user: User = Depends(require_permission("kanban", "edit"))
+):
     """Create a new task (always draft + private)."""
     tags_json = json.dumps(request.tags, ensure_ascii=False) if request.tags else None
     task = await async_kanban_manager.create_task(
@@ -240,14 +248,14 @@ async def update_task(
     task_id: int,
     request: TaskUpdate,
     background_tasks: BackgroundTasks,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Update a task. Non-admin can only edit own tasks."""
     existing = await async_kanban_manager.get_task(task_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if user.role != "admin" and existing["created_by"] != user.username:
+    if not user_has_level(user, "kanban", "manage") and existing["created_by"] != user.username:
         raise HTTPException(status_code=403, detail="Can only edit own tasks")
 
     update_data = {}
@@ -288,7 +296,7 @@ async def update_task(
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: int, user: User = Depends(require_admin)):
+async def delete_task(task_id: int, user: User = Depends(require_permission("kanban", "manage"))):
     """Delete a task (admin only)."""
     existing = await async_kanban_manager.get_task(task_id)
     if not existing:
@@ -311,7 +319,7 @@ async def delete_task(task_id: int, user: User = Depends(require_admin)):
 async def reorder_task(
     request: TaskReorder,
     background_tasks: BackgroundTasks,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Reorder a task (update status + position)."""
     # Get existing task before reorder (for GitHub push check)
@@ -335,13 +343,19 @@ async def reorder_task(
 
 
 @router.post("/dependencies")
-async def add_dependency(request: DependencyCreate, user: User = Depends(require_not_guest)):
+async def add_dependency(
+    request: DependencyCreate, user: User = Depends(require_permission("kanban", "edit"))
+):
     """Add a dependency between tasks."""
     # Check target task exists and is not private
     target = await async_kanban_manager.get_task(request.blocker_id)
     if not target:
         raise HTTPException(status_code=404, detail="Blocker task not found")
-    if target["is_private"] and target["created_by"] != user.username and user.role != "admin":
+    if (
+        target["is_private"]
+        and target["created_by"] != user.username
+        and not user_has_level(user, "kanban", "manage")
+    ):
         raise HTTPException(status_code=409, detail="Cannot depend on a private task")
 
     dependent = await async_kanban_manager.get_task(request.dependent_id)
@@ -360,7 +374,7 @@ async def add_dependency(request: DependencyCreate, user: User = Depends(require
 async def remove_dependency(
     blocker_id: int = Query(...),
     dependent_id: int = Query(...),
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Remove a dependency between tasks."""
     removed = await async_kanban_manager.remove_dependency(blocker_id, dependent_id)
@@ -376,7 +390,7 @@ async def remove_dependency(
 async def add_checklist_item(
     task_id: int,
     request: ChecklistItemCreate,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Add a checklist item to a task."""
     existing = await async_kanban_manager.get_task(task_id)
@@ -388,7 +402,9 @@ async def add_checklist_item(
 
 
 @router.patch("/checklist/{item_id}/toggle")
-async def toggle_checklist_item(item_id: int, user: User = Depends(require_not_guest)):
+async def toggle_checklist_item(
+    item_id: int, user: User = Depends(require_permission("kanban", "edit"))
+):
     """Toggle a checklist item's done status."""
     item = await async_kanban_manager.toggle_checklist_item(item_id)
     if not item:
@@ -397,7 +413,9 @@ async def toggle_checklist_item(item_id: int, user: User = Depends(require_not_g
 
 
 @router.delete("/checklist/{item_id}")
-async def delete_checklist_item(item_id: int, user: User = Depends(require_not_guest)):
+async def delete_checklist_item(
+    item_id: int, user: User = Depends(require_permission("kanban", "edit"))
+):
     """Delete a checklist item."""
     deleted = await async_kanban_manager.delete_checklist_item(item_id)
     if not deleted:

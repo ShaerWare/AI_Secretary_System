@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_manager import User, get_current_user, require_admin
+from auth_manager import User, require_permission
 from db.database import AsyncSessionLocal
 from db.repositories.usage import UsageLimitsRepository, UsageRepository
 
@@ -56,7 +56,7 @@ async def admin_get_usage_logs(
     to_date: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("usage", "view")),
 ):
     """Get usage logs with optional filters."""
     # Parse dates if provided
@@ -91,7 +91,7 @@ async def admin_get_usage_logs(
 async def admin_get_usage_stats(
     service_type: Optional[str] = None,
     period_days: int = 30,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("usage", "view")),
 ):
     """Get usage statistics for the specified period."""
     if period_days < 1 or period_days > 365:
@@ -134,7 +134,7 @@ async def admin_log_usage(request: UsageLogRequest):
 @router.post("/cleanup")
 async def admin_cleanup_usage_logs(
     days: int = 90,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("usage", "manage")),
 ):
     """Delete usage logs older than specified days."""
     if days < 7:
@@ -156,7 +156,7 @@ async def admin_cleanup_usage_logs(
 @router.get("/limits")
 async def admin_get_limits(
     enabled_only: bool = True,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("usage", "manage")),
 ):
     """Get all usage limits."""
     async with AsyncSessionLocal() as session:
@@ -169,7 +169,7 @@ async def admin_get_limits(
 async def admin_get_limit(
     service_type: str,
     limit_type: str,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("usage", "manage")),
 ):
     """Get a specific usage limit."""
     async with AsyncSessionLocal() as session:
@@ -183,7 +183,7 @@ async def admin_get_limit(
 @router.post("/limits")
 async def admin_set_limit(
     request: UsageLimitRequest,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("usage", "manage")),
 ):
     """Create or update a usage limit."""
     if request.service_type not in ("tts", "stt", "llm"):
@@ -207,7 +207,7 @@ async def admin_set_limit(
 async def admin_delete_limit(
     service_type: str,
     limit_type: str,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("usage", "manage")),
 ):
     """Delete a usage limit."""
     async with AsyncSessionLocal() as session:
@@ -257,7 +257,7 @@ async def admin_check_usage(
 
 @router.get("/summary")
 async def admin_get_usage_summary(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("usage", "view")),
 ):
     """
     Get a summary of usage across all services.
