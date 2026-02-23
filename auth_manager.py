@@ -66,12 +66,14 @@ class TokenPayload(BaseModel):
     exp: int  # expiration timestamp
     iat: int  # issued at timestamp
     jti: str = ""  # JWT ID for session tracking
+    workspace_id: int = 1  # backward compat: old tokens default to 1
 
 
 class User(BaseModel):
     id: int
     username: str
     role: str
+    workspace_id: int = 1
     permissions: Dict[str, str] = {}
 
 
@@ -141,6 +143,35 @@ class PermissionsCache:
 _permissions_cache = PermissionsCache()
 
 
+# ============== Member Role Cache ==============
+
+
+class MemberRoleCache:
+    """In-memory cache: (user_id, workspace_id) → role_name."""
+
+    def __init__(self) -> None:
+        self._cache: Dict[tuple, str] = {}
+
+    def get(self, user_id: int, workspace_id: int) -> Optional[str]:
+        return self._cache.get((user_id, workspace_id))
+
+    def put(self, user_id: int, workspace_id: int, role_name: str) -> None:
+        self._cache[(user_id, workspace_id)] = role_name
+
+    def invalidate_user(self, user_id: int) -> None:
+        to_remove = [k for k in self._cache if k[0] == user_id]
+        for k in to_remove:
+            del self._cache[k]
+
+    def invalidate_workspace(self, workspace_id: int) -> None:
+        to_remove = [k for k in self._cache if k[1] == workspace_id]
+        for k in to_remove:
+            del self._cache[k]
+
+
+_member_role_cache = MemberRoleCache()
+
+
 # ============== Password Helpers ==============
 # Centralized in utils/password.py. Legacy env-var fallback uses _verify_legacy_password.
 
@@ -149,7 +180,7 @@ _permissions_cache = PermissionsCache()
 
 
 def create_access_token(
-    username: str, role: str = "admin", user_id: int = 0
+    username: str, role: str = "admin", user_id: int = 0, workspace_id: int = 1
 ) -> tuple[str, int, str]:
     """Create a JWT access token with a unique JTI.
 
@@ -165,6 +196,7 @@ def create_access_token(
         "sub": username,
         "user_id": user_id,
         "role": role,
+        "workspace_id": workspace_id,
         "exp": int(expires.timestamp()),
         "iat": int(now.timestamp()),
         "jti": jti,
@@ -184,6 +216,9 @@ def decode_token(token: str) -> Optional[TokenPayload]:
         # Backward compat: old tokens may not have jti
         if "jti" not in payload:
             payload["jti"] = ""
+        # Backward compat: old tokens may not have workspace_id
+        if "workspace_id" not in payload:
+            payload["workspace_id"] = 1
         return TokenPayload(**payload)
     except jwt.ExpiredSignatureError:
         logger.debug("Token expired")
@@ -202,11 +237,12 @@ async def create_session(
     user_id: int,
     ip: Optional[str],
     user_agent: Optional[str],
+    workspace_id: int = 1,
 ) -> LoginResponse:
     """Create a new session: generate token, persist to DB, populate cache."""
     from db.integration import async_session_manager
 
-    token, expires_in, jti = create_access_token(username, role, user_id)
+    token, expires_in, jti = create_access_token(username, role, user_id, workspace_id)
     expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
 
     await async_session_manager.create_session(
@@ -215,6 +251,7 @@ async def create_session(
         ip_address=ip,
         user_agent=user_agent,
         expires_at=expires_at,
+        workspace_id=workspace_id,
     )
     _session_cache.put(jti, user_id)
 
@@ -285,12 +322,19 @@ async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
 
     user_id = token_payload.user_id
 
+    workspace_id = token_payload.workspace_id
+
     # Check in-memory cache first
     cached_uid = _session_cache.get(jti)
     if cached_uid is not None:
         if cached_uid != user_id:
             return None
-        return User(id=user_id, username=token_payload.sub, role=token_payload.role)
+        return User(
+            id=user_id,
+            username=token_payload.sub,
+            role=token_payload.role,
+            workspace_id=workspace_id,
+        )
 
     # Cache miss — check DB
     from db.integration import async_session_manager
@@ -305,7 +349,12 @@ async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
 
     # Valid session — populate cache
     _session_cache.put(jti, user_id)
-    return User(id=user_id, username=token_payload.sub, role=token_payload.role)
+    return User(
+        id=user_id,
+        username=token_payload.sub,
+        role=token_payload.role,
+        workspace_id=workspace_id,
+    )
 
 
 # ============== FastAPI Dependencies ==============
@@ -359,8 +408,7 @@ def require_permission(module: str, min_level: str):
     """FastAPI Depends factory: checks user has >= min_level for module."""
 
     async def _dependency(user: User = Depends(get_current_user)) -> User:
-        role_name = get_role_for_legacy(user.role)
-        perms = await _permissions_cache.get(role_name)
+        perms = await get_user_permissions(user)
         user.permissions = perms
         user_level = perms.get(module, "")
         if not level_gte(user_level, min_level):
@@ -383,22 +431,21 @@ def level_gte(user_level: str, required_level: str) -> bool:
     return _LEVEL_ORDER.get(user_level, 0) >= _LEVEL_ORDER.get(required_level, 0)
 
 
-_LEGACY_ROLE_MAP = {"admin": "admin", "user": "operator", "web": "operator", "guest": "viewer"}
-
-
-def get_role_for_legacy(legacy_role: str) -> str:
-    """Map legacy role string to new RBAC role name."""
-    return _LEGACY_ROLE_MAP.get(legacy_role, "viewer")
-
-
 def user_has_level(user: User, module: str, min_level: str) -> bool:
     """Check if user has >= min_level for module. Requires permissions pre-loaded."""
     return level_gte(user.permissions.get(module, ""), min_level)
 
 
 async def get_user_permissions(user: User) -> Dict[str, str]:
-    """Get permissions dict for user. Uses cache."""
-    role_name = get_role_for_legacy(user.role)
+    """Get permissions dict for user via workspace_members lookup. Uses cache."""
+    role_name = _member_role_cache.get(user.id, user.workspace_id)
+    if role_name is None:
+        from db.integration import async_workspace_manager
+
+        role_name = await async_workspace_manager.get_member_role_name(user.id, user.workspace_id)
+        if role_name is None:
+            role_name = "viewer"  # safe fallback
+        _member_role_cache.put(user.id, user.workspace_id, role_name)
     return await _permissions_cache.get(role_name)
 
 

@@ -38,6 +38,7 @@ from db.repositories import (
     UserSessionRepository,
     WhatsAppInstanceRepository,
     WidgetInstanceRepository,
+    WorkspaceRepository,
 )
 
 
@@ -1070,11 +1071,19 @@ class AsyncUserSessionManager:
         ip_address: Optional[str],
         user_agent: Optional[str],
         expires_at: "datetime",
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a new session record."""
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
-            return await repo.create_session(user_id, jti, ip_address, user_agent, expires_at)
+            return await repo.create_session(
+                user_id,
+                jti,
+                ip_address,
+                user_agent,
+                expires_at,
+                workspace_id=workspace_id,
+            )
 
     async def get_by_jti(self, jti: str):
         """Get session by JTI with user join."""
@@ -1773,6 +1782,40 @@ class AsyncRoleManager:
 
 
 async_role_manager = AsyncRoleManager()
+
+
+# ============== Workspace Manager ==============
+
+
+class AsyncWorkspaceManager:
+    """Async manager for workspace operations."""
+
+    async def get_member_role_name(self, user_id: int, workspace_id: int) -> Optional[str]:
+        """Get role_name for (user_id, workspace_id) from workspace_members."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.get_member_role_name(user_id, workspace_id)
+
+    async def ensure_membership(self, workspace_id: int, user_id: int, role_name: str) -> None:
+        """Insert or update workspace membership (idempotent)."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            await repo.ensure_membership(workspace_id, user_id, role_name)
+
+    async def get_default_workspace(self) -> Optional[dict]:
+        """Get workspace with id=1."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.get_default_workspace()
+
+    async def create_default(self, name: str = "Default", slug: str = "default") -> dict:
+        """Create the default workspace."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.create_default(name, slug)
+
+
+async_workspace_manager = AsyncWorkspaceManager()
 
 
 # ============== Initialization Function ==============

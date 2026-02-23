@@ -125,6 +125,10 @@ class UserSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    workspace_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=True
+    )
+
     user: Mapped["User"] = relationship("User", backref="sessions")
 
     def to_dict(self) -> dict:
@@ -187,6 +191,92 @@ class RolePermission(Base):
     level: Mapped[str] = mapped_column(String(10))  # "view", "edit", "manage"
 
     role: Mapped["Role"] = relationship("Role", back_populates="permissions")
+
+
+# ============== Workspaces ==============
+
+
+class Workspace(Base):
+    """Multi-tenant workspace container."""
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    members: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember", back_populates="workspace", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slug": self.slug,
+            "owner_id": self.owner_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WorkspaceMember(Base):
+    """User membership in a workspace with assigned role."""
+
+    __tablename__ = "workspace_members"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id", name="uq_workspace_user"),
+        Index("ix_wm_user_workspace", "user_id", "workspace_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role_name: Mapped[str] = mapped_column(String(50), ForeignKey("roles.name"), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="members")
+    user: Mapped["User"] = relationship("User")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workspace_id": self.workspace_id,
+            "user_id": self.user_id,
+            "role_name": self.role_name,
+            "joined_at": self.joined_at.isoformat() if self.joined_at else None,
+        }
+
+
+class WorkspaceInvite(Base):
+    """Invitation link to join a workspace."""
+
+    __tablename__ = "workspace_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    invite_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    role_name: Mapped[str] = mapped_column(
+        String(50), ForeignKey("roles.name"), nullable=False, server_default="viewer"
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    used_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
 
 # ============== Chat ==============

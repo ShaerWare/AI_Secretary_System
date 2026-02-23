@@ -17,8 +17,8 @@ from auth_manager import (
     get_auth_status,
     get_current_user,
     get_user_permissions,
+    require_permission,
     revoke_session,
-    user_has_level,
 )
 from db.integration import async_audit_logger, async_session_manager, async_user_manager
 
@@ -43,6 +43,7 @@ async def admin_login(request: Request, login_request: LoginRequest):
         user_id=user.id,
         ip=ip,
         user_agent=user_agent,
+        workspace_id=1,
     )
 
     # Audit log
@@ -61,6 +62,7 @@ async def admin_get_current_user(user: User = Depends(get_current_user)):
         "id": user.id,
         "username": user.username,
         "role": user.role,
+        "workspace_id": user.workspace_id,
         "deployment_mode": deployment_mode,
     }
 
@@ -84,13 +86,9 @@ async def admin_get_profile(user: User = Depends(get_current_user)):
 @router.put("/profile")
 async def admin_update_profile(
     request: UpdateProfileRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("settings", "edit")),
 ):
     """Update user profile (display name)."""
-    user.permissions = await get_user_permissions(user)
-    if not user_has_level(user, "settings", "edit"):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-
     result = await async_user_manager.update_profile(user.id, display_name=request.display_name)
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
@@ -103,13 +101,9 @@ async def admin_update_profile(
 async def admin_change_password(
     http_request: Request,
     request: ChangePasswordRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("settings", "edit")),
 ):
     """Change current user's password. Revokes all sessions and issues a new token."""
-    user.permissions = await get_user_permissions(user)
-    if not user_has_level(user, "settings", "edit"):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-
     # Verify old password
     auth_result = await authenticate_user(user.username, request.old_password)
     if not auth_result:
@@ -129,6 +123,7 @@ async def admin_change_password(
         user_id=user.id,
         ip=ip,
         user_agent=user_agent,
+        workspace_id=user.workspace_id,
     )
 
     await async_audit_logger.log(action="update", resource="password", user_id=user.username)
@@ -156,7 +151,9 @@ async def delete_session(
     # Load permissions for inline check
     user.permissions = await get_user_permissions(user)
     # Check ownership: non-manage users can only revoke their own sessions
-    if not user_has_level(user, "users", "manage"):
+    from auth_manager import level_gte
+
+    if not level_gte(user.permissions.get("users", ""), "manage"):
         db_session = await async_session_manager.get_by_jti(jti)
         if db_session is None or db_session.user_id != user.id:
             raise HTTPException(status_code=404, detail="Session not found")

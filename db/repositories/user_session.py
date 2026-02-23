@@ -24,6 +24,7 @@ class UserSessionRepository(BaseRepository[UserSession]):
         ip_address: Optional[str],
         user_agent: Optional[str],
         expires_at: datetime,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a new user session record."""
         user_session = UserSession(
@@ -32,6 +33,7 @@ class UserSessionRepository(BaseRepository[UserSession]):
             ip_address=ip_address,
             user_agent=user_agent[:500] if user_agent and len(user_agent) > 500 else user_agent,
             expires_at=expires_at,
+            workspace_id=workspace_id,
         )
         self.session.add(user_session)
         await self.session.commit()
