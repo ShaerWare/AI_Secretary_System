@@ -11,7 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from db.integration import (
     async_audit_logger,
     async_bot_instance_manager,
@@ -122,7 +122,7 @@ class BotInstanceUpdateRequest(BaseModel):
 
 
 @router.get("/config")
-async def admin_get_telegram_config(user: User = Depends(get_current_user)):
+async def admin_get_telegram_config(user: User = Depends(require_permission("channels", "view"))):
     """Получить конфигурацию Telegram бота (legacy endpoint - uses 'default' instance)"""
     # Try to get from default bot instance first (with token for internal use)
     instance = await async_bot_instance_manager.get_instance_with_token("default")
@@ -157,7 +157,8 @@ async def admin_get_telegram_config(user: User = Depends(get_current_user)):
 
 @router.post("/config")
 async def admin_save_telegram_config(
-    request: AdminTelegramConfigRequest, user: User = Depends(require_not_guest)
+    request: AdminTelegramConfigRequest,
+    user: User = Depends(require_permission("channels", "edit")),
 ):
     """Сохранить конфигурацию Telegram бота (legacy endpoint - saves to 'default' instance)"""
     # Load existing to preserve token if not provided
@@ -222,7 +223,7 @@ async def admin_save_telegram_config(
 
 
 @router.get("/status")
-async def admin_get_telegram_status(user: User = Depends(get_current_user)):
+async def admin_get_telegram_status(user: User = Depends(require_permission("channels", "view"))):
     """Получить статус Telegram бота (legacy endpoint - uses 'default' instance)"""
     global _telegram_bot_process
 
@@ -259,7 +260,7 @@ async def admin_get_telegram_status(user: User = Depends(get_current_user)):
 
 
 @router.post("/start")
-async def admin_start_telegram_bot(user: User = Depends(require_not_guest)):
+async def admin_start_telegram_bot(user: User = Depends(require_permission("channels", "edit"))):
     """Запустить Telegram бота"""
     global _telegram_bot_process
 
@@ -305,7 +306,7 @@ async def admin_start_telegram_bot(user: User = Depends(require_not_guest)):
 
 
 @router.post("/stop")
-async def admin_stop_telegram_bot(user: User = Depends(require_not_guest)):
+async def admin_stop_telegram_bot(user: User = Depends(require_permission("channels", "edit"))):
     """Остановить Telegram бота"""
     global _telegram_bot_process
 
@@ -329,7 +330,7 @@ async def admin_stop_telegram_bot(user: User = Depends(require_not_guest)):
 
 
 @router.post("/restart")
-async def admin_restart_telegram_bot(user: User = Depends(require_not_guest)):
+async def admin_restart_telegram_bot(user: User = Depends(require_permission("channels", "edit"))):
     """Перезапустить Telegram бота"""
     await admin_stop_telegram_bot()
     await asyncio.sleep(1)
@@ -337,14 +338,16 @@ async def admin_restart_telegram_bot(user: User = Depends(require_not_guest)):
 
 
 @router.delete("/sessions")
-async def admin_clear_telegram_sessions(user: User = Depends(require_not_guest)):
+async def admin_clear_telegram_sessions(
+    user: User = Depends(require_permission("channels", "edit")),
+):
     """Очистить все сессии Telegram"""
     count = await async_telegram_manager.clear_all()
     return {"status": "ok", "message": f"Cleared {count} sessions"}
 
 
 @router.get("/sessions")
-async def admin_get_telegram_sessions(user: User = Depends(get_current_user)):
+async def admin_get_telegram_sessions(user: User = Depends(require_permission("channels", "view"))):
     """Получить список сессий Telegram (legacy, for default bot)"""
     sessions = await async_telegram_manager.get_sessions_dict()
     return {"sessions": sessions}
@@ -355,10 +358,10 @@ async def admin_get_telegram_sessions(user: User = Depends(get_current_user)):
 
 @router.get("/instances")
 async def admin_list_bot_instances(
-    enabled_only: bool = False, user: User = Depends(get_current_user)
+    enabled_only: bool = False, user: User = Depends(require_permission("channels", "view"))
 ):
     """List all Telegram bot instances"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     instances = await async_bot_instance_manager.list_instances(
         enabled_only=enabled_only, owner_id=owner_id
     )
@@ -373,10 +376,10 @@ async def admin_list_bot_instances(
 
 @router.post("/instances")
 async def admin_create_bot_instance(
-    request: BotInstanceCreateRequest, user: User = Depends(require_not_guest)
+    request: BotInstanceCreateRequest, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Create a new Telegram bot instance"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     # Convert request to dict, removing None values
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
     kwargs["owner_id"] = owner_id
@@ -397,10 +400,12 @@ async def admin_create_bot_instance(
 
 @router.get("/instances/{instance_id}")
 async def admin_get_bot_instance(
-    instance_id: str, include_token: bool = False, user: User = Depends(get_current_user)
+    instance_id: str,
+    include_token: bool = False,
+    user: User = Depends(require_permission("channels", "view")),
 ):
     """Get a specific bot instance"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     if include_token:
         instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
     else:
@@ -419,11 +424,13 @@ async def admin_get_bot_instance(
 
 @router.put("/instances/{instance_id}")
 async def admin_update_bot_instance(
-    instance_id: str, request: BotInstanceUpdateRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: BotInstanceUpdateRequest,
+    user: User = Depends(require_permission("channels", "edit")),
 ):
     """Update a bot instance"""
     # Check if exists and verify ownership
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     existing = await async_bot_instance_manager.get_instance(instance_id, owner_id=owner_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Bot instance not found")
@@ -446,9 +453,11 @@ async def admin_update_bot_instance(
 
 
 @router.delete("/instances/{instance_id}")
-async def admin_delete_bot_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def admin_delete_bot_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Delete a bot instance"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     # Stop bot if running
     await multi_bot_manager.stop_bot(instance_id)
 
@@ -465,7 +474,9 @@ async def admin_delete_bot_instance(instance_id: str, user: User = Depends(requi
 
 
 @router.post("/instances/{instance_id}/start")
-async def admin_start_bot_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def admin_start_bot_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Start a specific bot instance and enable auto-start"""
     # Check if instance exists
     instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
@@ -488,7 +499,9 @@ async def admin_start_bot_instance(instance_id: str, user: User = Depends(requir
 
 
 @router.post("/instances/{instance_id}/stop")
-async def admin_stop_bot_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def admin_stop_bot_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Stop a specific bot instance and disable auto-start"""
     result = await multi_bot_manager.stop_bot(instance_id)
 
@@ -500,16 +513,20 @@ async def admin_stop_bot_instance(instance_id: str, user: User = Depends(require
 
 
 @router.post("/instances/{instance_id}/restart")
-async def admin_restart_bot_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def admin_restart_bot_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Restart a specific bot instance"""
     result = await multi_bot_manager.restart_bot(instance_id)
     return result
 
 
 @router.get("/instances/{instance_id}/status")
-async def admin_get_bot_instance_status(instance_id: str, user: User = Depends(get_current_user)):
+async def admin_get_bot_instance_status(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
     """Get status of a specific bot instance"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     instance = await async_bot_instance_manager.get_instance(instance_id, owner_id=owner_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
@@ -530,7 +547,9 @@ async def admin_get_bot_instance_status(instance_id: str, user: User = Depends(g
 
 
 @router.get("/instances/{instance_id}/sessions")
-async def admin_get_bot_instance_sessions(instance_id: str, user: User = Depends(get_current_user)):
+async def admin_get_bot_instance_sessions(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
     """Get sessions for a specific bot instance"""
     sessions = await async_telegram_manager.get_sessions_for_bot(instance_id)
     return {"sessions": sessions}
@@ -559,7 +578,7 @@ async def admin_create_bot_instance_session(instance_id: str, request: dict):
 
 @router.delete("/instances/{instance_id}/sessions")
 async def admin_clear_bot_instance_sessions(
-    instance_id: str, user: User = Depends(require_not_guest)
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Clear all sessions for a specific bot instance"""
     count = await async_telegram_manager.clear_sessions_for_bot(instance_id)
@@ -568,7 +587,7 @@ async def admin_clear_bot_instance_sessions(
 
 @router.get("/instances/{instance_id}/logs")
 async def admin_get_bot_instance_logs(
-    instance_id: str, lines: int = 100, user: User = Depends(get_current_user)
+    instance_id: str, lines: int = 100, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get recent logs for a bot instance"""
     logs = await multi_bot_manager.get_recent_logs(instance_id, lines)
@@ -637,7 +656,9 @@ async def admin_get_payment_stats(instance_id: str):
 
 
 @router.get("/instances/{instance_id}/yoomoney/auth-url")
-async def admin_yoomoney_auth_url(instance_id: str, user: User = Depends(get_current_user)):
+async def admin_yoomoney_auth_url(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
     """Generate YooMoney OAuth2 authorization URL."""
     from app.services.yoomoney_service import build_auth_url
 
@@ -737,7 +758,9 @@ async def admin_yoomoney_callback(
 
 
 @router.get("/instances/{instance_id}/yoomoney/status")
-async def admin_yoomoney_status(instance_id: str, user: User = Depends(get_current_user)):
+async def admin_yoomoney_status(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
     """Check YooMoney connection status and wallet balance."""
     from app.services.yoomoney_service import get_account_info
 
@@ -766,7 +789,9 @@ async def admin_yoomoney_status(instance_id: str, user: User = Depends(get_curre
 
 
 @router.post("/instances/{instance_id}/yoomoney/disconnect")
-async def admin_yoomoney_disconnect(instance_id: str, user: User = Depends(get_current_user)):
+async def admin_yoomoney_disconnect(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Disconnect YooMoney — remove access token."""
     instance = await async_bot_instance_manager.get_instance(instance_id)
     if not instance:
