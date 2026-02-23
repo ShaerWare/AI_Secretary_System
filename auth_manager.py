@@ -438,6 +438,10 @@ def user_has_level(user: User, module: str, min_level: str) -> bool:
 
 async def get_user_permissions(user: User) -> Dict[str, str]:
     """Get permissions dict for user via workspace_members lookup. Uses cache."""
+    # Internal bot users (user_id=0) with admin role get full manage access
+    if user.id == 0 and user.role == "admin":
+        return dict.fromkeys(("chat", "bots", "widgets", "llm", "tts", "system"), "manage")
+
     role_name = _member_role_cache.get(user.id, user.workspace_id)
     if role_name is None:
         from db.integration import async_workspace_manager
