@@ -3673,6 +3673,21 @@ async def widget_create_session(request: Request):
 
     system_prompt = instance_data.get("system_prompt")
     session = await async_chat_manager.create_session(None, system_prompt, "widget", instance_id)
+
+    # Track widget visitor as user identity
+    try:
+        from db.integration import async_user_identity_manager
+
+        await async_user_identity_manager.find_or_create(
+            provider="widget",
+            provider_uid=session["id"],
+            display_name=f"Widget visitor ({instance_id})",
+        )
+    except Exception:
+        logger.debug(
+            "Failed to track widget identity for session %s", session.get("id"), exc_info=True
+        )
+
     return {"session": session}
 
 

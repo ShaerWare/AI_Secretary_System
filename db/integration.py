@@ -34,6 +34,7 @@ from db.repositories import (
     PresetRepository,
     RoleRepository,
     TelegramRepository,
+    UserIdentityRepository,
     UserRepository,
     UserSessionRepository,
     WhatsAppInstanceRepository,
@@ -496,6 +497,23 @@ class AsyncTelegramSessionManager:
             await repo.set_session(
                 user_id, chat_session_id, username, first_name, last_name, bot_id=bot_id
             )
+
+            # Track Telegram contact as user identity
+            try:
+                identity_repo = UserIdentityRepository(session)
+                display = first_name or username or str(user_id)
+                await identity_repo.find_or_create(
+                    provider="telegram",
+                    provider_uid=str(user_id),
+                    display_name=display,
+                    metadata_dict={
+                        "username": username,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                    },
+                )
+            except Exception:
+                logger.debug("Failed to track Telegram identity for %s", user_id, exc_info=True)
 
     async def get_all_sessions(self, bot_id: Optional[str] = None) -> List[dict]:
         """Get all sessions (optionally for specific bot)."""
@@ -1544,6 +1562,52 @@ class AsyncClaudeCodeManager:
             return await repo.delete_session(session_id)
 
 
+# ============== User Identity Manager ==============
+
+
+class AsyncUserIdentityManager:
+    """Async manager for external user identities (Telegram, WhatsApp, Widget)."""
+
+    async def find_or_create(
+        self,
+        provider: str,
+        provider_uid: str,
+        display_name: Optional[str] = None,
+        metadata_dict: Optional[Dict[str, Any]] = None,
+    ) -> dict:
+        """Find existing identity or create contact user + identity."""
+        async with AsyncSessionLocal() as session:
+            repo = UserIdentityRepository(session)
+            return await repo.find_or_create(provider, provider_uid, display_name, metadata_dict)
+
+    async def get_identities_for_user(self, user_id: int) -> List[dict]:
+        """Get all identities linked to a user."""
+        async with AsyncSessionLocal() as session:
+            repo = UserIdentityRepository(session)
+            return await repo.get_identities_for_user(user_id)
+
+    async def link_identity(
+        self,
+        user_id: int,
+        provider: str,
+        provider_uid: str,
+        display_name: Optional[str] = None,
+        metadata_dict: Optional[Dict[str, Any]] = None,
+    ) -> dict:
+        """Link an external identity to an existing user."""
+        async with AsyncSessionLocal() as session:
+            repo = UserIdentityRepository(session)
+            return await repo.link_identity(
+                user_id, provider, provider_uid, display_name, metadata_dict
+            )
+
+    async def update_last_seen(self, provider: str, provider_uid: str) -> bool:
+        """Touch the last_seen timestamp for an identity."""
+        async with AsyncSessionLocal() as session:
+            repo = UserIdentityRepository(session)
+            return await repo.update_last_seen(provider, provider_uid)
+
+
 # ============== Global Instances ==============
 
 # These can be used directly in orchestrator
@@ -1561,6 +1625,7 @@ async_payment_manager = AsyncPaymentManager()
 async_amocrm_manager = AsyncAmoCRMManager()
 async_gsm_manager = AsyncGSMManager()
 async_user_manager = AsyncUserManager()
+async_user_identity_manager = AsyncUserIdentityManager()
 async_knowledge_doc_manager = AsyncKnowledgeDocManager()
 async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
 async_chat_share_manager = AsyncChatShareManager()

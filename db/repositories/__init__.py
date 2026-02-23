@@ -39,6 +39,7 @@ from db.repositories.role import RoleRepository
 from db.repositories.telegram import TelegramRepository
 from db.repositories.usage import UsageLimitsRepository, UsageRepository
 from db.repositories.user import UserRepository
+from db.repositories.user_identity import UserIdentityRepository
 from db.repositories.user_session import UserSessionRepository
 from db.repositories.whatsapp_instance import WhatsAppInstanceRepository
 from db.repositories.widget_instance import WidgetInstanceRepository
@@ -82,6 +83,7 @@ __all__ = [
     "RoleRepository",
     "TelegramRepository",
     "UsageLimitsRepository",
+    "UserIdentityRepository",
     "UserRepository",
     "UserSessionRepository",
     "UsageRepository",

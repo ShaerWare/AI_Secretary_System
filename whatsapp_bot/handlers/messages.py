@@ -36,6 +36,18 @@ async def handle_text_message(phone: str, text: str, message_id: str) -> None:
     lock = _get_lock(phone)
 
     async with lock:
+        # Track WhatsApp contact as user identity
+        try:
+            from db.integration import async_user_identity_manager
+
+            await async_user_identity_manager.find_or_create(
+                provider="whatsapp",
+                provider_uid=phone,
+                display_name=phone,
+            )
+        except Exception:
+            logger.debug("Failed to track WhatsApp identity for %s", phone, exc_info=True)
+
         await _process_message(phone, text, message_id)
 
 

@@ -16,7 +16,7 @@ from utils.password import hash_password, needs_rehash, verify_password
 
 logger = logging.getLogger(__name__)
 
-VALID_ROLES = ("guest", "web", "user", "admin")
+VALID_ROLES = ("guest", "web", "user", "admin", "contact")
 
 
 class UserRepository(BaseRepository[User]):
@@ -133,11 +133,32 @@ class UserRepository(BaseRepository[User]):
         await self.session.commit()
         return True
 
-    async def list_users(self, include_inactive: bool = False) -> List[dict]:
-        """List all users."""
+    async def create_contact_user(
+        self, display_name: Optional[str] = None, email: Optional[str] = None
+    ) -> dict:
+        """Create a contact-only user (no credentials, cannot log in)."""
+        user = User(
+            username=None,
+            password_hash=None,
+            role="contact",
+            display_name=display_name,
+            email=email,
+            is_active=True,
+        )
+        self.session.add(user)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user.to_dict()
+
+    async def list_users(
+        self, include_inactive: bool = False, include_contacts: bool = False
+    ) -> List[dict]:
+        """List users. By default hides inactive and contact-only users."""
         query = select(User).order_by(User.created)
         if not include_inactive:
             query = query.where(User.is_active == True)
+        if not include_contacts:
+            query = query.where(User.username.isnot(None))
 
         result = await self.session.execute(query)
         users = result.scalars().all()
