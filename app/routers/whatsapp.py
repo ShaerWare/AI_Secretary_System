@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from db.integration import async_audit_logger, async_whatsapp_instance_manager
 from whatsapp_manager import whatsapp_manager
 
@@ -85,10 +85,10 @@ class WhatsAppInstanceUpdateRequest(BaseModel):
 
 @router.get("/instances")
 async def list_whatsapp_instances(
-    enabled_only: bool = False, user: User = Depends(get_current_user)
+    enabled_only: bool = False, user: User = Depends(require_permission("channels", "view"))
 ):
     """List all WhatsApp bot instances."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     instances = await async_whatsapp_instance_manager.list_instances(
         enabled_only=enabled_only, owner_id=owner_id
     )
@@ -103,10 +103,11 @@ async def list_whatsapp_instances(
 
 @router.post("/instances")
 async def create_whatsapp_instance(
-    request: WhatsAppInstanceCreateRequest, user: User = Depends(require_not_guest)
+    request: WhatsAppInstanceCreateRequest,
+    user: User = Depends(require_permission("channels", "edit")),
 ):
     """Create a new WhatsApp bot instance."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     # Convert request to dict, removing None values
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
     kwargs["owner_id"] = owner_id
@@ -127,10 +128,12 @@ async def create_whatsapp_instance(
 
 @router.get("/instances/{instance_id}")
 async def get_whatsapp_instance(
-    instance_id: str, include_token: bool = False, user: User = Depends(get_current_user)
+    instance_id: str,
+    include_token: bool = False,
+    user: User = Depends(require_permission("channels", "view")),
 ):
     """Get a specific WhatsApp bot instance."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     if include_token:
         instance = await async_whatsapp_instance_manager.get_instance_with_token(instance_id)
     else:
@@ -153,11 +156,11 @@ async def get_whatsapp_instance(
 async def update_whatsapp_instance(
     instance_id: str,
     request: WhatsAppInstanceUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("channels", "edit")),
 ):
     """Update a WhatsApp bot instance."""
     # Check if exists and verify ownership
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     existing = await async_whatsapp_instance_manager.get_instance(instance_id, owner_id=owner_id)
     if not existing:
         raise HTTPException(status_code=404, detail="WhatsApp instance not found")
@@ -180,9 +183,11 @@ async def update_whatsapp_instance(
 
 
 @router.delete("/instances/{instance_id}")
-async def delete_whatsapp_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def delete_whatsapp_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Delete a WhatsApp bot instance."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     # Stop bot if running
     await whatsapp_manager.stop_bot(instance_id)
 
@@ -205,7 +210,9 @@ async def delete_whatsapp_instance(instance_id: str, user: User = Depends(requir
 
 
 @router.post("/instances/{instance_id}/start")
-async def start_whatsapp_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def start_whatsapp_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Start a specific WhatsApp bot instance and enable auto-start."""
     # Check if instance exists
     instance = await async_whatsapp_instance_manager.get_instance_with_token(instance_id)
@@ -225,7 +232,9 @@ async def start_whatsapp_instance(instance_id: str, user: User = Depends(require
 
 
 @router.post("/instances/{instance_id}/stop")
-async def stop_whatsapp_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def stop_whatsapp_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Stop a specific WhatsApp bot instance and disable auto-start."""
     result = await whatsapp_manager.stop_bot(instance_id)
 
@@ -237,16 +246,20 @@ async def stop_whatsapp_instance(instance_id: str, user: User = Depends(require_
 
 
 @router.post("/instances/{instance_id}/restart")
-async def restart_whatsapp_instance(instance_id: str, user: User = Depends(require_not_guest)):
+async def restart_whatsapp_instance(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
     """Restart a specific WhatsApp bot instance."""
     result = await whatsapp_manager.restart_bot(instance_id)
     return result
 
 
 @router.get("/instances/{instance_id}/status")
-async def get_whatsapp_instance_status(instance_id: str, user: User = Depends(get_current_user)):
+async def get_whatsapp_instance_status(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
     """Get status of a specific WhatsApp bot instance."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     instance = await async_whatsapp_instance_manager.get_instance(instance_id, owner_id=owner_id)
     if not instance:
         raise HTTPException(status_code=404, detail="WhatsApp instance not found")
@@ -263,10 +276,10 @@ async def get_whatsapp_instance_status(instance_id: str, user: User = Depends(ge
 
 @router.get("/instances/{instance_id}/logs")
 async def get_whatsapp_instance_logs(
-    instance_id: str, lines: int = 100, user: User = Depends(get_current_user)
+    instance_id: str, lines: int = 100, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get recent logs for a WhatsApp bot instance."""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "channels", "manage") else user.id
     instance = await async_whatsapp_instance_manager.get_instance(instance_id, owner_id=owner_id)
     if not instance:
         raise HTTPException(status_code=404, detail="WhatsApp instance not found")
