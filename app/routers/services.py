@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends
 
 from app.dependencies import get_container
-from auth_manager import User, get_current_user, require_admin
+from auth_manager import User, require_permission
 from service_manager import get_service_manager
 
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/admin/services", tags=["services"])
 
 
 @router.get("/status")
-async def admin_services_status(user: User = Depends(get_current_user)):
+async def admin_services_status(user: User = Depends(require_permission("system", "view"))):
     """Получить статус всех сервисов"""
     manager = get_service_manager()
     status = manager.get_all_status()
@@ -29,28 +29,34 @@ async def admin_services_status(user: User = Depends(get_current_user)):
 
 
 @router.post("/{service}/start")
-async def admin_start_service(service: str, user: User = Depends(require_admin)):
+async def admin_start_service(
+    service: str, user: User = Depends(require_permission("system", "manage"))
+):
     """Запустить сервис"""
     manager = get_service_manager()
     return await manager.start_service(service)
 
 
 @router.post("/{service}/stop")
-async def admin_stop_service(service: str, user: User = Depends(require_admin)):
+async def admin_stop_service(
+    service: str, user: User = Depends(require_permission("system", "manage"))
+):
     """Остановить сервис"""
     manager = get_service_manager()
     return await manager.stop_service(service)
 
 
 @router.post("/{service}/restart")
-async def admin_restart_service(service: str, user: User = Depends(require_admin)):
+async def admin_restart_service(
+    service: str, user: User = Depends(require_permission("system", "manage"))
+):
     """Перезапустить сервис"""
     manager = get_service_manager()
     return await manager.restart_service(service)
 
 
 @router.post("/start-all")
-async def admin_start_all_services(user: User = Depends(require_admin)):
+async def admin_start_all_services(user: User = Depends(require_permission("system", "manage"))):
     """Запустить все внешние сервисы"""
     manager = get_service_manager()
     results = {}
@@ -60,7 +66,7 @@ async def admin_start_all_services(user: User = Depends(require_admin)):
 
 
 @router.post("/stop-all")
-async def admin_stop_all_services(user: User = Depends(require_admin)):
+async def admin_stop_all_services(user: User = Depends(require_permission("system", "manage"))):
     """Остановить все внешние сервисы"""
     manager = get_service_manager()
     results = {}
