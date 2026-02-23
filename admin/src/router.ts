@@ -186,9 +186,9 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // Module + level check
+  // Module + level check (skip if permissions not loaded yet — avoid redirect loops)
   const mod = to.meta.module as string | undefined
-  if (mod) {
+  if (mod && Object.keys(authStore.permissions).length > 0) {
     const minLvl = (to.meta.minLevel as string) || 'view'
     if ((LVL[authStore.permissions[mod]] ?? 0) < (LVL[minLvl] ?? 1)) {
       const landing = authStore.hasModule('dashboard') && !authStore.isCloudMode ? 'dashboard' : 'chat'

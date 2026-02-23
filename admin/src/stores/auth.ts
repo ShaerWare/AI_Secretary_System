@@ -60,7 +60,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchPermissions() {
     try {
       const resp = await fetch('/admin/auth/permissions', { headers: getAuthHeaders() })
-      if (resp.ok) permissions.value = await resp.json()
+      if (resp.ok) {
+        permissions.value = await resp.json()
+      } else if (resp.status === 401) {
+        // Token invalid/expired/session revoked — force logout
+        logout()
+      }
     } catch { /* default empty */ }
   }
 
