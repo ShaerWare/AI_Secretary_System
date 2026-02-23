@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from db.integration import (
     async_audit_logger,
     async_knowledge_collection_manager,
@@ -172,7 +172,7 @@ def _get_wiki_rag():
 
 
 @router.get("/collections")
-async def list_collections(user: User = Depends(get_current_user)):
+async def list_collections(user: User = Depends(require_permission("wiki", "view"))):
     """List all knowledge collections."""
     collections = await async_knowledge_collection_manager.get_all()
     return {"collections": collections}
@@ -181,7 +181,7 @@ async def list_collections(user: User = Depends(get_current_user)):
 @router.post("/collections")
 async def create_collection(
     request: CollectionCreateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Create a new knowledge collection."""
     slug = request.slug or _slugify(request.name)
@@ -217,7 +217,9 @@ async def create_collection(
 
 
 @router.get("/collections/{collection_id}")
-async def get_collection(collection_id: int, user: User = Depends(get_current_user)):
+async def get_collection(
+    collection_id: int, user: User = Depends(require_permission("wiki", "view"))
+):
     """Get a single knowledge collection."""
     collection = await async_knowledge_collection_manager.get_by_id(collection_id)
     if not collection:
@@ -229,7 +231,7 @@ async def get_collection(collection_id: int, user: User = Depends(get_current_us
 async def update_collection(
     collection_id: int,
     request: CollectionUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Update a knowledge collection."""
     collection = await async_knowledge_collection_manager.get_by_id(collection_id)
@@ -256,7 +258,7 @@ async def update_collection(
 @router.delete("/collections/{collection_id}")
 async def delete_collection(
     collection_id: int,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Delete a knowledge collection. Cannot delete 'default'."""
     collection = await async_knowledge_collection_manager.get_by_id(collection_id)
@@ -286,7 +288,7 @@ async def delete_collection(
 @router.post("/collections/{collection_id}/reload")
 async def reload_collection_index(
     collection_id: int,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "manage")),
 ):
     """Re-index a specific collection."""
     wiki_rag = _get_wiki_rag()
@@ -323,7 +325,7 @@ async def reload_collection_index(
 
 
 @router.get("/stats")
-async def wiki_rag_stats(user: User = Depends(get_current_user)):
+async def wiki_rag_stats(user: User = Depends(require_permission("wiki", "view"))):
     """Get Wiki RAG index statistics and source file list."""
     wiki_rag = _get_wiki_rag()
     if not wiki_rag:
@@ -344,7 +346,7 @@ async def wiki_rag_stats(user: User = Depends(get_current_user)):
 
 
 @router.post("/reload")
-async def wiki_rag_reload(user: User = Depends(require_not_guest)):
+async def wiki_rag_reload(user: User = Depends(require_permission("wiki", "manage"))):
     """Re-index wiki-pages/ directory."""
     wiki_rag = _get_wiki_rag()
     if not wiki_rag:
@@ -363,7 +365,7 @@ async def wiki_rag_reload(user: User = Depends(require_not_guest)):
 
 
 @router.post("/reindex-embeddings")
-async def wiki_rag_reindex_embeddings(user: User = Depends(require_not_guest)):
+async def wiki_rag_reindex_embeddings(user: User = Depends(require_permission("wiki", "manage"))):
     """Force rebuild all embedding vectors from scratch."""
     wiki_rag = _get_wiki_rag()
     if not wiki_rag:
@@ -384,7 +386,7 @@ async def wiki_rag_reindex_embeddings(user: User = Depends(require_not_guest)):
 @router.post("/search")
 async def wiki_rag_search(
     request: WikiSearchRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("wiki", "view")),
 ):
     """Test search: query → scored results. Optionally filter by collection."""
     wiki_rag = _get_wiki_rag()
@@ -400,7 +402,7 @@ async def wiki_rag_search(
 @router.get("/documents")
 async def list_documents(
     collection_id: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("wiki", "view")),
 ):
     """List knowledge base documents. Optionally filter by collection_id."""
     synced = await _sync_disk_to_db()
@@ -417,7 +419,7 @@ async def list_documents(
 async def upload_document(
     file: UploadFile,
     collection_id: Optional[int] = Form(None),
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Upload .md or .txt file to wiki-pages/ and register in DB."""
     if not file.filename:
@@ -459,7 +461,7 @@ async def upload_document(
         title = first_header.group(1).strip()
 
     # Create DB record
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "wiki", "manage") else user.id
     doc = await async_knowledge_doc_manager.create(
         filename=filename,
         title=title,
@@ -493,7 +495,7 @@ async def upload_document(
 
 
 @router.get("/documents/{doc_id}")
-async def get_document(doc_id: int, user: User = Depends(get_current_user)):
+async def get_document(doc_id: int, user: User = Depends(require_permission("wiki", "view"))):
     """Get document metadata + content preview."""
     doc = await async_knowledge_doc_manager.get_by_id(doc_id)
     if not doc:
@@ -516,7 +518,7 @@ async def get_document(doc_id: int, user: User = Depends(get_current_user)):
 async def update_document(
     doc_id: int,
     request: DocumentUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Update document title and/or content."""
     doc = await async_knowledge_doc_manager.get_by_id(doc_id)
@@ -562,7 +564,7 @@ async def update_document(
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: int, user: User = Depends(require_not_guest)):
+async def delete_document(doc_id: int, user: User = Depends(require_permission("wiki", "edit"))):
     """Delete document from disk and DB, re-index."""
     doc = await async_knowledge_doc_manager.get_by_id(doc_id)
     if not doc:
