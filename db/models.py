@@ -204,9 +204,7 @@ class Workspace(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -241,9 +239,7 @@ class WorkspaceMember(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    role_name: Mapped[str] = mapped_column(
-        String(50), ForeignKey("roles.name"), nullable=False
-    )
+    role_name: Mapped[str] = mapped_column(String(50), ForeignKey("roles.name"), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -280,9 +276,7 @@ class WorkspaceInvite(Base):
     )
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    used_by: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    used_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
 
 # ============== Chat ==============

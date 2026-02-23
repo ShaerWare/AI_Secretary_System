@@ -330,7 +330,9 @@ async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
         if cached_uid != user_id:
             return None
         return User(
-            id=user_id, username=token_payload.sub, role=token_payload.role,
+            id=user_id,
+            username=token_payload.sub,
+            role=token_payload.role,
             workspace_id=workspace_id,
         )
 
@@ -348,7 +350,9 @@ async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
     # Valid session — populate cache
     _session_cache.put(jti, user_id)
     return User(
-        id=user_id, username=token_payload.sub, role=token_payload.role,
+        id=user_id,
+        username=token_payload.sub,
+        role=token_payload.role,
         workspace_id=workspace_id,
     )
 
@@ -438,9 +442,7 @@ async def get_user_permissions(user: User) -> Dict[str, str]:
     if role_name is None:
         from db.integration import async_workspace_manager
 
-        role_name = await async_workspace_manager.get_member_role_name(
-            user.id, user.workspace_id
-        )
+        role_name = await async_workspace_manager.get_member_role_name(user.id, user.workspace_id)
         if role_name is None:
             role_name = "viewer"  # safe fallback
         _member_role_cache.put(user.id, user.workspace_id, role_name)

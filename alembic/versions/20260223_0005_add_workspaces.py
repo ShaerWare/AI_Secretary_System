@@ -61,9 +61,7 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("workspace_id", "user_id", name="uq_workspace_user"),
     )
-    op.create_index(
-        "ix_wm_user_workspace", "workspace_members", ["user_id", "workspace_id"]
-    )
+    op.create_index("ix_wm_user_workspace", "workspace_members", ["user_id", "workspace_id"])
 
     # -- workspace_invites --
     op.create_table(
@@ -84,9 +82,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="viewer",
         ),
-        sa.Column(
-            "created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True
-        ),
+        sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("expires_at", sa.DateTime(), nullable=True),
         sa.Column("used_at", sa.DateTime(), nullable=True),
         sa.Column("used_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),

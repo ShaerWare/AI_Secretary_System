@@ -1077,7 +1077,11 @@ class AsyncUserSessionManager:
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
             return await repo.create_session(
-                user_id, jti, ip_address, user_agent, expires_at,
+                user_id,
+                jti,
+                ip_address,
+                user_agent,
+                expires_at,
                 workspace_id=workspace_id,
             )
 
@@ -1792,9 +1796,7 @@ class AsyncWorkspaceManager:
             repo = WorkspaceRepository(session)
             return await repo.get_member_role_name(user_id, workspace_id)
 
-    async def ensure_membership(
-        self, workspace_id: int, user_id: int, role_name: str
-    ) -> None:
+    async def ensure_membership(self, workspace_id: int, user_id: int, role_name: str) -> None:
         """Insert or update workspace membership (idempotent)."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
@@ -1806,9 +1808,7 @@ class AsyncWorkspaceManager:
             repo = WorkspaceRepository(session)
             return await repo.get_default_workspace()
 
-    async def create_default(
-        self, name: str = "Default", slug: str = "default"
-    ) -> dict:
+    async def create_default(self, name: str = "Default", slug: str = "default") -> dict:
         """Create the default workspace."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)

@@ -15,9 +15,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, Workspace)
 
-    async def get_member_role_name(
-        self, user_id: int, workspace_id: int
-    ) -> Optional[str]:
+    async def get_member_role_name(self, user_id: int, workspace_id: int) -> Optional[str]:
         """Get role_name for (user_id, workspace_id) from workspace_members."""
         result = await self.session.execute(
             select(WorkspaceMember.role_name).where(
@@ -27,9 +25,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         )
         return result.scalar_one_or_none()
 
-    async def ensure_membership(
-        self, workspace_id: int, user_id: int, role_name: str
-    ) -> None:
+    async def ensure_membership(self, workspace_id: int, user_id: int, role_name: str) -> None:
         """Insert or update workspace membership (idempotent)."""
         result = await self.session.execute(
             select(WorkspaceMember).where(
@@ -55,9 +51,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         ws = await self.get_by_id(1)
         return ws.to_dict() if ws else None
 
-    async def create_default(
-        self, name: str = "Default", slug: str = "default"
-    ) -> dict:
+    async def create_default(self, name: str = "Default", slug: str = "default") -> dict:
         """Create the default workspace (id=1)."""
         ws = Workspace(name=name, slug=slug)
         self.session.add(ws)
