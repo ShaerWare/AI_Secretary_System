@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.dependencies import get_container
-from auth_manager import User, get_current_user
+from auth_manager import User, require_permission
 from service_manager import get_service_manager
 from system_monitor import get_system_monitor
 
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/admin/monitor", tags=["monitor"])
 
 
 @router.get("/gpu")
-async def admin_get_gpu_stats(user: User = Depends(get_current_user)):
+async def admin_get_gpu_stats(user: User = Depends(require_permission("system", "view"))):
     """Получить статистику GPU"""
     import torch
 
@@ -81,7 +81,7 @@ async def admin_get_gpu_stats(user: User = Depends(get_current_user)):
 
 
 @router.get("/gpu/stream")
-async def admin_stream_gpu_stats(user: User = Depends(get_current_user)):
+async def admin_stream_gpu_stats(user: User = Depends(require_permission("system", "view"))):
     """SSE streaming статистики GPU"""
     import torch
 
@@ -117,7 +117,7 @@ async def admin_stream_gpu_stats(user: User = Depends(get_current_user)):
 
 
 @router.get("/health")
-async def admin_get_health(user: User = Depends(get_current_user)):
+async def admin_get_health(user: User = Depends(require_permission("system", "view"))):
     """Расширенная проверка здоровья всех компонентов"""
     manager = get_service_manager()
     container = get_container()
@@ -163,7 +163,7 @@ async def admin_get_health(user: User = Depends(get_current_user)):
 
 
 @router.get("/metrics")
-async def admin_get_metrics(user: User = Depends(get_current_user)):
+async def admin_get_metrics(user: User = Depends(require_permission("system", "view"))):
     """Получить метрики системы"""
     import psutil
 
@@ -192,14 +192,14 @@ async def admin_get_metrics(user: User = Depends(get_current_user)):
 
 
 @router.get("/errors")
-async def admin_get_errors(user: User = Depends(get_current_user)):
+async def admin_get_errors(user: User = Depends(require_permission("system", "view"))):
     """Получить последние ошибки"""
     manager = get_service_manager()
     return {"errors": manager.last_errors, "timestamp": datetime.now().isoformat()}
 
 
 @router.post("/metrics/reset")
-async def admin_reset_metrics(user: User = Depends(get_current_user)):
+async def admin_reset_metrics(user: User = Depends(require_permission("system", "edit"))):
     """Сбросить метрики"""
     container = get_container()
     # Очищаем кэш TTS
@@ -211,14 +211,14 @@ async def admin_reset_metrics(user: User = Depends(get_current_user)):
 
 
 @router.get("/system")
-async def admin_get_system_status(user: User = Depends(get_current_user)):
+async def admin_get_system_status(user: User = Depends(require_permission("system", "view"))):
     """Полная информация о системе: GPU, CPU, RAM, диски, Docker, сеть"""
     monitor = get_system_monitor()
     return monitor.get_full_status()
 
 
 @router.get("/rate-limits")
-async def admin_get_rate_limits(user: User = Depends(get_current_user)):
+async def admin_get_rate_limits(user: User = Depends(require_permission("system", "view"))):
     """Get current rate limiting configuration"""
     from app.rate_limiter import get_rate_limit_status
 
@@ -226,7 +226,7 @@ async def admin_get_rate_limits(user: User = Depends(get_current_user)):
 
 
 @router.get("/security")
-async def admin_get_security_status(user: User = Depends(get_current_user)):
+async def admin_get_security_status(user: User = Depends(require_permission("system", "view"))):
     """Get current security configuration (rate limits, CORS, headers)"""
     import os
 

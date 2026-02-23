@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.services.backup_service import get_backup_service
-from auth_manager import User, require_admin
+from auth_manager import User, require_permission
 
 
 router = APIRouter(prefix="/admin/backup", tags=["backup"])
@@ -48,7 +48,7 @@ class BackupResponse(BaseModel):
 
 
 @router.get("/system-info")
-async def get_system_info(_: User = Depends(require_admin)) -> dict:
+async def get_system_info(_: User = Depends(require_permission("system", "view"))) -> dict:
     """
     Get system info for backup planning.
 
@@ -59,7 +59,7 @@ async def get_system_info(_: User = Depends(require_admin)) -> dict:
 
 
 @router.get("/list")
-async def list_backups(_: User = Depends(require_admin)) -> list[dict]:
+async def list_backups(_: User = Depends(require_permission("system", "view"))) -> list[dict]:
     """
     List all available backups.
 
@@ -70,7 +70,9 @@ async def list_backups(_: User = Depends(require_admin)) -> list[dict]:
 
 
 @router.get("/{filename}")
-async def get_backup_info(filename: str, _: User = Depends(require_admin)) -> dict:
+async def get_backup_info(
+    filename: str, _: User = Depends(require_permission("system", "view"))
+) -> dict:
     """
     Get detailed info about a specific backup.
 
@@ -85,7 +87,9 @@ async def get_backup_info(filename: str, _: User = Depends(require_admin)) -> di
 
 
 @router.get("/{filename}/download")
-async def download_backup(filename: str, _: User = Depends(require_admin)) -> FileResponse:
+async def download_backup(
+    filename: str, _: User = Depends(require_permission("system", "view"))
+) -> FileResponse:
     """
     Download a backup file.
 
@@ -105,7 +109,9 @@ async def download_backup(filename: str, _: User = Depends(require_admin)) -> Fi
 
 
 @router.post("/{filename}/validate")
-async def validate_backup(filename: str, _: User = Depends(require_admin)) -> dict:
+async def validate_backup(
+    filename: str, _: User = Depends(require_permission("system", "edit"))
+) -> dict:
     """
     Validate backup integrity by checking checksums.
 
@@ -117,7 +123,9 @@ async def validate_backup(filename: str, _: User = Depends(require_admin)) -> di
 
 
 @router.post("/create")
-async def create_backup(request: CreateBackupRequest, _: User = Depends(require_admin)) -> dict:
+async def create_backup(
+    request: CreateBackupRequest, _: User = Depends(require_permission("system", "manage"))
+) -> dict:
     """
     Create a new backup.
 
@@ -135,7 +143,9 @@ async def create_backup(request: CreateBackupRequest, _: User = Depends(require_
 
 
 @router.post("/restore")
-async def restore_backup(request: RestoreBackupRequest, _: User = Depends(require_admin)) -> dict:
+async def restore_backup(
+    request: RestoreBackupRequest, _: User = Depends(require_permission("system", "manage"))
+) -> dict:
     """
     Restore from a backup.
 
@@ -162,7 +172,9 @@ async def restore_backup(request: RestoreBackupRequest, _: User = Depends(requir
 
 
 @router.delete("/{filename}")
-async def delete_backup(filename: str, _: User = Depends(require_admin)) -> dict:
+async def delete_backup(
+    filename: str, _: User = Depends(require_permission("system", "manage"))
+) -> dict:
     """
     Delete a backup file.
 

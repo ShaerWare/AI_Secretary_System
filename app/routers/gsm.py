@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import get_gsm_service
-from auth_manager import User, require_admin
+from auth_manager import User, require_permission
 
 
 logger = logging.getLogger(__name__)
@@ -188,7 +188,7 @@ def _require_gsm(gsm_service):
 
 @router.get("/status")
 async def gsm_status(
-    gsm_service=Depends(get_gsm_service), user: User = Depends(require_admin)
+    gsm_service=Depends(get_gsm_service), user: User = Depends(require_permission("gsm", "view"))
 ) -> GSMStatus:
     """Получить статус GSM модуля."""
     if gsm_service is None:
@@ -216,7 +216,7 @@ async def gsm_status(
 @router.post("/initialize")
 async def initialize_module(
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "edit")),
 ):
     """Инициализировать GSM модуль."""
     gsm = _require_gsm(gsm_service)
@@ -239,7 +239,7 @@ async def initialize_module(
 
 
 @router.get("/config")
-async def get_gsm_config(user: User = Depends(require_admin)) -> GSMConfig:
+async def get_gsm_config(user: User = Depends(require_permission("gsm", "view"))) -> GSMConfig:
     """Получить конфигурацию GSM."""
     from db.integration import async_config_manager
 
@@ -252,7 +252,7 @@ async def get_gsm_config(user: User = Depends(require_admin)) -> GSMConfig:
 @router.put("/config")
 async def update_gsm_config(
     config: GSMConfig,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "edit")),
 ) -> GSMConfig:
     """Обновить конфигурацию GSM."""
     from db.integration import async_config_manager
@@ -270,7 +270,7 @@ async def list_calls(
     limit: int = 50,
     offset: int = 0,
     state: Optional[CallState] = None,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "view")),
 ) -> dict:
     """Список звонков из БД."""
     from db.integration import async_gsm_manager
@@ -289,7 +289,7 @@ async def list_calls(
 
 @router.get("/calls/active")
 async def get_active_call(
-    gsm_service=Depends(get_gsm_service), user: User = Depends(require_admin)
+    gsm_service=Depends(get_gsm_service), user: User = Depends(require_permission("gsm", "view"))
 ):
     """Получить активный звонок."""
     if gsm_service is None:
@@ -298,7 +298,7 @@ async def get_active_call(
 
 
 @router.get("/calls/{call_id}")
-async def get_call(call_id: str, user: User = Depends(require_admin)) -> dict:
+async def get_call(call_id: str, user: User = Depends(require_permission("gsm", "view"))) -> dict:
     """Детали звонка из БД."""
     from db.integration import async_gsm_manager
 
@@ -312,7 +312,7 @@ async def get_call(call_id: str, user: User = Depends(require_admin)) -> dict:
 @router.post("/calls/answer")
 async def answer_call(
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "manage")),
 ):
     """Ответить на входящий звонок."""
     gsm = _require_gsm(gsm_service)
@@ -336,7 +336,7 @@ async def answer_call(
 @router.post("/calls/hangup")
 async def hangup_call(
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "manage")),
 ):
     """Завершить текущий звонок."""
     gsm = _require_gsm(gsm_service)
@@ -362,7 +362,7 @@ async def hangup_call(
 async def dial_number(
     request: DialRequest,
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "manage")),
 ):
     """Позвонить на номер."""
     gsm = _require_gsm(gsm_service)
@@ -387,7 +387,9 @@ async def dial_number(
 
 
 @router.get("/sms")
-async def list_sms(limit: int = 50, offset: int = 0, user: User = Depends(require_admin)) -> dict:
+async def list_sms(
+    limit: int = 50, offset: int = 0, user: User = Depends(require_permission("gsm", "view"))
+) -> dict:
     """Список SMS из БД."""
     from db.integration import async_gsm_manager
 
@@ -406,7 +408,7 @@ async def list_sms(limit: int = 50, offset: int = 0, user: User = Depends(requir
 async def send_sms(
     request: SendSMSRequest,
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "manage")),
 ):
     """Отправить SMS."""
     gsm = _require_gsm(gsm_service)
@@ -434,7 +436,7 @@ async def send_sms(
 async def execute_at_command(
     request: ATCommandRequest,
     gsm_service=Depends(get_gsm_service),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("gsm", "manage")),
 ) -> ATCommandResponse:
     """Выполнить AT команду (для отладки)."""
     gsm = _require_gsm(gsm_service)
@@ -448,7 +450,7 @@ async def execute_at_command(
 
 
 @router.get("/ports")
-async def list_serial_ports(user: User = Depends(require_admin)) -> dict:
+async def list_serial_ports(user: User = Depends(require_permission("gsm", "view"))) -> dict:
     """Список доступных serial портов."""
     dev_path = Path("/dev")
 

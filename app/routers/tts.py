@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_TTS, limiter
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from db.integration import async_preset_manager
 from voice_clone_service import INTONATION_PRESETS
 
@@ -97,7 +97,7 @@ async def _reload_voice_presets():
 
 
 @router.get("/presets")
-async def admin_tts_presets(user: User = Depends(get_current_user)):
+async def admin_tts_presets(user: User = Depends(require_permission("speech", "view"))):
     """Список доступных TTS пресетов"""
     container = get_container()
     presets = {}
@@ -122,7 +122,7 @@ async def admin_tts_presets(user: User = Depends(get_current_user)):
 
 @router.post("/preset")
 async def admin_set_tts_preset(
-    request: AdminTTSPresetRequest, user: User = Depends(require_not_guest)
+    request: AdminTTSPresetRequest, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Установить текущий пресет TTS"""
     container = get_container()
@@ -155,7 +155,9 @@ async def admin_set_tts_preset(
 @router.post("/test")
 @limiter.limit(RATE_LIMIT_TTS)
 async def admin_tts_test(
-    request: Request, tts_request: AdminTTSTestRequest, user: User = Depends(get_current_user)
+    request: Request,
+    tts_request: AdminTTSTestRequest,
+    user: User = Depends(require_permission("speech", "view")),
 ):
     """Тестовый синтез речи - возвращает аудио-файл для воспроизведения в браузере"""
     import time as t
@@ -253,7 +255,7 @@ async def admin_tts_test(
 
 
 @router.get("/cache")
-async def admin_tts_cache(user: User = Depends(get_current_user)):
+async def admin_tts_cache(user: User = Depends(require_permission("speech", "view"))):
     """Статистика кэша streaming TTS"""
     container = get_container()
     if container.streaming_tts_manager:
@@ -262,7 +264,7 @@ async def admin_tts_cache(user: User = Depends(get_current_user)):
 
 
 @router.delete("/cache")
-async def admin_clear_tts_cache(user: User = Depends(require_not_guest)):
+async def admin_clear_tts_cache(user: User = Depends(require_permission("speech", "edit"))):
     """Очистить кэш streaming TTS"""
     container = get_container()
     if container.streaming_tts_manager:
@@ -277,7 +279,7 @@ async def admin_clear_tts_cache(user: User = Depends(require_not_guest)):
 
 
 @router.get("/xtts/params")
-async def admin_get_xtts_params(user: User = Depends(get_current_user)):
+async def admin_get_xtts_params(user: User = Depends(require_permission("speech", "view"))):
     """Получить параметры XTTS"""
     container = get_container()
     service = container.anna_voice_service or container.voice_service
@@ -301,7 +303,7 @@ async def admin_get_xtts_params(user: User = Depends(get_current_user)):
 
 @router.post("/xtts/params")
 async def admin_set_xtts_params(
-    request: AdminXTTSParamsRequest, user: User = Depends(require_not_guest)
+    request: AdminXTTSParamsRequest, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Установить параметры XTTS (для следующего синтеза)"""
     params = {k: v for k, v in request.model_dump().items() if v is not None}
@@ -313,7 +315,7 @@ async def admin_set_xtts_params(
 
 
 @router.get("/piper/params")
-async def admin_get_piper_params(user: User = Depends(get_current_user)):
+async def admin_get_piper_params(user: User = Depends(require_permission("speech", "view"))):
     """Получить параметры Piper TTS"""
     container = get_container()
     if not container.piper_service:
@@ -327,7 +329,7 @@ async def admin_get_piper_params(user: User = Depends(get_current_user)):
 
 @router.post("/piper/params")
 async def admin_set_piper_params(
-    request: AdminPiperParamsRequest, user: User = Depends(require_not_guest)
+    request: AdminPiperParamsRequest, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Установить параметры Piper TTS"""
     container = get_container()
@@ -342,7 +344,7 @@ async def admin_set_piper_params(
 
 
 @router.get("/presets/custom")
-async def admin_get_custom_presets(user: User = Depends(get_current_user)):
+async def admin_get_custom_presets(user: User = Depends(require_permission("speech", "view"))):
     """Получить пользовательские пресеты TTS"""
     presets = await async_preset_manager.get_custom()
     return {"presets": presets}
@@ -350,10 +352,10 @@ async def admin_get_custom_presets(user: User = Depends(get_current_user)):
 
 @router.post("/presets/custom")
 async def admin_create_custom_preset(
-    request: AdminCustomPresetRequest, user: User = Depends(require_not_guest)
+    request: AdminCustomPresetRequest, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Создать пользовательский пресет TTS"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "speech", "manage") else user.id
     await async_preset_manager.create(request.name, request.params, owner_id=owner_id)
     await _reload_voice_presets()
     return {"status": "ok", "preset": request.name}
@@ -361,7 +363,9 @@ async def admin_create_custom_preset(
 
 @router.put("/presets/custom/{name}")
 async def admin_update_custom_preset(
-    name: str, request: AdminCustomPresetRequest, user: User = Depends(require_not_guest)
+    name: str,
+    request: AdminCustomPresetRequest,
+    user: User = Depends(require_permission("speech", "edit")),
 ):
     """Обновить пользовательский пресет TTS"""
     result = await async_preset_manager.update(name, request.params)
@@ -373,7 +377,9 @@ async def admin_update_custom_preset(
 
 
 @router.delete("/presets/custom/{name}")
-async def admin_delete_custom_preset(name: str, user: User = Depends(require_not_guest)):
+async def admin_delete_custom_preset(
+    name: str, user: User = Depends(require_permission("speech", "edit"))
+):
     """Удалить пользовательский пресет TTS"""
     if not await async_preset_manager.delete(name):
         raise HTTPException(status_code=404, detail=f"Preset not found: {name}")
@@ -388,7 +394,9 @@ async def admin_delete_custom_preset(name: str, user: User = Depends(require_not
 @router.post("/stream")
 @limiter.limit(RATE_LIMIT_TTS)
 async def tts_stream(
-    request: Request, stream_request: StreamingTTSRequest, user: User = Depends(get_current_user)
+    request: Request,
+    stream_request: StreamingTTSRequest,
+    user: User = Depends(require_permission("speech", "view")),
 ):
     """
     Потоковый синтез речи - выдаёт аудио чанки по мере генерации.
