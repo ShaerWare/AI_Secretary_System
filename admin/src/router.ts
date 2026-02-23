@@ -35,115 +35,115 @@ const router = createRouter({
       path: '/',
       name: 'dashboard',
       component: DashboardView,
-      meta: { title: 'Dashboard', icon: 'LayoutDashboard', excludeRoles: ['web'], localOnly: true }
+      meta: { title: 'Dashboard', icon: 'LayoutDashboard', module: 'dashboard', localOnly: true }
     },
     {
       path: '/chat',
       name: 'chat',
       component: ChatView,
-      meta: { title: 'Chat', icon: 'MessageCircle' }
+      meta: { title: 'Chat', icon: 'MessageCircle', module: 'chat' }
     },
     {
       path: '/services',
       name: 'services',
       component: ServicesView,
-      meta: { title: 'Services', icon: 'Server', minRole: 'user', excludeRoles: ['web'], localOnly: true }
+      meta: { title: 'Services', icon: 'Server', module: 'system', minLevel: 'manage', localOnly: true }
     },
     {
       path: '/llm',
       name: 'llm',
       component: LlmView,
-      meta: { title: 'LLM', icon: 'Brain', minRole: 'user' }
+      meta: { title: 'LLM', icon: 'Brain', module: 'llm' }
     },
     {
       path: '/tts',
       name: 'tts',
       component: TtsView,
-      meta: { title: 'TTS', icon: 'Mic', minRole: 'user', excludeRoles: ['web'], localOnly: true }
+      meta: { title: 'TTS', icon: 'Mic', module: 'speech', localOnly: true }
     },
     {
       path: '/wiki',
       name: 'wiki',
       component: FaqView,
-      meta: { title: 'Wiki', icon: 'BookOpen' }
+      meta: { title: 'Wiki', icon: 'BookOpen', module: 'faq' }
     },
     {
       path: '/finetune',
       name: 'finetune',
       component: FinetuneView,
-      meta: { title: 'Fine-tune', icon: 'Sparkles' }
+      meta: { title: 'Fine-tune', icon: 'Sparkles', module: 'llm' }
     },
     {
       path: '/monitoring',
       name: 'monitoring',
       component: MonitoringView,
-      meta: { title: 'Monitoring', icon: 'Activity', minRole: 'user', excludeRoles: ['web'], localOnly: true }
+      meta: { title: 'Monitoring', icon: 'Activity', module: 'system', localOnly: true }
     },
     {
       path: '/models',
       name: 'models',
       component: ModelsView,
-      meta: { title: 'Models', icon: 'HardDrive', minRole: 'admin', localOnly: true }
+      meta: { title: 'Models', icon: 'HardDrive', module: 'system', minLevel: 'manage', localOnly: true }
     },
     {
       path: '/widget',
       name: 'widget',
       component: WidgetView,
-      meta: { title: 'Widget', icon: 'Code2', minRole: 'user' }
+      meta: { title: 'Widget', icon: 'Code2', module: 'channels' }
     },
     {
       path: '/telegram',
       name: 'telegram',
       component: TelegramView,
-      meta: { title: 'Telegram', icon: 'Send', minRole: 'user' }
+      meta: { title: 'Telegram', icon: 'Send', module: 'channels' }
     },
     {
       path: '/whatsapp',
       name: 'whatsapp',
       component: WhatsAppView,
-      meta: { title: 'WhatsApp', icon: 'MessageCircle', minRole: 'user' }
+      meta: { title: 'WhatsApp', icon: 'MessageCircle', module: 'channels' }
     },
     {
       path: '/gsm',
       name: 'gsm',
       component: GSMView,
-      meta: { title: 'GSM Telephony', icon: 'Phone', minRole: 'admin', localOnly: true }
+      meta: { title: 'GSM Telephony', icon: 'Phone', module: 'gsm', localOnly: true }
     },
     {
       path: '/audit',
       name: 'audit',
       component: AuditView,
-      meta: { title: 'Audit', icon: 'FileText', minRole: 'user', excludeRoles: ['web'] }
+      meta: { title: 'Audit', icon: 'FileText', module: 'audit' }
     },
     {
       path: '/usage',
       name: 'usage',
       component: UsageView,
-      meta: { title: 'Usage', icon: 'BarChart3', minRole: 'user', excludeRoles: ['web'] }
+      meta: { title: 'Usage', icon: 'BarChart3', module: 'usage' }
     },
     {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
-      meta: { title: 'Settings', icon: 'Settings', minRole: 'user' }
+      meta: { title: 'Settings', icon: 'Settings' }
     },
     {
       path: '/crm',
       name: 'crm',
       component: CrmView,
-      meta: { title: 'CRM', icon: 'Users', minRole: 'user', excludeRoles: ['web'] }
+      meta: { title: 'CRM', icon: 'Users', module: 'sales' }
     },
     {
       path: '/kanban',
       name: 'kanban',
       component: KanbanView,
-      meta: { title: 'Kanban', icon: 'ClipboardList', minRole: 'user' }
+      meta: { title: 'Kanban', icon: 'ClipboardList', module: 'kanban' }
     },
     {
       path: '/sales',
       name: 'sales',
       component: SalesView,
-      meta: { title: 'Sales', icon: 'ShoppingCart', minRole: 'user' }
+      meta: { title: 'Sales', icon: 'ShoppingCart', module: 'sales' }
     },
     {
       path: '/about',
@@ -154,8 +154,7 @@ const router = createRouter({
   ]
 })
 
-// Role level mapping for route guards
-const ROLE_LEVEL: Record<string, number> = { guest: 0, web: 1, user: 1, admin: 2 }
+const LVL: Record<string, number> = { view: 1, edit: 2, manage: 3 }
 
 // Navigation guard for authentication and authorization
 router.beforeEach((to, from, next) => {
@@ -168,7 +167,7 @@ router.beforeEach((to, from, next) => {
     // Check if token is in localStorage but store not initialized
     const token = localStorage.getItem('admin_token')
     if (token && !authStore.isTokenExpired()) {
-      // Token exists and valid, check role below
+      // Token exists and valid, check permissions below
     } else {
       // Redirect to login
       next({ name: 'login', query: { redirect: to.fullPath } })
@@ -176,17 +175,8 @@ router.beforeEach((to, from, next) => {
     }
   } else if (to.name === 'login' && authStore.isAuthenticated) {
     // Already logged in, redirect to landing page
-    const landing = authStore.isWeb ? 'chat' : 'dashboard'
+    const landing = authStore.hasModule('dashboard') && !authStore.isCloudMode ? 'dashboard' : 'chat'
     next({ name: landing })
-    return
-  }
-
-  const userRole = authStore.user?.role || 'guest'
-
-  // Check excludeRoles (e.g. 'web' excluded from dashboard, services)
-  const excludeRoles = to.meta.excludeRoles as string[] | undefined
-  if (excludeRoles?.includes(userRole)) {
-    next({ name: 'chat' })
     return
   }
 
@@ -196,12 +186,12 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // Check role-based access
-  const minRole = to.meta.minRole as string | undefined
-  if (minRole) {
-    if (ROLE_LEVEL[userRole] < ROLE_LEVEL[minRole]) {
-      // Insufficient role, redirect to landing page
-      const landing = userRole === 'web' ? 'chat' : 'dashboard'
+  // Module + level check
+  const mod = to.meta.module as string | undefined
+  if (mod) {
+    const minLvl = (to.meta.minLevel as string) || 'view'
+    if ((LVL[authStore.permissions[mod]] ?? 0) < (LVL[minLvl] ?? 1)) {
+      const landing = authStore.hasModule('dashboard') && !authStore.isCloudMode ? 'dashboard' : 'chat'
       next({ name: landing })
       return
     }

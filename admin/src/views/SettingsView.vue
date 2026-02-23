@@ -240,7 +240,7 @@ function toggleLocale() {
           </div>
 
           <!-- Display Name -->
-          <div v-if="!authStore.isGuest">
+          <div v-if="authStore.canEdit('settings')">
             <label class="block text-sm text-muted-foreground mb-1">{{ t('profile.displayName') }}</label>
             <div class="flex gap-2">
               <input
@@ -272,14 +272,14 @@ function toggleLocale() {
           </div>
 
           <!-- Guest notice -->
-          <div v-if="authStore.isGuest" class="text-sm text-muted-foreground italic">
+          <div v-if="!authStore.canEdit('settings')" class="text-sm text-muted-foreground italic">
             {{ t('profile.guestReadOnly') }}
           </div>
         </div>
       </div>
 
       <!-- Change Password -->
-      <div v-if="!authStore.isGuest" class="bg-card rounded-xl border border-border p-6">
+      <div v-if="authStore.canEdit('settings')" class="bg-card rounded-xl border border-border p-6">
         <h3 class="font-semibold flex items-center gap-2 mb-4">
           <Lock class="w-5 h-5" />
           {{ t('profile.changePassword') }}

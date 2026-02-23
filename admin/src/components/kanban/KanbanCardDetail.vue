@@ -44,7 +44,7 @@ const newChecklistText = ref('')
 const showAddDependency = ref(false)
 const selectedDependencyId = ref<number | null>(null)
 
-const isAdmin = computed(() => authStore.isAdmin)
+const isAdmin = computed(() => authStore.canManage('kanban'))
 
 const githubIssueUrl = computed(() => {
   if (!props.task?.github_issue_number || !props.currentProject) return null

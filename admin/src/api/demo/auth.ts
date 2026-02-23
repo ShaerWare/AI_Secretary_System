@@ -3,6 +3,31 @@ import type { DemoRoute } from './types'
 const demoRole = import.meta.env.VITE_DEMO_ROLE || 'admin'
 const demoDeploymentMode = import.meta.env.VITE_DEMO_DEPLOYMENT_MODE || 'full'
 
+const ALL_MODULES = [
+  'dashboard', 'chat', 'llm', 'speech', 'faq', 'channels',
+  'gsm', 'system', 'audit', 'usage', 'settings', 'users',
+  'sales', 'kanban', 'roles', 'billing',
+]
+
+function getDemoPermissions(): Record<string, string> {
+  if (demoRole === 'admin') {
+    return Object.fromEntries(ALL_MODULES.map(m => [m, 'manage']))
+  }
+  if (demoRole === 'user' || demoRole === 'web') {
+    // operator: edit on core modules, view on read-only modules
+    return {
+      chat: 'edit', llm: 'edit', faq: 'edit', channels: 'edit',
+      sales: 'edit', kanban: 'edit', settings: 'edit', usage: 'edit',
+      audit: 'view', system: 'view', dashboard: 'view',
+    }
+  }
+  // guest / viewer
+  return {
+    chat: 'view', faq: 'view', dashboard: 'view',
+    audit: 'view', usage: 'view', kanban: 'view', sales: 'view',
+  }
+}
+
 function createDemoToken(username: string): { access_token: string } {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const payload = btoa(JSON.stringify({
@@ -54,5 +79,10 @@ export const authRoutes: DemoRoute[] = [
     method: 'GET',
     pattern: /^\/admin\/deployment-mode$/,
     handler: () => ({ mode: demoDeploymentMode }),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/admin\/auth\/permissions$/,
+    handler: () => getDemoPermissions(),
   },
 ]

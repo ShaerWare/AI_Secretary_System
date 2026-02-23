@@ -296,7 +296,7 @@ function selectProject(id: number | null) {
                 {{ project.github_owner }}/{{ project.github_repo }}
               </span>
             </button>
-            <div v-if="authStore.isAdmin" class="border-t border-border">
+            <div v-if="authStore.canManage('kanban')" class="border-t border-border">
               <button
                 class="w-full text-left px-4 py-2 hover:bg-secondary/50 last:rounded-b-lg text-sm text-primary flex items-center gap-2"
                 @click="openProjectCreate"
@@ -310,7 +310,7 @@ function selectProject(id: number | null) {
 
         <!-- Edit project button -->
         <button
-          v-if="kanbanStore.currentProject && authStore.isAdmin"
+          v-if="kanbanStore.currentProject && authStore.canManage('kanban')"
           class="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
           :title="t('kanban.editProject')"
           @click="openProjectEdit"
@@ -321,7 +321,7 @@ function selectProject(id: number | null) {
       <div class="flex items-center gap-2">
         <!-- Sync button (GitHub projects only) -->
         <button
-          v-if="kanbanStore.currentProject && !authStore.isGuest"
+          v-if="kanbanStore.currentProject && authStore.canEdit('kanban')"
           class="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
           :disabled="kanbanStore.syncing"
           @click="handleSync"
@@ -366,7 +366,7 @@ function selectProject(id: number | null) {
           <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': kanbanStore.loading }" />
         </button>
         <button
-          v-if="!authStore.isGuest"
+          v-if="authStore.canEdit('kanban')"
           class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           @click="openCreate"
         >
@@ -381,7 +381,7 @@ function selectProject(id: number | null) {
       v-if="kanbanStore.activeView === 'kanban'"
       :tasks-by-status="kanbanStore.tasksByStatus"
       :loading="kanbanStore.loading"
-      :disabled="authStore.isGuest"
+      :disabled="!authStore.canEdit('kanban')"
       :is-github-project="!!kanbanStore.currentProject"
       @reorder="handleReorder"
       @click-task="openDetail"
@@ -393,7 +393,7 @@ function selectProject(id: number | null) {
       v-else
       :tasks="kanbanStore.ganttTasks"
       :loading="kanbanStore.loading"
-      :disabled="authStore.isGuest"
+      :disabled="!authStore.canEdit('kanban')"
       @click-task="handleGanttClick"
       @date-change="handleDateChange"
     />
