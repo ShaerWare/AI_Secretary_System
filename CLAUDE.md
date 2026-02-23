@@ -287,18 +287,18 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **Adding a new secretary persona:**
 1. Add entry to `SECRETARY_PERSONAS` dict in `vllm_llm_service.py`
 
-**RBAC auth guards** (3 levels in `auth_manager.py`):
-- `Depends(get_current_user)` — any authenticated user (read endpoints)
-- `Depends(require_not_guest)` — user/web + admin only (write endpoints)
-- `Depends(require_admin)` — admin only (vLLM, GSM, backups, models)
-- Data isolation: `owner_id = None if user.role == "admin" else user.id` in routers
+**RBAC auth guards** (in `auth_manager.py`):
+- `Depends(require_permission(module, level))` — checks module permission (all routers)
+- `user_has_level(user, module, level)` — inline check within endpoint (owner/manage logic)
+- `Depends(get_current_user)` — auth only, no RBAC check (self-service: auth.py)
+- Data isolation: `owner_id = None if user_has_level(user, mod, "manage") else user.id`
 
 **4 legacy roles** (`VALID_ROLES` in `db/repositories/user.py`), mapped to RBAC roles via `get_role_for_legacy()`:
-- `admin` → RBAC `admin` — full access, sees all resources
-- `user` → RBAC `operator` — read + write own resources, full admin panel
-- `web` → RBAC `operator` — same backend access as `user`, but frontend hides: Dashboard, Services, TTS, Monitoring, Audit, Usage (via `excludeRoles`). Models hidden via `minRole: 'admin'`. Landing page: `/chat`
-- `guest` → RBAC `viewer` — read-only (demo access)
-- Frontend role exclusion: routes/nav items support `excludeRoles: ['web']` meta for per-role hiding
+- `admin` → RBAC `admin` — all 16 modules `manage`, sees all resources
+- `user` → RBAC `operator` — 8 modules `edit` + 3 `view`
+- `web` → RBAC `operator` — same backend access as `user`
+- `guest` → RBAC `viewer` — 7 modules `view` (read-only demo)
+- Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web`
 
 **Adding i18n translations:**
@@ -351,11 +351,11 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 **Routing** (`admin/src/router.ts`): Single flat router with `createWebHashHistory`. Routes use rich `meta` fields for access control:
 - `meta.public` — bypass auth guard (only `/login`)
 - `meta.localOnly` — hidden in `DEPLOYMENT_MODE=cloud` (Dashboard, Services, TTS, Monitoring, Models, GSM)
-- `meta.excludeRoles` — per-role hiding (e.g. `['web']` hides Dashboard, Services, TTS, Monitoring, Audit, Usage from `web` role)
-- `meta.minRole` — minimum role required (`'user'` or `'admin'`)
-- Navigation guard redirects unauthorized users to `/chat` or `/login`
+- `meta.module` — RBAC module name (e.g. `'llm'`, `'system'`, `'channels'`)
+- `meta.minLevel` — minimum permission level (`'view'` default, `'edit'`, or `'manage'`)
+- Navigation guard checks `permissions[module] >= minLevel`, redirects unauthorized users to `/chat` or `/login`
 
-**Stores** (`admin/src/stores/`): Pinia stores re-exported from `stores/index.ts`. Key store: `auth.ts` holds JWT token, decoded user (id, username, role), `deploymentMode` (`full|cloud|local`). Exposes `isAdmin`, `isWeb`, `isCloudMode`, `hasPermission()`, `can()`. UI state stores: `toast`, `confirm`, `search`, `theme` — decouple trigger sites from rendering.
+**Stores** (`admin/src/stores/`): Pinia stores re-exported from `stores/index.ts`. Key store: `auth.ts` holds JWT token, decoded user (id, username, role), `deploymentMode` (`full|cloud|local`), `permissions` (from `GET /admin/auth/permissions`). Exposes `isAdmin` (= `canManage('users')`), `isCloudMode`, `hasModule()`, `canView()`, `canEdit()`, `canManage()`. UI state stores: `toast`, `confirm`, `search`, `theme` — decouple trigger sites from rendering.
 
 **API layer** (`admin/src/api/`): `client.ts` provides `api.get/post/put/delete/upload` + `createSSE()` helper (auto-injects JWT from `localStorage('admin_token')`). Domain-specific files (`chat.ts`, `telegram.ts`, `llm.ts`, etc.) build on it. All re-exported from `api/index.ts`. In demo mode, `client.ts` awaits `demoReady` promise before any API call.
 
