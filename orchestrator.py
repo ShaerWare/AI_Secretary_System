@@ -71,7 +71,7 @@ from auth_manager import (
     LoginResponse,
     User,
     authenticate_user,
-    create_access_token,
+    create_session,
     get_auth_status,
     get_current_user,
 )
@@ -1650,7 +1650,7 @@ async def chat_completions(request: ChatCompletionRequest):
 
 
 @app.post("/admin/auth/login", response_model=LoginResponse)
-async def admin_login(request: LoginRequest):
+async def admin_login(request: LoginRequest, req: Request):
     """
     Authenticate user and return JWT token.
 
@@ -1661,14 +1661,20 @@ async def admin_login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token, expires_in, _jti = create_access_token(user.username, user.role, user.id)
+    response = await create_session(
+        username=user.username,
+        role=user.role,
+        user_id=user.id,
+        ip=req.client.host if req.client else None,
+        user_agent=req.headers.get("user-agent"),
+    )
 
     # Audit log
     await async_audit_logger.log(
         action="login", resource="auth", user_id=user.username, details={"role": user.role}
     )
 
-    return LoginResponse(access_token=token, token_type="bearer", expires_in=expires_in)
+    return response
 
 
 @app.get("/admin/auth/me")

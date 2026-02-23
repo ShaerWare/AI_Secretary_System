@@ -374,61 +374,124 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 
 ## Server Deployment
 
-The production server runs at `admin.ai-sekretar24.ru`. Single repo at `/opt/ai-secretary/` serves as both **development workspace** and **production runtime**.
+The production server runs at `admin.ai-sekretar24.ru`. Deployed via **Docker (CPU mode)** on a Beget VPS.
 
 ### Server Architecture
 
+**New server** (as of 2026-02-21): `155.212.227.26` (Beget VPS, 12GB RAM, 145GB disk, Ubuntu 24.04)
+
 ```
-/opt/ai-secretary/                  ← single Git repo (dev + production)
-    ├── .env                        ← production config (DEPLOYMENT_MODE=cloud, etc.)
-    ├── apply_patches.py            ← cloud-mode patches (makes GPU imports optional)
-    ├── deploy.sh                   ← auto-deploy script
-    ├── webhook_server.py           ← GitHub webhook for demo auto-deploy
-    ├── admin/.env.production.local ← VITE_BASE_PATH=/
-    └── venv/                       ← Python 3.12 virtualenv
+/opt/ai-secretary/                  ← Git repo clone
+    ├── .env                        ← production config (DEPLOYMENT_MODE=cloud)
+    ├── docker-compose.yml          ← base compose (modified: GPU deploy removed, dev mounts removed)
+    ├── docker-compose.override.yml ← cloud mode: CPU target, Claude creds mount, env overrides
+    ├── Dockerfile                  ← modified: CPU stage has Node.js for Claude CLI, whisper excluded
+    ├── data/secretary.db           ← SQLite DB (mounted into container)
+    ├── data/crm-dataset/           ← CRM dataset files (mounted)
+    ├── logs/                       ← app logs (mounted)
+    └── Анна/, Марина/              ← empty dirs (voice samples not needed in cloud mode)
 
-Systemd services:
-    ai-secretary.service            ← orchestrator (port 8002)
-    demo-webhook.service            ← webhook listener (port 9876)
+Docker containers:
+    ai-secretary        ← orchestrator + admin panel + bridge (port 8002)
+    ai-secretary-redis  ← Redis cache (port 6379, internal)
 
-Static sites:
-    /var/www/admin-ai-sekretar24/   ← admin panel (rsync from admin/dist/)
-    /var/www/ai-sekretar24/         ← landing page (static)
-    /var/www/demo-ai-sekretar24/    ← demo builds (full/ + cloud/ subdirs)
+Nginx:
+    /etc/nginx/sites-available/ai-secretary  ← reverse proxy → :8002 (HTTP→HTTPS redirect, WSS, SSE)
+    /etc/letsencrypt/live/admin.ai-sekretar24.ru/  ← SSL cert (copied from old server, valid until May 2026)
+
+Cron:
+    certbot renew (daily 3am)
 ```
 
-**Local-only files** (not in git, backed up by deploy.sh): `.env`, `apply_patches.py`, `deploy.sh`, `webhook_server.py`, `admin/.env.production.local`
+**Old server** (decommissioning): `155.212.231.7` — native Python deployment with venv, systemd services. Keep running until DNS fully propagated and new server verified.
 
-### Development Workflow (on server)
+**Local-only files on new server** (not in git):
+- `.env` — production config
+- `docker-compose.override.yml` — cloud mode overrides
+- `docker-compose.yml` — modified (GPU removed, dev mounts removed)
+- `Dockerfile` — modified (Node.js added, whisper excluded in CPU stage)
+- `services/bridge/src/models/` — gitignored by `models/` pattern, must be copied manually
+
+### Docker Deployment Commands
 
 ```bash
+# SSH to server
+ssh root@155.212.227.26
+
+# View status
 cd /opt/ai-secretary
-git pull origin main                         # sync with remote
-git checkout -b server/my-feature            # create feature branch
-# ... make changes ...
-ruff check . && cd admin && npm run lint:check && npm run build  # verify
-git add <files> && git commit -m "feat: ..."
-git push -u origin server/my-feature
-gh pr create --title "..." --body "..."
-gh pr checks <N> --watch                     # wait for CI
-gh pr merge <N> --merge                      # merge
-git checkout main && git pull                # sync
-bash deploy.sh                               # deploy to production
+docker compose ps                            # container status
+docker compose logs -f ai-secretary          # follow logs
+curl http://localhost:8002/health             # health check
+
+# Redeploy after git pull
+cd /opt/ai-secretary
+git pull origin main
+# Re-copy services/bridge/src/models/ if changed (gitignored!)
+docker compose up -d --build                 # rebuild + restart
+docker compose logs -f ai-secretary          # watch startup
+
+# Restart without rebuild
+docker compose restart ai-secretary
+
+# View bridge logs
+docker exec ai-secretary cat /app/logs/bridge.log
 ```
 
-### deploy.sh Steps
+### Key Docker Modifications (not in git)
 
+The following changes were made to the Dockerfile and compose files **on the server only** to support cloud-mode Docker deployment:
+
+1. **Dockerfile CPU stage** — added Node.js 20 + `@anthropic-ai/claude-code` (for Claude CLI bridge); excluded `openai-whisper` from requirements (not needed in cloud mode, fails to build in Docker)
+2. **docker-compose.yml** — removed `deploy.resources.reservations.devices` (GPU) from orchestrator; removed all dev source-code `:ro` mounts and HuggingFace/TTS cache mounts; removed `admin/dist` mount (served from Docker image)
+3. **docker-compose.override.yml** — sets `build.target: cpu`, mounts `/root/.claude` for Claude credentials, sets `LLM_BACKEND`, `DEPLOYMENT_MODE`, clears GPU env vars
+
+### .env (Production)
+
+```bash
+LLM_BACKEND=cloud:claude-bridge-stalkerelectric
+ORCHESTRATOR_PORT=8002
+ADMIN_JWT_SECRET=ai-secretary-web-2026-prod
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_DEFAULT=60/minute
+RATE_LIMIT_AUTH=10/minute
+CORS_ORIGINS=https://admin.ai-sekretar24.ru,https://ai-sekretar24.ru
+CUDA_VISIBLE_DEVICES=
+DEPLOYMENT_MODE=cloud
+```
+
+### Migration TODO (from old server)
+
+- [ ] DNS: change A-record for `admin.ai-sekretar24.ru` → `155.212.227.26` (changed, awaiting propagation)
+- [ ] Verify login and chat functionality via real domain
+- [ ] Migrate `ai-sekretar24.ru` landing page (if needed)
+- [ ] Migrate `demo.ai-sekretar24.ru` demo builds (if needed)
+- [ ] Set up GitHub webhook for auto-deploy (optional)
+- [ ] Decommission old server (`155.212.231.7`)
+- [ ] Renew SSL cert via certbot after DNS propagation (`certbot renew`)
+
+### Legacy: Native Deployment (Old Server)
+
+<details>
+<summary>Old server native deployment (for reference, being replaced by Docker)</summary>
+
+The old server ran natively with Python venv, systemd, and rsync-based deploys.
+
+**deploy.sh steps (old):**
 1. Backs up local-only files to `/tmp/`
-2. `git reset --hard origin/main` (syncs to latest main)
+2. `git reset --hard origin/main`
 3. Restores local-only files
 4. `python3 apply_patches.py` (cloud-mode: makes TTS/STT/GPU imports optional)
 5. `pip install -r services/bridge/requirements.txt`
-6. Cleans `admin/dist/` and `node_modules/.vite` (prevents stale demo artifacts)
-7. `VITE_DEMO_MODE= npm run build` (explicit production mode)
-8. Verifies no `setupDemoInterceptor` in built JS (aborts if found)
+6. Cleans `admin/dist/` and `node_modules/.vite`
+7. `VITE_DEMO_MODE= npm run build`
+8. Verifies no `setupDemoInterceptor` in built JS
 9. `rsync admin/dist/ → /var/www/admin-ai-sekretar24/`
 10. `systemctl restart ai-secretary`
-11. Health check: `curl http://localhost:8002/health`
+11. Health check
+
+**Local-only files (old):** `.env`, `apply_patches.py`, `deploy.sh`, `webhook_server.py`, `admin/.env.production.local`
+</details>
 
 ### Demo Sites
 
@@ -466,7 +529,7 @@ Both demos live on `demo.ai-sekretar24.ru` with path-based routing. Single scrip
 
 This project is developed simultaneously from two machines running Claude Code:
 - **local** — dev workstation with GPU (RTX 3060), hardware access, full stack
-- **server** — cloud VPS at `/opt/ai-secretary/`, no GPU, cloud LLM only, production-facing
+- **server** — Beget VPS (`155.212.227.26`), Docker deployment, no GPU, cloud LLM (Claude bridge), production-facing
 
 ### Environment Detection
 
@@ -521,3 +584,6 @@ To minimize merge conflicts, each machine has primary ownership of certain areas
 6. **xray-core for VLESS** — Included in Docker image; for local dev, download to `./bin/xray`
 7. **VLESS proxy vs localhost services** — `GeminiProvider` sets `HTTP_PROXY`/`HTTPS_PROXY` globally for xray; this breaks `httpx.Client` calls to localhost (bridge, etc.). Fix: `OpenAICompatibleProvider` sets `NO_PROXY=127.0.0.1,localhost` for `claude_bridge` type; `bridge_manager.py` strips proxy env vars from subprocess environment
 8. **Claude bridge timeouts** — Claude CLI has 7-30s warmup + processing time. Complex questions with RAG context can exceed 60s before first token. `OpenAICompatibleProvider` uses `read=300s` timeout for `claude_bridge` (vs 60s default). Default `max_tokens` raised to 4096 for bridge (vs 512). Bridge itself allows 600s per-chunk (`STREAM_TIMEOUT`), 300s for sync (`CLI_TIMEOUT`)
+9. **`services/bridge/src/models/` gitignored** — The `.gitignore` pattern `models/` catches this directory. After `git clone`, the bridge models must be copied manually from a working machine (`scp -r services/bridge/src/models/ server:/opt/ai-secretary/services/bridge/src/models/`). Without this, the bridge fails with `ModuleNotFoundError: No module named 'src.models'`
+10. **Docker CPU stage: whisper excluded** — `openai-whisper` fails to build in the Docker CPU stage (missing `pkg_resources` in build isolation). The server's Dockerfile is patched to `grep -v whisper` from requirements. Not needed in cloud mode (no STT)
+11. **Docker + Claude CLI** — The CPU Docker image needs Node.js for the Claude CLI. The server's Dockerfile is patched to install Node.js 20 + `@anthropic-ai/claude-code` in the CPU stage. Claude credentials are mounted from `/root/.claude` on the host

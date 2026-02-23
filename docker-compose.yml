@@ -56,6 +56,7 @@ services:
       - ./telegram_bot_service.py:/app/telegram_bot_service.py:ro
       - ./whatsapp_manager.py:/app/whatsapp_manager.py:ro
       - ./auth_manager.py:/app/auth_manager.py:ro
+      - ./utils:/app/utils:ro
       - ./model_manager.py:/app/model_manager.py:ro
       - ./llm_service.py:/app/llm_service.py:ro
       - ./phone_service.py:/app/phone_service.py:ro
