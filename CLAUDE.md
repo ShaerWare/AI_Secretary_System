@@ -293,13 +293,14 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - `Depends(get_current_user)` — auth only, no RBAC check (self-service: auth.py)
 - Data isolation: `owner_id = None if user_has_level(user, mod, "manage") else user.id`
 
-**4 legacy roles** (`VALID_ROLES` in `db/repositories/user.py`), mapped to RBAC roles via `get_role_for_legacy()`:
+**Workspaces + RBAC roles:** Permission resolution goes through `workspace_members` table (not legacy `users.role`). Default workspace (id=1) is seeded at startup; all users are auto-mapped using legacy role → RBAC role:
 - `admin` → RBAC `admin` — all 16 modules `manage`, sees all resources
 - `user` → RBAC `operator` — 8 modules `edit` + 3 `view`
 - `web` → RBAC `operator` — same backend access as `user`
 - `guest` → RBAC `viewer` — 7 modules `view` (read-only demo)
+- JWT includes `workspace_id` (defaults to 1); `MemberRoleCache` caches `(user_id, workspace_id) → role_name`
 - Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
-- CLI: `python scripts/manage_users.py create <user> <pass> --role web`
+- CLI: `python scripts/manage_users.py create <user> <pass> --role web` (also populates `workspace_members`)
 
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, and `kk` (Kazakh)
