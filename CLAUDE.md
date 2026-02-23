@@ -300,6 +300,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - `guest` → RBAC `viewer` — 7 modules `view` (read-only demo)
 - JWT includes `workspace_id` (defaults to 1); `MemberRoleCache` caches `(user_id, workspace_id) → role_name`
 - 13 resource tables have `workspace_id` FK (NOT NULL, default=1): `chat_sessions`, `bot_instances`, `widget_instances`, `whatsapp_instances`, `cloud_llm_providers`, `tts_presets`, `knowledge_documents`, `knowledge_collections`, `claude_code_sessions`, `faq_entries`, `kanban_tasks`, `kanban_projects`, `amocrm_config`
+- **User identities:** `user_identities` table links external contacts (Telegram/WhatsApp/Widget) to `users` rows. Contact-only users have `username=NULL, password_hash=NULL, role=contact` and cannot log in. Identity tracked via `find_or_create` on first message (Telegram `set_session`, WhatsApp `handle_text_message`, Widget `widget_create_session`). `AsyncUserIdentityManager` in `db/integration.py`.
 - Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web` (also populates `workspace_members`)
 
