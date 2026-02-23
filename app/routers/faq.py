@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission
 from db.integration import async_audit_logger, async_faq_manager
 
 
@@ -31,14 +31,16 @@ async def _reload_llm_faq():
 
 
 @router.get("")
-async def admin_get_faq(user: User = Depends(get_current_user)):
+async def admin_get_faq(user: User = Depends(require_permission("faq", "view"))):
     """Получить все FAQ записи"""
     faq = await async_faq_manager.get_all()
     return {"faq": faq}
 
 
 @router.post("")
-async def admin_add_faq(request: AdminFAQRequest, user: User = Depends(require_not_guest)):
+async def admin_add_faq(
+    request: AdminFAQRequest, user: User = Depends(require_permission("faq", "edit"))
+):
     """Добавить FAQ запись"""
     await async_faq_manager.add(request.trigger, request.response)
 
@@ -59,7 +61,7 @@ async def admin_add_faq(request: AdminFAQRequest, user: User = Depends(require_n
 
 @router.put("/{trigger}")
 async def admin_update_faq(
-    trigger: str, request: AdminFAQRequest, user: User = Depends(require_not_guest)
+    trigger: str, request: AdminFAQRequest, user: User = Depends(require_permission("faq", "edit"))
 ):
     """Обновить FAQ запись"""
     result = await async_faq_manager.update(trigger, request.trigger, request.response)
@@ -81,7 +83,7 @@ async def admin_update_faq(
 
 
 @router.delete("/{trigger}")
-async def admin_delete_faq(trigger: str, user: User = Depends(require_not_guest)):
+async def admin_delete_faq(trigger: str, user: User = Depends(require_permission("faq", "edit"))):
     """Удалить FAQ запись"""
     if not await async_faq_manager.delete(trigger):
         raise HTTPException(status_code=404, detail=f"Trigger not found: {trigger}")
@@ -97,7 +99,7 @@ async def admin_delete_faq(trigger: str, user: User = Depends(require_not_guest)
 
 
 @router.post("/reload")
-async def admin_reload_faq(user: User = Depends(require_not_guest)):
+async def admin_reload_faq(user: User = Depends(require_permission("faq", "edit"))):
     """Перезагрузить FAQ из БД"""
     await _reload_llm_faq()
     container = get_container()
@@ -107,13 +109,15 @@ async def admin_reload_faq(user: User = Depends(require_not_guest)):
 
 
 @router.post("/save")
-async def admin_save_faq(user: User = Depends(require_not_guest)):
+async def admin_save_faq(user: User = Depends(require_permission("faq", "edit"))):
     """Сохранить FAQ (уже автоматически сохраняется)"""
     return {"status": "ok", "message": "FAQ is saved automatically on each change"}
 
 
 @router.post("/test")
-async def admin_test_faq(request: AdminFAQTestRequest, user: User = Depends(get_current_user)):
+async def admin_test_faq(
+    request: AdminFAQTestRequest, user: User = Depends(require_permission("faq", "view"))
+):
     """Тестировать FAQ поиск"""
     container = get_container()
     llm_service = container.llm_service
