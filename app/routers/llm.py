@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, get_current_user, require_admin, require_not_guest
+from auth_manager import User, require_permission, user_has_level
 from cloud_llm_service import PROVIDER_TYPES, CloudLLMService, GeminiProvider
 from db.integration import async_audit_logger, async_cloud_provider_manager
 from service_manager import get_service_manager
@@ -225,7 +225,7 @@ async def _switch_to_cloud_provider(provider_id: str, stop_unused: bool, user: U
 
 
 @router.get("/prompt")
-async def admin_get_llm_prompt(user: User = Depends(get_current_user)):
+async def admin_get_llm_prompt(user: User = Depends(require_permission("llm", "view"))):
     """Получить текущий системный промпт LLM"""
     container = get_container()
     llm_service = container.llm_service
@@ -243,7 +243,7 @@ async def admin_get_llm_prompt(user: User = Depends(get_current_user)):
 
 @router.post("/prompt")
 async def admin_set_llm_prompt(
-    request: AdminLLMPromptRequest, user: User = Depends(require_not_guest)
+    request: AdminLLMPromptRequest, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Установить новый системный промпт LLM"""
     container = get_container()
@@ -261,7 +261,7 @@ async def admin_set_llm_prompt(
 
 
 @router.get("/model")
-async def admin_get_llm_model(user: User = Depends(get_current_user)):
+async def admin_get_llm_model(user: User = Depends(require_permission("llm", "view"))):
     """Получить текущую модель LLM"""
     container = get_container()
     llm_service = container.llm_service
@@ -272,7 +272,7 @@ async def admin_get_llm_model(user: User = Depends(get_current_user)):
 
 @router.post("/model")
 async def admin_set_llm_model(
-    request: AdminLLMModelRequest, user: User = Depends(require_not_guest)
+    request: AdminLLMModelRequest, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Изменить модель LLM"""
     allowed_models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
@@ -299,7 +299,7 @@ async def admin_set_llm_model(
 
 
 @router.delete("/history")
-async def admin_clear_llm_history(user: User = Depends(require_not_guest)):
+async def admin_clear_llm_history(user: User = Depends(require_permission("llm", "edit"))):
     """Очистить историю диалога LLM"""
     container = get_container()
     llm_service = container.llm_service
@@ -311,7 +311,7 @@ async def admin_clear_llm_history(user: User = Depends(require_not_guest)):
 
 
 @router.get("/history")
-async def admin_get_llm_history(user: User = Depends(get_current_user)):
+async def admin_get_llm_history(user: User = Depends(require_permission("llm", "view"))):
     """Получить историю диалога LLM"""
     container = get_container()
     llm_service = container.llm_service
@@ -327,7 +327,7 @@ async def admin_get_llm_history(user: User = Depends(get_current_user)):
 
 
 @router.get("/backend")
-async def admin_get_llm_backend(user: User = Depends(get_current_user)):
+async def admin_get_llm_backend(user: User = Depends(require_permission("llm", "view"))):
     """Получить текущий LLM backend"""
     container = get_container()
     llm_service = container.llm_service
@@ -350,7 +350,7 @@ async def admin_get_llm_backend(user: User = Depends(get_current_user)):
 
 
 @router.get("/models")
-async def admin_get_llm_models(user: User = Depends(get_current_user)):
+async def admin_get_llm_models(user: User = Depends(require_permission("llm", "view"))):
     """
     Получить список доступных моделей vLLM и текущую модель.
     Возвращает информацию о Qwen, Llama, DeepSeek и других моделях.
@@ -386,7 +386,7 @@ async def admin_get_llm_models(user: User = Depends(get_current_user)):
 
 @router.post("/backend")
 async def admin_set_llm_backend(
-    request: AdminBackendRequest, user: User = Depends(get_current_user)
+    request: AdminBackendRequest, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Переключить LLM backend с горячей перезагрузкой сервиса"""
     container = get_container()
@@ -544,7 +544,7 @@ async def admin_set_llm_backend(
 
 
 @router.get("/vllm-model")
-async def admin_get_vllm_model(user: User = Depends(require_admin)):
+async def admin_get_vllm_model(user: User = Depends(require_permission("llm", "manage"))):
     """
     Получить текущую настроенную модель vLLM.
     Возвращает модель из БД или env var.
@@ -572,7 +572,9 @@ async def admin_get_vllm_model(user: User = Depends(require_admin)):
 
 
 @router.post("/vllm-model")
-async def admin_set_vllm_model(request: VLLMModelRequest, user: User = Depends(require_admin)):
+async def admin_set_vllm_model(
+    request: VLLMModelRequest, user: User = Depends(require_permission("llm", "manage"))
+):
     """
     Изменить модель vLLM и перезапустить контейнер.
 
@@ -632,10 +634,10 @@ async def admin_set_vllm_model(request: VLLMModelRequest, user: User = Depends(r
 
 @router.get("/providers")
 async def admin_list_cloud_providers(
-    enabled_only: bool = False, user: User = Depends(get_current_user)
+    enabled_only: bool = False, user: User = Depends(require_permission("llm", "view"))
 ):
     """List all cloud LLM providers"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     providers = await async_cloud_provider_manager.list_providers(enabled_only, owner_id=owner_id)
     return {
         "providers": providers,
@@ -645,10 +647,12 @@ async def admin_list_cloud_providers(
 
 @router.get("/providers/{provider_id}")
 async def admin_get_cloud_provider(
-    provider_id: str, include_key: bool = False, user: User = Depends(get_current_user)
+    provider_id: str,
+    include_key: bool = False,
+    user: User = Depends(require_permission("llm", "view")),
 ):
     """Get cloud provider by ID"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     if include_key:
         provider = await async_cloud_provider_manager.get_provider_with_key(provider_id)
     else:
@@ -661,10 +665,10 @@ async def admin_get_cloud_provider(
 
 @router.post("/providers")
 async def admin_create_cloud_provider(
-    data: CloudProviderCreate, user: User = Depends(get_current_user)
+    data: CloudProviderCreate, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Create new cloud LLM provider"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     try:
         provider = await async_cloud_provider_manager.create_provider(
             name=data.name,
@@ -695,11 +699,13 @@ async def admin_create_cloud_provider(
 
 @router.put("/providers/{provider_id}")
 async def admin_update_cloud_provider(
-    provider_id: str, data: CloudProviderUpdate, user: User = Depends(get_current_user)
+    provider_id: str,
+    data: CloudProviderUpdate,
+    user: User = Depends(require_permission("llm", "edit")),
 ):
     """Update cloud LLM provider"""
     # Verify ownership
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     existing = await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -724,9 +730,11 @@ async def admin_update_cloud_provider(
 
 
 @router.delete("/providers/{provider_id}")
-async def admin_delete_cloud_provider(provider_id: str, user: User = Depends(get_current_user)):
+async def admin_delete_cloud_provider(
+    provider_id: str, user: User = Depends(require_permission("llm", "edit"))
+):
     """Delete cloud LLM provider"""
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     if not await async_cloud_provider_manager.delete_provider(provider_id, owner_id=owner_id):
         raise HTTPException(status_code=404, detail="Provider not found")
 
@@ -742,10 +750,12 @@ async def admin_delete_cloud_provider(provider_id: str, user: User = Depends(get
 
 
 @router.post("/providers/{provider_id}/test")
-async def admin_test_cloud_provider(provider_id: str, user: User = Depends(get_current_user)):
+async def admin_test_cloud_provider(
+    provider_id: str, user: User = Depends(require_permission("llm", "edit"))
+):
     """Test cloud provider connection"""
     # Verify ownership before testing
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     if not await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id):
         raise HTTPException(status_code=404, detail="Provider not found")
     provider_config = await async_cloud_provider_manager.get_provider_with_key(provider_id)
@@ -803,11 +813,11 @@ async def admin_test_cloud_provider(provider_id: str, user: User = Depends(get_c
 
 @router.post("/providers/{provider_id}/set-default")
 async def admin_set_default_cloud_provider(
-    provider_id: str, user: User = Depends(get_current_user)
+    provider_id: str, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Set cloud provider as default"""
     # Verify ownership
-    owner_id = None if user.role == "admin" else user.id
+    owner_id = None if user_has_level(user, "llm", "manage") else user.id
     if not await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id):
         raise HTTPException(status_code=404, detail="Provider not found")
 
@@ -829,7 +839,7 @@ async def admin_set_default_cloud_provider(
 
 
 @router.get("/personas")
-async def admin_get_personas(user: User = Depends(get_current_user)):
+async def admin_get_personas(user: User = Depends(require_permission("llm", "view"))):
     """Получить список доступных персон (из БД)"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -847,7 +857,7 @@ async def admin_get_personas(user: User = Depends(get_current_user)):
 
 
 @router.get("/persona")
-async def admin_get_current_persona(user: User = Depends(get_current_user)):
+async def admin_get_current_persona(user: User = Depends(require_permission("llm", "view"))):
     """Получить текущую персону (из БД)"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -874,7 +884,9 @@ async def admin_get_current_persona(user: User = Depends(get_current_user)):
 
 
 @router.post("/persona")
-async def admin_set_persona(request: AdminPersonaRequest, user: User = Depends(get_current_user)):
+async def admin_set_persona(
+    request: AdminPersonaRequest, user: User = Depends(require_permission("llm", "edit"))
+):
     """Установить персону (из БД)"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -918,7 +930,7 @@ async def admin_set_persona(request: AdminPersonaRequest, user: User = Depends(g
 
 
 @router.get("/params")
-async def admin_get_llm_params(user: User = Depends(get_current_user)):
+async def admin_get_llm_params(user: User = Depends(require_permission("llm", "view"))):
     """Получить параметры генерации LLM"""
     container = get_container()
     llm_service = container.llm_service
@@ -933,7 +945,7 @@ async def admin_get_llm_params(user: User = Depends(get_current_user)):
 
 @router.post("/params")
 async def admin_set_llm_params(
-    request: AdminLLMParamsRequest, user: User = Depends(require_not_guest)
+    request: AdminLLMParamsRequest, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Установить параметры генерации LLM"""
     container = get_container()
@@ -958,7 +970,9 @@ async def admin_set_llm_params(
 
 
 @router.get("/prompt/{persona}")
-async def admin_get_persona_prompt(persona: str, user: User = Depends(get_current_user)):
+async def admin_get_persona_prompt(
+    persona: str, user: User = Depends(require_permission("llm", "view"))
+):
     """Получить системный промпт для персоны (из БД)"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -973,7 +987,9 @@ async def admin_get_persona_prompt(persona: str, user: User = Depends(get_curren
 
 @router.post("/prompt/{persona}")
 async def admin_set_persona_prompt(
-    persona: str, request: AdminLLMPromptRequest, user: User = Depends(require_not_guest)
+    persona: str,
+    request: AdminLLMPromptRequest,
+    user: User = Depends(require_permission("llm", "edit")),
 ):
     """Установить системный промпт для персоны (в БД)"""
     from db.database import get_session_context
@@ -995,7 +1011,9 @@ async def admin_set_persona_prompt(
 
 
 @router.post("/prompt/{persona}/reset")
-async def admin_reset_persona_prompt(persona: str, user: User = Depends(get_current_user)):
+async def admin_reset_persona_prompt(
+    persona: str, user: User = Depends(require_permission("llm", "edit"))
+):
     """Сбросить системный промпт персоны на значение по умолчанию"""
     from db.database import get_session_context
     from db.models import DEFAULT_LLM_PRESETS
@@ -1032,7 +1050,7 @@ async def admin_reset_persona_prompt(persona: str, user: User = Depends(get_curr
 
 
 @router.get("/bridge/status")
-async def admin_get_bridge_status(user: User = Depends(require_not_guest)):
+async def admin_get_bridge_status(user: User = Depends(require_permission("llm", "view"))):
     """Get CLI-OpenAI Bridge process status."""
     from bridge_manager import bridge_manager
 
@@ -1040,7 +1058,7 @@ async def admin_get_bridge_status(user: User = Depends(require_not_guest)):
 
 
 @router.post("/bridge/start")
-async def admin_start_bridge(user: User = Depends(require_not_guest)):
+async def admin_start_bridge(user: User = Depends(require_permission("llm", "edit"))):
     """Manually start the CLI-OpenAI Bridge."""
     from bridge_manager import bridge_manager
 
@@ -1069,7 +1087,7 @@ async def admin_start_bridge(user: User = Depends(require_not_guest)):
 
 
 @router.post("/bridge/stop")
-async def admin_stop_bridge(user: User = Depends(require_not_guest)):
+async def admin_stop_bridge(user: User = Depends(require_permission("llm", "edit"))):
     """Manually stop the CLI-OpenAI Bridge."""
     from bridge_manager import bridge_manager
 
@@ -1093,7 +1111,7 @@ async def admin_stop_bridge(user: User = Depends(require_not_guest)):
 
 
 @router.get("/proxy/status")
-async def admin_get_proxy_status(user: User = Depends(require_not_guest)):
+async def admin_get_proxy_status(user: User = Depends(require_permission("llm", "view"))):
     """
     Get VLESS proxy status for current Gemini provider.
 
@@ -1134,7 +1152,9 @@ async def admin_get_proxy_status(user: User = Depends(require_not_guest)):
 
 
 @router.post("/proxy/test")
-async def admin_test_proxy(request: ProxyTestRequest, user: User = Depends(require_admin)):
+async def admin_test_proxy(
+    request: ProxyTestRequest, user: User = Depends(require_permission("llm", "manage"))
+):
     """
     Test VLESS proxy connection to Google Gemini API.
 
@@ -1203,7 +1223,9 @@ async def admin_test_proxy(request: ProxyTestRequest, user: User = Depends(requi
 
 
 @router.get("/proxy/validate")
-async def admin_validate_vless_url(vless_url: str, user: User = Depends(require_admin)):
+async def admin_validate_vless_url(
+    vless_url: str, user: User = Depends(require_permission("llm", "manage"))
+):
     """
     Validate a VLESS URL without testing the connection.
 
@@ -1252,7 +1274,7 @@ class ProxyTestMultipleRequest(BaseModel):
 
 @router.post("/proxy/test-multiple")
 async def admin_test_multiple_proxies(
-    request: ProxyTestMultipleRequest, user: User = Depends(require_admin)
+    request: ProxyTestMultipleRequest, user: User = Depends(require_permission("llm", "manage"))
 ):
     """
     Test multiple VLESS proxy URLs.
@@ -1306,7 +1328,7 @@ async def admin_test_multiple_proxies(
 
 
 @router.post("/proxy/reset")
-async def admin_reset_proxies(user: User = Depends(require_admin)):
+async def admin_reset_proxies(user: User = Depends(require_permission("llm", "manage"))):
     """
     Reset all proxies to enabled state (for fallback mode).
     """
@@ -1330,7 +1352,7 @@ async def admin_reset_proxies(user: User = Depends(require_admin)):
 
 
 @router.post("/proxy/switch-next")
-async def admin_switch_to_next_proxy(user: User = Depends(require_admin)):
+async def admin_switch_to_next_proxy(user: User = Depends(require_permission("llm", "manage"))):
     """
     Manually switch to the next proxy in fallback chain.
     """
@@ -1359,7 +1381,7 @@ async def admin_switch_to_next_proxy(user: User = Depends(require_admin)):
 
 
 @router.get("/presets")
-async def admin_get_llm_presets(user: User = Depends(get_current_user)):
+async def admin_get_llm_presets(user: User = Depends(require_permission("llm", "view"))):
     """Get all LLM presets"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -1373,7 +1395,9 @@ async def admin_get_llm_presets(user: User = Depends(get_current_user)):
 
 
 @router.get("/presets/{preset_id}")
-async def admin_get_llm_preset(preset_id: str, user: User = Depends(get_current_user)):
+async def admin_get_llm_preset(
+    preset_id: str, user: User = Depends(require_permission("llm", "view"))
+):
     """Get a specific LLM preset"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -1387,7 +1411,9 @@ async def admin_get_llm_preset(preset_id: str, user: User = Depends(get_current_
 
 
 @router.post("/presets")
-async def admin_create_llm_preset(request: LLMPresetCreate, user: User = Depends(get_current_user)):
+async def admin_create_llm_preset(
+    request: LLMPresetCreate, user: User = Depends(require_permission("llm", "edit"))
+):
     """Create a new LLM preset"""
     from db.database import get_session_context
     from db.models import LLMPreset
@@ -1419,7 +1445,9 @@ async def admin_create_llm_preset(request: LLMPresetCreate, user: User = Depends
 
 @router.put("/presets/{preset_id}")
 async def admin_update_llm_preset(
-    preset_id: str, request: LLMPresetUpdate, user: User = Depends(get_current_user)
+    preset_id: str,
+    request: LLMPresetUpdate,
+    user: User = Depends(require_permission("llm", "edit")),
 ):
     """Update an existing LLM preset"""
     from db.database import get_session_context
@@ -1470,7 +1498,9 @@ async def admin_update_llm_preset(
 
 
 @router.delete("/presets/{preset_id}")
-async def admin_delete_llm_preset(preset_id: str, user: User = Depends(get_current_user)):
+async def admin_delete_llm_preset(
+    preset_id: str, user: User = Depends(require_permission("llm", "edit"))
+):
     """Delete an LLM preset"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
@@ -1498,7 +1528,9 @@ async def admin_delete_llm_preset(preset_id: str, user: User = Depends(get_curre
 
 
 @router.post("/presets/{preset_id}/activate")
-async def admin_activate_llm_preset(preset_id: str, user: User = Depends(get_current_user)):
+async def admin_activate_llm_preset(
+    preset_id: str, user: User = Depends(require_permission("llm", "edit"))
+):
     """
     Activate an LLM preset - load its parameters into the current vLLM service.
     Also sets it as the default preset.
@@ -1559,7 +1591,7 @@ async def admin_activate_llm_preset(preset_id: str, user: User = Depends(get_cur
 
 
 @router.get("/presets/current")
-async def admin_get_current_preset(user: User = Depends(get_current_user)):
+async def admin_get_current_preset(user: User = Depends(require_permission("llm", "view"))):
     """Get the currently active LLM preset"""
     from db.database import get_session_context
     from db.repositories.llm_preset import LLMPresetRepository
