@@ -127,7 +127,7 @@ watch(logSearch, async () => {
     <!-- Toolbar -->
     <div class="flex items-center gap-4">
       <button
-        v-if="authStore.isAdmin"
+        v-if="authStore.canManage('system')"
         :disabled="startAllMutation.isPending.value"
         class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
         @click="startAllMutation.mutate()"
@@ -136,7 +136,7 @@ watch(logSearch, async () => {
         Start All
       </button>
       <button
-        v-if="authStore.isAdmin"
+        v-if="authStore.canManage('system')"
         :disabled="stopAllMutation.isPending.value"
         class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
         @click="stopAllMutation.mutate()"
@@ -200,7 +200,7 @@ watch(logSearch, async () => {
               <Terminal class="w-4 h-4" />
             </button>
             <button
-              v-if="!service.is_running && authStore.isAdmin"
+              v-if="!service.is_running && authStore.canManage('system')"
               :disabled="startMutation.isPending.value"
               class="p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
               title="Start"
@@ -210,7 +210,7 @@ watch(logSearch, async () => {
               <Play v-else class="w-4 h-4" />
             </button>
             <button
-              v-if="service.is_running && authStore.isAdmin"
+              v-if="service.is_running && authStore.canManage('system')"
               :disabled="stopMutation.isPending.value"
               class="p-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               title="Stop"
@@ -220,7 +220,7 @@ watch(logSearch, async () => {
               <Square v-else class="w-4 h-4" />
             </button>
             <button
-              v-if="authStore.isAdmin"
+              v-if="authStore.canManage('system')"
               :disabled="restartMutation.isPending.value"
               class="p-2 rounded-lg bg-secondary hover:bg-secondary/80 disabled:opacity-50 transition-colors"
               title="Restart"

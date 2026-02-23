@@ -640,7 +640,7 @@ function switchToCloudProvider(providerId: string) {
         <div v-if="backendLoading" class="text-muted-foreground">Loading...</div>
         <div v-else class="space-y-4">
           <!-- Backend Toggle (admin only can switch to vLLM) -->
-          <div v-if="authStore.isAdmin" class="flex items-center gap-4">
+          <div v-if="authStore.canManage('llm')" class="flex items-center gap-4">
             <div class="grid grid-cols-2 gap-2 p-1 bg-secondary rounded-lg">
               <button
                 :disabled="setBackendMutation.isPending.value"
@@ -845,7 +845,7 @@ function switchToCloudProvider(providerId: string) {
     </div>
 
     <!-- Available Models (vLLM) — admin only -->
-    <div v-if="isVllm && authStore.isAdmin" class="bg-card rounded-lg border border-border">
+    <div v-if="isVllm && authStore.canManage('llm')" class="bg-card rounded-lg border border-border">
       <div class="p-4 border-b border-border">
         <h2 class="text-lg font-semibold flex items-center gap-2">
           <Cpu class="w-5 h-5" />

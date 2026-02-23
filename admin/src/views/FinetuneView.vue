@@ -48,7 +48,7 @@ const activeTab = ref<'llm' | 'tts'>('llm')
 
 // LLM sub-mode: local LoRA vs cloud AI knowledge
 // Web role users only see Cloud AI
-const llmMode = ref<'local' | 'cloud'>(authStore.isWeb || authStore.isCloudMode ? 'cloud' : 'local')
+const llmMode = ref<'local' | 'cloud'>(!authStore.hasModule('speech') || authStore.isCloudMode ? 'cloud' : 'local')
 
 // ============== Cloud AI (Wiki RAG) State ==============
 const searchQuery = ref('')
@@ -564,7 +564,7 @@ onUnmounted(() => {
         LLM Training
       </button>
       <button
-        v-if="!authStore.isWeb && !authStore.isCloudMode"
+        v-if="authStore.hasModule('speech') && !authStore.isCloudMode"
         :class="[
           'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
           activeTab === 'tts' ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-secondary/80'
@@ -579,7 +579,7 @@ onUnmounted(() => {
     <!-- ============== LLM TAB ============== -->
     <template v-if="activeTab === 'llm'">
       <!-- Local / Cloud AI Toggle (hidden for web/cloud — they only see Cloud AI) -->
-      <div v-if="!authStore.isWeb && !authStore.isCloudMode" class="bg-card rounded-lg border border-border p-4">
+      <div v-if="authStore.hasModule('speech') && !authStore.isCloudMode" class="bg-card rounded-lg border border-border p-4">
         <div class="grid grid-cols-2 gap-2 p-1 bg-secondary rounded-lg max-w-md">
           <button
             :class="[

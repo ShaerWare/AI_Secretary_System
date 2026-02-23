@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore, type UserRole } from '../stores/auth'
+import { useAuthStore } from '../stores/auth'
 import { ChevronDown } from 'lucide-vue-next'
 import {
   LayoutDashboard,
@@ -36,14 +36,13 @@ const { t } = useI18n()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const ROLE_LEVEL: Record<UserRole, number> = { guest: 0, web: 1, user: 1, admin: 2 }
+const LVL: Record<string, number> = { view: 1, edit: 2, manage: 3 }
 
-function isVisibleForRole(item: { minRole?: UserRole; excludeRoles?: UserRole[]; localOnly?: boolean }): boolean {
-  const userRole = authStore.user?.role || 'guest'
-  if (item.excludeRoles?.includes(userRole)) return false
+function isVisible(item: { module?: string; minLevel?: string; localOnly?: boolean }): boolean {
   if (item.localOnly && authStore.isCloudMode) return false
-  if (!item.minRole) return true
-  return ROLE_LEVEL[userRole] >= ROLE_LEVEL[item.minRole]
+  if (!item.module) return true
+  const min = item.minLevel || 'view'
+  return (LVL[authStore.permissions[item.module]] ?? 0) >= (LVL[min] ?? 1)
 }
 
 // Navigation groups with items
@@ -53,10 +52,10 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.monitoring',
     icon: Activity,
     items: [
-      { path: '/', nameKey: 'nav.dashboard', icon: LayoutDashboard, excludeRoles: ['web', 'user'] as UserRole[], localOnly: true },
-      { path: '/monitoring', nameKey: 'nav.monitoring', icon: Activity, minRole: 'admin' as UserRole, localOnly: true },
-      { path: '/services', nameKey: 'nav.services', icon: Server, minRole: 'admin' as UserRole, localOnly: true },
-      { path: '/audit', nameKey: 'nav.audit', icon: FileText, minRole: 'admin' as UserRole },
+      { path: '/', nameKey: 'nav.dashboard', icon: LayoutDashboard, module: 'dashboard', localOnly: true },
+      { path: '/monitoring', nameKey: 'nav.monitoring', icon: Activity, module: 'system', localOnly: true },
+      { path: '/services', nameKey: 'nav.services', icon: Server, module: 'system', minLevel: 'manage', localOnly: true },
+      { path: '/audit', nameKey: 'nav.audit', icon: FileText, module: 'audit' },
     ]
   },
   {
@@ -64,10 +63,10 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.ai',
     icon: Brain,
     items: [
-      { path: '/llm', nameKey: 'nav.llm', icon: Brain, minRole: 'user' as UserRole },
-      { path: '/tts', nameKey: 'nav.tts', icon: Mic, minRole: 'user' as UserRole, excludeRoles: ['web'] as UserRole[], localOnly: true },
-      { path: '/models', nameKey: 'nav.models', icon: AudioLines, minRole: 'admin' as UserRole, localOnly: true },
-      { path: '/finetune', nameKey: 'nav.finetune', icon: Sparkles, minRole: 'user' as UserRole },
+      { path: '/llm', nameKey: 'nav.llm', icon: Brain, module: 'llm' },
+      { path: '/tts', nameKey: 'nav.tts', icon: Mic, module: 'speech', localOnly: true },
+      { path: '/models', nameKey: 'nav.models', icon: AudioLines, module: 'system', minLevel: 'manage', localOnly: true },
+      { path: '/finetune', nameKey: 'nav.finetune', icon: Sparkles, module: 'llm' },
     ]
   },
   {
@@ -75,10 +74,10 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.channels',
     icon: MessageCircle,
     items: [
-      { path: '/telegram', nameKey: 'nav.telegram', icon: Send, minRole: 'user' as UserRole },
-      { path: '/whatsapp', nameKey: 'nav.whatsapp', icon: WhatsApp, minRole: 'user' as UserRole },
-      { path: '/widget', nameKey: 'nav.widget', icon: Code2, minRole: 'user' as UserRole },
-      { path: '/gsm', nameKey: 'nav.gsm', icon: Phone, minRole: 'admin' as UserRole, localOnly: true },
+      { path: '/telegram', nameKey: 'nav.telegram', icon: Send, module: 'channels' },
+      { path: '/whatsapp', nameKey: 'nav.whatsapp', icon: WhatsApp, module: 'channels' },
+      { path: '/widget', nameKey: 'nav.widget', icon: Code2, module: 'channels' },
+      { path: '/gsm', nameKey: 'nav.gsm', icon: Phone, module: 'gsm', localOnly: true },
     ]
   },
   {
@@ -86,9 +85,9 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.business',
     icon: ShoppingCart,
     items: [
-      { path: '/sales', nameKey: 'nav.sales', icon: ShoppingCart, minRole: 'user' as UserRole },
-      { path: '/crm', nameKey: 'nav.crm', icon: Users, minRole: 'user' as UserRole },
-      { path: '/kanban', nameKey: 'nav.kanban', icon: ClipboardList, minRole: 'user' as UserRole },
+      { path: '/sales', nameKey: 'nav.sales', icon: ShoppingCart, module: 'sales' },
+      { path: '/crm', nameKey: 'nav.crm', icon: Users, module: 'sales' },
+      { path: '/kanban', nameKey: 'nav.kanban', icon: ClipboardList, module: 'kanban' },
     ]
   },
   {
@@ -96,8 +95,8 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.system',
     icon: Settings,
     items: [
-      { path: '/wiki', nameKey: 'nav.wiki', icon: BookOpen },
-      { path: '/settings', nameKey: 'common.settings', icon: Settings, minRole: 'user' as UserRole },
+      { path: '/wiki', nameKey: 'nav.wiki', icon: BookOpen, module: 'faq' },
+      { path: '/settings', nameKey: 'common.settings', icon: Settings },
       { path: '/about', nameKey: 'nav.about', icon: Info },
     ]
   }
@@ -108,7 +107,7 @@ const navGroups = computed(() =>
   allNavGroups.value
     .map(group => ({
       ...group,
-      items: group.items.filter(item => isVisibleForRole(item))
+      items: group.items.filter(item => isVisible(item))
     }))
     .filter(group => group.items.length > 0)
 )

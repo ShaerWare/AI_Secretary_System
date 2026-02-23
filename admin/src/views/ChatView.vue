@@ -262,7 +262,7 @@ const tokenUsage = computed(() => currentSession.value?.token_usage)
 const isSessionOwner = computed(() => {
   if (!currentSession.value) return false
   const ownerId = currentSession.value.owner_id
-  return authStore.isAdmin || ownerId === authStore.user?.id || ownerId === null || ownerId === undefined
+  return authStore.canManage('chat') || ownerId === authStore.user?.id || ownerId === null || ownerId === undefined
 })
 const isSharedWithMe = computed(() => currentSession.value?.is_shared_with_me === true)
 const isReadOnly = computed(() => isSharedWithMe.value && currentSession.value?.share_permission === 'read')

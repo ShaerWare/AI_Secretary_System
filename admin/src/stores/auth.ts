@@ -9,49 +9,13 @@ export interface User {
   role: UserRole
 }
 
-// Role permissions
-export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: ['*'], // All permissions
-  user: [
-    'chat.*',
-    'llm.view', 'llm.cloud.*',
-    'tts.view', 'tts.test',
-    'faq.*',
-    'telegram.*',
-    'widget.*',
-    'monitoring.view',
-    'services.view',
-    'audit.view',
-    'settings.profile',
-    'sales.*',
-    'crm.view',
-    'usage.view',
-  ],
-  web: [
-    'chat.*',
-    'llm.view', 'llm.cloud.*',
-    'faq.*',
-    'telegram.*',
-    'widget.*',
-    'monitoring.view',
-    'audit.view',
-    'settings.profile',
-    'sales.*',
-    'crm.view',
-    'usage.view',
-  ],
-  guest: [
-    'chat.demo',
-    'dashboard.view',
-    'faq.view',
-  ]
-}
-
 // Check if we're in dev mode (Vite sets this)
 const isDev = import.meta.env.DEV
 const isDemo = import.meta.env.VITE_DEMO_MODE === 'true'
 
 export type DeploymentMode = 'full' | 'cloud' | 'local'
+
+const LEVEL_ORDER: Record<string, number> = { view: 1, edit: 2, manage: 3 }
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('admin_token'))
@@ -59,37 +23,23 @@ export const useAuthStore = defineStore('auth', () => {
   const deploymentMode = ref<DeploymentMode>('full')
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const permissions = ref<Record<string, string>>({})
 
   const isAuthenticated = computed(() => !!token.value)
-  const isAdmin = computed(() => user.value?.role === 'admin')
-  const isUser = computed(() => user.value?.role === 'user' || user.value?.role === 'web' || isAdmin.value)
-  const isWeb = computed(() => user.value?.role === 'web')
-  const isGuest = computed(() => user.value?.role === 'guest')
+  const isAdmin = computed(() => canManage('users'))
   const isCloudMode = computed(() => deploymentMode.value === 'cloud')
 
-  // Legacy compat aliases
-  const isOperator = isUser
-  const isViewer = computed(() => !!user.value)
-
-  // Check if user has specific permission
-  function hasPermission(permission: string): boolean {
-    if (!user.value) return false
-    const permissions = ROLE_PERMISSIONS[user.value.role]
-    if (permissions.includes('*')) return true
-    // Check exact match or wildcard match (e.g. 'chat.*' matches 'chat.view')
-    return permissions.some(p => {
-      if (p === permission) return true
-      if (p.endsWith('.*')) {
-        const prefix = p.slice(0, -2)
-        return permission.startsWith(prefix + '.')
-      }
-      return false
-    })
+  function hasModule(module: string): boolean {
+    return module in permissions.value
   }
-
-  // Check if user can perform action on resource
-  function can(action: string, resource: string): boolean {
-    return hasPermission(`${resource}.${action}`)
+  function canView(module: string): boolean {
+    return (LEVEL_ORDER[permissions.value[module]] ?? 0) >= 1
+  }
+  function canEdit(module: string): boolean {
+    return (LEVEL_ORDER[permissions.value[module]] ?? 0) >= 2
+  }
+  function canManage(module: string): boolean {
+    return (LEVEL_ORDER[permissions.value[module]] ?? 0) >= 3
   }
 
   // Fetch deployment mode from backend
@@ -105,6 +55,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Fetch permissions from backend
+  async function fetchPermissions() {
+    try {
+      const resp = await fetch('/admin/auth/permissions', { headers: getAuthHeaders() })
+      if (resp.ok) permissions.value = await resp.json()
+    } catch { /* default empty */ }
+  }
+
   // Initialize from localStorage
   if (token.value) {
     try {
@@ -114,8 +72,9 @@ export const useAuthStore = defineStore('auth', () => {
         username: payload.sub,
         role: payload.role
       }
-      // Fetch deployment mode on init
+      // Fetch deployment mode and permissions on init
       fetchDeploymentMode()
+      fetchPermissions()
     } catch {
       token.value = null
       localStorage.removeItem('admin_token')
@@ -166,8 +125,9 @@ export const useAuthStore = defineStore('auth', () => {
         role: payload.role
       }
 
-      // Fetch deployment mode from backend
+      // Fetch deployment mode and permissions from backend
       await fetchDeploymentMode()
+      await fetchPermissions()
 
       return true
     } catch (e) {
@@ -192,6 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     token.value = null
     user.value = null
+    permissions.value = {}
     localStorage.removeItem('admin_token')
   }
 
@@ -219,16 +180,14 @@ export const useAuthStore = defineStore('auth', () => {
     deploymentMode,
     isLoading,
     error,
+    permissions,
     isAuthenticated,
     isAdmin,
-    isUser,
-    isWeb,
-    isGuest,
     isCloudMode,
-    isOperator,
-    isViewer,
-    hasPermission,
-    can,
+    hasModule,
+    canView,
+    canEdit,
+    canManage,
     login,
     logout,
     getAuthHeaders,

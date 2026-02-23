@@ -631,7 +631,7 @@ onMounted(async () => {
               {{ isDatasetSyncing ? t('crm.dataset.syncing') : t('crm.dataset.syncButton') }}
             </button>
             <button
-              v-if="datasetStatus.synced && authStore.isAdmin"
+              v-if="datasetStatus.synced && authStore.canManage('sales')"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg hover:bg-destructive/10 text-destructive"
               @click="clearDataset"
             >
