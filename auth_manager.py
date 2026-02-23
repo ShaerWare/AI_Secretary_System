@@ -355,23 +355,6 @@ async def get_optional_user(
     return await _validate_session(token_payload)
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Dependency to require admin role."""
-    if user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
-
-
-def require_not_guest(user: User = Depends(get_current_user)) -> User:
-    """Dependency to block guest from write operations. Allows user and admin."""
-    if user.role == "guest":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Guest accounts cannot perform this action",
-        )
-    return user
-
-
 def require_permission(module: str, min_level: str):
     """FastAPI Depends factory: checks user has >= min_level for module."""
 
@@ -388,14 +371,6 @@ def require_permission(module: str, min_level: str):
         return user
 
     return _dependency
-
-
-def verify_ownership(user: User, record_owner_id: Optional[int]) -> None:
-    """Raise 404 if user doesn't own the record (admin bypasses)."""
-    if user.role == "admin":
-        return
-    if record_owner_id is not None and record_owner_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 # ============== RBAC Helpers ==============
