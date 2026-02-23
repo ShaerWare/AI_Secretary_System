@@ -299,6 +299,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - `web` → RBAC `operator` — same backend access as `user`
 - `guest` → RBAC `viewer` — 7 modules `view` (read-only demo)
 - JWT includes `workspace_id` (defaults to 1); `MemberRoleCache` caches `(user_id, workspace_id) → role_name`
+- 13 resource tables have `workspace_id` FK (NOT NULL, default=1): `chat_sessions`, `bot_instances`, `widget_instances`, `whatsapp_instances`, `cloud_llm_providers`, `tts_presets`, `knowledge_documents`, `knowledge_collections`, `claude_code_sessions`, `faq_entries`, `kanban_tasks`, `kanban_projects`, `amocrm_config`
 - Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web` (also populates `workspace_members`)
 
