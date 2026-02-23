@@ -112,13 +112,18 @@ class WhatsAppManager:
             env["PYTHONUNBUFFERED"] = "1"
 
             # Generate internal JWT for subprocess to authenticate with orchestrator API
+            # Must use create_session() to register in user_sessions table (RBAC validation)
             try:
-                from auth_manager import create_access_token
+                from auth_manager import create_session
 
-                token, _, _ = create_access_token(
-                    username="__internal_wa_bot__", role="admin", user_id=0
+                login_resp = await create_session(
+                    username="__internal_wa_bot__",
+                    role="admin",
+                    user_id=0,
+                    ip=None,
+                    user_agent="WhatsAppManager",
                 )
-                env["WA_INTERNAL_TOKEN"] = token
+                env["WA_INTERNAL_TOKEN"] = login_resp.access_token
             except Exception as e:
                 logger.warning(f"Could not generate internal token: {e}")
 

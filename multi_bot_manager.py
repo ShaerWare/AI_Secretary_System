@@ -117,13 +117,18 @@ class MultiBotManager:
                 env["ORCHESTRATOR_URL"] = "http://127.0.0.1:8002"
 
             # Generate internal JWT for subprocess to authenticate with orchestrator API
+            # Must use create_session() to register in user_sessions table (RBAC validation)
             try:
-                from auth_manager import create_access_token
+                from auth_manager import create_session
 
-                token, _, _ = create_access_token(
-                    username="__internal_bot__", role="admin", user_id=0
+                login_resp = await create_session(
+                    username="__internal_bot__",
+                    role="admin",
+                    user_id=0,
+                    ip=None,
+                    user_agent="MultiBotManager",
                 )
-                env["BOT_INTERNAL_TOKEN"] = token
+                env["BOT_INTERNAL_TOKEN"] = login_resp.access_token
             except Exception as e:
                 logger.warning(f"Could not generate internal token: {e}")
 
