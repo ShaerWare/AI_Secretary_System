@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth_manager import User, get_current_user, require_not_guest
+from auth_manager import User, require_permission
 from db.database import AsyncSessionLocal
 from db.integration import async_audit_logger, async_bot_instance_manager
 from db.repositories.bot_ab_test import BotAbTestRepository
@@ -68,7 +68,7 @@ class AgentPromptUpdateRequest(BaseModel):
 
 
 @router.get("/prompts")
-async def list_prompts(instance_id: str, user: User = Depends(get_current_user)):
+async def list_prompts(instance_id: str, user: User = Depends(require_permission("sales", "view"))):
     """List all agent prompts for bot instance."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -79,7 +79,9 @@ async def list_prompts(instance_id: str, user: User = Depends(get_current_user))
 
 @router.post("/prompts")
 async def create_prompt(
-    instance_id: str, request: AgentPromptRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: AgentPromptRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create agent prompt."""
     await _check_instance(instance_id)
@@ -100,7 +102,7 @@ async def update_prompt(
     instance_id: str,
     prompt_id: int,
     request: AgentPromptUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update agent prompt."""
     await _check_instance(instance_id)
@@ -114,7 +116,9 @@ async def update_prompt(
 
 
 @router.delete("/prompts/{prompt_id}")
-async def delete_prompt(instance_id: str, prompt_id: int, user: User = Depends(require_not_guest)):
+async def delete_prompt(
+    instance_id: str, prompt_id: int, user: User = Depends(require_permission("sales", "edit"))
+):
     """Delete agent prompt."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -144,7 +148,9 @@ class QuizQuestionUpdateRequest(BaseModel):
 
 
 @router.get("/quiz")
-async def list_quiz_questions(instance_id: str, user: User = Depends(get_current_user)):
+async def list_quiz_questions(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all quiz questions for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -155,7 +161,9 @@ async def list_quiz_questions(instance_id: str, user: User = Depends(get_current
 
 @router.post("/quiz")
 async def create_quiz_question(
-    instance_id: str, request: QuizQuestionRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: QuizQuestionRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create quiz question."""
     await _check_instance(instance_id)
@@ -170,7 +178,7 @@ async def update_quiz_question(
     instance_id: str,
     question_id: int,
     request: QuizQuestionUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update quiz question."""
     await _check_instance(instance_id)
@@ -185,7 +193,7 @@ async def update_quiz_question(
 
 @router.delete("/quiz/{question_id}")
 async def delete_quiz_question(
-    instance_id: str, question_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, question_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete quiz question."""
     await _check_instance(instance_id)
@@ -222,7 +230,9 @@ class SegmentUpdateRequest(BaseModel):
 
 
 @router.get("/segments")
-async def list_segments(instance_id: str, user: User = Depends(get_current_user)):
+async def list_segments(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all segments for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -233,7 +243,9 @@ async def list_segments(instance_id: str, user: User = Depends(get_current_user)
 
 @router.post("/segments")
 async def create_segment(
-    instance_id: str, request: SegmentRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: SegmentRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create segment."""
     await _check_instance(instance_id)
@@ -248,7 +260,7 @@ async def update_segment(
     instance_id: str,
     segment_id: int,
     request: SegmentUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update segment."""
     await _check_instance(instance_id)
@@ -263,7 +275,7 @@ async def update_segment(
 
 @router.delete("/segments/{segment_id}")
 async def delete_segment(
-    instance_id: str, segment_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, segment_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete segment."""
     await _check_instance(instance_id)
@@ -303,7 +315,9 @@ class FollowupRuleUpdateRequest(BaseModel):
 
 
 @router.get("/followups")
-async def list_followup_rules(instance_id: str, user: User = Depends(get_current_user)):
+async def list_followup_rules(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all follow-up rules for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -314,7 +328,9 @@ async def list_followup_rules(instance_id: str, user: User = Depends(get_current
 
 @router.post("/followups")
 async def create_followup_rule(
-    instance_id: str, request: FollowupRuleRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: FollowupRuleRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create follow-up rule."""
     await _check_instance(instance_id)
@@ -329,7 +345,7 @@ async def update_followup_rule(
     instance_id: str,
     rule_id: int,
     request: FollowupRuleUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update follow-up rule."""
     await _check_instance(instance_id)
@@ -344,7 +360,7 @@ async def update_followup_rule(
 
 @router.delete("/followups/{rule_id}")
 async def delete_followup_rule(
-    instance_id: str, rule_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, rule_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete follow-up rule."""
     await _check_instance(instance_id)
@@ -358,7 +374,9 @@ async def delete_followup_rule(
 
 @router.get("/followups/queue")
 async def get_followup_queue(
-    instance_id: str, status: str = "pending", user: User = Depends(get_current_user)
+    instance_id: str,
+    status: str = "pending",
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get follow-up queue for bot."""
     await _check_instance(instance_id)
@@ -388,7 +406,9 @@ class TestimonialUpdateRequest(BaseModel):
 
 
 @router.get("/testimonials")
-async def list_testimonials(instance_id: str, user: User = Depends(get_current_user)):
+async def list_testimonials(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all testimonials for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -399,7 +419,9 @@ async def list_testimonials(instance_id: str, user: User = Depends(get_current_u
 
 @router.post("/testimonials")
 async def create_testimonial(
-    instance_id: str, request: TestimonialRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: TestimonialRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create testimonial."""
     await _check_instance(instance_id)
@@ -414,7 +436,7 @@ async def update_testimonial(
     instance_id: str,
     testimonial_id: int,
     request: TestimonialUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update testimonial."""
     await _check_instance(instance_id)
@@ -429,7 +451,7 @@ async def update_testimonial(
 
 @router.delete("/testimonials/{testimonial_id}")
 async def delete_testimonial(
-    instance_id: str, testimonial_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, testimonial_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete testimonial."""
     await _check_instance(instance_id)
@@ -473,7 +495,9 @@ class HardwareSpecUpdateRequest(BaseModel):
 
 
 @router.get("/hardware")
-async def list_hardware_specs(instance_id: str, user: User = Depends(get_current_user)):
+async def list_hardware_specs(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all hardware specs for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -484,7 +508,9 @@ async def list_hardware_specs(instance_id: str, user: User = Depends(get_current
 
 @router.post("/hardware")
 async def create_hardware_spec(
-    instance_id: str, request: HardwareSpecRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: HardwareSpecRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create hardware spec."""
     await _check_instance(instance_id)
@@ -499,7 +525,7 @@ async def update_hardware_spec(
     instance_id: str,
     spec_id: int,
     request: HardwareSpecUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update hardware spec."""
     await _check_instance(instance_id)
@@ -514,7 +540,7 @@ async def update_hardware_spec(
 
 @router.delete("/hardware/{spec_id}")
 async def delete_hardware_spec(
-    instance_id: str, spec_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, spec_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete hardware spec."""
     await _check_instance(instance_id)
@@ -527,7 +553,9 @@ async def delete_hardware_spec(
 
 
 @router.get("/hardware/audit")
-async def audit_hardware(instance_id: str, gpu: str, user: User = Depends(get_current_user)):
+async def audit_hardware(
+    instance_id: str, gpu: str, user: User = Depends(require_permission("sales", "view"))
+):
     """Find hardware spec by GPU name (fuzzy match)."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -558,7 +586,9 @@ class AbTestUpdateRequest(BaseModel):
 
 
 @router.get("/abtests")
-async def list_ab_tests(instance_id: str, user: User = Depends(get_current_user)):
+async def list_ab_tests(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all A/B tests for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -569,7 +599,9 @@ async def list_ab_tests(instance_id: str, user: User = Depends(get_current_user)
 
 @router.post("/abtests")
 async def create_ab_test(
-    instance_id: str, request: AbTestRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: AbTestRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create A/B test."""
     await _check_instance(instance_id)
@@ -584,7 +616,7 @@ async def update_ab_test(
     instance_id: str,
     test_id: int,
     request: AbTestUpdateRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update A/B test."""
     await _check_instance(instance_id)
@@ -598,7 +630,9 @@ async def update_ab_test(
 
 
 @router.delete("/abtests/{test_id}")
-async def delete_ab_test(instance_id: str, test_id: int, user: User = Depends(require_not_guest)):
+async def delete_ab_test(
+    instance_id: str, test_id: int, user: User = Depends(require_permission("sales", "edit"))
+):
     """Delete A/B test."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -613,7 +647,9 @@ async def delete_ab_test(instance_id: str, test_id: int, user: User = Depends(re
 
 
 @router.get("/subscribers")
-async def list_subscribers(instance_id: str, user: User = Depends(get_current_user)):
+async def list_subscribers(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all subscribers for bot, enriched with user profile data."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -631,7 +667,9 @@ async def list_subscribers(instance_id: str, user: User = Depends(get_current_us
 
 
 @router.get("/subscribers/stats")
-async def get_subscriber_stats(instance_id: str, user: User = Depends(get_current_user)):
+async def get_subscriber_stats(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """Get subscriber stats."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -648,7 +686,9 @@ class BroadcastRequest(BaseModel):
 
 @router.post("/broadcast")
 async def broadcast_message(
-    instance_id: str, request: BroadcastRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: BroadcastRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Send a message to selected subscribers (or all active if user_ids is empty)."""
     await _check_instance(instance_id)
@@ -729,7 +769,9 @@ class GithubConfigRequest(BaseModel):
 
 
 @router.get("/github-config")
-async def get_github_config(instance_id: str, user: User = Depends(get_current_user)):
+async def get_github_config(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """Get GitHub config for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -740,7 +782,9 @@ async def get_github_config(instance_id: str, user: User = Depends(get_current_u
 
 @router.put("/github-config")
 async def save_github_config(
-    instance_id: str, request: GithubConfigRequest, user: User = Depends(require_not_guest)
+    instance_id: str,
+    request: GithubConfigRequest,
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Save GitHub config for bot."""
     await _check_instance(instance_id)
@@ -764,7 +808,7 @@ async def list_user_profiles(
     instance_id: str,
     segment: Optional[str] = None,
     state: Optional[str] = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """List user profiles for bot, optionally filtered."""
     await _check_instance(instance_id)
@@ -775,7 +819,9 @@ async def list_user_profiles(
 
 
 @router.get("/users/{user_id}")
-async def get_user_profile(instance_id: str, user_id: int, user: User = Depends(get_current_user)):
+async def get_user_profile(
+    instance_id: str, user_id: int, user: User = Depends(require_permission("sales", "view"))
+):
     """Get specific user profile."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -786,7 +832,7 @@ async def get_user_profile(instance_id: str, user_id: int, user: User = Depends(
 
 @router.delete("/users/{user_id}")
 async def delete_user_profile(
-    instance_id: str, user_id: int, user: User = Depends(require_not_guest)
+    instance_id: str, user_id: int, user: User = Depends(require_permission("sales", "edit"))
 ):
     """Delete user profile."""
     await _check_instance(instance_id)
@@ -806,7 +852,7 @@ async def list_events(
     instance_id: str,
     event_type: Optional[str] = None,
     days: int = 30,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """List events for bot."""
     await _check_instance(instance_id)
@@ -820,7 +866,9 @@ async def list_events(
 
 
 @router.get("/funnel")
-async def get_funnel(instance_id: str, days: int = 30, user: User = Depends(get_current_user)):
+async def get_funnel(
+    instance_id: str, days: int = 30, user: User = Depends(require_permission("sales", "view"))
+):
     """Get funnel analytics for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -830,7 +878,9 @@ async def get_funnel(instance_id: str, days: int = 30, user: User = Depends(get_
 
 
 @router.get("/funnel/daily")
-async def get_daily_report(instance_id: str, user: User = Depends(get_current_user)):
+async def get_daily_report(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """Get daily report summary."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
@@ -856,7 +906,7 @@ async def get_daily_report(instance_id: str, user: User = Depends(get_current_us
 
 @router.get("/discovery/{user_id}")
 async def get_discovery_responses(
-    instance_id: str, user_id: int, user: User = Depends(get_current_user)
+    instance_id: str, user_id: int, user: User = Depends(require_permission("sales", "view"))
 ):
     """Get discovery responses for a specific user."""
     await _check_instance(instance_id)
@@ -867,7 +917,9 @@ async def get_discovery_responses(
 
 
 @router.get("/discovery")
-async def list_all_discovery_responses(instance_id: str, user: User = Depends(get_current_user)):
+async def list_all_discovery_responses(
+    instance_id: str, user: User = Depends(require_permission("sales", "view"))
+):
     """List all discovery responses for bot (admin view)."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:

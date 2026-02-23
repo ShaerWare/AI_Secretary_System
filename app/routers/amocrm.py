@@ -41,7 +41,7 @@ from app.services.crm_dataset_service import (
     build_summary_document,
     clean_crm_files,
 )
-from auth_manager import User, require_admin, require_not_guest
+from auth_manager import User, require_permission
 from db.integration import (
     async_amocrm_manager,
     async_audit_logger,
@@ -181,7 +181,7 @@ class SendChatMessageRequest(BaseModel):
 
 
 @router.get("/status")
-async def crm_status(user: User = Depends(require_not_guest)):
+async def crm_status(user: User = Depends(require_permission("sales", "view"))):
     """Quick status: connected? token expired? last sync."""
     config = await async_amocrm_manager.get_config()
     if not config:
@@ -203,7 +203,7 @@ async def crm_status(user: User = Depends(require_not_guest)):
 
 
 @router.get("/config")
-async def crm_get_config(user: User = Depends(require_not_guest)):
+async def crm_get_config(user: User = Depends(require_permission("sales", "view"))):
     """Get amoCRM config (secrets masked)."""
     config = await async_amocrm_manager.get_config()
     return {"config": config or {}}
@@ -212,7 +212,7 @@ async def crm_get_config(user: User = Depends(require_not_guest)):
 @router.post("/config")
 async def crm_save_config(
     request: AmoCRMConfigRequest,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission("sales", "manage")),
 ):
     """Save OAuth credentials and sync settings."""
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
@@ -231,7 +231,9 @@ async def crm_save_config(
 
 
 @router.get("/auth-url")
-async def crm_auth_url(request: Request, user: User = Depends(require_admin)):
+async def crm_auth_url(
+    request: Request, user: User = Depends(require_permission("sales", "manage"))
+):
     """Build OAuth authorization URL for amoCRM."""
     config = await async_amocrm_manager.get_config_with_secrets()
     if not config or not config.get("client_id"):
@@ -327,7 +329,7 @@ async def crm_oauth_redirect(
 
 
 @router.post("/disconnect")
-async def crm_disconnect(user: User = Depends(require_admin)):
+async def crm_disconnect(user: User = Depends(require_permission("sales", "manage"))):
     """Clear tokens — disconnect from amoCRM."""
     await async_amocrm_manager.clear_tokens()
     await cache_delete_pattern(f"{CacheKey.AMOCRM}:*")
@@ -349,7 +351,7 @@ async def crm_disconnect(user: User = Depends(require_admin)):
 
 
 @router.post("/test")
-async def crm_test_connection(user: User = Depends(require_not_guest)):
+async def crm_test_connection(user: User = Depends(require_permission("sales", "edit"))):
     """Test connection by fetching account info."""
     config = await _get_valid_token()
     try:
@@ -360,7 +362,7 @@ async def crm_test_connection(user: User = Depends(require_not_guest)):
 
 
 @router.post("/refresh-token")
-async def crm_force_refresh_token(user: User = Depends(require_admin)):
+async def crm_force_refresh_token(user: User = Depends(require_permission("sales", "manage"))):
     """Force token refresh."""
     config = await async_amocrm_manager.get_config_with_secrets()
     if not config or not config.get("refresh_token"):
@@ -396,7 +398,7 @@ async def crm_get_contacts(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=250),
     query: Optional[str] = None,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """List contacts from amoCRM (proxied)."""
     config = await _get_valid_token()
@@ -410,7 +412,7 @@ async def crm_get_contacts(
 @router.post("/contacts")
 async def crm_create_contact(
     request: CreateContactRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create a contact in amoCRM."""
     config = await _get_valid_token()
@@ -442,7 +444,7 @@ async def crm_get_leads(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=250),
     query: Optional[str] = None,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """List leads from amoCRM (proxied)."""
     config = await _get_valid_token()
@@ -456,7 +458,7 @@ async def crm_get_leads(
 @router.post("/leads")
 async def crm_create_lead(
     request: CreateLeadRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create a lead in amoCRM."""
     config = await _get_valid_token()
@@ -489,7 +491,7 @@ async def crm_create_lead(
 async def crm_add_note_to_lead(
     lead_id: int,
     request: AddNoteRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Add a note to a lead."""
     config = await _get_valid_token()
@@ -511,7 +513,7 @@ async def crm_add_note_to_lead(
 @router.get("/leads/by-pipeline/{pipeline_id}")
 async def crm_get_leads_by_pipeline(
     pipeline_id: int,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get all leads in a specific pipeline (for kanban board)."""
     config = await _get_valid_token()
@@ -532,7 +534,7 @@ async def crm_get_leads_by_pipeline(
 async def crm_get_unsorted_leads(
     page: int = 1,
     limit: int = 250,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get unsorted (incoming) leads, paginated."""
     config = await _get_valid_token()
@@ -554,7 +556,7 @@ async def crm_get_unsorted_leads(
 @router.get("/leads/{lead_id}")
 async def crm_get_lead(
     lead_id: int,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get single lead detail with contacts."""
     config = await _get_valid_token()
@@ -577,7 +579,7 @@ async def crm_get_lead(
 async def crm_update_lead(
     lead_id: int,
     request: UpdateLeadRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update a lead (status, pipeline, name, price)."""
     config = await _get_valid_token()
@@ -614,7 +616,7 @@ async def crm_get_events(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     types: Optional[str] = None,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get events feed (chat messages, lead changes, etc.)."""
     config = await _get_valid_token()
@@ -631,7 +633,7 @@ async def crm_get_events(
 @router.get("/contacts/{contact_id}/chats")
 async def crm_get_contact_chats(
     contact_id: int,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get chats linked to a contact."""
     config = await _get_valid_token()
@@ -650,7 +652,7 @@ async def crm_get_chat_history(
     chat_id: str,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get chat message history via amojo API."""
     config = await async_amocrm_manager.get_config_with_secrets()
@@ -677,7 +679,7 @@ async def crm_get_chat_history(
 async def crm_send_chat_message(
     chat_id: str,
     request: SendChatMessageRequest,
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "edit")),
 ):
     """Send a chat message via amojo API."""
     config = await async_amocrm_manager.get_config_with_secrets()
@@ -718,7 +720,7 @@ async def crm_send_chat_message(
 
 
 @router.get("/pipelines")
-async def crm_get_pipelines(user: User = Depends(require_not_guest)):
+async def crm_get_pipelines(user: User = Depends(require_permission("sales", "view"))):
     """List pipelines with their statuses."""
     config = await _get_valid_token()
     subdomain = _get_subdomain(config)
@@ -738,7 +740,7 @@ async def crm_get_pipelines(user: User = Depends(require_not_guest)):
 
 
 @router.post("/sync")
-async def crm_sync(user: User = Depends(require_not_guest)):
+async def crm_sync(user: User = Depends(require_permission("sales", "edit"))):
     """Manual sync — fetch counts from amoCRM and update local stats."""
     config = await _get_valid_token()
     subdomain = config["subdomain"]
@@ -785,7 +787,7 @@ async def crm_sync(user: User = Depends(require_not_guest)):
 @router.get("/sync-log")
 async def crm_sync_log(
     limit: int = Query(50, ge=1, le=200),
-    user: User = Depends(require_not_guest),
+    user: User = Depends(require_permission("sales", "view")),
 ):
     """Get sync event log."""
     logs = await async_amocrm_manager.get_sync_logs(limit)
@@ -799,7 +801,7 @@ CRM_FILE_PREFIX = "crm-"
 
 
 @router.post("/dataset-sync")
-async def crm_dataset_sync(user: User = Depends(require_not_guest)):
+async def crm_dataset_sync(user: User = Depends(require_permission("sales", "edit"))):
     """Sync amoCRM data into knowledge base for RAG.
 
     Fetches all pipelines + leads, generates markdown documents,
@@ -961,7 +963,7 @@ async def crm_dataset_sync(user: User = Depends(require_not_guest)):
 
 
 @router.get("/dataset-status")
-async def crm_dataset_status(user: User = Depends(require_not_guest)):
+async def crm_dataset_status(user: User = Depends(require_permission("sales", "view"))):
     """Get CRM dataset sync status."""
     collection = await async_knowledge_collection_manager.get_by_slug("amocrm")
     if not collection:
@@ -996,7 +998,7 @@ async def crm_dataset_status(user: User = Depends(require_not_guest)):
 
 
 @router.delete("/dataset")
-async def crm_dataset_clear(user: User = Depends(require_admin)):
+async def crm_dataset_clear(user: User = Depends(require_permission("sales", "manage"))):
     """Clear CRM dataset — remove files, DB records, and collection index."""
     removed = clean_crm_files()
 
