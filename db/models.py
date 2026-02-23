@@ -299,6 +299,9 @@ class ChatSession(Base):
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
 
     # Pinned chat (stays at top of list)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
@@ -473,6 +476,9 @@ class FAQEntry(Base):
     keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     hit_count: Mapped[int] = mapped_column(Integer, default=0)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -507,6 +513,9 @@ class TTSPreset(Base):
     builtin: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated: Mapped[datetime] = mapped_column(
@@ -630,6 +639,9 @@ class BotInstance(Base):
     auto_start: Mapped[bool] = mapped_column(Boolean, default=False)  # Auto-start on app launch
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
 
     # Telegram configuration
@@ -829,6 +841,9 @@ class WidgetInstance(Base):
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
 
     # Appearance
     title: Mapped[str] = mapped_column(String(100), default="AI Ассистент")
@@ -950,6 +965,9 @@ class WhatsAppInstance(Base):
     auto_start: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
 
     # WhatsApp Cloud API credentials
@@ -1104,6 +1122,9 @@ class CloudLLMProvider(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
 
     # Extended configuration (JSON)
@@ -2259,6 +2280,9 @@ class AmoCRMConfig(Base):
 
     # Metadata
     account_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -2429,6 +2453,9 @@ class KnowledgeCollection(Base):
     base_dir: Mapped[str] = mapped_column(
         String(200), default="wiki-pages", server_default="wiki-pages"
     )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -2472,6 +2499,9 @@ class KnowledgeDocument(Base):
     )
     owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
@@ -3006,6 +3036,9 @@ class ClaudeCodeSession(Base):
     cli_session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     title: Mapped[str] = mapped_column(String(255), default="New session")
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
     status: Mapped[str] = mapped_column(
         String(20), default="active"
     )  # active, completed, error, aborted
@@ -3064,6 +3097,9 @@ class KanbanProject(Base):
     label_mapping: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -3137,6 +3173,9 @@ class KanbanTask(Base):
         ForeignKey("kanban_projects.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
     github_issue_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created: Mapped[datetime] = mapped_column(
