@@ -5,7 +5,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_manager import User, invalidate_permissions_cache, require_admin
+from auth_manager import User, invalidate_permissions_cache, require_permission
 from db.integration import async_audit_logger, async_role_manager
 
 
@@ -44,14 +44,16 @@ def _validate_permissions(permissions: Dict[str, str]) -> None:
 
 
 @router.get("")
-async def list_roles(user: User = Depends(require_admin)):
+async def list_roles(user: User = Depends(require_permission("users", "manage"))):
     """List all roles with permissions."""
     roles = await async_role_manager.get_all_with_permissions()
     return roles
 
 
 @router.post("", status_code=201)
-async def create_role(body: RoleCreate, user: User = Depends(require_admin)):
+async def create_role(
+    body: RoleCreate, user: User = Depends(require_permission("users", "manage"))
+):
     """Create a new custom role."""
     if body.permissions:
         _validate_permissions(body.permissions)
@@ -78,7 +80,7 @@ async def create_role(body: RoleCreate, user: User = Depends(require_admin)):
 
 
 @router.get("/{role_id}")
-async def get_role(role_id: int, user: User = Depends(require_admin)):
+async def get_role(role_id: int, user: User = Depends(require_permission("users", "manage"))):
     """Get a single role by ID."""
     role = await async_role_manager.get_with_permissions(role_id)
     if not role:
@@ -87,7 +89,9 @@ async def get_role(role_id: int, user: User = Depends(require_admin)):
 
 
 @router.put("/{role_id}")
-async def update_role(role_id: int, body: RoleUpdate, user: User = Depends(require_admin)):
+async def update_role(
+    role_id: int, body: RoleUpdate, user: User = Depends(require_permission("users", "manage"))
+):
     """Update a role. System roles: can update permissions, cannot change name."""
     if body.permissions is not None:
         _validate_permissions(body.permissions)
@@ -113,7 +117,7 @@ async def update_role(role_id: int, body: RoleUpdate, user: User = Depends(requi
 
 
 @router.delete("/{role_id}")
-async def delete_role(role_id: int, user: User = Depends(require_admin)):
+async def delete_role(role_id: int, user: User = Depends(require_permission("users", "manage"))):
     """Delete a custom role. System roles cannot be deleted."""
     role = await async_role_manager.get_with_permissions(role_id)
     if not role:

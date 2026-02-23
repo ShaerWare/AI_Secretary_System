@@ -87,8 +87,9 @@ async def admin_update_profile(
     user: User = Depends(get_current_user),
 ):
     """Update user profile (display name)."""
-    if user.role == "guest":
-        raise HTTPException(status_code=403, detail="Guest cannot update profile")
+    user.permissions = await get_user_permissions(user)
+    if not user_has_level(user, "settings", "edit"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     result = await async_user_manager.update_profile(user.id, display_name=request.display_name)
     if not result:
@@ -105,8 +106,9 @@ async def admin_change_password(
     user: User = Depends(get_current_user),
 ):
     """Change current user's password. Revokes all sessions and issues a new token."""
-    if user.role == "guest":
-        raise HTTPException(status_code=403, detail="Guest cannot change password")
+    user.permissions = await get_user_permissions(user)
+    if not user_has_level(user, "settings", "edit"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     # Verify old password
     auth_result = await authenticate_user(user.username, request.old_password)
