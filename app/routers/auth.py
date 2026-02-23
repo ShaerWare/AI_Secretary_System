@@ -18,6 +18,7 @@ from auth_manager import (
     get_current_user,
     get_user_permissions,
     revoke_session,
+    user_has_level,
 )
 from db.integration import async_audit_logger, async_session_manager, async_user_manager
 
@@ -150,8 +151,10 @@ async def delete_session(
     user: User = Depends(get_current_user),
 ):
     """Revoke a specific session. Users can revoke their own sessions; admins can revoke any."""
-    # Check ownership: non-admins can only revoke their own sessions
-    if user.role != "admin":
+    # Load permissions for inline check
+    user.permissions = await get_user_permissions(user)
+    # Check ownership: non-manage users can only revoke their own sessions
+    if not user_has_level(user, "users", "manage"):
         db_session = await async_session_manager.get_by_jti(jti)
         if db_session is None or db_session.user_id != user.id:
             raise HTTPException(status_code=404, detail="Session not found")

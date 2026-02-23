@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
-from auth_manager import TokenPayload, decode_token, require_admin
+from auth_manager import TokenPayload, decode_token, require_permission
 
 
 router = APIRouter(prefix="/admin/claude-code", tags=["claude-code"])
@@ -576,7 +576,7 @@ async def _handle_abort(user_id: int) -> None:
 
 
 @router.get("/sessions")
-async def list_sessions(user=Depends(require_admin)):
+async def list_sessions(user=Depends(require_permission("claude_code", "manage"))):
     """List Claude Code sessions."""
     from db.integration import async_claude_code_manager
 
@@ -585,7 +585,7 @@ async def list_sessions(user=Depends(require_admin)):
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str, user=Depends(require_admin)):
+async def get_session(session_id: str, user=Depends(require_permission("claude_code", "manage"))):
     """Get a specific Claude Code session."""
     from db.integration import async_claude_code_manager
 
@@ -596,7 +596,9 @@ async def get_session(session_id: str, user=Depends(require_admin)):
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, user=Depends(require_admin)):
+async def delete_session(
+    session_id: str, user=Depends(require_permission("claude_code", "manage"))
+):
     """Delete a Claude Code session."""
     from db.integration import async_claude_code_manager
 
@@ -607,6 +609,6 @@ async def delete_session(session_id: str, user=Depends(require_admin)):
 
 
 @router.get("/directories")
-async def list_directories(user=Depends(require_admin)):
+async def list_directories(user=Depends(require_permission("claude_code", "manage"))):
     """List allowed working directories for Claude Code."""
     return {"directories": _ALLOWED_CWDS, "default": _DEFAULT_CWD}
