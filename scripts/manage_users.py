@@ -24,6 +24,7 @@ from utils.password import hash_password
 
 DB_PATH = Path(__file__).parent.parent / "data" / "secretary.db"
 VALID_ROLES = ("guest", "web", "user", "admin")
+_LEGACY_ROLE_MAP = {"admin": "admin", "user": "operator", "web": "operator", "guest": "viewer"}
 
 
 def get_connection():
@@ -38,7 +39,9 @@ def cmd_list(args):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, role, display_name, is_active, created, last_login FROM users ORDER BY id"
+        """SELECT u.id, u.username, u.role, wm.role_name, u.display_name, u.is_active, u.created, u.last_login
+           FROM users u LEFT JOIN workspace_members wm ON u.id = wm.user_id AND wm.workspace_id = 1
+           ORDER BY u.id"""
     )
     rows = cursor.fetchall()
     conn.close()
@@ -48,15 +51,16 @@ def cmd_list(args):
         return
 
     print(
-        f"{'ID':>4}  {'Username':<20} {'Role':<8} {'Active':<7} {'Display Name':<20} {'Last Login'}"
+        f"{'ID':>4}  {'Username':<20} {'Role':<8} {'WS Role':<10} {'Active':<7} {'Display Name':<20} {'Last Login'}"
     )
-    print("-" * 90)
+    print("-" * 100)
     for row in rows:
-        uid, username, role, display_name, is_active, _created, last_login = row
+        uid, username, role, ws_role, display_name, is_active, _created, last_login = row
         active_str = "Yes" if is_active else "No"
         login_str = last_login or "Never"
+        ws_role_str = ws_role or "-"
         print(
-            f"{uid:>4}  {username:<20} {role:<8} {active_str:<7} {(display_name or ''):<20} {login_str}"
+            f"{uid:>4}  {username:<20} {role:<8} {ws_role_str:<10} {active_str:<7} {(display_name or ''):<20} {login_str}"
         )
 
     print(f"\nTotal: {len(rows)} user(s)")
@@ -83,9 +87,16 @@ def cmd_create(args):
            VALUES (?, ?, ?, ?, ?, 1)""",
         (args.username, pw_hash, salt, args.role, args.username),
     )
+    user_id = cursor.lastrowid
+    ws_role = _LEGACY_ROLE_MAP.get(args.role, "viewer")
+    cursor.execute(
+        """INSERT OR REPLACE INTO workspace_members (workspace_id, user_id, role_name)
+           VALUES (1, ?, ?)""",
+        (user_id, ws_role),
+    )
     conn.commit()
     conn.close()
-    print(f"Created user '{args.username}' with role '{args.role}'")
+    print(f"Created user '{args.username}' with role '{args.role}' (workspace role: {ws_role})")
 
 
 def cmd_delete(args):
@@ -144,9 +155,15 @@ def cmd_set_role(args):
         "UPDATE users SET role = ?, updated = CURRENT_TIMESTAMP WHERE username = ?",
         (args.role, args.username),
     )
+    ws_role = _LEGACY_ROLE_MAP.get(args.role, "viewer")
+    cursor.execute(
+        """INSERT OR REPLACE INTO workspace_members (workspace_id, user_id, role_name)
+           VALUES (1, (SELECT id FROM users WHERE username = ?), ?)""",
+        (args.username, ws_role),
+    )
     conn.commit()
     conn.close()
-    print(f"Role updated for '{args.username}' -> '{args.role}'")
+    print(f"Role updated for '{args.username}' -> '{args.role}' (workspace role: {ws_role})")
 
 
 def cmd_toggle_active(args, active: bool):

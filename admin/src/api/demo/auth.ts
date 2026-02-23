@@ -33,6 +33,7 @@ function createDemoToken(username: string): { access_token: string } {
   const payload = btoa(JSON.stringify({
     sub: username,
     role: demoRole,
+    workspace_id: 1,
     exp: Math.floor(Date.now() / 1000) + 86400,
     iat: Math.floor(Date.now() / 1000),
     demo: true,
@@ -72,6 +73,7 @@ export const authRoutes: DemoRoute[] = [
     handler: () => ({
       username: 'admin',
       role: demoRole,
+      workspace_id: 1,
       deployment_mode: demoDeploymentMode,
     }),
   },

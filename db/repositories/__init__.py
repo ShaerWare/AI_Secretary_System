@@ -42,6 +42,7 @@ from db.repositories.user import UserRepository
 from db.repositories.user_session import UserSessionRepository
 from db.repositories.whatsapp_instance import WhatsAppInstanceRepository
 from db.repositories.widget_instance import WidgetInstanceRepository
+from db.repositories.workspace import WorkspaceRepository
 
 
 __all__ = [
@@ -86,4 +87,5 @@ __all__ = [
     "UsageRepository",
     "WhatsAppInstanceRepository",
     "WidgetInstanceRepository",
+    "WorkspaceRepository",
 ]

@@ -88,7 +88,9 @@ from db.integration import (
     async_faq_manager,
     async_preset_manager,
     async_role_manager,
+    async_user_manager,
     async_widget_instance_manager,
+    async_workspace_manager,
     get_database_status,
     init_database,
     shutdown_database,
@@ -737,6 +739,35 @@ async def _seed_system_roles():
         logger.error(f"🔐 RBAC seed failed: {e}")
 
 
+async def _seed_default_workspace():
+    """Seed default workspace and populate workspace_members for all users."""
+    try:
+        ws = await async_workspace_manager.get_default_workspace()
+        if ws:
+            logger.info("🏢 Workspace: default already exists, checking membership")
+        else:
+            await async_workspace_manager.create_default(name="Default", slug="default")
+            logger.info("🏢 Workspace: created default workspace (id=1)")
+
+        # Populate workspace_members for all users not yet in workspace 1
+        _LEGACY_ROLE_MAP = {
+            "admin": "admin",
+            "user": "operator",
+            "web": "operator",
+            "guest": "viewer",
+        }
+        users = await async_user_manager.list_users(include_inactive=True)
+        added = 0
+        for u in users:
+            role_name = _LEGACY_ROLE_MAP.get(u["role"], "viewer")
+            await async_workspace_manager.ensure_membership(1, u["id"], role_name)
+            added += 1
+        if added:
+            logger.info(f"🏢 Workspace: ensured {added} users in default workspace")
+    except Exception as e:
+        logger.error(f"🏢 Workspace seed failed: {e}")
+
+
 class ConversationRequest(BaseModel):
     text: str
     session_id: Optional[str] = None
@@ -790,6 +821,7 @@ async def startup_event():
     # Initialize database first
     await init_database()
     await _seed_system_roles()
+    await _seed_default_workspace()
 
     try:
         # TTS/STT services — skip entirely in cloud mode

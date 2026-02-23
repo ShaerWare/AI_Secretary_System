@@ -7,6 +7,7 @@ export interface User {
   id: number
   username: string
   role: UserRole
+  workspace_id: number
 }
 
 // Check if we're in dev mode (Vite sets this)
@@ -70,7 +71,8 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = {
         id: payload.user_id || 0,
         username: payload.sub,
-        role: payload.role
+        role: payload.role,
+        workspace_id: payload.workspace_id || 1,
       }
       // Fetch deployment mode and permissions on init
       fetchDeploymentMode()
@@ -88,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
       sub: username,
       user_id: 0,
       role: import.meta.env.VITE_DEMO_ROLE || 'admin',
+      workspace_id: 1,
       exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
       iat: Math.floor(Date.now() / 1000),
       dev: true
@@ -122,7 +125,8 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = {
         id: payload.user_id || 0,
         username: payload.sub,
-        role: payload.role
+        role: payload.role,
+        workspace_id: payload.workspace_id || 1,
       }
 
       // Fetch deployment mode and permissions from backend
@@ -137,7 +141,7 @@ export const useAuthStore = defineStore('auth', () => {
         const devToken = createDevToken(username)
         token.value = devToken
         localStorage.setItem('admin_token', devToken)
-        user.value = { id: 0, username, role: (import.meta.env.VITE_DEMO_ROLE || 'admin') as UserRole }
+        user.value = { id: 0, username, role: (import.meta.env.VITE_DEMO_ROLE || 'admin') as UserRole, workspace_id: 1 }
         error.value = null
         return true
       }
