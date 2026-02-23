@@ -72,11 +72,14 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    username: Mapped[Optional[str]] = mapped_column(
+        String(100), unique=True, index=True, nullable=True
+    )
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     salt: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    role: Mapped[str] = mapped_column(String(20), default="user")  # guest, user, admin
+    role: Mapped[str] = mapped_column(String(20), default="user")  # guest, user, admin, contact
     display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", index=True)
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
@@ -89,12 +92,17 @@ class User(Base):
     )
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    identities: Mapped[list["UserIdentity"]] = relationship(
+        "UserIdentity", back_populates="user", cascade="all, delete-orphan", lazy="noload"
+    )
+
     def to_dict(self, include_sensitive: bool = False) -> dict:
         result: dict[str, Any] = {
             "id": self.id,
             "username": self.username,
             "role": self.role,
             "display_name": self.display_name,
+            "email": self.email,
             "is_active": self.is_active,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
@@ -104,6 +112,39 @@ class User(Base):
             result["password_hash"] = self.password_hash
             result["salt"] = self.salt
         return result
+
+
+class UserIdentity(Base):
+    """External identity linked to a user (Telegram, WhatsApp, Widget)."""
+
+    __tablename__ = "user_identities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    provider_uid: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="identities")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "provider": self.provider,
+            "provider_uid": self.provider_uid,
+            "display_name": self.display_name,
+            "metadata": json.loads(self.metadata_json) if self.metadata_json else None,
+            "created": self.created.isoformat() if self.created else None,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
+        }
 
 
 class UserSession(Base):
