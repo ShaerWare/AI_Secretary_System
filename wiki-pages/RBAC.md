@@ -280,7 +280,8 @@ Content-Type: application/json
 **Прогресс 6c:**
 - [x] **6c-0**: Инфраструктура — `BaseRepository._apply_workspace_filter()`, `workspace_context()` (#376, PR #383)
 - [x] **6c-1**: **Chat** — первый модуль с workspace-фильтрацией, эталон для остальных (#377, PR #385)
-- [ ] **6c-2–6c-5**: Telegram/WhatsApp/Widget, LLM/TTS, Knowledge/FAQ, System/Kanban/Audit (#378–#381)
+- [x] **6c-2**: **Channels** — Telegram, WhatsApp, Widget (#378, PR #387)
+- [ ] **6c-3–6c-5**: LLM/TTS, Knowledge/FAQ, System/Kanban/Audit (#379–#381)
 - [ ] **6c-6**: Финализация — тесты, документация (#382)
 
 Bot-scoped таблицы (`telegram_sessions`, `bot_agent_prompts`, `bot_quiz_questions` и др.) **не** содержат `workspace_id` — они фильтруются через `bot_instances.workspace_id`.
@@ -402,7 +403,7 @@ Cloud providers используют `user_has_level(user, "llm", "manage")` д�
 
 5 внутренних эндпоинтов в telegram.py без авторизации (bot session registration, payment logging, payment queries, YooMoney OAuth callback) — не мигрированы, остаются публичными.
 
-Все три роутера используют `user_has_level(user, "channels", "manage")` для owner_id bypass — manage видит все инстансы, остальные только свои.
+Все три роутера используют `workspace_context(user, "channels")` для owner_id + workspace_id фильтрации — manage видит все инстансы workspace, остальные только свои. Action-эндпоинты (start/stop/restart/logs/sessions) проверяют workspace через gate-check `get_instance(id, workspace_id=user.workspace_id)`.
 
 ### Матрица прав sales (bot_sales.py + amocrm.py)
 
