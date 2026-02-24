@@ -343,7 +343,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **FastAPI Depends pattern** — `B008` (function-call-in-default-argument) is disabled for this reason
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
-- **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete, and `_apply_workspace_filter(query, workspace_id)` for multi-tenant filtering. Domain repos extend with custom queries and should call `_apply_workspace_filter()` in list/get methods.
+- **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete, and `_apply_workspace_filter(query, workspace_id)` for multi-tenant filtering. Domain repos extend with custom queries and should call `_apply_workspace_filter()` in list/get methods. `ChatRepository` is the reference implementation — workspace_id on gate methods (list/get/create/delete/fork), message-level ops trust session validation.
 - **Admin panel** — See **Frontend Architecture** section below for full details (routing, stores, API layer, demo mode, components).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.

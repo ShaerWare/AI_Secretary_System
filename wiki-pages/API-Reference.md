@@ -20,9 +20,14 @@ Content-Type: application/json
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "Bearer"
+  "token_type": "bearer",
+  "expires_in": 86400
 }
 ```
+
+При логине создаётся серверная сессия с записью IP-адреса и User-Agent. Токен содержит `jti` (уникальный ID сессии), который проверяется при каждом запросе.
+
+Пароли хешируются **bcrypt**. Старые SHA-256 хеши автоматически перехешируются при успешном входе (lazy-rehash).
 
 ### Использование токена
 
@@ -37,12 +42,83 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 | Метод | Эндпоинт | Описание |
 |-------|----------|----------|
-| POST | `/admin/auth/login` | Вход (получение JWT) |
+| POST | `/admin/auth/login` | Вход (получение JWT + создание сессии) |
 | GET | `/admin/auth/me` | Текущий пользователь |
 | GET | `/admin/auth/status` | Статус аутентификации |
 | GET | `/admin/auth/profile` | Профиль пользователя |
 | PUT | `/admin/auth/profile` | Обновление профиля |
-| POST | `/admin/auth/change-password` | Смена пароля |
+| POST | `/admin/auth/change-password` | Смена пароля (отзыв всех сессий + новый токен) |
+| GET | `/admin/auth/sessions` | Список активных сессий текущего пользователя |
+| DELETE | `/admin/auth/sessions/{jti}` | Отзыв конкретной сессии |
+| GET | `/admin/auth/permissions` | Эффективные права текущего пользователя |
+
+### Управление сессиями
+
+Каждый вход создаёт серверную сессию. Сессии можно просматривать и отзывать (revoke). При отзыве сессии токен мгновенно становится недействительным.
+
+#### Список активных сессий
+
+```bash
+GET /admin/auth/sessions
+Authorization: Bearer <token>
+```
+
+**Ответ:**
+```json
+[
+  {
+    "token_jti": "550e8400-e29b-41d4-a716-446655440000",
+    "ip_address": "192.168.1.100",
+    "user_agent": "Mozilla/5.0 ...",
+    "created_at": "2026-02-22T03:00:00",
+    "expires_at": "2026-02-23T03:00:00",
+    "revoked_at": null
+  }
+]
+```
+
+#### Отзыв сессии
+
+```bash
+DELETE /admin/auth/sessions/{jti}
+Authorization: Bearer <token>
+```
+
+- Обычные пользователи могут отзывать только свои сессии
+- Пользователи с `users:manage` могут отзывать любые сессии
+- После отзыва токен возвращает 401
+
+**Ответ:** `{"message": "Session revoked"}`
+
+#### Смена пароля (обновлённое поведение)
+
+```bash
+POST /admin/auth/change-password
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "old_password": "current",
+  "new_password": "new_secure_password"
+}
+```
+
+**Ответ:** Все существующие сессии отзываются, возвращается новый токен:
+```json
+{
+  "message": "Password updated successfully",
+  "access_token": "eyJ...",
+  "token_type": "bearer",
+  "expires_in": 86400
+}
+```
+
+#### Автоматический отзыв сессий
+
+Все активные сессии пользователя автоматически отзываются при:
+- Смене пароля (`POST /admin/auth/change-password`)
+- Смене роли (через `manage_users.py set-role`)
+- Деактивации аккаунта (через `manage_users.py disable`)
 
 ## OpenAI-совместимые эндпоинты
 
@@ -246,56 +322,143 @@ GET /health
 }
 ```
 
-## Ветвление чата (Chat Branching)
+## Kanban (Задачи)
 
-| Метод | Эндпоинт | Описание |
-|-------|----------|----------|
-| PUT | `/admin/chat/sessions/{id}/messages/{msg_id}` | Не-деструктивное редактирование (создаёт sibling) |
-| POST | `/admin/chat/sessions/{id}/messages/{msg_id}/regenerate` | Регенерация ответа |
-| GET | `/admin/chat/sessions/{id}/branches` | Дерево веток |
-| POST | `/admin/chat/sessions/{id}/branches/switch` | Переключить активную ветку |
-| POST | `/admin/chat/sessions/{id}/branches/new` | Начать новую ветку с чистого листа |
+### Эндпоинты проектов (GitHub-привязка)
 
-### Новая ветка с чистого листа
+| Метод | Эндпоинт | Описание | Доступ |
+|-------|----------|----------|--------|
+| GET | `/admin/kanban/projects` | Список всех проектов | kanban:view |
+| POST | `/admin/kanban/projects` | Создать проект (GitHub-привязка) | kanban:manage |
+| PATCH | `/admin/kanban/projects/{id}` | Обновить проект | kanban:manage |
+| DELETE | `/admin/kanban/projects/{id}` | Удалить проект | kanban:manage |
+| POST | `/admin/kanban/projects/{id}/sync` | Полная синхронизация GitHub issues | kanban:edit |
+
+### Эндпоинты задач
+
+| Метод | Эндпоинт | Описание | Доступ |
+|-------|----------|----------|--------|
+| GET | `/admin/kanban/tasks?project_id=N` | Список задач проекта (null = локальные) | kanban:view |
+| POST | `/admin/kanban/tasks` | Создать задачу (всегда draft + private) | kanban:edit |
+| PATCH | `/admin/kanban/tasks/{id}` | Обновить задачу (+ push на GitHub) | kanban:edit |
+| DELETE | `/admin/kanban/tasks/{id}` | Удалить задачу | kanban:manage |
+| POST | `/admin/kanban/reorder` | Изменить статус и позицию (+ push на GitHub) | kanban:edit |
+
+### Эндпоинты зависимостей
+
+| Метод | Эндпоинт | Описание | Доступ |
+|-------|----------|----------|--------|
+| POST | `/admin/kanban/dependencies` | Добавить зависимость (409 при цикле) | kanban:edit |
+| DELETE | `/admin/kanban/dependencies?blocker_id=X&dependent_id=Y` | Удалить зависимость | kanban:edit |
+
+### Эндпоинты чеклиста
+
+| Метод | Эндпоинт | Описание | Доступ |
+|-------|----------|----------|--------|
+| POST | `/admin/kanban/tasks/{id}/checklist` | Добавить пункт чеклиста | kanban:edit |
+| PATCH | `/admin/kanban/checklist/{item_id}/toggle` | Переключить выполнение | kanban:edit |
+| DELETE | `/admin/kanban/checklist/{item_id}` | Удалить пункт | kanban:edit |
+
+### Создать проект
 
 ```bash
-POST /admin/chat/sessions/{session_id}/branches/new
-Authorization: Bearer <jwt_token>
+POST /admin/kanban/projects
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "AI Secretary",
+  "github_owner": "ShaerWare",
+  "github_repo": "AI_Secretary_System",
+  "github_token": "ghp_xxx...",
+  "webhook_secret": "my-secret",
+  "label_mapping": {"todo": "status:todo", "in_progress": "status:in_progress", "review": "status:review"},
+  "sync_enabled": true
+}
+```
+
+**Ответ:** `{"project": {...}}` (токен не возвращается, только `has_token: true/false`)
+
+### Синхронизация GitHub issues
+
+```bash
+POST /admin/kanban/projects/1/sync
+Authorization: Bearer <token>
+```
+
+**Ответ:** `{"created": 15, "updated": 3, "total": 18}`
+
+### Создать задачу
+
+```bash
+POST /admin/kanban/tasks
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "Настроить интеграцию",
+  "description": "Подключить API",
+  "assignee": "admin",
+  "due_date": "2026-03-01",
+  "tags": ["интеграция", "api"]
+}
 ```
 
 **Ответ:**
 ```json
 {
-  "status": "ok",
-  "session": { ... }
+  "task": {
+    "id": 1,
+    "title": "Настроить интеграцию",
+    "description": "Подключить API",
+    "status": "draft",
+    "is_private": true,
+    "assignee": "admin",
+    "created_by": "admin",
+    "start_date": null,
+    "due_date": "2026-03-01",
+    "position": 0,
+    "tags": ["интеграция", "api"],
+    "project_id": null,
+    "github_issue_number": null,
+    "checklist": [],
+    "blockers": [],
+    "dependents": [],
+    "created": "2026-02-21T00:00:00",
+    "updated": "2026-02-21T00:00:00"
+  }
 }
 ```
 
-Деактивирует все `is_active` сообщения в сессии. Следующее отправленное сообщение автоматически создаст новый корень. Системный промпт и файлы контекста сохраняются.
+### Обновить задачу
 
-## CRM (amoCRM) эндпоинты
+```bash
+PATCH /admin/kanban/tasks/1
+Authorization: Bearer <token>
+Content-Type: application/json
 
-| Метод | Эндпоинт | Описание |
-|-------|----------|----------|
-| GET | `/admin/crm/config` | Конфигурация CRM |
-| PUT | `/admin/crm/config` | Обновить конфигурацию |
-| GET | `/admin/crm/auth-url` | URL для OAuth2 авторизации |
-| GET | `/admin/crm/callback` | OAuth2 callback |
-| GET | `/admin/crm/status` | Статус подключения |
-| POST | `/admin/crm/disconnect` | Отключить amoCRM |
-| GET | `/admin/crm/contacts` | Контакты |
-| GET | `/admin/crm/leads` | Сделки |
-| GET | `/admin/crm/leads/{id}` | Детали сделки |
-| PATCH | `/admin/crm/leads/{id}` | Обновить сделку |
-| GET | `/admin/crm/leads/by-pipeline/{pipeline_id}` | Сделки по воронке (Kanban) |
-| GET | `/admin/crm/pipelines` | Воронки и статусы |
-| GET | `/admin/crm/events` | Лента событий |
-| GET | `/admin/crm/contacts/{id}/chats` | Чаты контакта (Amojo) |
-| GET | `/admin/crm/chats/{chat_id}/history` | История сообщений (Amojo) |
-| POST | `/admin/crm/chats/{chat_id}/messages` | Отправить сообщение (Amojo) |
-| GET | `/admin/crm/account` | Информация об аккаунте |
-| POST | `/admin/crm/sync` | Запустить синхронизацию |
-| GET | `/admin/crm/sync/log` | Лог синхронизации |
+{
+  "status": "in_progress",
+  "assignee": "admin"
+}
+```
+
+При смене статуса с `draft` на любой другой — задача автоматически становится публичной (`is_private: false`). Для GitHub-привязанных задач статус также обновляется на GitHub (лейблы + open/close).
+
+### Добавить зависимость
+
+```bash
+POST /admin/kanban/dependencies
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "blocker_id": 1,
+  "dependent_id": 2
+}
+```
+
+Возвращает **409** если зависимость создаёт цикл или целевая задача приватная.
 
 ## URL паттерны
 
@@ -341,30 +504,59 @@ data: [DONE]\n\n
 **Доступные вебхуки:**
 - `/webhooks/amocrm` — amoCRM webhook
 - `/webhooks/yoomoney` — YooMoney payments
-- `/webhooks/github` — GitHub CI/CD
+- `/webhooks/github` — GitHub PR events + Issues (kanban sync)
 
 ## RBAC (контроль доступа)
 
-Система использует permission-based RBAC с 16 модулями и 3 уровнями доступа.
+Все роутеры мигрированы на RBAC. Legacy guard-функции (`require_admin`, `require_not_guest`, `verify_ownership`) удалены в PR #358.
 
-### Защита эндпоинтов
+### RBAC permissions
 
 | Dependency | Описание | Применение |
 |------------|----------|------------|
-| `require_permission(module, level)` | Проверяет permission модуля | Все бизнес-эндпоинты |
-| `get_current_user` | Только аутентификация | Self-service (auth.py) |
+| `require_permission(module, level)` | Проверяет уровень прав по модулю | Эндпоинт-уровень (все роутеры) |
+| `user_has_level(user, module, level)` | Inline-проверка внутри эндпоинта | Дополнительная логика (owner/manage) |
+| `get_current_user` | Аутентификация без RBAC-проверки | Self-service (auth.py) |
 
-Уровни: `view` (чтение) → `edit` (изменение) → `manage` (полный доступ).
+Мигрированные роутеры (20): **chat.py** (21), **llm.py** (42), **telegram.py** (23), **whatsapp.py** (10), **widget.py** (7), **bot_sales.py** (43), **amocrm.py** (26), **faq.py** (8), **wiki_rag.py** (15), **stt.py** (4), **services.py** (6), **monitor.py** (9), **backup.py** (8), **gsm.py** (14), **tts.py** (14), **kanban.py** (15), **audit.py** (4), **usage.py** (8), **claude_code.py** (4), **legal.py** (4), **roles.py** (5). Инфраструктурный: **auth.py** (self-service + inline RBAC checks).
 
-### Роли (динамические, в БД)
+### Legacy роли пользователей
 
-| Роль | Описание | Модули |
-|------|----------|--------|
-| **admin** | Полный доступ | Все 16 модулей — `manage` |
-| **operator** | Работа с ресурсами | 8 модулей `edit` + 3 `view` |
-| **viewer** | Только просмотр | 7 модулей `view` |
+| Роль | RBAC маппинг | Права | Ограничения |
+|------|-------------|-------|-------------|
+| **admin** | admin (manage all) | Полный доступ | Видит все ресурсы всех пользователей |
+| **user** | operator (edit) | Read + Write своих ресурсов | Полный доступ к админ-панели |
+| **web** | operator (edit) | Как user, но упрощённый UI | Скрыты: Dashboard, Services, vLLM, Models |
+| **guest** | viewer (view) | Read-only (demo) | Только просмотр, без изменений |
 
-Legacy роли (`admin`, `user`, `web`, `guest`) маппятся на RBAC-роли через `workspace_members` при создании пользователя.
+### Динамические RBAC роли
+
+Матрица прав: 16 модулей × 3 уровня (view/edit/manage). Legacy роли автоматически маппятся на RBAC через `get_role_for_legacy()`.
+
+Подробнее: [[RBAC]]
+
+### Эндпоинты RBAC
+
+#### Права текущего пользователя
+
+```bash
+GET /admin/auth/permissions
+Authorization: Bearer <token>
+```
+
+**Ответ:** `{"dashboard": "manage", "chat": "manage", ...}`
+
+В облачном режиме модули `speech`, `gsm`, `system` автоматически исключаются.
+
+#### Управление ролями (admin only)
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/admin/roles` | Список всех ролей с правами |
+| POST | `/admin/roles` | Создать пользовательскую роль |
+| GET | `/admin/roles/{id}` | Получить роль по ID |
+| PUT | `/admin/roles/{id}` | Обновить роль |
+| DELETE | `/admin/roles/{id}` | Удалить роль (только пользовательские) |
 
 ### Изоляция данных
 
@@ -385,7 +577,81 @@ sessions = await manager.list_sessions(owner_id=owner_id, workspace_id=workspace
 
 Workspace — контейнер всех ресурсов. Default workspace (id=1) создаётся автоматически. JWT содержит `workspace_id`. Репозитории фильтруют через `BaseRepository._apply_workspace_filter()`.
 
-> **Статус:** workspace_id колонки добавлены на 13 таблиц, инфраструктура фильтрации готова. Workspace-aware запросы внедряются поэтапно (#365).
+> **Статус:** workspace_id колонки добавлены на 13 таблиц, инфраструктура фильтрации готова. **Chat** — первый модуль с полной workspace-фильтрацией (PR #385). Остальные модули внедряются поэтапно (#365).
+
+### Совместный доступ к чатам
+
+Чат-сессии (admin source) могут быть расшарены другим пользователям с уровнями доступа `read` или `write`.
+
+При `read`-доступе пользователь может просматривать чат, но не может отправлять/редактировать/удалять сообщения. При `write` — полный доступ, аналогичный владельцу (кроме удаления сессии и управления шарами).
+
+#### Эндпоинты шаринга
+
+| Метод | Эндпоинт | Описание | Доступ |
+|-------|----------|----------|--------|
+| GET | `/admin/chat/sessions/{id}/shares` | Список шар сессии | `chat:edit` + owner/manage |
+| POST | `/admin/chat/sessions/{id}/shares` | Расшарить сессию | `chat:edit` + owner/manage |
+| PUT | `/admin/chat/sessions/{id}/shares/{user_id}` | Изменить permission | `chat:edit` + owner/manage |
+| DELETE | `/admin/chat/sessions/{id}/shares/{user_id}` | Удалить шар | `chat:edit` + owner/manage |
+| POST | `/admin/chat/sessions/{id}/fork` | Форк сессии (глубокое копирование) | `chat:edit` |
+| GET | `/admin/chat/shareable-users` | Список пользователей для шаринга | `chat:view` |
+
+#### Расшарить чат
+
+```bash
+POST /admin/chat/sessions/{id}/shares
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "user_id": 2,
+  "permission": "read"
+}
+```
+
+**Ответ:**
+```json
+{
+  "share": {
+    "id": 1,
+    "session_id": "chat_123",
+    "user_id": 2,
+    "permission": "read",
+    "shared_by": 1,
+    "shared_at": "2026-02-19T12:00:00"
+  }
+}
+```
+
+#### Обогащение ответов
+
+При получении сессии добавляются поля шаринга:
+
+```json
+{
+  "session": {
+    "id": "chat_123",
+    "owner_id": 1,
+    "is_shared_with_me": true,
+    "share_permission": "read",
+    "share_count": 2
+  }
+}
+```
+
+#### Форк сессии
+
+```bash
+POST /admin/chat/sessions/{id}/fork
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "title": "Мой форк"
+}
+```
+
+Создаёт глубокую копию всех активных сообщений с новым `owner_id`.
 
 ## Формат ошибок
 

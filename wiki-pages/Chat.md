@@ -288,18 +288,74 @@
 
 ## API
 
-| Endpoint | Описание |
-|----------|----------|
-| `GET /admin/chat/sessions` | Список сессий. Параметры: `source` (фильтр по источнику), `exclude_source` (исключить источник), `group_by=source` (группировка) |
-| `POST /admin/chat/sessions` | Создать сессию (с source tracking) |
-| `GET /admin/chat/sessions/{id}` | Получить сессию с сообщениями и sibling_info |
-| `PUT /admin/chat/sessions/{id}` | Обновить (переименовать, сменить промпт, pinned, context_files, rag_mode) |
-| `DELETE /admin/chat/sessions/{id}` | Удалить сессию |
-| `POST /admin/chat/sessions/bulk-delete` | Массовое удаление |
-| `POST /admin/chat/sessions/{id}/messages` | Отправить сообщение (без стриминга) |
-| `POST /admin/chat/sessions/{id}/stream` | SSE стриминг ответа |
-| `DELETE /admin/chat/sessions/{id}/messages/{msg_id}` | Удалить сообщение |
-| `POST /admin/chat/sessions/{id}/messages/{msg_id}/summarize` | Суммаризация ветки до сообщения |
+Все эндпоинты чата защищены через `require_permission("chat", level)`. Уровни: `view` (просмотр), `edit` (создание/изменение), `manage` (полное управление включая чужие ресурсы).
+
+Все запросы фильтруются по `workspace_id` из JWT (`workspace_context(user, "chat")`) — сессии изолированы между workspace'ами. Менеджеры (`manage`-уровень) видят все ресурсы workspace; остальные — только свои + расшаренные.
+
+| Endpoint | Уровень | Описание |
+|----------|---------|----------|
+| `GET /admin/chat/sessions` | `view` | Список сессий. `manage` видит все, остальные — только свои + расшаренные |
+| `POST /admin/chat/sessions` | `edit` | Создать сессию (с source tracking) |
+| `GET /admin/chat/sessions/{id}` | `view` | Получить сессию с сообщениями и sibling_info |
+| `PUT /admin/chat/sessions/{id}` | `edit` | Обновить (переименовать, сменить промпт, pinned, context_files, rag_mode) |
+| `DELETE /admin/chat/sessions/{id}` | `edit` | Удалить сессию (owner или `manage`) |
+| `POST /admin/chat/sessions/bulk-delete` | `manage` | Массовое удаление |
+| `POST /admin/chat/sessions/{id}/messages` | `edit` | Отправить сообщение (без стриминга) |
+| `POST /admin/chat/sessions/{id}/stream` | `edit` | SSE стриминг ответа |
+| `PUT /admin/chat/sessions/{id}/messages/{msg_id}` | `edit` | Редактирование сообщения (создаёт sibling) |
+| `DELETE /admin/chat/sessions/{id}/messages/{msg_id}` | `edit` | Удалить сообщение |
+| `POST /admin/chat/sessions/{id}/messages/{msg_id}/regenerate` | `edit` | Регенерация ответа |
+| `POST /admin/chat/sessions/{id}/messages/{msg_id}/summarize` | `edit` | Суммаризация ветки до сообщения |
+| `GET /admin/chat/sessions/{id}/branches` | `view` | Дерево веток |
+| `POST /admin/chat/sessions/{id}/branches/switch` | `view` | Переключить активную ветку |
+| `POST /admin/chat/sessions/{id}/branches/new` | `edit` | Начать новую ветку |
+| `GET /admin/chat/sessions/{id}/shares` | `edit` | Список шар сессии |
+| `POST /admin/chat/sessions/{id}/shares` | `edit` | Расшарить сессию |
+| `PUT /admin/chat/sessions/{id}/shares/{user_id}` | `edit` | Изменить permission шара |
+| `DELETE /admin/chat/sessions/{id}/shares/{user_id}` | `edit` | Удалить шар |
+| `POST /admin/chat/sessions/{id}/fork` | `edit` | Форк сессии (глубокое копирование) |
+| `GET /admin/chat/shareable-users` | `view` | Список пользователей для шаринга |
+
+Подробнее о системе прав: [[RBAC]]
+
+## Zen-режим (полноэкранный)
+
+Полноэкранный режим для сосредоточенной работы с чатом. Активируется кнопкой Maximize2 в заголовке чата или в сайдбаре (свёрнутый режим). Выход — `Esc` или кнопка Minimize2.
+
+### Вертикальная панель иконок (Activity Bar)
+
+Вместо обычного заголовка в zen-режиме слева отображается узкая вертикальная панель (48px) в стиле VS Code Activity Bar. Состоит из иконок-кнопок, разделённых тонкими линиями:
+
+| Позиция | Иконка | Описание |
+|---------|--------|----------|
+| **Верх** | Аватар (буква) | Первая буква названия сессии. Клик — переименовать |
+| | Minimize2 | Выйти из zen-режима |
+| **Основные** | Terminal | Включить/выключить Claude Code (для admin) |
+| | Brain | Выбор LLM-провайдера (dropdown вправо) |
+| | BookOpen | RAG-коллекции (dropdown вправо) |
+| | Share2 | Поделиться чатом |
+| | GitFork | Форкнуть (для read-only сессий) |
+| | Download | Экспорт (copy / md / json) |
+| **Режимы** | ArrowDown/Up | Переместить поле ввода вверх/вниз |
+| | Volume2 | Voice mode вкл/выкл |
+| | GitBranch | Панель дерева веток |
+| | FolderOpen | Рабочая директория CC |
+| | Paperclip | Контекстные файлы CC |
+| **Настройки** | Settings2 | Открыть полную панель настроек |
+| **Низ** | Plus | Новая ветка / новая CC-сессия |
+| | Trash2 | Удалить чат / выключить CC |
+
+### Инлайн-заголовок
+
+В верхней части области сообщений отображается компактное название сессии. Клик — редактирование inline (Enter — сохранить, Esc — отменить).
+
+### Выпадающие меню
+
+Все dropdown-меню в activity bar открываются **вправо** от иконки. Используют стилизацию `zen-glass` (полупрозрачный фон с blur). Закрываются по клику вне меню.
+
+### Резиновые панели
+
+Панели настроек и дерева веток в zen-режиме полностью функциональны — открываются справа с возможностью drag-resize. Resize-хэндлы поддерживают как мышь, так и touch-события (для сенсорных экранов).
 
 ## Горячие клавиши
 
@@ -308,7 +364,7 @@
 | `Enter` | Отправить сообщение |
 | `Ctrl+Enter` | Отправить сообщение (альтернатива) |
 | `Shift+Enter` | Новая строка |
-| `Esc` | Отмена редактирования |
+| `Esc` | Отмена редактирования / выход из zen-режима |
 | `Ctrl+K` / `⌘K` | Command Palette |
 
 ---
