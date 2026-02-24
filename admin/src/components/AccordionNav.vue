@@ -19,6 +19,7 @@ import {
   Phone,
   BookOpen,
   ShoppingCart,
+  ShoppingBag,
   Users,
   Settings,
   Info,
@@ -87,6 +88,7 @@ const allNavGroups = computed(() => [
     items: [
       { path: '/sales', nameKey: 'nav.sales', icon: ShoppingCart, module: 'sales' },
       { path: '/crm', nameKey: 'nav.crm', icon: Users, module: 'sales' },
+      { path: '/woocommerce', nameKey: 'nav.woocommerce', icon: ShoppingBag, module: 'sales' },
       { path: '/kanban', nameKey: 'nav.kanban', icon: ClipboardList, module: 'kanban' },
     ]
   },

@@ -23,6 +23,7 @@ from app.routers import (
     whatsapp,
     widget,
     wiki_rag,
+    woocommerce,
     yoomoney_webhook,
 )
 
@@ -63,6 +64,7 @@ __all__ = [
     "legal",
     "whatsapp",
     "wiki_rag",
+    "woocommerce",
     "github_webhook",
     "yoomoney_webhook",
 ]

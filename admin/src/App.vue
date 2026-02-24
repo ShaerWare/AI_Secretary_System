@@ -276,7 +276,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
           </header>
 
           <!-- Content -->
-          <div :class="['flex-1', route.name === 'chat' ? 'overflow-hidden' : 'overflow-auto p-4 md:p-6']">
+          <div :class="['flex-1', ['chat', 'kanban'].includes(route.name as string) ? 'overflow-hidden' : 'overflow-auto p-4 md:p-6']">
             <RouterView />
           </div>
         </main>

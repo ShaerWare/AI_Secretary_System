@@ -60,6 +60,7 @@ from app.routers import (
     whatsapp,
     widget,
     wiki_rag,
+    woocommerce,
     yoomoney_webhook,
 )
 from app.security_headers import (
@@ -438,6 +439,7 @@ app.include_router(backup.router)
 app.include_router(wiki_rag.router)
 app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
+app.include_router(woocommerce.router)
 app.include_router(claude_code.router)
 app.include_router(kanban.router)
 app.include_router(roles.router)

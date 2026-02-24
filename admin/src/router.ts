@@ -20,6 +20,7 @@ import LoginView from './views/LoginView.vue'
 import CrmView from './views/CrmView.vue'
 import KanbanView from './views/KanbanView.vue'
 import SalesView from './views/SalesView.vue'
+import WooCommerceView from './views/WooCommerceView.vue'
 import AboutView from './views/AboutView.vue'
 
 const router = createRouter({
@@ -144,6 +145,12 @@ const router = createRouter({
       name: 'sales',
       component: SalesView,
       meta: { title: 'Sales', icon: 'ShoppingCart', module: 'sales' }
+    },
+    {
+      path: '/woocommerce',
+      name: 'woocommerce',
+      component: WooCommerceView,
+      meta: { title: 'WooCommerce', icon: 'ShoppingBag', module: 'sales' }
     },
     {
       path: '/about',
