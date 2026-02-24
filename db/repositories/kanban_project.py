@@ -16,9 +16,11 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, KanbanProject)
 
-    async def get_all_projects(self) -> List[dict]:
+    async def get_all_projects(self, workspace_id: Optional[int] = None) -> List[dict]:
         """Get all projects (safe dict, no token exposed)."""
-        result = await self.session.execute(select(KanbanProject).order_by(KanbanProject.name))
+        query = select(KanbanProject).order_by(KanbanProject.name)
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
         return [p.to_dict() for p in result.scalars().all()]
 
     async def get_project_with_token(self, project_id: int) -> Optional[KanbanProject]:

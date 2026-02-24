@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, user_has_level, workspace_context
 from db.integration import async_audit_logger, async_kanban_manager, async_kanban_project_manager
 
 
@@ -81,7 +81,8 @@ class ProjectUpdate(BaseModel):
 @router.get("/projects")
 async def get_projects(user: User = Depends(require_permission("kanban", "view"))):
     """Get all kanban projects."""
-    projects = await async_kanban_project_manager.get_all_projects()
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    projects = await async_kanban_project_manager.get_all_projects(workspace_id=ws_id)
     return {"projects": projects}
 
 
@@ -90,11 +91,13 @@ async def create_project(
     request: ProjectCreate, user: User = Depends(require_permission("kanban", "manage"))
 ):
     """Create a new kanban project (admin only)."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
     kwargs = {
         "name": request.name,
         "github_owner": request.github_owner,
         "github_repo": request.github_repo,
         "sync_enabled": request.sync_enabled,
+        "workspace_id": ws_id,
     }
     if request.github_token:
         kwargs["github_token"] = request.github_token
@@ -212,9 +215,10 @@ async def get_tasks(
     project_id: Optional[int] = Query(None),
 ):
     """Get tasks visible to the current user, optionally filtered by project."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
     is_admin = user_has_level(user, "kanban", "manage")
     tasks = await async_kanban_manager.get_visible_tasks_for_project(
-        project_id, user.username, is_admin
+        project_id, user.username, is_admin, workspace_id=ws_id
     )
     return {"tasks": tasks}
 
@@ -224,6 +228,7 @@ async def create_task(
     request: TaskCreate, user: User = Depends(require_permission("kanban", "edit"))
 ):
     """Create a new task (always draft + private)."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
     tags_json = json.dumps(request.tags, ensure_ascii=False) if request.tags else None
     task = await async_kanban_manager.create_task(
         title=request.title,
@@ -233,6 +238,7 @@ async def create_task(
         due_date=request.due_date,
         tags=tags_json,
         created_by=user.username,
+        workspace_id=ws_id,
     )
     await async_audit_logger.log(
         action="create",
