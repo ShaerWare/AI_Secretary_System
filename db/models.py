@@ -361,6 +361,11 @@ class ChatSession(Base):
     )
     knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # amoCRM lead tracking (widget → CRM)
+    amocrm_lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amocrm_contact_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    visitor_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+
     # Relationships
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage",
@@ -383,6 +388,11 @@ class ChatSession(Base):
             "knowledge_collection_id": self.knowledge_collection_id,
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
+            else None,
+            "amocrm_lead_id": self.amocrm_lead_id,
+            "amocrm_contact_id": self.amocrm_contact_id,
+            "visitor_metadata": json.loads(self.visitor_metadata)
+            if self.visitor_metadata
             else None,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
@@ -409,6 +419,8 @@ class ChatSession(Base):
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
             else None,
+            "amocrm_lead_id": self.amocrm_lead_id,
+            "amocrm_contact_id": self.amocrm_contact_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
