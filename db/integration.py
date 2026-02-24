@@ -357,17 +357,17 @@ class AsyncChatManager:
 class AsyncFAQManager:
     """Async FAQ manager using database with caching."""
 
-    async def get_all(self) -> Dict[str, str]:
+    async def get_all(self, workspace_id: Optional[int] = None) -> Dict[str, str]:
         """Get all FAQ as question->answer dict."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.get_as_dict()
+            return await repo.get_as_dict(workspace_id=workspace_id)
 
-    async def get_all_entries(self) -> List[dict]:
+    async def get_all_entries(self, workspace_id: Optional[int] = None) -> List[dict]:
         """Get all FAQ entries with full details."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.get_all_entries(enabled_only=False)
+            return await repo.get_all_entries(enabled_only=False, workspace_id=workspace_id)
 
     async def find_answer(self, question: str) -> Optional[str]:
         """Find exact match answer for question."""
@@ -375,13 +375,19 @@ class AsyncFAQManager:
             repo = FAQRepository(session)
             return await repo.find_answer(question)
 
-    async def add(self, question: str, answer: str) -> dict:
+    async def add(self, question: str, answer: str, workspace_id: Optional[int] = None) -> dict:
         """Add new FAQ entry."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.create_entry(question, answer)
+            return await repo.create_entry(question, answer, workspace_id=workspace_id)
 
-    async def update(self, old_question: str, question: str, answer: str) -> Optional[dict]:
+    async def update(
+        self,
+        old_question: str,
+        question: str,
+        answer: str,
+        workspace_id: Optional[int] = None,
+    ) -> Optional[dict]:
         """Update FAQ entry."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
@@ -391,7 +397,7 @@ class AsyncFAQManager:
                 existing = await repo.get_by_question(old_question)
                 if existing:
                     await repo.delete_by_question(old_question)
-                return await repo.create_entry(question, answer)
+                return await repo.create_entry(question, answer, workspace_id=workspace_id)
             else:
                 existing = await repo.get_by_question(question)
                 if existing:
@@ -408,11 +414,11 @@ class AsyncFAQManager:
             repo = FAQRepository(session)
             return await repo.delete_by_question(question)
 
-    async def search(self, query: str) -> List[dict]:
+    async def search(self, query: str, workspace_id: Optional[int] = None) -> List[dict]:
         """Search FAQ entries."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.search(query)
+            return await repo.search(query, workspace_id=workspace_id)
 
 
 # ============== Preset Manager ==============
@@ -1349,11 +1355,11 @@ class AsyncUserManager:
 class AsyncKnowledgeDocManager:
     """Async wrapper for KnowledgeDocumentRepository."""
 
-    async def get_all(self) -> List[dict]:
+    async def get_all(self, workspace_id: Optional[int] = None) -> List[dict]:
         """Get all knowledge documents."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.get_all_documents()
+            return await repo.get_all_documents(workspace_id=workspace_id)
 
     async def get_by_id(self, doc_id: int) -> Optional[dict]:
         """Get document by ID."""
@@ -1369,11 +1375,13 @@ class AsyncKnowledgeDocManager:
             doc = await repo.get_by_filename(filename)
             return doc.to_dict() if doc else None
 
-    async def get_by_collection(self, collection_id: int) -> List[dict]:
+    async def get_by_collection(
+        self, collection_id: int, workspace_id: Optional[int] = None
+    ) -> List[dict]:
         """Get all documents in a specific collection."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.get_by_collection(collection_id)
+            return await repo.get_by_collection(collection_id, workspace_id=workspace_id)
 
     async def create(
         self,
@@ -1384,6 +1392,7 @@ class AsyncKnowledgeDocManager:
         section_count: int = 0,
         owner_id: Optional[int] = None,
         collection_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a knowledge document record."""
         async with AsyncSessionLocal() as session:
@@ -1396,6 +1405,7 @@ class AsyncKnowledgeDocManager:
                 section_count=section_count,
                 owner_id=owner_id,
                 collection_id=collection_id,
+                workspace_id=workspace_id,
             )
 
     async def update(
@@ -1426,11 +1436,15 @@ class AsyncKnowledgeDocManager:
 class AsyncKnowledgeCollectionManager:
     """Async wrapper for KnowledgeCollectionRepository."""
 
-    async def get_all(self, enabled_only: bool = False) -> List[dict]:
+    async def get_all(
+        self, enabled_only: bool = False, workspace_id: Optional[int] = None
+    ) -> List[dict]:
         """Get all collections."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            return await repo.get_all_collections(enabled_only=enabled_only)
+            return await repo.get_all_collections(
+                enabled_only=enabled_only, workspace_id=workspace_id
+            )
 
     async def get_by_id(self, collection_id: int) -> Optional[dict]:
         """Get collection by ID with document count."""
@@ -1486,6 +1500,7 @@ class AsyncKnowledgeCollectionManager:
         description: Optional[str] = None,
         enabled: bool = True,
         base_dir: str = "wiki-pages",
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a collection."""
         async with AsyncSessionLocal() as session:
@@ -1496,6 +1511,7 @@ class AsyncKnowledgeCollectionManager:
                 description=description,
                 enabled=enabled,
                 base_dir=base_dir,
+                workspace_id=workspace_id,
             )
 
     async def update(

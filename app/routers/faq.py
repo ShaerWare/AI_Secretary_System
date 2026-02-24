@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, require_permission
+from auth_manager import User, require_permission, workspace_context
 from db.integration import async_audit_logger, async_faq_manager
 
 
@@ -33,7 +33,8 @@ async def _reload_llm_faq():
 @router.get("")
 async def admin_get_faq(user: User = Depends(require_permission("faq", "view"))):
     """Получить все FAQ записи"""
-    faq = await async_faq_manager.get_all()
+    _owner_id, ws_id = workspace_context(user, "faq")
+    faq = await async_faq_manager.get_all(workspace_id=ws_id)
     return {"faq": faq}
 
 
@@ -42,7 +43,8 @@ async def admin_add_faq(
     request: AdminFAQRequest, user: User = Depends(require_permission("faq", "edit"))
 ):
     """Добавить FAQ запись"""
-    await async_faq_manager.add(request.trigger, request.response)
+    _owner_id, ws_id = workspace_context(user, "faq")
+    await async_faq_manager.add(request.trigger, request.response, workspace_id=ws_id)
 
     # Audit log
     await async_audit_logger.log(
@@ -64,7 +66,10 @@ async def admin_update_faq(
     trigger: str, request: AdminFAQRequest, user: User = Depends(require_permission("faq", "edit"))
 ):
     """Обновить FAQ запись"""
-    result = await async_faq_manager.update(trigger, request.trigger, request.response)
+    _owner_id, ws_id = workspace_context(user, "faq")
+    result = await async_faq_manager.update(
+        trigger, request.trigger, request.response, workspace_id=ws_id
+    )
     if not result:
         raise HTTPException(status_code=404, detail="FAQ entry not found")
 

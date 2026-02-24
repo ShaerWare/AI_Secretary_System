@@ -20,34 +20,41 @@ class FAQRepository(BaseRepository[FAQEntry]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, FAQEntry)
 
-    async def get_all_entries(self, enabled_only: bool = True) -> List[dict]:
-        """Get all FAQ entries."""
+    async def get_all_entries(
+        self, enabled_only: bool = True, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        """Get all FAQ entries, filtered by workspace."""
         query = select(FAQEntry).order_by(FAQEntry.question)
         if enabled_only:
             query = query.where(FAQEntry.enabled == True)
+        query = self._apply_workspace_filter(query, workspace_id)
 
         result = await self.session.execute(query)
         entries = result.scalars().all()
         return [e.to_dict() for e in entries]
 
-    async def get_as_dict(self) -> Dict[str, str]:
+    async def get_as_dict(self, workspace_id: Optional[int] = None) -> Dict[str, str]:
         """
         Get FAQ as question->answer dict for LLM matching.
-        Uses Redis cache for performance.
+        Uses Redis cache when no workspace filter.
         """
-        # Try cache first
-        cached = await get_cached_faq()
-        if cached:
-            return cached
+        # Try cache first (only when no workspace filter)
+        if workspace_id is None:
+            cached = await get_cached_faq()
+            if cached:
+                return cached
 
         # Fetch from database
-        result = await self.session.execute(select(FAQEntry).where(FAQEntry.enabled == True))
+        query = select(FAQEntry).where(FAQEntry.enabled == True)
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
         entries = result.scalars().all()
 
         faq_dict = {e.question: e.answer for e in entries}
 
-        # Cache for 10 minutes
-        await cache_faq(faq_dict, ttl_seconds=600)
+        # Cache for 10 minutes (only when no workspace filter)
+        if workspace_id is None:
+            await cache_faq(faq_dict, ttl_seconds=600)
 
         return faq_dict
 
@@ -84,8 +91,13 @@ class FAQRepository(BaseRepository[FAQEntry]):
         question: str,
         answer: str,
         keywords: Optional[List[str]] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create new FAQ entry."""
+        create_kwargs: dict[str, Any] = {}
+        if workspace_id is not None:
+            create_kwargs["workspace_id"] = workspace_id
+
         entry = FAQEntry(
             question=question.lower().strip(),
             answer=answer,
@@ -94,6 +106,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
             hit_count=0,
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
+            **create_kwargs,
         )
 
         self.session.add(entry)
@@ -175,14 +188,16 @@ class FAQRepository(BaseRepository[FAQEntry]):
         """Export FAQ to legacy dict format."""
         return await self.get_as_dict()
 
-    async def search(self, query: str) -> List[dict]:
+    async def search(self, query: str, workspace_id: Optional[int] = None) -> List[dict]:
         """Search FAQ entries by question or answer content."""
         pattern = f"%{query.lower()}%"
-        result = await self.session.execute(
+        stmt = (
             select(FAQEntry)
             .where((FAQEntry.question.ilike(pattern)) | (FAQEntry.answer.ilike(pattern)))
             .order_by(FAQEntry.hit_count.desc())
         )
+        stmt = self._apply_workspace_filter(stmt, workspace_id)
+        result = await self.session.execute(stmt)
         entries = result.scalars().all()
         return [e.to_dict() for e in entries]
 
