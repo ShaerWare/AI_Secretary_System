@@ -592,7 +592,8 @@ async def get_session(session_id: str, user=Depends(require_permission("claude_c
     """Get a specific Claude Code session."""
     from db.integration import async_claude_code_manager
 
-    session = await async_claude_code_manager.get_session(session_id)
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    session = await async_claude_code_manager.get_session(session_id, workspace_id=ws_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"session": session}
@@ -605,7 +606,8 @@ async def delete_session(
     """Delete a Claude Code session."""
     from db.integration import async_claude_code_manager
 
-    deleted = await async_claude_code_manager.delete_session(session_id)
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    deleted = await async_claude_code_manager.delete_session(session_id, workspace_id=ws_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "deleted"}

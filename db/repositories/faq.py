@@ -155,11 +155,12 @@ class FAQRepository(BaseRepository[FAQEntry]):
         await invalidate_faq_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
-    async def delete_by_question(self, question: str) -> bool:
-        """Delete FAQ entry by question."""
-        result = await self.session.execute(
-            delete(FAQEntry).where(FAQEntry.question == question.lower())
-        )
+    async def delete_by_question(self, question: str, workspace_id: Optional[int] = None) -> bool:
+        """Delete FAQ entry by question, optionally scoped to workspace."""
+        stmt = delete(FAQEntry).where(FAQEntry.question == question.lower())
+        if workspace_id is not None and hasattr(FAQEntry, "workspace_id"):
+            stmt = stmt.where(FAQEntry.workspace_id == workspace_id)
+        result = await self.session.execute(stmt)
         await self.session.commit()
         await invalidate_faq_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]

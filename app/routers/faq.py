@@ -90,7 +90,8 @@ async def admin_update_faq(
 @router.delete("/{trigger}")
 async def admin_delete_faq(trigger: str, user: User = Depends(require_permission("faq", "edit"))):
     """Удалить FAQ запись"""
-    if not await async_faq_manager.delete(trigger):
+    _owner_id, ws_id = workspace_context(user, "faq")
+    if not await async_faq_manager.delete(trigger, workspace_id=ws_id):
         raise HTTPException(status_code=404, detail=f"Trigger not found: {trigger}")
 
     # Audit log

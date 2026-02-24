@@ -24,11 +24,13 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             selectinload(KanbanTask.dependencies_as_dependent),
         ]
 
-    async def get_task_with_relations(self, task_id: int) -> Optional[KanbanTask]:
+    async def get_task_with_relations(
+        self, task_id: int, workspace_id: Optional[int] = None
+    ) -> Optional[KanbanTask]:
         """Get a single task with all relations loaded."""
-        result = await self.session.execute(
-            select(KanbanTask).where(KanbanTask.id == task_id).options(*self._load_options())
-        )
+        query = select(KanbanTask).where(KanbanTask.id == task_id).options(*self._load_options())
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def get_visible_tasks(

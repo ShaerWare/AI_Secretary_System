@@ -33,6 +33,19 @@ class BaseRepository(Generic[T]):
         result: Optional[T] = await self.session.get(self.model, id_value)
         return result
 
+    async def get_by_id_ws(self, id_value: Any, workspace_id: Optional[int] = None) -> Optional[T]:
+        """Get entity by PK with optional workspace filter.
+
+        Gate-check for mutation endpoints: returns None if the entity
+        exists but belongs to a different workspace.
+        """
+        if workspace_id is None:
+            return await self.get_by_id(id_value)
+        query = select(self.model).where(self.model.id == id_value)
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_all(self, limit: int = 1000, offset: int = 0) -> List[T]:
         """Get all entities with pagination."""
         result = await self.session.execute(select(self.model).limit(limit).offset(offset))

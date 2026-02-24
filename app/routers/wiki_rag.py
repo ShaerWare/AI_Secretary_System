@@ -224,7 +224,10 @@ async def get_collection(
     collection_id: int, user: User = Depends(require_permission("wiki", "view"))
 ):
     """Get a single knowledge collection."""
-    collection = await async_knowledge_collection_manager.get_by_id(collection_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    collection = await async_knowledge_collection_manager.get_by_id(
+        collection_id, workspace_id=ws_id
+    )
     if not collection:
         raise HTTPException(status_code=404, detail="Коллекция не найдена")
     return {"collection": collection}
@@ -237,7 +240,10 @@ async def update_collection(
     user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Update a knowledge collection."""
-    collection = await async_knowledge_collection_manager.get_by_id(collection_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    collection = await async_knowledge_collection_manager.get_by_id(
+        collection_id, workspace_id=ws_id
+    )
     if not collection:
         raise HTTPException(status_code=404, detail="Коллекция не найдена")
 
@@ -264,7 +270,10 @@ async def delete_collection(
     user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Delete a knowledge collection. Cannot delete 'default'."""
-    collection = await async_knowledge_collection_manager.get_by_id(collection_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    collection = await async_knowledge_collection_manager.get_by_id(
+        collection_id, workspace_id=ws_id
+    )
     if not collection:
         raise HTTPException(status_code=404, detail="Коллекция не найдена")
 
@@ -298,7 +307,10 @@ async def reload_collection_index(
     if not wiki_rag:
         raise HTTPException(status_code=503, detail="Wiki RAG сервис не инициализирован")
 
-    collection = await async_knowledge_collection_manager.get_by_id(collection_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    collection = await async_knowledge_collection_manager.get_by_id(
+        collection_id, workspace_id=ws_id
+    )
     if not collection:
         raise HTTPException(status_code=404, detail="Коллекция не найдена")
 
@@ -504,7 +516,8 @@ async def upload_document(
 @router.get("/documents/{doc_id}")
 async def get_document(doc_id: int, user: User = Depends(require_permission("wiki", "view"))):
     """Get document metadata + content preview."""
-    doc = await async_knowledge_doc_manager.get_by_id(doc_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    doc = await async_knowledge_doc_manager.get_by_id(doc_id, workspace_id=ws_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Документ не найден")
 
@@ -528,7 +541,8 @@ async def update_document(
     user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Update document title and/or content."""
-    doc = await async_knowledge_doc_manager.get_by_id(doc_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    doc = await async_knowledge_doc_manager.get_by_id(doc_id, workspace_id=ws_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Документ не найден")
 
@@ -573,7 +587,8 @@ async def update_document(
 @router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int, user: User = Depends(require_permission("wiki", "edit"))):
     """Delete document from disk and DB, re-index."""
-    doc = await async_knowledge_doc_manager.get_by_id(doc_id)
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    doc = await async_knowledge_doc_manager.get_by_id(doc_id, workspace_id=ws_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Документ не найден")
 

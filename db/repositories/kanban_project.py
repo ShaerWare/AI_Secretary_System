@@ -23,8 +23,15 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
         result = await self.session.execute(query)
         return [p.to_dict() for p in result.scalars().all()]
 
-    async def get_project_with_token(self, project_id: int) -> Optional[KanbanProject]:
+    async def get_project_with_token(
+        self, project_id: int, workspace_id: Optional[int] = None
+    ) -> Optional[KanbanProject]:
         """Get project ORM object (includes token for sync operations)."""
+        if workspace_id is not None:
+            query = select(KanbanProject).where(KanbanProject.id == project_id)
+            query = self._apply_workspace_filter(query, workspace_id)
+            result = await self.session.execute(query)
+            return result.scalar_one_or_none()
         return await self.session.get(KanbanProject, project_id)
 
     async def get_by_repo(self, owner: str, repo: str) -> Optional[KanbanProject]:

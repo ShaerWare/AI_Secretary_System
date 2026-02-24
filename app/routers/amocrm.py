@@ -60,13 +60,13 @@ webhook_router = APIRouter(tags=["amocrm-webhook"])
 # ============== Helpers ==============
 
 
-async def _get_valid_token() -> dict:
+async def _get_valid_token(workspace_id: Optional[int] = None) -> dict:
     """Get config with a valid access token; auto-refresh if expired.
 
     Returns full config dict with fresh tokens.
     Raises HTTPException if not connected or refresh fails.
     """
-    config = await async_amocrm_manager.get_config_with_secrets()
+    config = await async_amocrm_manager.get_config_with_secrets(workspace_id=workspace_id)
     if not config or not config.get("access_token"):
         raise HTTPException(status_code=400, detail="amoCRM not connected")
 
@@ -106,6 +106,7 @@ async def _get_valid_token() -> dict:
         new_expires = datetime.utcnow() + timedelta(seconds=expires_in)
 
         await async_amocrm_manager.save_config(
+            workspace_id=workspace_id,
             access_token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
             token_expires_at=new_expires,
@@ -238,7 +239,8 @@ async def crm_auth_url(
     request: Request, user: User = Depends(require_permission("sales", "manage"))
 ):
     """Build OAuth authorization URL for amoCRM."""
-    config = await async_amocrm_manager.get_config_with_secrets()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config_with_secrets(workspace_id=ws_id)
     if not config or not config.get("client_id"):
         raise HTTPException(status_code=400, detail="Client ID not configured")
 
@@ -357,7 +359,8 @@ async def crm_disconnect(user: User = Depends(require_permission("sales", "manag
 @router.post("/test")
 async def crm_test_connection(user: User = Depends(require_permission("sales", "edit"))):
     """Test connection by fetching account info."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         account = await get_account_info(config["subdomain"], config["access_token"])
         return {"status": "ok", "account": account}
@@ -368,7 +371,8 @@ async def crm_test_connection(user: User = Depends(require_permission("sales", "
 @router.post("/refresh-token")
 async def crm_force_refresh_token(user: User = Depends(require_permission("sales", "manage"))):
     """Force token refresh."""
-    config = await async_amocrm_manager.get_config_with_secrets()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config_with_secrets(workspace_id=ws_id)
     if not config or not config.get("refresh_token"):
         raise HTTPException(status_code=400, detail="No refresh token available")
 
@@ -387,6 +391,7 @@ async def crm_force_refresh_token(user: User = Depends(require_permission("sales
     expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
 
     await async_amocrm_manager.save_config(
+        workspace_id=ws_id,
         access_token=tokens["access_token"],
         refresh_token=tokens["refresh_token"],
         token_expires_at=expires_at,
@@ -405,7 +410,8 @@ async def crm_get_contacts(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """List contacts from amoCRM (proxied)."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         data = await get_contacts(config["subdomain"], config["access_token"], page, limit, query)
         return data
@@ -419,7 +425,8 @@ async def crm_create_contact(
     user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create a contact in amoCRM."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         result = await create_contact(
             config["subdomain"],
@@ -451,7 +458,8 @@ async def crm_get_leads(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """List leads from amoCRM (proxied)."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         data = await get_leads(config["subdomain"], config["access_token"], page, limit, query)
         return data
@@ -465,7 +473,8 @@ async def crm_create_lead(
     user: User = Depends(require_permission("sales", "edit")),
 ):
     """Create a lead in amoCRM."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         result = await create_lead(
             config["subdomain"],
@@ -498,7 +507,8 @@ async def crm_add_note_to_lead(
     user: User = Depends(require_permission("sales", "edit")),
 ):
     """Add a note to a lead."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         result = await add_note_to_lead(
             config["subdomain"],
@@ -520,7 +530,8 @@ async def crm_get_leads_by_pipeline(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get all leads in a specific pipeline (for kanban board)."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = _get_subdomain(config)
     cache_key = f"{CacheKey.AMOCRM}:pipeline_leads:{subdomain}:{pipeline_id}"
     cached = await cache_get(cache_key)
@@ -541,7 +552,8 @@ async def crm_get_unsorted_leads(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get unsorted (incoming) leads, paginated."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = _get_subdomain(config)
     cache_key = f"{CacheKey.AMOCRM}:unsorted:{subdomain}:{page}:{limit}"
     cached = await cache_get(cache_key)
@@ -563,7 +575,8 @@ async def crm_get_lead(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get single lead detail with contacts."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = _get_subdomain(config)
     cache_key = f"{CacheKey.AMOCRM}:lead:{subdomain}:{lead_id}"
     cached = await cache_get(cache_key)
@@ -586,7 +599,8 @@ async def crm_update_lead(
     user: User = Depends(require_permission("sales", "edit")),
 ):
     """Update a lead (status, pipeline, name, price)."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     update_data = {k: v for k, v in request.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -623,7 +637,8 @@ async def crm_get_events(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get events feed (chat messages, lead changes, etc.)."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         data = await get_events(config["subdomain"], config["access_token"], page, limit, types)
         return data
@@ -640,7 +655,8 @@ async def crm_get_contact_chats(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get chats linked to a contact."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     try:
         data = await get_contact_chats(config["subdomain"], config["access_token"], contact_id)
         return data
@@ -659,7 +675,8 @@ async def crm_get_chat_history(
     user: User = Depends(require_permission("sales", "view")),
 ):
     """Get chat message history via amojo API."""
-    config = await async_amocrm_manager.get_config_with_secrets()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config_with_secrets(workspace_id=ws_id)
     if not config:
         raise HTTPException(status_code=400, detail="amoCRM not configured")
 
@@ -686,7 +703,8 @@ async def crm_send_chat_message(
     user: User = Depends(require_permission("sales", "edit")),
 ):
     """Send a chat message via amojo API."""
-    config = await async_amocrm_manager.get_config_with_secrets()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config_with_secrets(workspace_id=ws_id)
     if not config:
         raise HTTPException(status_code=400, detail="amoCRM not configured")
 
@@ -726,7 +744,8 @@ async def crm_send_chat_message(
 @router.get("/pipelines")
 async def crm_get_pipelines(user: User = Depends(require_permission("sales", "view"))):
     """List pipelines with their statuses."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = _get_subdomain(config)
     cache_key = f"{CacheKey.AMOCRM}:pipelines:{subdomain}"
     cached = await cache_get(cache_key)
@@ -746,7 +765,8 @@ async def crm_get_pipelines(user: User = Depends(require_permission("sales", "vi
 @router.post("/sync")
 async def crm_sync(user: User = Depends(require_permission("sales", "edit"))):
     """Manual sync — fetch counts from amoCRM and update local stats."""
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = config["subdomain"]
     access_token = config["access_token"]
 
@@ -768,6 +788,7 @@ async def crm_sync(user: User = Depends(require_permission("sales", "edit"))):
         pass
 
     await async_amocrm_manager.save_config(
+        workspace_id=ws_id,
         contacts_count=contacts_count,
         leads_count=leads_count,
         last_sync_at=datetime.utcnow(),
@@ -811,7 +832,8 @@ async def crm_dataset_sync(user: User = Depends(require_permission("sales", "edi
     Fetches all pipelines + leads, generates markdown documents,
     writes to data/crm-dataset/, updates knowledge collection + re-indexes.
     """
-    config = await _get_valid_token()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await _get_valid_token(workspace_id=ws_id)
     subdomain = config["subdomain"]
     access_token = config["access_token"]
 
