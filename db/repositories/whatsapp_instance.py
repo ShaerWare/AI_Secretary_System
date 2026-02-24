@@ -53,9 +53,12 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
         return instance
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
-        """List WhatsApp instances, filtered by owner."""
+        """List WhatsApp instances, filtered by owner and workspace."""
         query = select(WhatsAppInstance).order_by(WhatsAppInstance.updated.desc())
         if enabled_only:
             query = query.where(WhatsAppInstance.enabled == True)
@@ -63,19 +66,28 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             query = query.where(
                 (WhatsAppInstance.owner_id == owner_id) | (WhatsAppInstance.owner_id.is_(None))
             )
+        query = self._apply_workspace_filter(query, workspace_id)
 
         result = await self.session.execute(query)
         instances = result.scalars().all()
         return [i.to_dict() for i in instances]
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
-        """Get WhatsApp instance by ID, with optional owner check."""
-        instance = await self.session.get(WhatsAppInstance, instance_id)
+        """Get WhatsApp instance by ID, with optional owner/workspace check."""
+        query = select(WhatsAppInstance).where(WhatsAppInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (WhatsAppInstance.owner_id == owner_id) | (WhatsAppInstance.owner_id.is_(None))
+            )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return None
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return None
         return instance.to_dict()
 
@@ -99,6 +111,11 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
         if existing:
             instance_id = f"{instance_id}-{int(datetime.utcnow().timestamp())}"
 
+        # Build creation kwargs
+        create_kwargs: dict[str, Any] = {}
+        if kwargs.get("workspace_id") is not None:
+            create_kwargs["workspace_id"] = kwargs["workspace_id"]
+
         instance = WhatsAppInstance(
             id=instance_id,
             name=name,
@@ -106,6 +123,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             enabled=kwargs.get("enabled", True),
             auto_start=kwargs.get("auto_start", False),
             owner_id=kwargs.get("owner_id"),
+            **create_kwargs,
             # WhatsApp API
             phone_number_id=phone_number_id,
             waba_id=kwargs.get("waba_id"),
@@ -191,12 +209,23 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
         data: dict[str, Any] = instance.to_dict()
         return data
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
-        """Delete WhatsApp instance, with optional owner check."""
-        instance = await self.session.get(WhatsAppInstance, instance_id)
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
+        """Delete WhatsApp instance, with optional owner/workspace check."""
+        query = select(WhatsAppInstance).where(WhatsAppInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (WhatsAppInstance.owner_id == owner_id) | (WhatsAppInstance.owner_id.is_(None))
+            )
+        if workspace_id is not None and hasattr(WhatsAppInstance, "workspace_id"):
+            query = query.where(WhatsAppInstance.workspace_id == workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return False
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return False
 
         await self.session.delete(instance)

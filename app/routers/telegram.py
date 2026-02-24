@@ -11,7 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, workspace_context
 from db.integration import (
     async_audit_logger,
     async_bot_instance_manager,
@@ -361,9 +361,9 @@ async def admin_list_bot_instances(
     enabled_only: bool = False, user: User = Depends(require_permission("channels", "view"))
 ):
     """List all Telegram bot instances"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     instances = await async_bot_instance_manager.list_instances(
-        enabled_only=enabled_only, owner_id=owner_id
+        enabled_only=enabled_only, owner_id=owner_id, workspace_id=ws_id
     )
 
     # Add running status from multi_bot_manager
@@ -379,10 +379,11 @@ async def admin_create_bot_instance(
     request: BotInstanceCreateRequest, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Create a new Telegram bot instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     # Convert request to dict, removing None values
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
     kwargs["owner_id"] = owner_id
+    kwargs["workspace_id"] = ws_id
 
     instance = await async_bot_instance_manager.create_instance(**kwargs)
 
@@ -405,11 +406,13 @@ async def admin_get_bot_instance(
     user: User = Depends(require_permission("channels", "view")),
 ):
     """Get a specific bot instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     if include_token:
         instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
     else:
-        instance = await async_bot_instance_manager.get_instance(instance_id, owner_id=owner_id)
+        instance = await async_bot_instance_manager.get_instance(
+            instance_id, owner_id=owner_id, workspace_id=ws_id
+        )
 
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
@@ -430,8 +433,10 @@ async def admin_update_bot_instance(
 ):
     """Update a bot instance"""
     # Check if exists and verify ownership
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
-    existing = await async_bot_instance_manager.get_instance(instance_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "channels")
+    existing = await async_bot_instance_manager.get_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Bot instance not found")
 
@@ -457,11 +462,13 @@ async def admin_delete_bot_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Delete a bot instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     # Stop bot if running
     await multi_bot_manager.stop_bot(instance_id)
 
-    success = await async_bot_instance_manager.delete_instance(instance_id, owner_id=owner_id)
+    success = await async_bot_instance_manager.delete_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Bot instance not found")
 
@@ -478,10 +485,15 @@ async def admin_start_bot_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Start a specific bot instance and enable auto-start"""
-    # Check if instance exists
-    instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
+
+    # Re-fetch with token for start logic
+    instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
 
     if not instance.get("bot_token"):
         raise HTTPException(status_code=400, detail="Bot token not configured")
@@ -503,6 +515,13 @@ async def admin_stop_bot_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Stop a specific bot instance and disable auto-start"""
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+
     result = await multi_bot_manager.stop_bot(instance_id)
 
     # Save auto_start=False so bot doesn't restart on app launch
@@ -517,6 +536,13 @@ async def admin_restart_bot_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Restart a specific bot instance"""
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+
     result = await multi_bot_manager.restart_bot(instance_id)
     return result
 
@@ -526,8 +552,10 @@ async def admin_get_bot_instance_status(
     instance_id: str, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get status of a specific bot instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
-    instance = await async_bot_instance_manager.get_instance(instance_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "channels")
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
 
@@ -551,6 +579,13 @@ async def admin_get_bot_instance_sessions(
     instance_id: str, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get sessions for a specific bot instance"""
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+
     sessions = await async_telegram_manager.get_sessions_for_bot(instance_id)
     return {"sessions": sessions}
 
@@ -581,6 +616,13 @@ async def admin_clear_bot_instance_sessions(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Clear all sessions for a specific bot instance"""
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+
     count = await async_telegram_manager.clear_sessions_for_bot(instance_id)
     return {"status": "ok", "message": f"Cleared {count} sessions"}
 
@@ -590,6 +632,13 @@ async def admin_get_bot_instance_logs(
     instance_id: str, lines: int = 100, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get recent logs for a bot instance"""
+    # Workspace gate-check
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, workspace_id=user.workspace_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+
     logs = await multi_bot_manager.get_recent_logs(instance_id, lines)
     return {"logs": logs}
 

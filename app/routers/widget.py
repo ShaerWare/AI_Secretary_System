@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.cors_middleware import get_cors_middleware
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, workspace_context
 from db.integration import (
     async_audit_logger,
     async_config_manager,
@@ -167,9 +167,9 @@ async def admin_list_widget_instances(
     enabled_only: bool = False, user: User = Depends(require_permission("channels", "view"))
 ):
     """List all widget instances"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     instances = await async_widget_instance_manager.list_instances(
-        enabled_only=enabled_only, owner_id=owner_id
+        enabled_only=enabled_only, owner_id=owner_id, workspace_id=ws_id
     )
     return {"instances": instances}
 
@@ -180,9 +180,10 @@ async def admin_create_widget_instance(
     user: User = Depends(require_permission("channels", "edit")),
 ):
     """Create a new widget instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "channels")
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
     kwargs["owner_id"] = owner_id
+    kwargs["workspace_id"] = ws_id
 
     instance = await async_widget_instance_manager.create_instance(**kwargs)
 
@@ -205,8 +206,10 @@ async def admin_get_widget_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "view"))
 ):
     """Get a specific widget instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
-    instance = await async_widget_instance_manager.get_instance(instance_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "channels")
+    instance = await async_widget_instance_manager.get_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not instance:
         raise HTTPException(status_code=404, detail="Widget instance not found")
 
@@ -220,8 +223,10 @@ async def admin_update_widget_instance(
     user: User = Depends(require_permission("channels", "edit")),
 ):
     """Update a widget instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
-    existing = await async_widget_instance_manager.get_instance(instance_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "channels")
+    existing = await async_widget_instance_manager.get_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Widget instance not found")
 
@@ -248,8 +253,10 @@ async def admin_delete_widget_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
     """Delete a widget instance"""
-    owner_id = None if user_has_level(user, "channels", "manage") else user.id
-    success = await async_widget_instance_manager.delete_instance(instance_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "channels")
+    success = await async_widget_instance_manager.delete_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Widget instance not found")
 

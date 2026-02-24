@@ -61,9 +61,12 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         return instance
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
-        """List widget instances, filtered by owner."""
+        """List widget instances, filtered by owner and workspace."""
         query = select(WidgetInstance).order_by(WidgetInstance.updated.desc())
         if enabled_only:
             query = query.where(WidgetInstance.enabled == True)
@@ -71,19 +74,28 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             query = query.where(
                 (WidgetInstance.owner_id == owner_id) | (WidgetInstance.owner_id.is_(None))
             )
+        query = self._apply_workspace_filter(query, workspace_id)
 
         result = await self.session.execute(query)
         instances = result.scalars().all()
         return [i.to_dict() for i in instances]
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
-        """Get widget instance by ID, with optional owner check."""
-        instance = await self.session.get(WidgetInstance, instance_id)
+        """Get widget instance by ID, with optional owner/workspace check."""
+        query = select(WidgetInstance).where(WidgetInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (WidgetInstance.owner_id == owner_id) | (WidgetInstance.owner_id.is_(None))
+            )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return None
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return None
         return instance.to_dict()
 
@@ -99,12 +111,18 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             # Append timestamp to make unique
             instance_id = f"{instance_id}-{int(datetime.utcnow().timestamp())}"
 
+        # Build creation kwargs
+        create_kwargs: dict[str, Any] = {}
+        if kwargs.get("workspace_id") is not None:
+            create_kwargs["workspace_id"] = kwargs["workspace_id"]
+
         instance = WidgetInstance(
             id=instance_id,
             name=name,
             description=description,
             enabled=kwargs.get("enabled", True),
             owner_id=kwargs.get("owner_id"),
+            **create_kwargs,
             # Appearance
             title=kwargs.get("title", DEFAULT_WIDGET_CONFIG["title"]),
             greeting=kwargs.get("greeting", DEFAULT_WIDGET_CONFIG["greeting"]),
@@ -187,12 +205,23 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         data: dict[str, Any] = instance.to_dict()
         return data
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
-        """Delete widget instance, with optional owner check."""
-        instance = await self.session.get(WidgetInstance, instance_id)
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
+        """Delete widget instance, with optional owner/workspace check."""
+        query = select(WidgetInstance).where(WidgetInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (WidgetInstance.owner_id == owner_id) | (WidgetInstance.owner_id.is_(None))
+            )
+        if workspace_id is not None and hasattr(WidgetInstance, "workspace_id"):
+            query = query.where(WidgetInstance.workspace_id == workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return False
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return False
 
         await self.session.delete(instance)

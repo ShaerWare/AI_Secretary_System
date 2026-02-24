@@ -56,9 +56,12 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         return instance
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
-        """List bot instances, filtered by owner."""
+        """List bot instances, filtered by owner and workspace."""
         query = select(BotInstance).order_by(BotInstance.updated.desc())
         if enabled_only:
             query = query.where(BotInstance.enabled == True)
@@ -66,19 +69,28 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             query = query.where(
                 (BotInstance.owner_id == owner_id) | (BotInstance.owner_id.is_(None))
             )
+        query = self._apply_workspace_filter(query, workspace_id)
 
         result = await self.session.execute(query)
         instances = result.scalars().all()
         return [i.to_dict() for i in instances]
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
-        """Get bot instance by ID, with optional owner check."""
-        instance = await self.session.get(BotInstance, instance_id)
+        """Get bot instance by ID, with optional owner/workspace check."""
+        query = select(BotInstance).where(BotInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (BotInstance.owner_id == owner_id) | (BotInstance.owner_id.is_(None))
+            )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return None
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return None
         return instance.to_dict()
 
@@ -103,12 +115,18 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             # Append timestamp to make unique
             instance_id = f"{instance_id}-{int(datetime.utcnow().timestamp())}"
 
+        # Build creation kwargs
+        create_kwargs: dict[str, Any] = {}
+        if kwargs.get("workspace_id") is not None:
+            create_kwargs["workspace_id"] = kwargs["workspace_id"]
+
         instance = BotInstance(
             id=instance_id,
             name=name,
             description=description,
             enabled=kwargs.get("enabled", True),
             owner_id=kwargs.get("owner_id"),
+            **create_kwargs,
             # Telegram
             bot_token=bot_token,
             welcome_message=kwargs.get("welcome_message", DEFAULT_BOT_CONFIG["welcome_message"]),
@@ -230,12 +248,23 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         data: dict[str, Any] = instance.to_dict()
         return data
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
-        """Delete bot instance, with optional owner check."""
-        instance = await self.session.get(BotInstance, instance_id)
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
+        """Delete bot instance, with optional owner/workspace check."""
+        query = select(BotInstance).where(BotInstance.id == instance_id)
+        if owner_id is not None:
+            query = query.where(
+                (BotInstance.owner_id == owner_id) | (BotInstance.owner_id.is_(None))
+            )
+        if workspace_id is not None and hasattr(BotInstance, "workspace_id"):
+            query = query.where(BotInstance.workspace_id == workspace_id)
+        result = await self.session.execute(query)
+        instance = result.scalar_one_or_none()
         if not instance:
-            return False
-        if owner_id is not None and instance.owner_id is not None and instance.owner_id != owner_id:
             return False
 
         await self.session.delete(instance)
