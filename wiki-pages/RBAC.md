@@ -284,7 +284,7 @@ Content-Type: application/json
 - [x] **6c-3**: **AI/LLM** — Cloud LLM Providers + TTS Presets (#379, PR #389)
 - [x] **6c-4**: **Knowledge/FAQ** — Knowledge Documents, Collections, FAQ Entries (#380, PR #391)
 - [x] **6c-5**: **System/Kanban/amoCRM** — Kanban Tasks & Projects, Claude Code Sessions, amoCRM Config (#381, PR #393). Audit excluded (no workspace_id)
-- [ ] **6c-6**: Финализация — тесты, документация (#382)
+- [x] **6c-6**: Финализация — аудит, gate-check на мутациях, документация (#382, PR #395)
 
 Bot-scoped таблицы (`telegram_sessions`, `bot_agent_prompts`, `bot_quiz_questions` и др.) **не** содержат `workspace_id` — они фильтруются через `bot_instances.workspace_id`.
 
