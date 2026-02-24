@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_CHAT, limiter
 from app.utils.tokens import count_message_tokens, get_context_window, trim_messages
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, user_has_level, workspace_context
 from cloud_llm_service import CloudLLMService
 from db.integration import (
     async_bot_instance_manager,
@@ -322,7 +322,7 @@ class ForkSessionRequest(BaseModel):
 
 async def _check_session_owner_or_admin(session_id: str, user: User) -> dict:
     """Verify user is session owner or admin. Returns session data."""
-    session_data = await async_chat_manager.get_session(session_id)
+    session_data = await async_chat_manager.get_session(session_id, workspace_id=user.workspace_id)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
     if not user_has_level(user, "chat", "manage") and session_data.get("owner_id") not in (
@@ -335,15 +335,18 @@ async def _check_session_owner_or_admin(session_id: str, user: User) -> dict:
 
 async def _check_write_access(session_id: str, user: User) -> dict:
     """Check that user has write access to session. Returns session data."""
+    ws_id = user.workspace_id
     # Manager always has access
     if user_has_level(user, "chat", "manage"):
-        session_data = await async_chat_manager.get_session(session_id)
+        session_data = await async_chat_manager.get_session(session_id, workspace_id=ws_id)
         if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
         return session_data
 
     # Owner has access
-    session_data = await async_chat_manager.get_session(session_id, owner_id=user.id)
+    session_data = await async_chat_manager.get_session(
+        session_id, owner_id=user.id, workspace_id=ws_id
+    )
     if session_data:
         owner_id = session_data.get("owner_id")
         if owner_id == user.id or owner_id is None:
@@ -368,7 +371,7 @@ async def admin_list_chat_sessions(
     user: User = Depends(require_permission("chat", "view")),
 ):
     """Список всех чат-сессий. group_by=source для группировки по источнику."""
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "chat")
 
     # Get shared session permissions for non-admin users
     shared_perms: dict[str, str] = {}
@@ -389,14 +392,16 @@ async def admin_list_chat_sessions(
         return sessions_list
 
     if group_by == "source":
-        grouped = await async_chat_manager.list_sessions_grouped(owner_id=owner_id)
+        grouped = await async_chat_manager.list_sessions_grouped(
+            owner_id=owner_id, workspace_id=ws_id
+        )
         all_ids = [s["id"] for sl in grouped.values() for s in sl]
         share_counts = await async_chat_share_manager.get_share_counts(all_ids) if all_ids else {}
         for source_key in grouped:
             _enrich(grouped[source_key], share_counts)
         return {"sessions": grouped, "grouped": True}
     sessions = await async_chat_manager.list_sessions(
-        owner_id=owner_id, source=source, exclude_source=exclude_source
+        owner_id=owner_id, source=source, exclude_source=exclude_source, workspace_id=ws_id
     )
     all_ids = [s["id"] for s in sessions]
     share_counts = await async_chat_share_manager.get_share_counts(all_ids) if all_ids else {}
@@ -409,7 +414,7 @@ async def admin_create_chat_session(
     request: CreateSessionRequest, user: User = Depends(require_permission("chat", "edit"))
 ):
     """Создать новую чат-сессию"""
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "chat")
 
     # Auto-apply widget system_prompt if not explicitly provided
     system_prompt = request.system_prompt
@@ -426,6 +431,7 @@ async def admin_create_chat_session(
         owner_id=owner_id,
         rag_mode=request.rag_mode,
         knowledge_collection_id=request.knowledge_collection_id,
+        workspace_id=ws_id,
     )
     return {"session": session}
 
@@ -435,8 +441,10 @@ async def admin_bulk_delete_sessions(
     request: BulkDeleteRequest, user: User = Depends(require_permission("chat", "manage"))
 ):
     """Удалить несколько сессий сразу"""
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    count = await async_chat_manager.delete_sessions_bulk(request.session_ids, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "chat")
+    count = await async_chat_manager.delete_sessions_bulk(
+        request.session_ids, owner_id=owner_id, workspace_id=ws_id
+    )
     return {"status": "ok", "deleted": count}
 
 
@@ -445,8 +453,10 @@ async def admin_get_chat_session(
     session_id: str, user: User = Depends(require_permission("chat", "view"))
 ):
     """Получить чат-сессию"""
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "chat")
+    session = await async_chat_manager.get_session(
+        session_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -512,8 +522,10 @@ async def admin_delete_chat_session(
 ):
     """Удалить чат-сессию (owner/admin only, shared users cannot delete)"""
     await _check_session_owner_or_admin(session_id, user)
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    if not await async_chat_manager.delete_session(session_id, owner_id=owner_id):
+    owner_id, ws_id = workspace_context(user, "chat")
+    if not await async_chat_manager.delete_session(
+        session_id, owner_id=owner_id, workspace_id=ws_id
+    ):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "ok"}
 
@@ -924,8 +936,10 @@ async def admin_summarize_branch(
 ):
     """Сгенерировать итоги ветки диалога и вернуть как markdown."""
     container = get_container()
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    session = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "chat")
+    session = await async_chat_manager.get_session(
+        session_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -968,8 +982,10 @@ async def _get_branch_visible_ids(session_id: str, user: User) -> tuple[dict, Op
 
     Returns (session_data, visible_ids). visible_ids is None for owner/admin (full tree).
     """
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    session_data = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "chat")
+    session_data = await async_chat_manager.get_session(
+        session_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -1015,7 +1031,7 @@ async def admin_switch_branch(
         raise HTTPException(status_code=404, detail="Message not found")
 
     # Return updated session
-    session = await async_chat_manager.get_session(session_id)
+    session = await async_chat_manager.get_session(session_id, workspace_id=user.workspace_id)
     if session:
         sibling_info = await async_chat_manager.get_sibling_info(session_id)
         session["sibling_info"] = sibling_info
@@ -1032,7 +1048,7 @@ async def admin_new_branch(
     success = await async_chat_manager.start_new_branch(session_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
-    session = await async_chat_manager.get_session(session_id)
+    session = await async_chat_manager.get_session(session_id, workspace_id=user.workspace_id)
     sibling_info = await async_chat_manager.get_sibling_info(session_id)
     if session:
         session["sibling_info"] = sibling_info
@@ -1127,8 +1143,10 @@ async def admin_fork_session(
 ):
     """Форк сессии — глубокое копирование к себе (любой с доступом, not guest)"""
     # Verify the user has at least read access
-    owner_id = None if user_has_level(user, "chat", "manage") else user.id
-    session_data = await async_chat_manager.get_session(session_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "chat")
+    session_data = await async_chat_manager.get_session(
+        session_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
 
