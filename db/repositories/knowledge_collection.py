@@ -2,7 +2,7 @@
 Repository for knowledge base collections.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +34,9 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         )
         return result.scalar_one_or_none()
 
-    async def get_all_collections(self, enabled_only: bool = False) -> List[dict]:
+    async def get_all_collections(
+        self, enabled_only: bool = False, workspace_id: Optional[int] = None
+    ) -> List[dict]:
         """Get all collections ordered by name, with document count."""
         stmt = (
             select(
@@ -47,6 +49,8 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         )
         if enabled_only:
             stmt = stmt.where(KnowledgeCollection.enabled.is_(True))
+        if workspace_id is not None and hasattr(KnowledgeCollection, "workspace_id"):
+            stmt = stmt.where(KnowledgeCollection.workspace_id == workspace_id)
 
         result = await self.session.execute(stmt)
         collections = []
@@ -74,14 +78,20 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         description: Optional[str] = None,
         enabled: bool = True,
         base_dir: str = "wiki-pages",
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a new collection."""
+        create_kwargs: dict[str, Any] = {}
+        if workspace_id is not None:
+            create_kwargs["workspace_id"] = workspace_id
+
         col = KnowledgeCollection(
             name=name,
             slug=slug,
             description=description,
             enabled=enabled,
             base_dir=base_dir,
+            **create_kwargs,
         )
         self.session.add(col)
         await self.session.commit()

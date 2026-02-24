@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, workspace_context
 from db.integration import (
     async_audit_logger,
     async_knowledge_collection_manager,
@@ -174,7 +174,8 @@ def _get_wiki_rag():
 @router.get("/collections")
 async def list_collections(user: User = Depends(require_permission("wiki", "view"))):
     """List all knowledge collections."""
-    collections = await async_knowledge_collection_manager.get_all()
+    _owner_id, ws_id = workspace_context(user, "wiki")
+    collections = await async_knowledge_collection_manager.get_all(workspace_id=ws_id)
     return {"collections": collections}
 
 
@@ -184,6 +185,7 @@ async def create_collection(
     user: User = Depends(require_permission("wiki", "edit")),
 ):
     """Create a new knowledge collection."""
+    _owner_id, ws_id = workspace_context(user, "wiki")
     slug = request.slug or _slugify(request.name)
 
     # Check for duplicate slug
@@ -203,6 +205,7 @@ async def create_collection(
         slug=slug,
         description=request.description,
         enabled=request.enabled,
+        workspace_id=ws_id,
     )
 
     await async_audit_logger.log(
@@ -405,12 +408,15 @@ async def list_documents(
     user: User = Depends(require_permission("wiki", "view")),
 ):
     """List knowledge base documents. Optionally filter by collection_id."""
+    _owner_id, ws_id = workspace_context(user, "wiki")
     synced = await _sync_disk_to_db()
 
     if collection_id is not None:
-        documents = await async_knowledge_doc_manager.get_by_collection(collection_id)
+        documents = await async_knowledge_doc_manager.get_by_collection(
+            collection_id, workspace_id=ws_id
+        )
     else:
-        documents = await async_knowledge_doc_manager.get_all()
+        documents = await async_knowledge_doc_manager.get_all(workspace_id=ws_id)
 
     return {"documents": documents, "synced": synced}
 
@@ -461,7 +467,7 @@ async def upload_document(
         title = first_header.group(1).strip()
 
     # Create DB record
-    owner_id = None if user_has_level(user, "wiki", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "wiki")
     doc = await async_knowledge_doc_manager.create(
         filename=filename,
         title=title,
@@ -470,6 +476,7 @@ async def upload_document(
         section_count=sections,
         owner_id=owner_id,
         collection_id=collection_id,
+        workspace_id=ws_id,
     )
 
     # Re-index global + collection

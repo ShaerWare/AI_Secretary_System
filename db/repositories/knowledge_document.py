@@ -2,7 +2,7 @@
 Repository for knowledge base documents.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,20 +24,24 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         )
         return result.scalar_one_or_none()
 
-    async def get_all_documents(self) -> List[dict]:
-        """Get all documents ordered by title."""
-        result = await self.session.execute(
-            select(KnowledgeDocument).order_by(KnowledgeDocument.title)
-        )
+    async def get_all_documents(self, workspace_id: Optional[int] = None) -> List[dict]:
+        """Get all documents ordered by title, filtered by workspace."""
+        query = select(KnowledgeDocument).order_by(KnowledgeDocument.title)
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
         return [doc.to_dict() for doc in result.scalars().all()]
 
-    async def get_by_collection(self, collection_id: int) -> List[dict]:
-        """Get all documents in a specific collection."""
-        result = await self.session.execute(
+    async def get_by_collection(
+        self, collection_id: int, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        """Get all documents in a specific collection, filtered by workspace."""
+        query = (
             select(KnowledgeDocument)
             .where(KnowledgeDocument.collection_id == collection_id)
             .order_by(KnowledgeDocument.title)
         )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
         return [doc.to_dict() for doc in result.scalars().all()]
 
     async def get_filenames_by_collection(self, collection_id: int) -> List[str]:
@@ -58,8 +62,13 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         section_count: int = 0,
         owner_id: Optional[int] = None,
         collection_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a new document record."""
+        create_kwargs: dict[str, Any] = {}
+        if workspace_id is not None:
+            create_kwargs["workspace_id"] = workspace_id
+
         doc = KnowledgeDocument(
             filename=filename,
             title=title,
@@ -68,6 +77,7 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
             section_count=section_count,
             owner_id=owner_id,
             collection_id=collection_id,
+            **create_kwargs,
         )
         self.session.add(doc)
         await self.session.commit()
