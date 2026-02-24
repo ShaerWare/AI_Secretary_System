@@ -436,6 +436,22 @@ def user_has_level(user: User, module: str, min_level: str) -> bool:
     return level_gte(user.permissions.get(module, ""), min_level)
 
 
+def workspace_context(user: User, module: str) -> tuple[Optional[int], int]:
+    """Extract (owner_id, workspace_id) from user for repository calls.
+
+    Returns:
+        (owner_id, workspace_id) — owner_id is None for managers (manage-level),
+        workspace_id is always set from user's JWT.
+
+    Usage in routers::
+
+        owner_id, workspace_id = workspace_context(user, "chat")
+        result = await manager.list(..., owner_id=owner_id, workspace_id=workspace_id)
+    """
+    owner_id = None if user_has_level(user, module, "manage") else user.id
+    return owner_id, user.workspace_id
+
+
 async def get_user_permissions(user: User) -> Dict[str, str]:
     """Get permissions dict for user via workspace_members lookup. Uses cache."""
     # Internal bot users (user_id=0) with admin role get full manage access

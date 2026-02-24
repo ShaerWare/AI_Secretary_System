@@ -19,6 +19,15 @@ class BaseRepository(Generic[T]):
         self.session = session
         self.model = model
 
+    def _apply_workspace_filter(self, query, workspace_id: Optional[int]):
+        """Add WHERE workspace_id = :workspace_id if model supports it.
+
+        Pass workspace_id=None to skip filtering (backward compatible).
+        """
+        if workspace_id is not None and hasattr(self.model, "workspace_id"):
+            query = query.where(self.model.workspace_id == workspace_id)
+        return query
+
     async def get_by_id(self, id_value: Any) -> Optional[T]:
         """Get entity by primary key."""
         result: Optional[T] = await self.session.get(self.model, id_value)
