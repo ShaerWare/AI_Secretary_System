@@ -29,8 +29,10 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
         result = await self.session.execute(query)
         return [s.to_dict() for s in result.scalars().all()]
 
-    async def get_session(self, session_id: str) -> Optional[dict]:
-        entity = await self.get_by_id(session_id)
+    async def get_session(
+        self, session_id: str, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
+        entity = await self.get_by_id_ws(session_id, workspace_id)
         return entity.to_dict() if entity else None
 
     async def create_session(
@@ -67,5 +69,9 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
         await self.session.refresh(entity)
         return entity.to_dict()
 
-    async def delete_session(self, session_id: str) -> bool:
-        return await self.delete_by_id(session_id)
+    async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:
+        entity = await self.get_by_id_ws(session_id, workspace_id)
+        if entity:
+            await self.delete(entity)
+            return True
+        return False

@@ -123,7 +123,8 @@ async def update_project(
     user: User = Depends(require_permission("kanban", "manage")),
 ):
     """Update a kanban project (admin only)."""
-    existing = await async_kanban_project_manager.get_project(project_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -158,7 +159,8 @@ async def delete_project(
     project_id: int, user: User = Depends(require_permission("kanban", "manage"))
 ):
     """Delete a kanban project (admin only)."""
-    existing = await async_kanban_project_manager.get_project(project_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -175,7 +177,8 @@ async def delete_project(
 @router.post("/projects/{project_id}/sync")
 async def sync_project(project_id: int, user: User = Depends(require_permission("kanban", "edit"))):
     """Trigger full sync of GitHub issues for a project."""
-    existing = await async_kanban_project_manager.get_project(project_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -257,7 +260,8 @@ async def update_task(
     user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Update a task. Non-admin can only edit own tasks."""
-    existing = await async_kanban_manager.get_task(task_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_manager.get_task(task_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -304,7 +308,8 @@ async def update_task(
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: int, user: User = Depends(require_permission("kanban", "manage"))):
     """Delete a task (admin only)."""
-    existing = await async_kanban_manager.get_task(task_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_manager.get_task(task_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -328,8 +333,9 @@ async def reorder_task(
     user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Reorder a task (update status + position)."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
     # Get existing task before reorder (for GitHub push check)
-    existing = await async_kanban_manager.get_task(request.task_id)
+    existing = await async_kanban_manager.get_task(request.task_id, workspace_id=ws_id)
 
     task = await async_kanban_manager.reorder(
         request.task_id, request.new_status, request.new_position
@@ -353,8 +359,9 @@ async def add_dependency(
     request: DependencyCreate, user: User = Depends(require_permission("kanban", "edit"))
 ):
     """Add a dependency between tasks."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
     # Check target task exists and is not private
-    target = await async_kanban_manager.get_task(request.blocker_id)
+    target = await async_kanban_manager.get_task(request.blocker_id, workspace_id=ws_id)
     if not target:
         raise HTTPException(status_code=404, detail="Blocker task not found")
     if (
@@ -364,7 +371,7 @@ async def add_dependency(
     ):
         raise HTTPException(status_code=409, detail="Cannot depend on a private task")
 
-    dependent = await async_kanban_manager.get_task(request.dependent_id)
+    dependent = await async_kanban_manager.get_task(request.dependent_id, workspace_id=ws_id)
     if not dependent:
         raise HTTPException(status_code=404, detail="Dependent task not found")
 
@@ -399,7 +406,8 @@ async def add_checklist_item(
     user: User = Depends(require_permission("kanban", "edit")),
 ):
     """Add a checklist item to a task."""
-    existing = await async_kanban_manager.get_task(task_id)
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    existing = await async_kanban_manager.get_task(task_id, workspace_id=ws_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 

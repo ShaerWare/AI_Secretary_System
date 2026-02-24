@@ -118,9 +118,9 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         if existing:
             provider_id = f"{provider_id}-{int(datetime.utcnow().timestamp())}"
 
-        # If this is set as default, unset others
+        # If this is set as default, unset others in the same workspace
         if kwargs.get("is_default", False):
-            await self._unset_all_defaults()
+            await self._unset_all_defaults(workspace_id=kwargs.get("workspace_id"))
 
         create_kwargs: dict[str, Any] = {}
         if kwargs.get("workspace_id") is not None:
@@ -158,9 +158,10 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         if not provider:
             return None
 
-        # If setting as default, unset others
+        # If setting as default, unset others in the same workspace
         if kwargs.get("is_default", False) and not provider.is_default:
-            await self._unset_all_defaults()
+            ws_id = getattr(provider, "workspace_id", None)
+            await self._unset_all_defaults(workspace_id=ws_id)
 
         # Update simple fields
         simple_fields = [
@@ -218,13 +219,14 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         return True
 
     async def set_default(self, provider_id: str) -> bool:
-        """Set provider as default."""
+        """Set provider as default (scoped to provider's workspace)."""
         # Check if provider exists and is enabled
         provider = await self.session.get(CloudLLMProvider, provider_id)
         if not provider or not provider.enabled:
             return False
 
-        await self._unset_all_defaults()
+        ws_id = getattr(provider, "workspace_id", None)
+        await self._unset_all_defaults(workspace_id=ws_id)
 
         result = await self.session.execute(
             update(CloudLLMProvider)
@@ -234,13 +236,16 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         await self.session.commit()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
-    async def _unset_all_defaults(self) -> None:
-        """Unset all default flags."""
-        await self.session.execute(
+    async def _unset_all_defaults(self, workspace_id: Optional[int] = None) -> None:
+        """Unset all default flags, scoped to workspace if provided."""
+        stmt = (
             update(CloudLLMProvider)
             .where(CloudLLMProvider.is_default == True)
             .values(is_default=False)
         )
+        if workspace_id is not None and hasattr(CloudLLMProvider, "workspace_id"):
+            stmt = stmt.where(CloudLLMProvider.workspace_id == workspace_id)
+        await self.session.execute(stmt)
 
     async def get_by_type(self, provider_type: str, enabled_only: bool = True) -> List[dict]:
         """Get providers by type."""

@@ -408,11 +408,11 @@ class AsyncFAQManager:
                     )
             return None
 
-    async def delete(self, question: str) -> bool:
+    async def delete(self, question: str, workspace_id: Optional[int] = None) -> bool:
         """Delete FAQ entry."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.delete_by_question(question)
+            return await repo.delete_by_question(question, workspace_id=workspace_id)
 
     async def search(self, query: str, workspace_id: Optional[int] = None) -> List[dict]:
         """Search FAQ entries."""
@@ -1363,11 +1363,11 @@ class AsyncKnowledgeDocManager:
             repo = KnowledgeDocumentRepository(session)
             return await repo.get_all_documents(workspace_id=workspace_id)
 
-    async def get_by_id(self, doc_id: int) -> Optional[dict]:
-        """Get document by ID."""
+    async def get_by_id(self, doc_id: int, workspace_id: Optional[int] = None) -> Optional[dict]:
+        """Get document by ID, with optional workspace gate-check."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            doc = await repo.get_by_id(doc_id)
+            doc = await repo.get_by_id_ws(doc_id, workspace_id)
             return doc.to_dict() if doc else None
 
     async def get_by_filename(self, filename: str) -> Optional[dict]:
@@ -1448,11 +1448,13 @@ class AsyncKnowledgeCollectionManager:
                 enabled_only=enabled_only, workspace_id=workspace_id
             )
 
-    async def get_by_id(self, collection_id: int) -> Optional[dict]:
-        """Get collection by ID with document count."""
+    async def get_by_id(
+        self, collection_id: int, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
+        """Get collection by ID with document count and optional workspace gate-check."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            col = await repo.get_by_id(collection_id)
+            col = await repo.get_by_id_ws(collection_id, workspace_id)
             if not col:
                 return None
             d = col.to_dict()
@@ -1666,10 +1668,12 @@ class AsyncClaudeCodeManager:
                 owner_id=owner_id, limit=limit, workspace_id=workspace_id
             )
 
-    async def get_session(self, session_id: str) -> Optional[dict]:
+    async def get_session(
+        self, session_id: str, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.get_session(session_id)
+            return await repo.get_session(session_id, workspace_id=workspace_id)
 
     async def create_session(
         self,
@@ -1689,10 +1693,10 @@ class AsyncClaudeCodeManager:
             repo = ClaudeCodeRepository(session)
             return await repo.update_session(session_id, **kwargs)
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.delete_session(session_id)
+            return await repo.delete_session(session_id, workspace_id=workspace_id)
 
 
 # ============== User Identity Manager ==============
@@ -1781,10 +1785,10 @@ class AsyncKanbanManager:
             repo = KanbanRepository(session)
             return await repo.get_visible_tasks(current_user, is_admin, workspace_id=workspace_id)
 
-    async def get_task(self, task_id: int) -> Optional[dict]:
+    async def get_task(self, task_id: int, workspace_id: Optional[int] = None) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            task = await repo.get_task_with_relations(task_id)
+            task = await repo.get_task_with_relations(task_id, workspace_id=workspace_id)
             return task.to_dict() if task else None
 
     async def create_task(self, **kwargs) -> dict:
@@ -1871,10 +1875,12 @@ class AsyncKanbanProjectManager:
             repo = KanbanProjectRepository(session)
             return await repo.get_all_projects(workspace_id=workspace_id)
 
-    async def get_project(self, project_id: int) -> Optional[dict]:
+    async def get_project(
+        self, project_id: int, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
-            project = await repo.get_project_with_token(project_id)
+            project = await repo.get_project_with_token(project_id, workspace_id=workspace_id)
             return project.to_dict() if project else None
 
     async def get_project_with_token(self, project_id: int):
