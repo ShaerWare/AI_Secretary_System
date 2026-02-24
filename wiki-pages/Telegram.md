@@ -285,9 +285,11 @@ POST /admin/telegram/instances/{id}/start
 
 ## RBAC
 
-- **Admin** — видит и управляет всеми ботами
+- **Admin** — видит и управляет всеми ботами в workspace
 - **User/Web** — только свои боты (`owner_id`)
 - **Guest** — только чтение
+
+Все CRUD-эндпоинты и action-эндпоинты (start/stop/restart/logs/sessions) фильтруются по `workspace_id` из JWT. Системные методы (`get_auto_start_instances`, `get_instance_with_token`) и публичные эндпоинты (payments, bot session registration, YooMoney callback) не фильтруются — работают без JWT-контекста.
 
 ---
 

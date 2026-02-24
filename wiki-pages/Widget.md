@@ -228,9 +228,11 @@ window.aiChat = {
 
 ## RBAC
 
-- **Admin** — видит и управляет всеми виджетами
+- **Admin** — видит и управляет всеми виджетами в workspace
 - **User/Web** — только свои виджеты (`owner_id`)
 - **Guest** — только чтение
+
+Все CRUD-эндпоинты фильтруются по `workspace_id` из JWT. Публичные эндпоинты (`widget.js`, `/widget/status`, `/widget/chat/session/{id}`) не фильтруются — работают без JWT-контекста.
 
 ## Безопасность
 
