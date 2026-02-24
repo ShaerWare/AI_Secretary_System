@@ -37,9 +37,12 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         return base or f"provider-{int(datetime.utcnow().timestamp())}"
 
     async def list_providers(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
-        """List providers, filtered by owner."""
+        """List providers, filtered by owner and workspace."""
         query = select(CloudLLMProvider).order_by(CloudLLMProvider.updated.desc())
         if enabled_only:
             query = query.where(CloudLLMProvider.enabled == True)
@@ -47,19 +50,28 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             query = query.where(
                 (CloudLLMProvider.owner_id == owner_id) | (CloudLLMProvider.owner_id.is_(None))
             )
+        query = self._apply_workspace_filter(query, workspace_id)
 
         result = await self.session.execute(query)
         providers = result.scalars().all()
         return [p.to_dict() for p in providers]
 
     async def get_provider(
-        self, provider_id: str, owner_id: Optional[int] = None
+        self,
+        provider_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
-        """Get provider by ID (without API key), with optional owner check."""
-        provider = await self.session.get(CloudLLMProvider, provider_id)
+        """Get provider by ID (without API key), with optional owner/workspace check."""
+        query = select(CloudLLMProvider).where(CloudLLMProvider.id == provider_id)
+        if owner_id is not None:
+            query = query.where(
+                (CloudLLMProvider.owner_id == owner_id) | (CloudLLMProvider.owner_id.is_(None))
+            )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        provider = result.scalar_one_or_none()
         if not provider:
-            return None
-        if owner_id is not None and provider.owner_id is not None and provider.owner_id != owner_id:
             return None
         return provider.to_dict()
 
@@ -110,6 +122,10 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         if kwargs.get("is_default", False):
             await self._unset_all_defaults()
 
+        create_kwargs: dict[str, Any] = {}
+        if kwargs.get("workspace_id") is not None:
+            create_kwargs["workspace_id"] = kwargs["workspace_id"]
+
         provider = CloudLLMProvider(
             id=provider_id,
             name=name,
@@ -123,6 +139,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             description=kwargs.get("description"),
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
+            **create_kwargs,
         )
 
         if kwargs.get("config"):
@@ -175,12 +192,23 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
         data: dict[str, Any] = provider.to_dict()
         return data
 
-    async def delete_provider(self, provider_id: str, owner_id: Optional[int] = None) -> bool:
-        """Delete provider, with optional owner check."""
-        provider = await self.session.get(CloudLLMProvider, provider_id)
+    async def delete_provider(
+        self,
+        provider_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
+        """Delete provider, with optional owner/workspace check."""
+        query = select(CloudLLMProvider).where(CloudLLMProvider.id == provider_id)
+        if owner_id is not None:
+            query = query.where(
+                (CloudLLMProvider.owner_id == owner_id) | (CloudLLMProvider.owner_id.is_(None))
+            )
+        if workspace_id is not None and hasattr(CloudLLMProvider, "workspace_id"):
+            query = query.where(CloudLLMProvider.workspace_id == workspace_id)
+        result = await self.session.execute(query)
+        provider = result.scalar_one_or_none()
         if not provider:
-            return False
-        if owner_id is not None and provider.owner_id is not None and provider.owner_id != owner_id:
             return False
 
         await self.session.delete(provider)

@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_TTS, limiter
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, workspace_context
 from db.integration import async_preset_manager
 from voice_clone_service import INTONATION_PRESETS
 
@@ -346,7 +346,8 @@ async def admin_set_piper_params(
 @router.get("/presets/custom")
 async def admin_get_custom_presets(user: User = Depends(require_permission("speech", "view"))):
     """Получить пользовательские пресеты TTS"""
-    presets = await async_preset_manager.get_custom()
+    owner_id, ws_id = workspace_context(user, "speech")
+    presets = await async_preset_manager.get_custom(owner_id=owner_id, workspace_id=ws_id)
     return {"presets": presets}
 
 
@@ -355,8 +356,10 @@ async def admin_create_custom_preset(
     request: AdminCustomPresetRequest, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Создать пользовательский пресет TTS"""
-    owner_id = None if user_has_level(user, "speech", "manage") else user.id
-    await async_preset_manager.create(request.name, request.params, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "speech")
+    await async_preset_manager.create(
+        request.name, request.params, owner_id=owner_id, workspace_id=ws_id
+    )
     await _reload_voice_presets()
     return {"status": "ok", "preset": request.name}
 
@@ -381,7 +384,8 @@ async def admin_delete_custom_preset(
     name: str, user: User = Depends(require_permission("speech", "edit"))
 ):
     """Удалить пользовательский пресет TTS"""
-    if not await async_preset_manager.delete(name):
+    _owner_id, ws_id = workspace_context(user, "speech")
+    if not await async_preset_manager.delete(name, workspace_id=ws_id):
         raise HTTPException(status_code=404, detail=f"Preset not found: {name}")
 
     await _reload_voice_presets()

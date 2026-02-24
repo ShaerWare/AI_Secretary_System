@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import get_container
-from auth_manager import User, require_permission, user_has_level
+from auth_manager import User, require_permission, workspace_context
 from cloud_llm_service import PROVIDER_TYPES, CloudLLMService, GeminiProvider
 from db.integration import async_audit_logger, async_cloud_provider_manager
 from service_manager import get_service_manager
@@ -637,8 +637,10 @@ async def admin_list_cloud_providers(
     enabled_only: bool = False, user: User = Depends(require_permission("llm", "view"))
 ):
     """List all cloud LLM providers"""
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
-    providers = await async_cloud_provider_manager.list_providers(enabled_only, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "llm")
+    providers = await async_cloud_provider_manager.list_providers(
+        enabled_only, owner_id=owner_id, workspace_id=ws_id
+    )
     return {
         "providers": providers,
         "provider_types": PROVIDER_TYPES,
@@ -652,11 +654,13 @@ async def admin_get_cloud_provider(
     user: User = Depends(require_permission("llm", "view")),
 ):
     """Get cloud provider by ID"""
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "llm")
     if include_key:
         provider = await async_cloud_provider_manager.get_provider_with_key(provider_id)
     else:
-        provider = await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id)
+        provider = await async_cloud_provider_manager.get_provider(
+            provider_id, owner_id=owner_id, workspace_id=ws_id
+        )
 
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -668,7 +672,7 @@ async def admin_create_cloud_provider(
     data: CloudProviderCreate, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Create new cloud LLM provider"""
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
+    owner_id, ws_id = workspace_context(user, "llm")
     try:
         provider = await async_cloud_provider_manager.create_provider(
             name=data.name,
@@ -681,6 +685,7 @@ async def admin_create_cloud_provider(
             config=data.config,
             description=data.description,
             owner_id=owner_id,
+            workspace_id=ws_id,
         )
 
         # Audit log
@@ -705,8 +710,10 @@ async def admin_update_cloud_provider(
 ):
     """Update cloud LLM provider"""
     # Verify ownership
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
-    existing = await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id)
+    owner_id, ws_id = workspace_context(user, "llm")
+    existing = await async_cloud_provider_manager.get_provider(
+        provider_id, owner_id=owner_id, workspace_id=ws_id
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Provider not found")
 
@@ -734,8 +741,10 @@ async def admin_delete_cloud_provider(
     provider_id: str, user: User = Depends(require_permission("llm", "edit"))
 ):
     """Delete cloud LLM provider"""
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
-    if not await async_cloud_provider_manager.delete_provider(provider_id, owner_id=owner_id):
+    owner_id, ws_id = workspace_context(user, "llm")
+    if not await async_cloud_provider_manager.delete_provider(
+        provider_id, owner_id=owner_id, workspace_id=ws_id
+    ):
         raise HTTPException(status_code=404, detail="Provider not found")
 
     # Audit log
@@ -755,8 +764,10 @@ async def admin_test_cloud_provider(
 ):
     """Test cloud provider connection"""
     # Verify ownership before testing
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
-    if not await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id):
+    owner_id, ws_id = workspace_context(user, "llm")
+    if not await async_cloud_provider_manager.get_provider(
+        provider_id, owner_id=owner_id, workspace_id=ws_id
+    ):
         raise HTTPException(status_code=404, detail="Provider not found")
     provider_config = await async_cloud_provider_manager.get_provider_with_key(provider_id)
     if not provider_config:
@@ -817,8 +828,10 @@ async def admin_set_default_cloud_provider(
 ):
     """Set cloud provider as default"""
     # Verify ownership
-    owner_id = None if user_has_level(user, "llm", "manage") else user.id
-    if not await async_cloud_provider_manager.get_provider(provider_id, owner_id=owner_id):
+    owner_id, ws_id = workspace_context(user, "llm")
+    if not await async_cloud_provider_manager.get_provider(
+        provider_id, owner_id=owner_id, workspace_id=ws_id
+    ):
         raise HTTPException(status_code=404, detail="Provider not found")
 
     if not await async_cloud_provider_manager.set_default(provider_id):

@@ -421,23 +421,35 @@ class AsyncFAQManager:
 class AsyncPresetManager:
     """Async TTS preset manager using database."""
 
-    async def get_all(self, owner_id: Optional[int] = None) -> Dict[str, dict]:
+    async def get_all(
+        self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> Dict[str, dict]:
         """Get all presets."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.get_all_presets(owner_id=owner_id)
+            return await repo.get_all_presets(owner_id=owner_id, workspace_id=workspace_id)
 
-    async def get_custom(self) -> Dict[str, dict]:
+    async def get_custom(
+        self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> Dict[str, dict]:
         """Get only custom presets."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.get_custom_presets()
+            return await repo.get_custom_presets(owner_id=owner_id, workspace_id=workspace_id)
 
-    async def create(self, name: str, params: dict, owner_id: Optional[int] = None) -> dict:
+    async def create(
+        self,
+        name: str,
+        params: dict,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> dict:
         """Create new preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.create_preset(name, params, owner_id=owner_id)
+            return await repo.create_preset(
+                name, params, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def update(self, name: str, params: dict) -> Optional[dict]:
         """Update preset."""
@@ -445,11 +457,11 @@ class AsyncPresetManager:
             repo = PresetRepository(session)
             return await repo.update_preset(name, params)
 
-    async def delete(self, name: str) -> bool:
+    async def delete(self, name: str, workspace_id: Optional[int] = None) -> bool:
         """Delete preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.delete_preset(name)
+            return await repo.delete_preset(name, workspace_id=workspace_id)
 
 
 # ============== Config Manager ==============
@@ -884,20 +896,30 @@ class AsyncCloudProviderManager:
     """Async manager for cloud LLM providers."""
 
     async def list_providers(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """List all cloud providers."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.list_providers(enabled_only=enabled_only, owner_id=owner_id)
+            return await repo.list_providers(
+                enabled_only=enabled_only, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_provider(
-        self, provider_id: str, owner_id: Optional[int] = None
+        self,
+        provider_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Get provider by ID (without API key)."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.get_provider(provider_id, owner_id=owner_id)
+            return await repo.get_provider(
+                provider_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_provider_with_key(self, provider_id: str) -> Optional[dict]:
         """Get provider with API key (for internal use)."""
@@ -929,11 +951,18 @@ class AsyncCloudProviderManager:
             repo = CloudProviderRepository(session)
             return await repo.update_provider(provider_id, **kwargs)
 
-    async def delete_provider(self, provider_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_provider(
+        self,
+        provider_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
         """Delete cloud provider."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.delete_provider(provider_id, owner_id=owner_id)
+            return await repo.delete_provider(
+                provider_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def set_default(self, provider_id: str) -> bool:
         """Set provider as default."""

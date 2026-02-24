@@ -32,14 +32,17 @@ class PresetRepository(BaseRepository[TTSPreset]):
         await cache_delete(self._cache_key())
 
     async def get_all_presets(
-        self, include_builtin: bool = True, owner_id: Optional[int] = None
+        self,
+        include_builtin: bool = True,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Dict[str, dict]:
         """
-        Get all presets as name->params dict, filtered by owner.
-        Uses Redis cache when no owner filter.
+        Get all presets as name->params dict, filtered by owner and workspace.
+        Uses Redis cache when no owner/workspace filter.
         """
-        # Try cache first (only when no owner filter)
-        if owner_id is None:
+        # Try cache first (only when no owner/workspace filter)
+        if owner_id is None and workspace_id is None:
             cached: Optional[Dict[str, dict]] = await cache_get(self._cache_key())
             if cached:
                 if not include_builtin:
@@ -50,6 +53,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
         query = select(TTSPreset)
         if owner_id is not None:
             query = query.where((TTSPreset.owner_id == owner_id) | (TTSPreset.owner_id.is_(None)))
+        query = self._apply_workspace_filter(query, workspace_id)
         result = await self.session.execute(query)
         presets = result.scalars().all()
 
@@ -60,17 +64,21 @@ class PresetRepository(BaseRepository[TTSPreset]):
                 "builtin": p.builtin,
             }
 
-        # Cache for 10 minutes (only when no owner filter)
-        if owner_id is None:
+        # Cache for 10 minutes (only when no owner/workspace filter)
+        if owner_id is None and workspace_id is None:
             await cache_set(self._cache_key(), preset_dict, self.CACHE_TTL)
 
         if not include_builtin:
             return {k: v for k, v in preset_dict.items() if not v.get("builtin", False)}
         return preset_dict
 
-    async def get_custom_presets(self) -> Dict[str, dict]:
+    async def get_custom_presets(
+        self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> Dict[str, dict]:
         """Get only custom (non-builtin) presets."""
-        return await self.get_all_presets(include_builtin=False)
+        return await self.get_all_presets(
+            include_builtin=False, owner_id=owner_id, workspace_id=workspace_id
+        )
 
     async def get_by_name(self, name: str) -> Optional[dict]:
         """Get preset by name."""
@@ -84,8 +92,13 @@ class PresetRepository(BaseRepository[TTSPreset]):
         params: dict,
         builtin: bool = False,
         owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create new preset."""
+        create_kwargs: dict[str, Any] = {}
+        if workspace_id is not None:
+            create_kwargs["workspace_id"] = workspace_id
+
         preset = TTSPreset(
             name=name,
             params=json.dumps(params, ensure_ascii=False),
@@ -93,6 +106,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
             owner_id=owner_id,
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
+            **create_kwargs,
         )
 
         self.session.add(preset)
@@ -123,13 +137,16 @@ class PresetRepository(BaseRepository[TTSPreset]):
         data: dict[str, Any] = preset.to_dict()
         return data
 
-    async def delete_preset(self, name: str) -> bool:
-        """Delete preset by name."""
-        result = await self.session.execute(
+    async def delete_preset(self, name: str, workspace_id: Optional[int] = None) -> bool:
+        """Delete preset by name, with optional workspace check."""
+        query = (
             delete(TTSPreset)
             .where(TTSPreset.name == name)
             .where(TTSPreset.builtin == False)  # Can't delete builtin
         )
+        if workspace_id is not None and hasattr(TTSPreset, "workspace_id"):
+            query = query.where(TTSPreset.workspace_id == workspace_id)
+        result = await self.session.execute(query)
         await self.session.commit()
         await self._invalidate_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
