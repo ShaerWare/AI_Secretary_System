@@ -22,6 +22,7 @@ router = APIRouter(prefix="/admin/kanban", tags=["kanban"])
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = None
+    status: Optional[str] = "todo"
     assignee: Optional[str] = None
     start_date: Optional[str] = None
     due_date: Optional[str] = None
@@ -230,12 +231,15 @@ async def get_tasks(
 async def create_task(
     request: TaskCreate, user: User = Depends(require_permission("kanban", "edit"))
 ):
-    """Create a new task (always draft + private)."""
+    """Create a new task (private by default)."""
     _owner_id, ws_id = workspace_context(user, "kanban")
+    valid_statuses = {"draft", "todo", "in_progress", "review", "done"}
+    status = request.status if request.status in valid_statuses else "todo"
     tags_json = json.dumps(request.tags, ensure_ascii=False) if request.tags else None
     task = await async_kanban_manager.create_task(
         title=request.title,
         description=request.description,
+        status=status,
         assignee=request.assignee,
         start_date=request.start_date,
         due_date=request.due_date,

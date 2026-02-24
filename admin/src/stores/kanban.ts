@@ -35,11 +35,13 @@ export const useKanbanStore = defineStore('kanban', () => {
 
   const tasksByStatus = computed(() => {
     const map: Record<string, KanbanTask[]> = {}
-    const statuses = ['draft', 'todo', 'in_progress', 'review', 'done']
+    const statuses = ['todo', 'in_progress', 'review', 'done']
     for (const s of statuses) map[s] = []
     for (const t of tasks.value) {
-      if (!map[t.status]) map[t.status] = []
-      map[t.status].push(t)
+      // Map legacy draft tasks to todo
+      const status = t.status === 'draft' ? 'todo' : t.status
+      if (!map[status]) map[status] = []
+      map[status].push(t)
     }
     for (const s of Object.keys(map)) {
       map[s].sort((a, b) => a.position - b.position)

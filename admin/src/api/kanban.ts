@@ -46,6 +46,7 @@ export interface ChecklistItem {
 export interface TaskCreateData {
   title: string
   description?: string
+  status?: string
   assignee?: string
   start_date?: string
   due_date?: string

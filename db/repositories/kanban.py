@@ -84,17 +84,18 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         title: str,
         created_by: str,
         description: Optional[str] = None,
+        status: str = "todo",
         assignee: Optional[str] = None,
         start_date: Optional[str] = None,
         due_date: Optional[str] = None,
         tags: Optional[str] = None,
         workspace_id: Optional[int] = None,
     ) -> dict:
-        """Create a new task (always draft + private)."""
+        """Create a new task (private by default)."""
         create_kwargs: dict = dict(
             title=title,
             description=description,
-            status="draft",
+            status=status,
             is_private=True,
             assignee=assignee,
             created_by=created_by,

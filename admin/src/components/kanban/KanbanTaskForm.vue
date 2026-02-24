@@ -7,6 +7,7 @@ import type { KanbanTask, TaskCreateData, TaskUpdateData } from '@/api'
 const props = defineProps<{
   visible: boolean
   task?: KanbanTask | null
+  initialStatus?: string
 }>()
 
 const emit = defineEmits<{
@@ -66,6 +67,7 @@ function handleSubmit() {
     emit('update', props.task.id, data)
   } else {
     const data: TaskCreateData = { title: title.value }
+    if (props.initialStatus) data.status = props.initialStatus
     if (description.value) data.description = description.value
     if (assignee.value) data.assignee = assignee.value
     if (startDate.value) data.start_date = startDate.value
