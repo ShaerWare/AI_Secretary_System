@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, defineAsyncComponent, computed } from 'vue'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ClipboardList,
@@ -8,7 +8,6 @@ import {
   LayoutGrid,
   ChartGantt,
   Github,
-  ChevronDown,
   ChevronLeft,
   FolderOpen,
   Settings,
@@ -39,11 +38,11 @@ const toast = useToastStore()
 
 const showForm = ref(false)
 const editingTask = ref<KanbanTask | null>(null)
+const createStatus = ref<string | undefined>(undefined)
 const showDetail = ref(false)
 const detailTask = ref<KanbanTask | null>(null)
 
-// Project selector
-const showProjectSelect = ref(false)
+// Project form
 const showProjectForm = ref(false)
 const editingProject = ref<(typeof kanbanStore.projects)[0] | null>(null)
 
@@ -52,40 +51,14 @@ const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSideba
 const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: startSidebarTouchResize } = useResizablePanel('kanban-sidebar-width', 288, 220, 440, 'right')
 const showSidebar = ref(true)
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-400',
-  todo: 'bg-blue-400',
-  in_progress: 'bg-yellow-400',
-  review: 'bg-purple-400',
-  done: 'bg-green-400',
-}
-
-const sortedTasks = computed(() => {
-  return [...kanbanStore.tasks].sort((a, b) => {
-    const statusOrder = ['in_progress', 'review', 'todo', 'draft', 'done']
-    const ai = statusOrder.indexOf(a.status)
-    const bi = statusOrder.indexOf(b.status)
-    if (ai !== bi) return ai - bi
-    return a.position - b.position
-  })
-})
-
-function isOverdue(task: KanbanTask) {
-  if (!task.due_date || task.status === 'done') return false
-  return new Date(task.due_date) < new Date()
-}
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
 onMounted(async () => {
   await kanbanStore.fetchProjects()
   kanbanStore.fetchTasks()
 })
 
-function openCreate() {
+function openCreate(status?: string) {
   editingTask.value = null
+  createStatus.value = status
   showForm.value = true
 }
 
@@ -97,15 +70,11 @@ function openDetail(task: KanbanTask) {
 function openProjectCreate() {
   editingProject.value = null
   showProjectForm.value = true
-  showProjectSelect.value = false
 }
 
-function openProjectEdit() {
-  if (kanbanStore.currentProject) {
-    editingProject.value = kanbanStore.currentProject
-    showProjectForm.value = true
-    showProjectSelect.value = false
-  }
+function openProjectEdit(project: (typeof kanbanStore.projects)[0]) {
+  editingProject.value = project
+  showProjectForm.value = true
 }
 
 async function handleCreate(data: TaskCreateData) {
@@ -236,7 +205,7 @@ async function handleSync() {
     toast.success(
       `${t('kanban.syncSuccess')}: ${result.created} ${t('kanban.created')}, ${result.updated} ${t('kanban.updated')}`,
     )
-  } catch (e) {
+  } catch {
     toast.error(t('kanban.syncFailed'))
   }
 }
@@ -279,13 +248,12 @@ async function handleProjectDelete(id: number) {
 
 function selectProject(id: number | null) {
   kanbanStore.selectProject(id)
-  showProjectSelect.value = false
 }
 </script>
 
 <template>
   <div class="flex h-full">
-    <!-- Sidebar: Task List -->
+    <!-- Sidebar: Board List -->
     <div
       :class="[
         'border-r border-border bg-card flex flex-col transition-all flex-shrink-0',
@@ -306,31 +274,47 @@ function selectProject(id: number | null) {
             <PanelLeftOpen class="w-4 h-4" />
           </button>
           <button
-            v-if="authStore.canEdit('kanban')"
+            v-if="authStore.canManage('kanban')"
             class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            :title="t('kanban.create')"
-            @click="openCreate"
+            :title="t('kanban.addProject')"
+            @click="openProjectCreate"
           >
             <Plus class="w-4 h-4" />
           </button>
         </div>
 
-        <!-- Collapsed items list -->
+        <!-- Collapsed boards list -->
         <div class="hidden md:block flex-1 overflow-y-auto">
+          <!-- Local tasks -->
           <button
-            v-for="task in sortedTasks"
-            :key="task.id"
-            :title="task.title"
+            :title="t('kanban.localTasks')"
             :class="[
-              'w-full flex items-center justify-center py-2 transition-colors relative',
-              detailTask?.id === task.id && showDetail
+              'w-full flex items-center justify-center py-2 transition-colors',
+              kanbanStore.selectedProjectId === null
                 ? 'bg-primary/10 border-l-2 border-l-primary'
                 : 'hover:bg-secondary/50'
             ]"
-            @click="openDetail(task)"
+            @click="selectProject(null)"
           >
-            <div class="w-8 h-8 rounded-full border border-border flex items-center justify-center">
-              <span class="w-2.5 h-2.5 rounded-full" :class="STATUS_COLORS[task.status] || 'bg-gray-400'" />
+            <div class="w-8 h-8 rounded-lg border border-border flex items-center justify-center">
+              <FolderOpen class="w-4 h-4 text-muted-foreground" />
+            </div>
+          </button>
+          <!-- Projects -->
+          <button
+            v-for="project in kanbanStore.projects"
+            :key="project.id"
+            :title="project.name"
+            :class="[
+              'w-full flex items-center justify-center py-2 transition-colors',
+              kanbanStore.selectedProjectId === project.id
+                ? 'bg-primary/10 border-l-2 border-l-primary'
+                : 'hover:bg-secondary/50'
+            ]"
+            @click="selectProject(project.id)"
+          >
+            <div class="w-8 h-8 rounded-lg border border-border flex items-center justify-center">
+              <Github class="w-4 h-4 text-muted-foreground" />
             </div>
           </button>
         </div>
@@ -346,10 +330,10 @@ function selectProject(id: number | null) {
           </h2>
           <div class="flex items-center gap-1">
             <button
-              v-if="authStore.canEdit('kanban')"
+              v-if="authStore.canManage('kanban')"
               class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              :title="t('kanban.create')"
-              @click="openCreate"
+              :title="t('kanban.addProject')"
+              @click="openProjectCreate"
             >
               <Plus class="w-4 h-4" />
             </button>
@@ -363,103 +347,53 @@ function selectProject(id: number | null) {
           </div>
         </div>
 
-        <!-- Project selector -->
-        <div class="p-3 border-b border-border">
-          <div class="relative">
+        <!-- Board list -->
+        <div class="flex-1 overflow-y-auto">
+          <!-- Local tasks board -->
+          <div
+            class="px-3 py-2.5 cursor-pointer border-b border-border group hover:bg-secondary/50 transition-colors flex items-center gap-3"
+            :class="{ 'bg-primary/10 border-l-2 border-l-primary': kanbanStore.selectedProjectId === null }"
+            @click="selectProject(null)"
+          >
+            <div class="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center flex-shrink-0">
+              <FolderOpen class="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="font-medium text-sm truncate">{{ t('kanban.localTasks') }}</div>
+            </div>
+          </div>
+
+          <!-- GitHub project boards -->
+          <div
+            v-for="project in kanbanStore.projects"
+            :key="project.id"
+            class="px-3 py-2.5 cursor-pointer border-b border-border group hover:bg-secondary/50 transition-colors flex items-center gap-3"
+            :class="{ 'bg-primary/10 border-l-2 border-l-primary': kanbanStore.selectedProjectId === project.id }"
+            @click="selectProject(project.id)"
+          >
+            <div class="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center flex-shrink-0">
+              <Github class="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="font-medium text-sm truncate">{{ project.name }}</div>
+              <div class="text-xs text-muted-foreground truncate">
+                {{ project.github_owner }}/{{ project.github_repo }}
+              </div>
+            </div>
             <button
-              class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
-              @click="showProjectSelect = !showProjectSelect"
-            >
-              <Github v-if="kanbanStore.currentProject" class="w-4 h-4 flex-shrink-0" />
-              <FolderOpen v-else class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate flex-1 text-left">
-                {{ kanbanStore.currentProject?.name || t('kanban.localTasks') }}
-              </span>
-              <ChevronDown class="w-3 h-3 flex-shrink-0" />
-            </button>
-            <!-- Edit project button -->
-            <button
-              v-if="kanbanStore.currentProject && authStore.canManage('kanban')"
-              class="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
+              v-if="authStore.canManage('kanban')"
+              class="p-1 rounded hover:bg-muted transition-colors text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0"
               :title="t('kanban.editProject')"
-              @click.stop="openProjectEdit"
+              @click.stop="openProjectEdit(project)"
             >
               <Settings class="w-3.5 h-3.5" />
             </button>
-            <div
-              v-if="showProjectSelect"
-              class="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-10"
-            >
-              <button
-                class="w-full text-left px-4 py-2 hover:bg-secondary/50 first:rounded-t-lg text-sm flex items-center gap-2"
-                :class="{ 'bg-secondary/30': kanbanStore.selectedProjectId === null }"
-                @click="selectProject(null)"
-              >
-                <FolderOpen class="w-4 h-4 text-muted-foreground" />
-                {{ t('kanban.localTasks') }}
-              </button>
-              <button
-                v-for="project in kanbanStore.projects"
-                :key="project.id"
-                class="w-full text-left px-4 py-2 hover:bg-secondary/50 text-sm flex items-center gap-2"
-                :class="{ 'bg-secondary/30': kanbanStore.selectedProjectId === project.id }"
-                @click="selectProject(project.id)"
-              >
-                <Github class="w-4 h-4 text-muted-foreground" />
-                <span class="truncate">{{ project.name }}</span>
-              </button>
-              <div v-if="authStore.canManage('kanban')" class="border-t border-border">
-                <button
-                  class="w-full text-left px-4 py-2 hover:bg-secondary/50 last:rounded-b-lg text-sm text-primary flex items-center gap-2"
-                  @click="openProjectCreate"
-                >
-                  <Plus class="w-4 h-4" />
-                  {{ t('kanban.addProject') }}
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
 
-        <!-- Task list -->
-        <div class="flex-1 overflow-y-auto">
-          <div v-if="kanbanStore.loading" class="p-4 text-center text-muted-foreground text-sm">
-            {{ t('kanban.roadmap.noTasks') }}...
+          <!-- Empty state -->
+          <div v-if="kanbanStore.projects.length === 0" class="p-4 text-center">
+            <p class="text-xs text-muted-foreground">{{ t('kanban.emptyState') }}</p>
           </div>
-          <div v-else-if="sortedTasks.length === 0" class="p-6 text-center">
-            <ClipboardList class="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
-            <p class="text-sm text-muted-foreground mb-3">{{ t('kanban.emptyState') }}</p>
-            <button
-              v-if="authStore.canEdit('kanban')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              @click="openCreate"
-            >
-              <Plus class="w-4 h-4" />
-              {{ t('kanban.create') }}
-            </button>
-          </div>
-          <template v-else>
-            <div
-              v-for="task in sortedTasks"
-              :key="task.id"
-              class="px-3 py-2.5 cursor-pointer border-b border-border group hover:bg-secondary/50 transition-colors"
-              :class="{ 'bg-primary/10 border-l-2 border-l-primary': detailTask?.id === task.id && showDetail }"
-              @click="openDetail(task)"
-            >
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="STATUS_COLORS[task.status] || 'bg-gray-400'" />
-                <span class="font-medium text-sm truncate flex-1">{{ task.title }}</span>
-              </div>
-              <div class="flex items-center gap-2 mt-1 text-xs text-muted-foreground pl-[18px]">
-                <span v-if="task.assignee" class="truncate">{{ task.assignee }}</span>
-                <span
-                  v-if="task.due_date"
-                  class="ml-auto flex-shrink-0"
-                  :class="{ 'text-red-500 font-medium': isOverdue(task) }"
-                >{{ formatDate(task.due_date) }}</span>
-              </div>
-            </div>
-          </template>
         </div>
       </template>
     </div>
@@ -495,9 +429,8 @@ function selectProject(id: number | null) {
           <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
             <ClipboardList class="w-4 h-4 text-primary" />
           </div>
-          <span class="font-semibold truncate">{{ t('kanban.title') }}</span>
-          <span v-if="kanbanStore.currentProject" class="text-sm text-muted-foreground truncate hidden sm:inline">
-            / {{ kanbanStore.currentProject.name }}
+          <span class="font-semibold truncate">
+            {{ kanbanStore.currentProject?.name || t('kanban.localTasks') }}
           </span>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
@@ -579,6 +512,7 @@ function selectProject(id: number | null) {
   <KanbanTaskForm
     :visible="showForm"
     :task="editingTask"
+    :initial-status="createStatus"
     @close="showForm = false"
     @create="handleCreate"
     @update="handleUpdate"
@@ -607,13 +541,4 @@ function selectProject(id: number | null) {
     @update="handleProjectUpdate"
     @delete="handleProjectDelete"
   />
-
-  <!-- Click-away for project selector -->
-  <Teleport to="body">
-    <div
-      v-if="showProjectSelect"
-      class="fixed inset-0 z-[5]"
-      @click="showProjectSelect = false"
-    />
-  </Teleport>
 </template>

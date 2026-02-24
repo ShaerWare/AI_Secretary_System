@@ -16,19 +16,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   reorder: [taskId: number, newStatus: string, newPosition: number]
   clickTask: [task: KanbanTask]
-  createTask: []
+  createTask: [status?: string]
 }>()
 
 const { t } = useI18n()
 
-const ALL_STATUSES = ['draft', 'todo', 'in_progress', 'review', 'done'] as const
+const ALL_STATUSES = ['todo', 'in_progress', 'review', 'done'] as const
 
-const STATUSES = computed(() =>
-  props.isGithubProject ? ALL_STATUSES.filter((s) => s !== 'draft') : [...ALL_STATUSES],
-)
+const STATUSES = computed(() => [...ALL_STATUSES])
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-zinc-400',
   todo: 'bg-blue-500',
   in_progress: 'bg-amber-500',
   review: 'bg-purple-500',
@@ -313,6 +310,14 @@ onUnmounted(() => {
             <span class="font-medium text-sm truncate">{{ t(`kanban.status.${status}`) }}</span>
             <span class="text-xs text-muted-foreground ml-auto">{{ columnCount(status) }}</span>
             <button
+              v-if="!props.disabled"
+              class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+              :title="t('kanban.newTask')"
+              @click="emit('createTask', status)"
+            >
+              <Plus class="w-3.5 h-3.5" />
+            </button>
+            <button
               class="p-0.5 rounded hover:bg-secondary text-muted-foreground"
               :title="t('kanban.collapseColumn')"
               @click="toggleColumnCollapse(status)"
@@ -348,15 +353,6 @@ onUnmounted(() => {
                 >
                   {{ t('kanban.emptyColumn') }}
                 </div>
-                <!-- New task button in draft column -->
-                <button
-                  v-if="status === 'draft' && !props.disabled"
-                  class="w-full flex items-center justify-center gap-1.5 py-2 mt-1 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-colors"
-                  @click="emit('createTask')"
-                >
-                  <Plus class="w-4 h-4" />
-                  {{ t('kanban.newTask') }}
-                </button>
               </template>
             </draggable>
           </div>
