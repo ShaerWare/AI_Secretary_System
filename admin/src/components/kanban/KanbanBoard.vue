@@ -192,8 +192,10 @@ const dragScrollLeft = ref(0)
 const dragScrollTop = ref(0)
 const dragMoved = ref(false)
 
-function isCardElement(el: HTMLElement | null): boolean {
+function isInteractiveElement(el: HTMLElement | null): boolean {
   while (el) {
+    const tag = el.tagName
+    if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT') return true
     if (el.classList?.contains('kanban-card')) return true
     if (el.classList?.contains('kanban-resize-handle')) return true
     if (el === boardContainer.value) return false
@@ -205,7 +207,7 @@ function isCardElement(el: HTMLElement | null): boolean {
 function onBoardPointerDown(e: PointerEvent) {
   // Only enable drag-to-scroll for mouse — touch devices use native scroll
   if (e.pointerType !== 'mouse') return
-  if (isCardElement(e.target as HTMLElement)) return
+  if (isInteractiveElement(e.target as HTMLElement)) return
   const board = boardContainer.value
   if (!board) return
   isDragScrolling.value = true
