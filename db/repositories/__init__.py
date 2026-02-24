@@ -43,6 +43,7 @@ from db.repositories.user_identity import UserIdentityRepository
 from db.repositories.user_session import UserSessionRepository
 from db.repositories.whatsapp_instance import WhatsAppInstanceRepository
 from db.repositories.widget_instance import WidgetInstanceRepository
+from db.repositories.woocommerce import WooCommerceConfigRepository
 from db.repositories.workspace import WorkspaceRepository
 
 
@@ -89,5 +90,6 @@ __all__ = [
     "UsageRepository",
     "WhatsAppInstanceRepository",
     "WidgetInstanceRepository",
+    "WooCommerceConfigRepository",
     "WorkspaceRepository",
 ]

@@ -39,6 +39,7 @@ from db.repositories import (
     UserSessionRepository,
     WhatsAppInstanceRepository,
     WidgetInstanceRepository,
+    WooCommerceConfigRepository,
     WorkspaceRepository,
 )
 
@@ -999,6 +1000,40 @@ class AsyncAmoCRMManager:
             return await repo.get_recent(limit)
 
 
+# ============== WooCommerce Manager ==============
+
+
+class AsyncWooCommerceManager:
+    """Async wrapper for WooCommerce config repository."""
+
+    async def get_config(self) -> Optional[dict]:
+        """Get WooCommerce config (secrets masked)."""
+        async with AsyncSessionLocal() as session:
+            repo = WooCommerceConfigRepository(session)
+            return await repo.get_config()
+
+    async def get_config_with_secrets(self) -> Optional[Dict[str, Any]]:
+        """Get raw config for internal use (credentials)."""
+        async with AsyncSessionLocal() as session:
+            repo = WooCommerceConfigRepository(session)
+            model = await repo.get_config_with_secrets()
+            if not model:
+                return None
+            return model.to_dict(include_secrets=True)
+
+    async def save_config(self, **kwargs: Any) -> dict:
+        """Create or update WooCommerce config."""
+        async with AsyncSessionLocal() as session:
+            repo = WooCommerceConfigRepository(session)
+            return await repo.save_config(**kwargs)
+
+    async def clear_credentials(self) -> dict:
+        """Clear store credentials (disconnect)."""
+        async with AsyncSessionLocal() as session:
+            repo = WooCommerceConfigRepository(session)
+            return await repo.clear_credentials()
+
+
 # ============== GSM Manager ==============
 
 
@@ -1623,6 +1658,7 @@ async_whatsapp_instance_manager = AsyncWhatsAppInstanceManager()
 async_cloud_provider_manager = AsyncCloudProviderManager()
 async_payment_manager = AsyncPaymentManager()
 async_amocrm_manager = AsyncAmoCRMManager()
+async_woocommerce_manager = AsyncWooCommerceManager()
 async_gsm_manager = AsyncGSMManager()
 async_user_manager = AsyncUserManager()
 async_user_identity_manager = AsyncUserIdentityManager()

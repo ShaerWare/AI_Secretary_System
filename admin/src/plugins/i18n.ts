@@ -26,6 +26,7 @@ const messages = {
       sales: 'Продажи',
       crm: 'CRM',
       kanban: 'Задачи',
+      woocommerce: 'WooCommerce',
       about: 'О системе',
       // Menu groups
       group: {
@@ -1002,6 +1003,41 @@ const messages = {
       web: 'Веб',
       guest: 'Гость'
     },
+    woocommerce: {
+      title: 'WooCommerce',
+      description: 'Интеграция с WooCommerce магазином для синхронизации товаров и заказов',
+      tabs: {
+        settings: 'Настройки',
+      },
+      storeUrl: 'URL магазина',
+      storeUrlPlaceholder: 'https://your-store.com',
+      consumerKey: 'Consumer Key',
+      consumerSecret: 'Consumer Secret',
+      connected: 'Подключено',
+      notConnected: 'Не подключено',
+      testConnection: 'Проверить подключение',
+      connectionOk: 'Подключение успешно',
+      connectionFail: 'Ошибка подключения',
+      disconnect: 'Отключить',
+      save: 'Сохранить',
+      dataset: {
+        title: 'Синхронизация базы знаний',
+        description: 'Синхронизация товаров, категорий и заказов из WooCommerce в базу знаний AI-ассистента',
+        syncButton: 'Синхронизировать',
+        syncing: 'Синхронизация...',
+        clear: 'Очистить',
+        products: 'Товаров',
+        categories: 'Категорий',
+        orders: 'Заказов',
+        documents: 'Документов',
+        sections: 'Секций',
+        lastSync: 'Последняя синхронизация',
+        notSynced: 'Данные ещё не синхронизированы',
+        syncSuccess: 'Синхронизировано: {products} товаров, {categories} категорий, {orders} заказов',
+        syncFail: 'Ошибка синхронизации',
+        clearSuccess: 'Данные очищены',
+      },
+    },
     kanban: {
       title: 'Задачи',
       create: 'Новая задача',
@@ -1079,7 +1115,10 @@ const messages = {
       leaveEmptyKeep: 'оставьте пустым для сохранения',
       generate: 'Сгенерировать',
       created: 'создано',
-      updated: 'обновлено'
+      updated: 'обновлено',
+      expandSidebar: 'Развернуть панель',
+      collapseSidebar: 'Свернуть панель',
+      taskCount: '{count} задач'
     },
     profile: {
       title: 'Профиль',
@@ -1124,6 +1163,7 @@ const messages = {
       sales: 'Sales',
       crm: 'CRM',
       kanban: 'Tasks',
+      woocommerce: 'WooCommerce',
       about: 'About',
       // Menu groups
       group: {
@@ -2100,6 +2140,41 @@ const messages = {
       web: 'Web',
       guest: 'Guest'
     },
+    woocommerce: {
+      title: 'WooCommerce',
+      description: 'WooCommerce store integration for syncing products and orders',
+      tabs: {
+        settings: 'Settings',
+      },
+      storeUrl: 'Store URL',
+      storeUrlPlaceholder: 'https://your-store.com',
+      consumerKey: 'Consumer Key',
+      consumerSecret: 'Consumer Secret',
+      connected: 'Connected',
+      notConnected: 'Not Connected',
+      testConnection: 'Test Connection',
+      connectionOk: 'Connection successful',
+      connectionFail: 'Connection failed',
+      disconnect: 'Disconnect',
+      save: 'Save',
+      dataset: {
+        title: 'Knowledge Base Sync',
+        description: 'Sync products, categories and orders from WooCommerce into AI assistant knowledge base',
+        syncButton: 'Sync',
+        syncing: 'Syncing...',
+        clear: 'Clear',
+        products: 'Products',
+        categories: 'Categories',
+        orders: 'Orders',
+        documents: 'Documents',
+        sections: 'Sections',
+        lastSync: 'Last Sync',
+        notSynced: 'Data not synced yet',
+        syncSuccess: 'Synced: {products} products, {categories} categories, {orders} orders',
+        syncFail: 'Sync failed',
+        clearSuccess: 'Data cleared',
+      },
+    },
     kanban: {
       title: 'Tasks',
       create: 'New Task',
@@ -2177,7 +2252,10 @@ const messages = {
       leaveEmptyKeep: 'leave empty to keep current',
       generate: 'Generate',
       created: 'created',
-      updated: 'updated'
+      updated: 'updated',
+      expandSidebar: 'Expand sidebar',
+      collapseSidebar: 'Collapse sidebar',
+      taskCount: '{count} tasks'
     },
     profile: {
       title: 'Profile',
@@ -2222,6 +2300,7 @@ const messages = {
       sales: 'Сатылым',
       crm: 'CRM',
       kanban: 'Тапсырмалар',
+      woocommerce: 'WooCommerce',
       about: 'Жүйе туралы',
       group: {
         monitoring: 'Мониторинг',
@@ -3197,6 +3276,41 @@ const messages = {
       web: 'Веб',
       guest: 'Қонақ'
     },
+    woocommerce: {
+      title: 'WooCommerce',
+      description: 'WooCommerce дүкенімен интеграция',
+      tabs: {
+        settings: 'Баптаулар',
+      },
+      storeUrl: 'Дүкен URL',
+      storeUrlPlaceholder: 'https://your-store.com',
+      consumerKey: 'Consumer Key',
+      consumerSecret: 'Consumer Secret',
+      connected: 'Қосылған',
+      notConnected: 'Қосылмаған',
+      testConnection: 'Қосылымды тексеру',
+      connectionOk: 'Қосылым сәтті',
+      connectionFail: 'Қосылым қатесі',
+      disconnect: 'Ажырату',
+      save: 'Сақтау',
+      dataset: {
+        title: 'Білім базасын синхрондау',
+        description: 'WooCommerce-тен тауарлар мен тапсырыстарды AI көмекшісінің білім базасына синхрондау',
+        syncButton: 'Синхрондау',
+        syncing: 'Синхрондау...',
+        clear: 'Тазалау',
+        products: 'Тауарлар',
+        categories: 'Санаттар',
+        orders: 'Тапсырыстар',
+        documents: 'Құжаттар',
+        sections: 'Бөлімдер',
+        lastSync: 'Соңғы синхрондау',
+        notSynced: 'Деректер синхрондалмаған',
+        syncSuccess: 'Синхрондалды: {products} тауар, {categories} санат, {orders} тапсырыс',
+        syncFail: 'Синхрондау қатесі',
+        clearSuccess: 'Деректер тазаланды',
+      },
+    },
     kanban: {
       title: 'Тапсырмалар',
       create: 'Жаңа тапсырма',
@@ -3274,7 +3388,10 @@ const messages = {
       leaveEmptyKeep: 'сақтау үшін бос қалдырыңыз',
       generate: 'Генерациялау',
       created: 'жасалды',
-      updated: 'жаңартылды'
+      updated: 'жаңартылды',
+      expandSidebar: 'Панельді жаю',
+      collapseSidebar: 'Панельді жию',
+      taskCount: '{count} тапсырма'
     },
     profile: {
       title: 'Профиль',
