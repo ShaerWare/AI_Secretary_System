@@ -123,19 +123,28 @@ class AsyncChatManager:
         owner_id: Optional[int] = None,
         source: Optional[str] = None,
         exclude_source: Optional[str] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """List all sessions with summary info."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             return await repo.list_sessions(
-                owner_id=owner_id, source=source, exclude_source=exclude_source
+                owner_id=owner_id,
+                source=source,
+                exclude_source=exclude_source,
+                workspace_id=workspace_id,
             )
 
-    async def get_session(self, session_id: str, owner_id: Optional[int] = None) -> Optional[dict]:
+    async def get_session(
+        self,
+        session_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> Optional[dict]:
         """Get full session with messages."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.get_session(session_id, owner_id=owner_id)
+            return await repo.get_session(session_id, owner_id=owner_id, workspace_id=workspace_id)
 
     async def create_session(
         self,
@@ -146,6 +155,7 @@ class AsyncChatManager:
         owner_id: Optional[int] = None,
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create new session."""
         async with AsyncSessionLocal() as session:
@@ -158,6 +168,7 @@ class AsyncChatManager:
                 owner_id=owner_id,
                 rag_mode=rag_mode,
                 knowledge_collection_id=knowledge_collection_id,
+                workspace_id=workspace_id,
             )
 
     async def update_session(
@@ -185,25 +196,39 @@ class AsyncChatManager:
                 context_files=context_files,
             )
 
-    async def delete_session(self, session_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_session(
+        self,
+        session_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
         """Delete session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.delete_session(session_id, owner_id=owner_id)
+            return await repo.delete_session(
+                session_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def delete_sessions_bulk(
-        self, session_ids: List[str], owner_id: Optional[int] = None
+        self,
+        session_ids: List[str],
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> int:
         """Delete multiple sessions by ID list."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.delete_sessions_bulk(session_ids, owner_id=owner_id)
+            return await repo.delete_sessions_bulk(
+                session_ids, owner_id=owner_id, workspace_id=workspace_id
+            )
 
-    async def list_sessions_grouped(self, owner_id: Optional[int] = None) -> dict:
+    async def list_sessions_grouped(
+        self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> dict:
         """Get sessions grouped by source."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.list_sessions_grouped(owner_id=owner_id)
+            return await repo.list_sessions_grouped(owner_id=owner_id, workspace_id=workspace_id)
 
     async def get_branch_path(self, session_id: str, message_id: str) -> List[dict]:
         """Get ordered message path from root to a specific message."""

@@ -41,6 +41,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         owner_id: Optional[int] = None,
         source: Optional[str] = None,
         exclude_source: Optional[str] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """Get list of sessions with summary info, filtered by owner and source."""
         query = (
@@ -48,6 +49,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             .options(selectinload(ChatSession.messages))
             .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
+        query = self._apply_workspace_filter(query, workspace_id)
         if owner_id is not None:
             shared_subq = (
                 select(ChatSessionShare.session_id)
@@ -71,10 +73,15 @@ class ChatRepository(BaseRepository[ChatSession]):
         sessions = result.scalars().all()
         return [s.to_summary() for s in sessions]
 
-    async def get_session(self, session_id: str, owner_id: Optional[int] = None) -> Optional[dict]:
+    async def get_session(
+        self,
+        session_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> Optional[dict]:
         """Get full session with messages, with Redis caching."""
-        # Try cache first (skip cache if owner filtering needed)
-        if owner_id is None:
+        # Try cache first (skip cache if owner/workspace filtering needed)
+        if owner_id is None and workspace_id is None:
             cached = await get_cached_session(session_id)
             if cached:
                 return cached
@@ -85,6 +92,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             .options(selectinload(ChatSession.messages))
             .where(ChatSession.id == session_id)
         )
+        query = self._apply_workspace_filter(query, workspace_id)
         if owner_id is not None:
             shared_subq = (
                 select(ChatSessionShare.session_id)
@@ -118,12 +126,13 @@ class ChatRepository(BaseRepository[ChatSession]):
         owner_id: Optional[int] = None,
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create new chat session."""
         session_id = self._generate_session_id()
         now = datetime.utcnow()
 
-        session = ChatSession(
+        kwargs: dict[str, Any] = dict(
             id=session_id,
             title=title or "Новый чат",
             system_prompt=system_prompt,
@@ -135,6 +144,10 @@ class ChatRepository(BaseRepository[ChatSession]):
             created=now,
             updated=now,
         )
+        if workspace_id is not None:
+            kwargs["workspace_id"] = workspace_id
+
+        session = ChatSession(**kwargs)
 
         self.session.add(session)
         await self.session.commit()
@@ -209,9 +222,13 @@ class ChatRepository(BaseRepository[ChatSession]):
         data_result: dict[str, Any] = session.to_dict()
         return data_result
 
-    async def delete_session(self, session_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_session(
+        self, session_id: str, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> bool:
         """Delete session and all its messages."""
         query = delete(ChatSession).where(ChatSession.id == session_id)
+        if workspace_id is not None and hasattr(ChatSession, "workspace_id"):
+            query = query.where(ChatSession.workspace_id == workspace_id)
         if owner_id is not None:
             query = query.where(
                 (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
@@ -222,13 +239,18 @@ class ChatRepository(BaseRepository[ChatSession]):
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def delete_sessions_bulk(
-        self, session_ids: List[str], owner_id: Optional[int] = None
+        self,
+        session_ids: List[str],
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> int:
         """Delete multiple sessions by ID list."""
         if not session_ids:
             return 0
 
         query = delete(ChatSession).where(ChatSession.id.in_(session_ids))
+        if workspace_id is not None and hasattr(ChatSession, "workspace_id"):
+            query = query.where(ChatSession.workspace_id == workspace_id)
         if owner_id is not None:
             query = query.where(
                 (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
@@ -242,13 +264,16 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         return int(result.rowcount)  # type: ignore[attr-defined]
 
-    async def list_sessions_grouped(self, owner_id: Optional[int] = None) -> dict:
+    async def list_sessions_grouped(
+        self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
+    ) -> dict:
         """Get sessions grouped by source."""
         query = (
             select(ChatSession)
             .options(selectinload(ChatSession.messages))
             .order_by(ChatSession.pinned.desc(), ChatSession.updated.desc())
         )
+        query = self._apply_workspace_filter(query, workspace_id)
         if owner_id is not None:
             shared_subq = (
                 select(ChatSessionShare.session_id)
@@ -765,6 +790,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         session_id: str,
         new_owner_id: int,
         new_title: Optional[str] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Deep copy a session with active messages to a new owner."""
         result = await self.session.execute(
@@ -781,7 +807,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         now = datetime.utcnow()
         title = new_title or f"{source_session.title} (fork)"
 
-        new_session = ChatSession(
+        kwargs: dict[str, Any] = dict(
             id=new_session_id,
             title=title,
             system_prompt=source_session.system_prompt,
@@ -794,6 +820,10 @@ class ChatRepository(BaseRepository[ChatSession]):
             created=now,
             updated=now,
         )
+        if workspace_id is not None:
+            kwargs["workspace_id"] = workspace_id
+
+        new_session = ChatSession(**kwargs)
         self.session.add(new_session)
 
         # Copy active messages with parent_id remapping
