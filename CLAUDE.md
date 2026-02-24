@@ -185,7 +185,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
 
-**Database layer** (`db/`): Async SQLAlchemy with aiosqlite. `db/database.py` creates the engine and `AsyncSessionLocal` factory. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`, `AsyncFAQManager`) that wrap repository calls — these are used as module-level singletons imported by `orchestrator.py` and routers. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD.
+**Database layer** (`db/`): Async SQLAlchemy with aiosqlite. `db/database.py` creates the engine and `AsyncSessionLocal` factory. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`, `AsyncFAQManager`) that wrap repository calls — these are used as module-level singletons imported by `orchestrator.py` and routers. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter(query, workspace_id)` for workspace-aware queries.
 
 **Telegram bots**: Run as subprocesses managed by `multi_bot_manager.py`. Each bot instance has independent config (LLM backend, TTS, prompts, system prompt). Bots with `auto_start=true` restart on app startup. Two Telegram frameworks: `python-telegram-bot` (legacy) and `aiogram` (new bots). In multi-instance mode, `BOT_INSTANCE_ID`, `BOT_INTERNAL_TOKEN`, and `ORCHESTRATOR_URL` env vars are passed to the subprocess. Config loading: manager pre-fetches config from DB and writes it to `/tmp/bot_config_{id}.json` (`BOT_CONFIG_FILE` env var); bot tries this file first (`load_config_from_file()`), then falls back to orchestrator API with retry logic (5 attempts, exponential backoff). `LLMRouter` in `telegram_bot/services/llm_router.py` routes LLM requests through the orchestrator chat API, auto-creates orchestrator DB sessions (mapping bot session IDs to real DB sessions via `_ensure_session()`), and uses the bot instance's `llm_backend` setting. `stream_renderer.py` handles both plain string chunks and OpenAI-format dicts.
 
@@ -290,8 +290,9 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **RBAC auth guards** (in `auth_manager.py`):
 - `Depends(require_permission(module, level))` — checks module permission (all routers)
 - `user_has_level(user, module, level)` — inline check within endpoint (owner/manage logic)
+- `workspace_context(user, module)` — returns `(owner_id, workspace_id)` tuple for repository calls; `owner_id` is `None` for manage-level users, `workspace_id` always from JWT
 - `Depends(get_current_user)` — auth only, no RBAC check (self-service: auth.py)
-- Data isolation: `owner_id = None if user_has_level(user, mod, "manage") else user.id`
+- Data isolation: `owner_id, workspace_id = workspace_context(user, module)` → pass both to repository/manager
 
 **Workspaces + RBAC roles:** Permission resolution goes through `workspace_members` table (not legacy `users.role`). Default workspace (id=1) is seeded at startup; all users are auto-mapped using legacy role → RBAC role:
 - `admin` → RBAC `admin` — all 16 modules `manage`, sees all resources
@@ -342,7 +343,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - **FastAPI Depends pattern** — `B008` (function-call-in-default-argument) is disabled for this reason
 - **Optional imports** — Services like vLLM and OpenVoice use try/except at module level with `*_AVAILABLE` flags
 - **SQLAlchemy mapped_column style** — Models use `Mapped[T]` with `mapped_column()` (declarative 2.0)
-- **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete. Domain repos extend with custom queries.
+- **Repository pattern** — `BaseRepository(Generic[T])` provides get_by_id, get_all, create, update, delete, and `_apply_workspace_filter(query, workspace_id)` for multi-tenant filtering. Domain repos extend with custom queries and should call `_apply_workspace_filter()` in list/get methods.
 - **Admin panel** — See **Frontend Architecture** section below for full details (routing, stores, API layer, demo mode, components).
 - **mypy strict scope** — Only `db/`, `auth_manager.py`, `service_manager.py` require typed defs; other modules are relaxed. mypy is soft in CI (`|| true`).
 - **Pre-commit hooks** — ruff lint+format, mypy (core only), eslint, hadolint (Docker), plus standard checks (trailing whitespace, large files ≤1MB, private key detection, merge conflicts). See `.pre-commit-config.yaml`.

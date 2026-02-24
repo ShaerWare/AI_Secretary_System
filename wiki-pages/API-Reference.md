@@ -345,33 +345,47 @@ data: [DONE]\n\n
 
 ## RBAC (контроль доступа)
 
-Система использует 3 уровня защиты эндпоинтов:
+Система использует permission-based RBAC с 16 модулями и 3 уровнями доступа.
 
-| Dependency | Роли | Применение |
-|------------|------|------------|
-| `get_current_user` | Любой авторизованный | Read endpoints |
-| `require_not_guest` | user, web, admin | Write endpoints |
-| `require_admin` | admin | Sensitive operations |
+### Защита эндпоинтов
 
-### Роли пользователей
+| Dependency | Описание | Применение |
+|------------|----------|------------|
+| `require_permission(module, level)` | Проверяет permission модуля | Все бизнес-эндпоинты |
+| `get_current_user` | Только аутентификация | Self-service (auth.py) |
 
-| Роль | Права | Ограничения |
-|------|-------|-------------|
-| **admin** | Полный доступ | Видит все ресурсы всех пользователей |
-| **user** | Read + Write своих ресурсов | Полный доступ к админ-панели |
-| **web** | Как user, но упрощённый UI | Скрыты: Dashboard, Services, vLLM, Models |
-| **guest** | Read-only (demo) | Только просмотр, без изменений |
+Уровни: `view` (чтение) → `edit` (изменение) → `manage` (полный доступ).
+
+### Роли (динамические, в БД)
+
+| Роль | Описание | Модули |
+|------|----------|--------|
+| **admin** | Полный доступ | Все 16 модулей — `manage` |
+| **operator** | Работа с ресурсами | 8 модулей `edit` + 3 `view` |
+| **viewer** | Только просмотр | 7 модулей `view` |
+
+Legacy роли (`admin`, `user`, `web`, `guest`) маппятся на RBAC-роли через `workspace_members` при создании пользователя.
 
 ### Изоляция данных
 
-Для пользователей с ролью `user` и `web` применяется фильтрация по `owner_id`:
+Двухуровневая фильтрация: **owner_id** (кто создал) + **workspace_id** (какому workspace принадлежит):
 
 ```python
-owner_id = None if user.role == "admin" else user.id
-# Пользователь видит только свои ресурсы
+from auth_manager import workspace_context
+
+owner_id, workspace_id = workspace_context(user, "chat")
+# owner_id = None для manage-level (видит все ресурсы workspace)
+# workspace_id = всегда из JWT (user.workspace_id)
+sessions = await manager.list_sessions(owner_id=owner_id, workspace_id=workspace_id)
 ```
 
-Ресурсы с `owner_id`: ChatSession, BotInstance, WidgetInstance, CloudLLMProvider, TTSPreset
+Ресурсы с `owner_id` + `workspace_id`: ChatSession, BotInstance, WidgetInstance, WhatsAppInstance, CloudLLMProvider, TTSPreset, KnowledgeDocument, ClaudeCodeSession и др. (13 таблиц).
+
+### Workspaces
+
+Workspace — контейнер всех ресурсов. Default workspace (id=1) создаётся автоматически. JWT содержит `workspace_id`. Репозитории фильтруют через `BaseRepository._apply_workspace_filter()`.
+
+> **Статус:** workspace_id колонки добавлены на 13 таблиц, инфраструктура фильтрации готова. Workspace-aware запросы внедряются поэтапно (#365).
 
 ## Формат ошибок
 

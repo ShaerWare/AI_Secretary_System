@@ -13,7 +13,7 @@
 | **ID** | Числовой идентификатор | Нет |
 | **Имя пользователя** | Логин | Нет |
 | **Отображаемое имя** | Display name | Да |
-| **Роль** | admin / user / web / guest | Нет (только через CLI) |
+| **Роль** | admin / user / web / guest (RBAC) | Нет (только через CLI) |
 | **Дата создания** | Когда создан аккаунт | Нет |
 | **Последний вход** | Время последнего логина | Нет |
 
@@ -134,7 +134,20 @@ python scripts/manage_users.py enable <user>                 # Активиро�
 python scripts/manage_users.py delete <user>                 # Удалить
 ```
 
-Роли: `admin`, `user`, `web`, `guest`. Подробнее о ролях: [[API-Reference]].
+### Роли и RBAC
+
+Legacy роли при создании пользователя автоматически маппятся на RBAC-роли через `workspace_members`:
+
+| Legacy роль | RBAC роль | Доступ |
+|-------------|-----------|--------|
+| `admin` | **admin** | Все 16 модулей — `manage` |
+| `user` | **operator** | 8 модулей `edit` + 3 `view` |
+| `web` | **operator** | Аналогично `user` |
+| `guest` | **viewer** | 7 модулей `view` (только чтение) |
+
+Уровни доступа: `view` (чтение) → `edit` (изменение) → `manage` (полный доступ).
+
+Подробнее о RBAC: [[API-Reference]].
 
 ## API
 
