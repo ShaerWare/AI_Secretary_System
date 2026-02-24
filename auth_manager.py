@@ -344,7 +344,8 @@ async def _validate_session(token_payload: TokenPayload) -> Optional[User]:
         return None
     if db_session.revoked_at is not None:
         return None
-    if db_session.user is None or not db_session.user.is_active:
+    # Internal bot tokens use user_id=0 which has no real User row — skip user check
+    if user_id != 0 and (db_session.user is None or not db_session.user.is_active):
         return None
 
     # Valid session — populate cache
