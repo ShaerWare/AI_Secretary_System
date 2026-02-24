@@ -281,7 +281,8 @@ Content-Type: application/json
 - [x] **6c-0**: Инфраструктура — `BaseRepository._apply_workspace_filter()`, `workspace_context()` (#376, PR #383)
 - [x] **6c-1**: **Chat** — первый модуль с workspace-фильтрацией, эталон для остальных (#377, PR #385)
 - [x] **6c-2**: **Channels** — Telegram, WhatsApp, Widget (#378, PR #387)
-- [ ] **6c-3–6c-5**: LLM/TTS, Knowledge/FAQ, System/Kanban/Audit (#379–#381)
+- [x] **6c-3**: **AI/LLM** — Cloud LLM Providers + TTS Presets (#379, PR #389)
+- [ ] **6c-4–6c-5**: Knowledge/FAQ, System/Kanban/Audit (#380–#381)
 - [ ] **6c-6**: Финализация — тесты, документация (#382)
 
 Bot-scoped таблицы (`telegram_sessions`, `bot_agent_prompts`, `bot_quiz_questions` и др.) **не** содержат `workspace_id` — они фильтруются через `bot_instances.workspace_id`.

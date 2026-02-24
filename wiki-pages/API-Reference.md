@@ -577,7 +577,7 @@ sessions = await manager.list_sessions(owner_id=owner_id, workspace_id=workspace
 
 Workspace — контейнер всех ресурсов. Default workspace (id=1) создаётся автоматически. JWT содержит `workspace_id`. Репозитории фильтруют через `BaseRepository._apply_workspace_filter()`.
 
-> **Статус:** workspace_id колонки добавлены на 13 таблиц, инфраструктура фильтрации готова. Модули с workspace-фильтрацией: **Chat** (PR #385), **Channels** — Telegram, WhatsApp, Widget (PR #387). Остальные модули внедряются поэтапно (#365).
+> **Статус:** workspace_id колонки добавлены на 13 таблиц, инфраструктура фильтрации готова. Модули с workspace-фильтрацией: **Chat** (PR #385), **Channels** — Telegram, WhatsApp, Widget (PR #387), **AI/LLM** — Cloud LLM Providers, TTS Presets (PR #389). Остальные модули внедряются поэтапно (#365).
 
 ### Совместный доступ к чатам
 
