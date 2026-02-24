@@ -41,7 +41,7 @@ from app.services.crm_dataset_service import (
     build_summary_document,
     clean_crm_files,
 )
-from auth_manager import User, require_permission
+from auth_manager import User, require_permission, workspace_context
 from db.integration import (
     async_amocrm_manager,
     async_audit_logger,
@@ -183,7 +183,8 @@ class SendChatMessageRequest(BaseModel):
 @router.get("/status")
 async def crm_status(user: User = Depends(require_permission("sales", "view"))):
     """Quick status: connected? token expired? last sync."""
-    config = await async_amocrm_manager.get_config()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config(workspace_id=ws_id)
     if not config:
         return {
             "connected": False,
@@ -205,7 +206,8 @@ async def crm_status(user: User = Depends(require_permission("sales", "view"))):
 @router.get("/config")
 async def crm_get_config(user: User = Depends(require_permission("sales", "view"))):
     """Get amoCRM config (secrets masked)."""
-    config = await async_amocrm_manager.get_config()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    config = await async_amocrm_manager.get_config(workspace_id=ws_id)
     return {"config": config or {}}
 
 
@@ -215,8 +217,9 @@ async def crm_save_config(
     user: User = Depends(require_permission("sales", "manage")),
 ):
     """Save OAuth credentials and sync settings."""
+    _owner_id, ws_id = workspace_context(user, "sales")
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
-    config = await async_amocrm_manager.save_config(**kwargs)
+    config = await async_amocrm_manager.save_config(workspace_id=ws_id, **kwargs)
 
     await async_audit_logger.log(
         action="update",
@@ -331,7 +334,8 @@ async def crm_oauth_redirect(
 @router.post("/disconnect")
 async def crm_disconnect(user: User = Depends(require_permission("sales", "manage"))):
     """Clear tokens — disconnect from amoCRM."""
-    await async_amocrm_manager.clear_tokens()
+    _owner_id, ws_id = workspace_context(user, "sales")
+    await async_amocrm_manager.clear_tokens(workspace_id=ws_id)
     await cache_delete_pattern(f"{CacheKey.AMOCRM}:*")
 
     await async_audit_logger.log(

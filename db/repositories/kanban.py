@@ -31,16 +31,27 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         )
         return result.scalar_one_or_none()
 
-    async def get_visible_tasks(self, current_user: str, is_admin: bool) -> List[dict]:
+    async def get_visible_tasks(
+        self,
+        current_user: str,
+        is_admin: bool,
+        workspace_id: Optional[int] = None,
+    ) -> List[dict]:
         """Get tasks visible to the user (local tasks only, project_id IS NULL).
 
         Admin sees all tasks.
         Others see their own tasks + non-draft public tasks.
         """
-        return await self.get_visible_tasks_for_project(None, current_user, is_admin)
+        return await self.get_visible_tasks_for_project(
+            None, current_user, is_admin, workspace_id=workspace_id
+        )
 
     async def get_visible_tasks_for_project(
-        self, project_id: Optional[int], current_user: str, is_admin: bool
+        self,
+        project_id: Optional[int],
+        current_user: str,
+        is_admin: bool,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """Get tasks visible to the user, filtered by project.
 
@@ -48,6 +59,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         project_id=N -> tasks for that project
         """
         stmt = select(KanbanTask).options(*self._load_options())
+        stmt = self._apply_workspace_filter(stmt, workspace_id)
 
         if project_id is None:
             stmt = stmt.where(KanbanTask.project_id.is_(None))
@@ -74,9 +86,10 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         start_date: Optional[str] = None,
         due_date: Optional[str] = None,
         tags: Optional[str] = None,
+        workspace_id: Optional[int] = None,
     ) -> dict:
         """Create a new task (always draft + private)."""
-        task = KanbanTask(
+        create_kwargs: dict = dict(
             title=title,
             description=description,
             status="draft",
@@ -87,6 +100,9 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             due_date=due_date,
             tags=tags,
         )
+        if workspace_id is not None:
+            create_kwargs["workspace_id"] = workspace_id
+        task = KanbanTask(**create_kwargs)
         self.session.add(task)
         await self.session.commit()
         task = await self.get_task_with_relations(task.id)

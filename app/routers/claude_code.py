@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
-from auth_manager import TokenPayload, decode_token, require_permission
+from auth_manager import TokenPayload, decode_token, require_permission, workspace_context
 
 
 router = APIRouter(prefix="/admin/claude-code", tags=["claude-code"])
@@ -455,9 +455,9 @@ async def claude_code_ws(websocket: WebSocket, token: str = ""):
             action = raw.get("action")
 
             if action == "start":
-                await _handle_start(websocket, user_id, raw)
+                await _handle_start(websocket, user_id, raw, payload.workspace_id)
             elif action == "message":
-                await _handle_message(websocket, user_id, raw)
+                await _handle_message(websocket, user_id, raw, payload.workspace_id)
             elif action == "abort":
                 await _handle_abort(user_id)
             else:
@@ -480,7 +480,7 @@ async def claude_code_ws(websocket: WebSocket, token: str = ""):
             shutil.rmtree(ctx_dir, ignore_errors=True)
 
 
-async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
+async def _handle_start(ws: WebSocket, user_id: int, raw: dict, workspace_id: int = 1) -> None:
     """Handle 'start' action — new session."""
     from db.integration import async_claude_code_manager
 
@@ -499,7 +499,9 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
 
     # Create DB session
     title = prompt[:50]
-    db_session = await async_claude_code_manager.create_session(title=title, owner_id=user_id)
+    db_session = await async_claude_code_manager.create_session(
+        title=title, owner_id=user_id, workspace_id=workspace_id
+    )
 
     await _send(ws, {"type": "session_created", "session": db_session})
 
@@ -519,7 +521,7 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict) -> None:
         )
 
 
-async def _handle_message(ws: WebSocket, user_id: int, raw: dict) -> None:
+async def _handle_message(ws: WebSocket, user_id: int, raw: dict, workspace_id: int = 1) -> None:
     """Handle 'message' action — continue existing session."""
     from db.integration import async_claude_code_manager
 
@@ -544,7 +546,7 @@ async def _handle_message(ws: WebSocket, user_id: int, raw: dict) -> None:
     if not db_session_id and cli_session_id:
         # Create a follow-up entry
         db_session = await async_claude_code_manager.create_session(
-            title=prompt[:50], owner_id=user_id
+            title=prompt[:50], owner_id=user_id, workspace_id=workspace_id
         )
         db_session_id = db_session["id"]
         await async_claude_code_manager.update_session(db_session_id, cli_session_id=cli_session_id)
@@ -580,7 +582,8 @@ async def list_sessions(user=Depends(require_permission("claude_code", "manage")
     """List Claude Code sessions."""
     from db.integration import async_claude_code_manager
 
-    sessions = await async_claude_code_manager.list_sessions(owner_id=user.id)
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    sessions = await async_claude_code_manager.list_sessions(owner_id=user.id, workspace_id=ws_id)
     return {"sessions": sessions}
 
 

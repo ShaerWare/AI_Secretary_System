@@ -21,20 +21,35 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, AmoCRMConfig)
 
-    async def get_config(self) -> Optional[dict]:
-        """Get the singleton config row (id=1), masked secrets."""
-        config = await self.session.get(AmoCRMConfig, 1)
-        return config.to_dict() if config else None
-
-    async def get_config_with_secrets(self) -> Optional[AmoCRMConfig]:
-        """Get raw model for internal use (tokens, secrets)."""
+    async def _get_config_entity(
+        self, workspace_id: Optional[int] = None
+    ) -> Optional[AmoCRMConfig]:
+        """Get config entity, optionally filtered by workspace_id."""
+        if workspace_id is not None:
+            query = select(AmoCRMConfig).where(AmoCRMConfig.workspace_id == workspace_id)
+            result = await self.session.execute(query)
+            return result.scalar_one_or_none()
         return await self.session.get(AmoCRMConfig, 1)
 
-    async def save_config(self, **kwargs: Any) -> dict:
-        """Create or update the singleton config."""
-        config = await self.session.get(AmoCRMConfig, 1)
+    async def get_config(self, workspace_id: Optional[int] = None) -> Optional[dict]:
+        """Get config row, masked secrets."""
+        config = await self._get_config_entity(workspace_id)
+        return config.to_dict() if config else None
+
+    async def get_config_with_secrets(
+        self, workspace_id: Optional[int] = None
+    ) -> Optional[AmoCRMConfig]:
+        """Get raw model for internal use (tokens, secrets)."""
+        return await self._get_config_entity(workspace_id)
+
+    async def save_config(self, workspace_id: Optional[int] = None, **kwargs: Any) -> dict:
+        """Create or update config."""
+        config = await self._get_config_entity(workspace_id)
         if not config:
-            config = AmoCRMConfig(id=1)
+            create_kwargs: dict = {"id": 1}
+            if workspace_id is not None:
+                create_kwargs["workspace_id"] = workspace_id
+            config = AmoCRMConfig(**create_kwargs)
             self.session.add(config)
 
         simple_fields = [
@@ -69,9 +84,9 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
         await self.session.refresh(config)
         return config.to_dict()
 
-    async def clear_tokens(self) -> dict:
+    async def clear_tokens(self, workspace_id: Optional[int] = None) -> dict:
         """Clear OAuth tokens (disconnect)."""
-        config = await self.session.get(AmoCRMConfig, 1)
+        config = await self._get_config_entity(workspace_id)
         if config:
             config.access_token = None
             config.refresh_token = None

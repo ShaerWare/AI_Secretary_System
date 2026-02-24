@@ -1064,17 +1064,19 @@ class AsyncPaymentManager:
 class AsyncAmoCRMManager:
     """Async wrapper for amoCRM config and sync log repositories."""
 
-    async def get_config(self) -> Optional[dict]:
+    async def get_config(self, workspace_id: Optional[int] = None) -> Optional[dict]:
         """Get amoCRM config (secrets masked)."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            return await repo.get_config()
+            return await repo.get_config(workspace_id=workspace_id)
 
-    async def get_config_with_secrets(self) -> Optional[Dict[str, Any]]:
+    async def get_config_with_secrets(
+        self, workspace_id: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
         """Get raw config model for internal use (tokens, secrets)."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            model = await repo.get_config_with_secrets()
+            model = await repo.get_config_with_secrets(workspace_id=workspace_id)
             if not model:
                 return None
             result = model.to_dict(include_secrets=True)
@@ -1085,17 +1087,17 @@ class AsyncAmoCRMManager:
             )
             return result
 
-    async def save_config(self, **kwargs: Any) -> dict:
+    async def save_config(self, workspace_id: Optional[int] = None, **kwargs: Any) -> dict:
         """Create or update amoCRM config."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            return await repo.save_config(**kwargs)
+            return await repo.save_config(workspace_id=workspace_id, **kwargs)
 
-    async def clear_tokens(self) -> dict:
+    async def clear_tokens(self, workspace_id: Optional[int] = None) -> dict:
         """Clear OAuth tokens (disconnect)."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            return await repo.clear_tokens()
+            return await repo.clear_tokens(workspace_id=workspace_id)
 
     async def log_sync(self, **kwargs: Any) -> dict:
         """Log a sync event."""
@@ -1652,10 +1654,17 @@ class AsyncChatShareManager:
 class AsyncClaudeCodeManager:
     """Manager for Claude Code session CRUD."""
 
-    async def list_sessions(self, owner_id: Optional[int] = None, limit: int = 50) -> List[dict]:
+    async def list_sessions(
+        self,
+        owner_id: Optional[int] = None,
+        limit: int = 50,
+        workspace_id: Optional[int] = None,
+    ) -> List[dict]:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.list_sessions(owner_id=owner_id, limit=limit)
+            return await repo.list_sessions(
+                owner_id=owner_id, limit=limit, workspace_id=workspace_id
+            )
 
     async def get_session(self, session_id: str) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
@@ -1667,10 +1676,13 @@ class AsyncClaudeCodeManager:
         title: str,
         owner_id: int,
         working_directory: str = "/opt/ai-secretary",
+        workspace_id: Optional[int] = None,
     ) -> dict:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.create_session(title, owner_id, working_directory)
+            return await repo.create_session(
+                title, owner_id, working_directory, workspace_id=workspace_id
+            )
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
@@ -1759,10 +1771,15 @@ async_claude_code_manager = AsyncClaudeCodeManager()
 class AsyncKanbanManager:
     """Async kanban task manager."""
 
-    async def get_visible_tasks(self, current_user: str, is_admin: bool) -> list:
+    async def get_visible_tasks(
+        self,
+        current_user: str,
+        is_admin: bool,
+        workspace_id: Optional[int] = None,
+    ) -> list:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.get_visible_tasks(current_user, is_admin)
+            return await repo.get_visible_tasks(current_user, is_admin, workspace_id=workspace_id)
 
     async def get_task(self, task_id: int) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
@@ -1816,11 +1833,17 @@ class AsyncKanbanManager:
             return await repo.delete_checklist_item(item_id)
 
     async def get_visible_tasks_for_project(
-        self, project_id, current_user: str, is_admin: bool
+        self,
+        project_id,
+        current_user: str,
+        is_admin: bool,
+        workspace_id: Optional[int] = None,
     ) -> list:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.get_visible_tasks_for_project(project_id, current_user, is_admin)
+            return await repo.get_visible_tasks_for_project(
+                project_id, current_user, is_admin, workspace_id=workspace_id
+            )
 
     async def find_by_github_issue(self, project_id: int, issue_number: int):
         async with AsyncSessionLocal() as session:
@@ -1843,10 +1866,10 @@ async_kanban_manager = AsyncKanbanManager()
 class AsyncKanbanProjectManager:
     """Async kanban project manager."""
 
-    async def get_all_projects(self) -> list:
+    async def get_all_projects(self, workspace_id: Optional[int] = None) -> list:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
-            return await repo.get_all_projects()
+            return await repo.get_all_projects(workspace_id=workspace_id)
 
     async def get_project(self, project_id: int) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
