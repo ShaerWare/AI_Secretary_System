@@ -66,11 +66,31 @@
     // If check fails (network error, CORS, etc.) — render anyway (fail-open)
   }
 
+  // Collect visitor metadata for CRM
+  function collectMetadata() {
+    const params = new URLSearchParams(window.location.search);
+    const meta = {
+      page_url: window.location.href,
+      page_title: document.title,
+      referrer: document.referrer || undefined,
+      utm_source: params.get('utm_source') || undefined,
+      utm_medium: params.get('utm_medium') || undefined,
+      utm_campaign: params.get('utm_campaign') || undefined,
+      language: navigator.language,
+      screen: screen.width + 'x' + screen.height,
+    };
+    // Remove undefined values
+    Object.keys(meta).forEach(k => { if (!meta[k]) delete meta[k]; });
+    return meta;
+  }
+
   // State
   let isOpen = false;
   let sessionId = getCookie(settings.sessionKey) || localStorage.getItem(settings.sessionKey);
   let messages = [];
   let isStreaming = false;
+  let aiResponseCount = 0; // Track AI responses for contact form trigger
+  const contactFormKey = settings.sessionKey + '_contact_form';
 
   // Create styles
   const styles = document.createElement('style');
@@ -349,6 +369,86 @@
       text-decoration: none;
     }
 
+    .ai-chat-contact-form {
+      align-self: flex-start;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      max-width: 90%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .ai-chat-contact-form p {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      color: #374151;
+      font-weight: 500;
+    }
+
+    .ai-chat-contact-form input {
+      display: block;
+      width: 100%;
+      padding: 7px 10px;
+      margin-bottom: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .ai-chat-contact-form input:focus {
+      border-color: var(--ai-primary);
+    }
+
+    .ai-chat-contact-form .ai-cf-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .ai-chat-contact-form .ai-cf-submit {
+      flex: 1;
+      padding: 7px 12px;
+      background: var(--ai-primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .ai-chat-contact-form .ai-cf-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .ai-chat-contact-form .ai-cf-skip {
+      padding: 7px 12px;
+      background: #f3f4f6;
+      color: #6b7280;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .ai-chat-contact-form .ai-cf-error {
+      color: #dc2626;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .ai-chat-contact-form .ai-cf-success {
+      color: #059669;
+      font-size: 13px;
+      text-align: center;
+      padding: 8px 0;
+    }
+
     @media (max-width: 480px) {
       .ai-chat-window {
         bottom: 0;
@@ -438,6 +538,8 @@
         const history = data.session && data.session.messages;
         if (history && history.length > 0) {
           pendingHistory = history;
+          // Count existing AI responses for contact form trigger
+          aiResponseCount = history.filter(m => m.role === 'assistant').length;
           return;
         }
       } else if (res.status === 404) {
@@ -524,6 +626,84 @@
     if (typing) typing.remove();
   }
 
+  // Contact form: show after 2nd AI response, unless already shown/submitted/skipped
+  function shouldShowContactForm() {
+    const state = sessionStorage.getItem(contactFormKey);
+    // Already submitted, skipped, or shown
+    if (state) return false;
+    // Show after 2nd AI response
+    return aiResponseCount >= 2;
+  }
+
+  function showContactForm() {
+    if (!shouldShowContactForm()) return;
+    sessionStorage.setItem(contactFormKey, 'shown');
+
+    const formEl = document.createElement('div');
+    formEl.className = 'ai-chat-contact-form';
+    formEl.innerHTML = `
+      <p>Оставьте контакты, чтобы мы могли с вами связаться</p>
+      <input type="text" class="ai-cf-name" placeholder="Ваше имя *" />
+      <input type="tel" class="ai-cf-phone" placeholder="Телефон" />
+      <input type="email" class="ai-cf-email" placeholder="Email" />
+      <div class="ai-cf-error" style="display:none"></div>
+      <div class="ai-cf-buttons">
+        <button class="ai-cf-submit">Отправить</button>
+        <button class="ai-cf-skip">Пропустить</button>
+      </div>
+    `;
+
+    messagesEl.appendChild(formEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    const nameInput = formEl.querySelector('.ai-cf-name');
+    const phoneInput = formEl.querySelector('.ai-cf-phone');
+    const emailInput = formEl.querySelector('.ai-cf-email');
+    const errorDiv = formEl.querySelector('.ai-cf-error');
+    const submitBtn = formEl.querySelector('.ai-cf-submit');
+    const skipBtn = formEl.querySelector('.ai-cf-skip');
+
+    submitBtn.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      const phone = phoneInput.value.trim();
+      const email = emailInput.value.trim();
+
+      // Validate
+      if (!name) {
+        errorDiv.textContent = 'Укажите имя';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      if (!phone && !email) {
+        errorDiv.textContent = 'Укажите телефон или email';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      errorDiv.style.display = 'none';
+      submitBtn.disabled = true;
+
+      try {
+        await fetch(`${settings.apiUrl}/widget/chat/session/${sessionId}/contacts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone, email })
+        });
+        sessionStorage.setItem(contactFormKey, 'submitted');
+        formEl.innerHTML = '<div class="ai-cf-success">Спасибо! Мы свяжемся с вами.</div>';
+        setTimeout(() => formEl.remove(), 3000);
+      } catch (e) {
+        errorDiv.textContent = 'Ошибка отправки. Попробуйте ещё раз.';
+        errorDiv.style.display = 'block';
+        submitBtn.disabled = false;
+      }
+    });
+
+    skipBtn.addEventListener('click', () => {
+      sessionStorage.setItem(contactFormKey, 'skipped');
+      formEl.remove();
+    });
+  }
+
   async function sendMessage() {
     const content = input.value.trim();
     if (!content || isStreaming) return;
@@ -549,6 +729,9 @@
           body.source = 'widget';
           body.source_id = settings.instanceId;
         }
+        // Collect visitor metadata for CRM lead creation
+        body.metadata = collectMetadata();
+
         // Use public widget endpoint if no JWT, else use admin endpoint
         const createUrl = jwt
           ? `${settings.apiUrl}/admin/chat/sessions`
@@ -618,6 +801,9 @@
               } else if (data.type === 'done' || data.type === 'assistant_message') {
                 if (assistantContent) {
                   messages.push({ role: 'assistant', content: assistantContent });
+                  aiResponseCount++;
+                  // Show contact form after 2nd AI response
+                  showContactForm();
                 }
               } else if (data.type === 'error') {
                 throw new Error(data.content || 'Stream error');
@@ -699,9 +885,11 @@
       messages = [];
       historyLoaded = false;
       pendingHistory = null;
+      aiResponseCount = 0;
       deleteCookie(settings.sessionKey);
       localStorage.removeItem(settings.sessionKey);
       sessionStorage.removeItem(settings.sessionKey + '_open');
+      sessionStorage.removeItem(contactFormKey);
       messagesEl.innerHTML = '';
     }
   };

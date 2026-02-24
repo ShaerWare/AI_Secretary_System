@@ -282,6 +282,22 @@ async def add_note_to_lead(
     )
 
 
+async def link_contact_to_lead(
+    subdomain: str,
+    access_token: str,
+    lead_id: int,
+    contact_id: int,
+) -> dict:
+    """Link an existing contact to a lead."""
+    return await _api_request(
+        subdomain,
+        access_token,
+        "PATCH",
+        f"leads/{lead_id}",
+        json_data={"_embedded": {"contacts": [{"id": contact_id}]}},
+    )
+
+
 # ============== Pipelines ==============
 
 
