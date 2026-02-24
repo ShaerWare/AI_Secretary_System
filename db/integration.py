@@ -590,20 +590,30 @@ class AsyncBotInstanceManager:
     """Async manager for Telegram bot instances."""
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """List all bot instances."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.list_instances(enabled_only=enabled_only, owner_id=owner_id)
+            return await repo.list_instances(
+                enabled_only=enabled_only, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Get bot instance by ID."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.get_instance(instance_id, owner_id=owner_id)
+            return await repo.get_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_instance_with_token(self, instance_id: str) -> Optional[dict]:
         """Get bot instance with token (for internal use)."""
@@ -623,11 +633,18 @@ class AsyncBotInstanceManager:
             repo = BotInstanceRepository(session)
             return await repo.update_instance(instance_id, **kwargs)
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
         """Delete bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.delete_instance(instance_id, owner_id=owner_id)
+            return await repo.delete_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable bot instance."""
@@ -679,20 +696,30 @@ class AsyncWidgetInstanceManager:
     """Async manager for website widget instances."""
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """List all widget instances."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.list_instances(enabled_only=enabled_only, owner_id=owner_id)
+            return await repo.list_instances(
+                enabled_only=enabled_only, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Get widget instance by ID."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.get_instance(instance_id, owner_id=owner_id)
+            return await repo.get_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def create_instance(self, name: str, **kwargs: Any) -> dict:
         """Create new widget instance."""
@@ -706,11 +733,18 @@ class AsyncWidgetInstanceManager:
             repo = WidgetInstanceRepository(session)
             return await repo.update_instance(instance_id, **kwargs)
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
         """Delete widget instance."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.delete_instance(instance_id, owner_id=owner_id)
+            return await repo.delete_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable widget instance."""
@@ -750,20 +784,30 @@ class AsyncWhatsAppInstanceManager:
     """Async manager for WhatsApp bot instances."""
 
     async def list_instances(
-        self, enabled_only: bool = False, owner_id: Optional[int] = None
+        self,
+        enabled_only: bool = False,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> List[dict]:
         """List all WhatsApp instances."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.list_instances(enabled_only=enabled_only, owner_id=owner_id)
+            return await repo.list_instances(
+                enabled_only=enabled_only, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_instance(
-        self, instance_id: str, owner_id: Optional[int] = None
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
         """Get WhatsApp instance by ID."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.get_instance(instance_id, owner_id=owner_id)
+            return await repo.get_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def get_instance_with_token(self, instance_id: str) -> Optional[dict]:
         """Get WhatsApp instance with token (for internal use)."""
@@ -783,11 +827,18 @@ class AsyncWhatsAppInstanceManager:
             repo = WhatsAppInstanceRepository(session)
             return await repo.update_instance(instance_id, **kwargs)
 
-    async def delete_instance(self, instance_id: str, owner_id: Optional[int] = None) -> bool:
+    async def delete_instance(
+        self,
+        instance_id: str,
+        owner_id: Optional[int] = None,
+        workspace_id: Optional[int] = None,
+    ) -> bool:
         """Delete WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.delete_instance(instance_id, owner_id=owner_id)
+            return await repo.delete_instance(
+                instance_id, owner_id=owner_id, workspace_id=workspace_id
+            )
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable WhatsApp instance."""
