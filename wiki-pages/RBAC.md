@@ -316,7 +316,39 @@ Frontend — `UsersView.vue` (`/admin/#/users`):
 - Demo-мок: `admin/src/api/demo/workspace.ts`
 - i18n: ru/en/kk (секция `users`)
 
-**8-2: Инвайт-система** (Issue #399) — в ожидании
+**8-2: Инвайт-система** (PR #408, Issue #399) — ✅ Done
+
+Миграция: `0012` — `max_uses` (nullable) и `used_count` на `workspace_invites`.
+
+Модель `WorkspaceInvite`:
+- `to_dict()` — сериализация с `is_valid`
+- `@property is_valid` — проверка expiry + max_uses
+
+Backend — 5 новых эндпоинтов в `app/routers/workspace.py`:
+
+| Метод | Путь | Доступ | Описание |
+|-------|------|--------|----------|
+| POST | `/admin/workspace/invites` | users:manage | Создать инвайт (role_name, email?, max_uses?, expires_hours?) |
+| GET | `/admin/workspace/invites` | users:manage | Список инвайтов workspace |
+| DELETE | `/admin/workspace/invites/{id}` | users:manage | Удалить инвайт |
+| GET | `/admin/workspace/invites/{code}/info` | **Public** | Информация для страницы принятия |
+| POST | `/admin/workspace/invites/accept` | **Public + rate limit** | Регистрация по инвайту (auto-login) |
+
+Бизнес-правила:
+- Нельзя создать инвайт на роль "owner"
+- Accept: валидация username (regex `^[a-zA-Z0-9_.\-]+$`), пароль min 6 символов
+- Rate limit на accept (RATE_LIMIT_AUTH)
+- Accept возвращает JWT — auto-login, redirect на `/chat`
+- Invite code: `secrets.token_urlsafe(32)` (256 бит)
+
+Frontend:
+- `InviteDialog.vue` — модалка создания инвайта (роль, email, max_uses, expires), копирование URL
+- `InviteView.vue` — публичная страница `/invite/:code` (регистрация)
+- Секция "Invites" в `UsersView.vue` — таблица инвайтов, создание, удаление, копирование ссылки
+- Demo-мок: invite CRUD, info, accept
+- i18n: ru/en/kk (секции `invites` + `invite`)
+
+**Этап 8 завершён. Вся RBAC-система (#322) полностью реализована.**
 
 ### Внешние контакты — user_identities
 
