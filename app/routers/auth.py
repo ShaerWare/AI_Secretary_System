@@ -98,6 +98,7 @@ async def admin_update_profile(
 
 
 @router.post("/change-password")
+@limiter.limit(RATE_LIMIT_AUTH)
 async def admin_change_password(
     http_request: Request,
     request: ChangePasswordRequest,

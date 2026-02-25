@@ -458,11 +458,13 @@ class AsyncPresetManager:
                 name, params, owner_id=owner_id, workspace_id=workspace_id
             )
 
-    async def update(self, name: str, params: dict) -> Optional[dict]:
+    async def update(
+        self, name: str, params: dict, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
         """Update preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.update_preset(name, params)
+            return await repo.update_preset(name, params, workspace_id=workspace_id)
 
     async def delete(self, name: str, workspace_id: Optional[int] = None) -> bool:
         """Delete preset."""
