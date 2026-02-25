@@ -272,7 +272,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Chat session sharing**: `ChatSessionShare` model (`chat_session_shares` table) enables sharing chat sessions between users. `ChatShareDialog.vue` component in frontend.
 
-**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler).
+**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler), `workspace.py` (workspace info + member management: list, role change, remove).
 
 ## Code Patterns
 
@@ -308,6 +308,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - **User identities:** `user_identities` table links external contacts (Telegram/WhatsApp/Widget) to `users` rows. Contact-only users have `username=NULL, password_hash=NULL, role=contact` and cannot log in. Identity tracked via `find_or_create` on first message (Telegram `set_session`, WhatsApp `handle_text_message`, Widget `widget_create_session`). `AsyncUserIdentityManager` in `db/integration.py`.
 - Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web` (also populates `workspace_members`)
+- **Workspace members management:** `app/routers/workspace.py` (prefix `/admin/workspace`) — 4 endpoints: GET info, GET members, PUT member role, DELETE member. Business rules: cannot change own role or owner's role, cannot remove self or owner. After role change: `_member_role_cache.invalidate_user()`. After remove: `revoke_all_user_sessions()`. Admin UI: `UsersView.vue` at `/admin/#/users` (module `users`, minLevel `view`).
 
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, and `kk` (Kazakh)

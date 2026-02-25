@@ -579,6 +579,15 @@ Workspace — контейнер всех ресурсов. Default workspace (i
 
 > **Статус:** workspace_id колонки добавлены на 13 таблиц, фильтрация полностью реализована. Модули с workspace-фильтрацией: **Chat** (PR #385), **Channels** — Telegram, WhatsApp, Widget (PR #387), **AI/LLM** — Cloud LLM Providers, TTS Presets (PR #389), **Knowledge/FAQ** — Knowledge Documents, Collections, FAQ Entries (PR #391), **System/Kanban/amoCRM** — Kanban Tasks & Projects, Claude Code Sessions, amoCRM Config (PR #393), **Финализация** — gate-check на мутациях всех модулей (PR #395). Audit excluded (no workspace_id).
 
+#### Управление участниками (PR #406)
+
+| Метод | Путь | Доступ | Описание |
+|-------|------|--------|----------|
+| `GET` | `/admin/workspace` | `users:view` | Информация о workspace (name, slug, owner_id, member_count, created_at) |
+| `GET` | `/admin/workspace/members` | `users:view` | Список участников с user details (username, display_name, email, is_active, last_login) |
+| `PUT` | `/admin/workspace/members/{user_id}/role` | `users:manage` | Смена роли. Body: `{"role_name": "operator"}`. Нельзя менять себе и owner |
+| `DELETE` | `/admin/workspace/members/{user_id}` | `users:manage` | Удаление участника. Нельзя удалить себя и owner. Ревокация сессий удалённого |
+
 ### Совместный доступ к чатам
 
 Чат-сессии (admin source) могут быть расшарены другим пользователям с уровнями доступа `read` или `write`.
