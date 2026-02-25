@@ -19,10 +19,12 @@ import {
   FileText,
   Shield,
   Phone,
+  Share2,
 } from 'lucide-vue-next'
 import { whatsappInstancesApi, type WhatsAppInstance } from '@/api'
 import { wikiRagApi } from '@/api/wikiRag'
 import { useToastStore } from '@/stores/toast'
+import ResourceShareDialog from '@/components/ResourceShareDialog.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -37,6 +39,7 @@ const selectedInstanceId = ref<string | null>(null)
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showLogsDialog = ref(false)
+const showShareDialog = ref(false)
 const activeTab = ref<'settings' | 'ai' | 'access' | 'logs'>('settings')
 
 // Form data
@@ -295,6 +298,7 @@ watch(instances, (val) => {
           <div class="flex items-center gap-2">
             <MessageCircle class="w-4 h-4 shrink-0" />
             <span class="font-medium truncate text-sm">{{ inst.name }}</span>
+            <Share2 v-if="inst.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('resourceShare.sharedWithYou')" />
             <span
               :class="[
                 'w-2 h-2 rounded-full ml-auto shrink-0',
@@ -379,6 +383,15 @@ watch(instances, (val) => {
               @click="restartMutation.mutate(selectedInstance!.id)"
             >
               <RefreshCw class="w-4 h-4" />
+            </button>
+            <!-- Share button -->
+            <button
+              v-if="selectedInstance?.owner_id"
+              class="p-2 rounded-lg text-muted-foreground hover:bg-secondary"
+              :title="t('resourceShare.title')"
+              @click="showShareDialog = true"
+            >
+              <Share2 class="w-4 h-4" />
             </button>
             <button
               class="p-2 rounded-lg text-muted-foreground hover:bg-secondary"
@@ -807,5 +820,18 @@ watch(instances, (val) => {
         </div>
       </div>
     </Teleport>
+
+    <!-- Resource Share Dialog -->
+    <ResourceShareDialog
+      :resource-type="'whatsapp_instance'"
+      :resource-id="selectedInstanceId || ''"
+      :open="showShareDialog"
+      :get-shares="whatsappInstancesApi.getShares"
+      :add-share="whatsappInstancesApi.shareInstance"
+      :update-permission="whatsappInstancesApi.updateSharePermission"
+      :remove-share="whatsappInstancesApi.removeShare"
+      @close="showShareDialog = false"
+      @updated="queryClient.invalidateQueries({ queryKey: ['whatsapp-instances'] })"
+    />
   </div>
 </template>

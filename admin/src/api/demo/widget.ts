@@ -133,4 +133,27 @@ export const widgetRoutes: DemoRoute[] = [
       return { status: 'ok', message: 'Widget deleted' }
     },
   },
+  // Instance shares
+  {
+    method: 'GET',
+    pattern: /^\/admin\/widget\/instances\/([^/]+)\/shares$/,
+    handler: () => ({ shares: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/admin\/widget\/instances\/([^/]+)\/shares$/,
+    handler: ({ body }) => ({
+      share: { id: Date.now(), ...(body as Record<string, unknown>), shared_at: new Date().toISOString(), username: 'user', display_name: null },
+    }),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/admin\/widget\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/widget\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
 ]

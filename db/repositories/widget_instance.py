@@ -10,7 +10,7 @@ from typing import Any, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import WidgetInstance
+from db.models import ResourceShare, WidgetInstance
 from db.repositories.base import BaseRepository
 
 
@@ -71,8 +71,18 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         if enabled_only:
             query = query.where(WidgetInstance.enabled == True)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "widget_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (WidgetInstance.owner_id == owner_id) | (WidgetInstance.owner_id.is_(None))
+                (WidgetInstance.owner_id == owner_id)
+                | (WidgetInstance.owner_id.is_(None))
+                | (WidgetInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
 
@@ -89,8 +99,18 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
         """Get widget instance by ID, with optional owner/workspace check."""
         query = select(WidgetInstance).where(WidgetInstance.id == instance_id)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "widget_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (WidgetInstance.owner_id == owner_id) | (WidgetInstance.owner_id.is_(None))
+                (WidgetInstance.owner_id == owner_id)
+                | (WidgetInstance.owner_id.is_(None))
+                | (WidgetInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
         result = await self.session.execute(query)

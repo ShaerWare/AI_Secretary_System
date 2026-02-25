@@ -256,6 +256,17 @@ const messages = {
       enabled: "Включён",
       disabled: "Выключен",
     },
+    resourceShare: {
+      title: "Поделиться",
+      searchUsers: "Поиск пользователей...",
+      view: "Просмотр",
+      edit: "Редактирование",
+      add: "Добавить",
+      remove: "Удалить",
+      noShares: "Нет совместного доступа",
+      sharedWithYou: "Доступ открыт",
+      shareCount: "Общий доступ ({count})",
+    },
     // Chat View
     chatView: {
       title: "Чаты",
@@ -1474,6 +1485,17 @@ const messages = {
       enabled: "Enabled",
       disabled: "Disabled",
     },
+    resourceShare: {
+      title: "Share",
+      searchUsers: "Search users...",
+      view: "View",
+      edit: "Edit",
+      add: "Add",
+      remove: "Remove",
+      noShares: "No shares yet",
+      sharedWithYou: "Shared with you",
+      shareCount: "Shared ({count})",
+    },
     // Chat View
     chatView: {
       title: "Chats",
@@ -2690,6 +2712,17 @@ const messages = {
       saved: "Сақталды",
       enabled: "Қосулы",
       disabled: "Өшірулі",
+    },
+    resourceShare: {
+      title: "Бөлісу",
+      searchUsers: "Пайдаланушыларды іздеу...",
+      view: "Қарау",
+      edit: "Өзгерту",
+      add: "Қосу",
+      remove: "Жою",
+      noShares: "Бөлісу жоқ",
+      sharedWithYou: "Сізбен бөлісілген",
+      shareCount: "Бөлісілген ({count})",
     },
     // Chat View
     chatView: {

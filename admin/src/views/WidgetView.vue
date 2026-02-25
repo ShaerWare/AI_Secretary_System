@@ -28,12 +28,14 @@ import {
   Settings2,
   Send,
   MessageCircle,
-  RotateCcw
+  RotateCcw,
+  Share2
 } from 'lucide-vue-next'
 import { widgetInstancesApi, llmApi, type WidgetInstance, type CloudProvider } from '@/api'
 import { chatApi, type ChatMessage } from '@/api/chat'
 import { wikiRagApi } from '@/api/wikiRag'
 import { useToastStore } from '@/stores/toast'
+import ResourceShareDialog from '@/components/ResourceShareDialog.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -47,6 +49,7 @@ const showMobileList = ref(true)
 const selectedInstanceId = ref<string | null>(null)
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
+const showShareDialog = ref(false)
 const activeTab = ref<'settings' | 'appearance' | 'domains' | 'ai' | 'code' | 'test'>('settings')
 const copied = ref<string | null>(null)
 
@@ -457,6 +460,7 @@ function handleTestKeydown(e: KeyboardEvent) {
                   instance.enabled ? 'bg-green-400' : 'bg-gray-400'
                 ]" />
                 <span class="font-medium truncate">{{ instance.name }}</span>
+                <Share2 v-if="instance.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('resourceShare.sharedWithYou')" />
               </div>
               <ChevronRight class="w-4 h-4 text-muted-foreground" />
             </div>
@@ -519,6 +523,15 @@ function handleTestKeydown(e: KeyboardEvent) {
               <ExternalLink class="w-4 h-4" />
               {{ t('widget.testWidget') }}
             </a>
+            <!-- Share button -->
+            <button
+              v-if="selectedInstance?.owner_id"
+              class="p-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+              :title="t('resourceShare.title')"
+              @click="showShareDialog = true"
+            >
+              <Share2 class="w-4 h-4" />
+            </button>
             <button
               class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               @click="openEditDialog(selectedInstance)"
@@ -1275,4 +1288,17 @@ function handleTestKeydown(e: KeyboardEvent) {
       </div>
     </Teleport>
   </div>
+
+  <!-- Resource Share Dialog -->
+  <ResourceShareDialog
+    :resource-type="'widget_instance'"
+    :resource-id="selectedInstanceId || ''"
+    :open="showShareDialog"
+    :get-shares="widgetInstancesApi.getShares"
+    :add-share="widgetInstancesApi.shareInstance"
+    :update-permission="widgetInstancesApi.updateSharePermission"
+    :remove-share="widgetInstancesApi.removeShare"
+    @close="showShareDialog = false"
+    @updated="queryClient.invalidateQueries({ queryKey: ['widget-instances'] })"
+  />
 </template>

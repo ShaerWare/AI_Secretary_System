@@ -111,6 +111,11 @@ export interface BotInstance {
   // Status (added by API)
   running?: boolean
   pid?: number
+  // Sharing (added by API)
+  owner_id?: number | null
+  share_count?: number
+  is_shared_with_me?: boolean
+  share_permission?: string | null
   // Timestamps
   created?: string
   updated?: string
@@ -210,4 +215,20 @@ export const botInstancesApi = {
 
   getPaymentStats: (instanceId: string) =>
     api.get<{ stats: { total_count: number; by_currency: Record<string, { count: number; total_amount: number }> } }>(`/admin/telegram/instances/${instanceId}/payments/stats`),
+
+  // Sharing
+  getShareableUsers: () =>
+    api.get<{ users: Array<{ id: number; username: string; display_name: string | null; role: string }> }>('/admin/telegram/shareable-users'),
+
+  getShares: (instanceId: string) =>
+    api.get<{ shares: Array<{ id: number; resource_type: string; resource_id: string; user_id: number; permission: string; shared_by: number | null; shared_at: string | null; username: string; display_name: string | null }> }>(`/admin/telegram/instances/${instanceId}/shares`),
+
+  shareInstance: (instanceId: string, userId: number, permission: string) =>
+    api.post(`/admin/telegram/instances/${instanceId}/shares`, { user_id: userId, permission }),
+
+  updateSharePermission: (instanceId: string, userId: number, permission: string) =>
+    api.put(`/admin/telegram/instances/${instanceId}/shares/${userId}`, { permission }),
+
+  removeShare: (instanceId: string, userId: number) =>
+    api.delete(`/admin/telegram/instances/${instanceId}/shares/${userId}`),
 }

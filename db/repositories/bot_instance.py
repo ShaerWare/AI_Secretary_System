@@ -11,7 +11,7 @@ from typing import Any, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import DEFAULT_ACTION_BUTTONS, BotInstance
+from db.models import DEFAULT_ACTION_BUTTONS, BotInstance, ResourceShare
 from db.repositories.base import BaseRepository
 
 
@@ -66,8 +66,18 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         if enabled_only:
             query = query.where(BotInstance.enabled == True)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "bot_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (BotInstance.owner_id == owner_id) | (BotInstance.owner_id.is_(None))
+                (BotInstance.owner_id == owner_id)
+                | (BotInstance.owner_id.is_(None))
+                | (BotInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
 
@@ -84,8 +94,18 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
         """Get bot instance by ID, with optional owner/workspace check."""
         query = select(BotInstance).where(BotInstance.id == instance_id)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "bot_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (BotInstance.owner_id == owner_id) | (BotInstance.owner_id.is_(None))
+                (BotInstance.owner_id == owner_id)
+                | (BotInstance.owner_id.is_(None))
+                | (BotInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
         result = await self.session.execute(query)
