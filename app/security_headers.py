@@ -2,6 +2,7 @@
 Security headers middleware.
 
 Adds security headers to all responses:
+- Content-Security-Policy: script-src 'self', style-src 'self' 'unsafe-inline', etc.
 - X-Content-Type-Options: nosniff
 - X-Frame-Options: DENY (or SAMEORIGIN)
 - X-XSS-Protection: 1; mode=block
@@ -11,6 +12,7 @@ Adds security headers to all responses:
 Environment variables:
 - SECURITY_HEADERS_ENABLED: Enable security headers (default: true)
 - X_FRAME_OPTIONS: X-Frame-Options value (default: DENY)
+- CSP_ENABLED: Enable Content-Security-Policy (default: true)
 """
 
 import os
@@ -28,6 +30,21 @@ SECURITY_HEADERS_ENABLED = os.getenv("SECURITY_HEADERS_ENABLED", "true").lower()
     "yes",
 )
 X_FRAME_OPTIONS = os.getenv("X_FRAME_OPTIONS", "DENY")
+CSP_ENABLED = os.getenv("CSP_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# Content-Security-Policy directives
+_CSP_DIRECTIVES = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+]
+CONTENT_SECURITY_POLICY = "; ".join(_CSP_DIRECTIVES)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -41,6 +58,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         if self.enabled:
+            # Content Security Policy — primary XSS protection
+            if CSP_ENABLED:
+                response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+
             # Prevent MIME type sniffing
             response.headers["X-Content-Type-Options"] = "nosniff"
 
@@ -66,13 +87,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 def get_security_headers_status() -> dict:
     """Get current security headers configuration."""
+    headers: dict[str, str] = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": X_FRAME_OPTIONS,
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "geolocation=()",
+    }
+    if CSP_ENABLED:
+        headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
     return {
         "enabled": SECURITY_HEADERS_ENABLED,
-        "headers": {
-            "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": X_FRAME_OPTIONS,
-            "X-XSS-Protection": "1; mode=block",
-            "Referrer-Policy": "strict-origin-when-cross-origin",
-            "Permissions-Policy": "geolocation=()",
-        },
+        "csp_enabled": CSP_ENABLED,
+        "headers": headers,
     }

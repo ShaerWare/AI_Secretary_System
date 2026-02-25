@@ -69,22 +69,6 @@
     <script src="/widget.js?instance=tz-generator" defer></script>
 
     <!-- Force clear old SW caches, then register new SW -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        // Unregister all old service workers first
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          regs.forEach(r => r.unregister());
-        });
-        // Clear all caches
-        if ('caches' in window) {
-          caches.keys().then(names => names.forEach(n => caches.delete(n)));
-        }
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('SW registered:', reg.scope))
-            .catch(err => console.log('SW registration failed:', err));
-        });
-      }
-    </script>
+    <script src="./sw-cleanup.js" defer></script>
   </body>
 </html>
