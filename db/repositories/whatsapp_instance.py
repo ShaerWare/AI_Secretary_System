@@ -10,7 +10,7 @@ from typing import Any, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import WhatsAppInstance
+from db.models import ResourceShare, WhatsAppInstance
 from db.repositories.base import BaseRepository
 
 
@@ -63,8 +63,18 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
         if enabled_only:
             query = query.where(WhatsAppInstance.enabled == True)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "whatsapp_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (WhatsAppInstance.owner_id == owner_id) | (WhatsAppInstance.owner_id.is_(None))
+                (WhatsAppInstance.owner_id == owner_id)
+                | (WhatsAppInstance.owner_id.is_(None))
+                | (WhatsAppInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
 
@@ -81,8 +91,18 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
         """Get WhatsApp instance by ID, with optional owner/workspace check."""
         query = select(WhatsAppInstance).where(WhatsAppInstance.id == instance_id)
         if owner_id is not None:
+            shared_subq = (
+                select(ResourceShare.resource_id)
+                .where(
+                    ResourceShare.resource_type == "whatsapp_instance",
+                    ResourceShare.user_id == owner_id,
+                )
+                .scalar_subquery()
+            )
             query = query.where(
-                (WhatsAppInstance.owner_id == owner_id) | (WhatsAppInstance.owner_id.is_(None))
+                (WhatsAppInstance.owner_id == owner_id)
+                | (WhatsAppInstance.owner_id.is_(None))
+                | (WhatsAppInstance.id.in_(shared_subq))
             )
         query = self._apply_workspace_filter(query, workspace_id)
         result = await self.session.execute(query)

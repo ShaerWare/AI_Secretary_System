@@ -543,6 +543,49 @@ class ChatSessionShare(Base):
         }
 
 
+class ResourceShare(Base):
+    """Sharing access for bot/widget/whatsapp instances between users."""
+
+    __tablename__ = "resource_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resource_type: Mapped[str] = mapped_column(
+        String(30), index=True
+    )  # "bot_instance", "widget_instance", "whatsapp_instance"
+    resource_id: Mapped[str] = mapped_column(String(50), index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    permission: Mapped[str] = mapped_column(String(10), default="view")  # "view" or "edit"
+    shared_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    shared_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index(
+            "ix_resource_shares_type_resource_user",
+            "resource_type",
+            "resource_id",
+            "user_id",
+            unique=True,
+        ),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "user_id": self.user_id,
+            "permission": self.permission,
+            "shared_by": self.shared_by,
+            "shared_at": self.shared_at.isoformat() if self.shared_at else None,
+        }
+
+
 class FAQEntry(Base):
     """FAQ question-answer pair with fuzzy matching support"""
 

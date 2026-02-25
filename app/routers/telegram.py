@@ -11,12 +11,13 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth_manager import User, require_permission, workspace_context
+from auth_manager import User, require_permission, user_has_level, workspace_context
 from db.integration import (
     async_audit_logger,
     async_bot_instance_manager,
     async_config_manager,
     async_payment_manager,
+    async_resource_share_manager,
     async_telegram_manager,
 )
 from multi_bot_manager import multi_bot_manager
@@ -116,6 +117,49 @@ class BotInstanceUpdateRequest(BaseModel):
     # Rate limiting
     rate_limit_count: Optional[int] = None
     rate_limit_hours: Optional[int] = None
+
+
+class InstanceShareRequest(BaseModel):
+    user_id: int
+    permission: str = "view"  # "view" or "edit"
+
+
+class InstanceUpdateShareRequest(BaseModel):
+    permission: str  # "view" or "edit"
+
+
+RESOURCE_TYPE_BOT = "bot_instance"
+
+
+async def _check_instance_owner_or_admin(
+    instance_id: str, user: User, resource_type: str = RESOURCE_TYPE_BOT
+) -> dict:
+    """Verify user is owner or admin of the instance. Returns instance dict."""
+    owner_id, ws_id = workspace_context(user, "channels")
+    instance = await async_bot_instance_manager.get_instance(
+        instance_id, owner_id=owner_id, workspace_id=ws_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Bot instance not found")
+    is_admin = user_has_level(user, "channels", "manage")
+    is_owner = instance.get("owner_id") == user.id
+    if not is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Only owner or admin can manage shares")
+    return instance
+
+
+async def _check_share_edit_permission(
+    instance_id: str, user: User, resource_type: str = RESOURCE_TYPE_BOT
+) -> None:
+    """Check if shared user has edit permission. Raises 403 if view-only."""
+    is_admin = user_has_level(user, "channels", "manage")
+    if is_admin:
+        return
+    perm = await async_resource_share_manager.get_user_permission(
+        resource_type, instance_id, user.id
+    )
+    if perm == "view":
+        raise HTTPException(status_code=403, detail="View-only access — editing not allowed")
 
 
 # ============== Legacy Config Endpoints ==============
@@ -371,6 +415,22 @@ async def admin_list_bot_instances(
     for instance in instances:
         instance["running"] = statuses.get(instance["id"], {}).get("running", False)
 
+    # Enrich with share info
+    instance_ids = [i["id"] for i in instances]
+    share_counts = await async_resource_share_manager.get_share_counts(
+        RESOURCE_TYPE_BOT, instance_ids
+    )
+    shared_with_me = {}
+    if owner_id is not None:
+        shared_with_me = await async_resource_share_manager.get_shared_resources_with_permissions(
+            RESOURCE_TYPE_BOT, owner_id
+        )
+    for instance in instances:
+        iid = instance["id"]
+        instance["share_count"] = share_counts.get(iid, 0)
+        instance["is_shared_with_me"] = iid in shared_with_me
+        instance["share_permission"] = shared_with_me.get(iid)
+
     return {"instances": instances}
 
 
@@ -440,6 +500,9 @@ async def admin_update_bot_instance(
     if not existing:
         raise HTTPException(status_code=404, detail="Bot instance not found")
 
+    # Shared users need edit permission
+    await _check_share_edit_permission(instance_id, user, RESOURCE_TYPE_BOT)
+
     # Convert request to dict, removing None values
     kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
 
@@ -461,7 +524,7 @@ async def admin_update_bot_instance(
 async def admin_delete_bot_instance(
     instance_id: str, user: User = Depends(require_permission("channels", "edit"))
 ):
-    """Delete a bot instance"""
+    """Delete a bot instance — only owner or admin"""
     owner_id, ws_id = workspace_context(user, "channels")
     # Stop bot if running
     await multi_bot_manager.stop_bot(instance_id)
@@ -471,6 +534,9 @@ async def admin_delete_bot_instance(
     )
     if not success:
         raise HTTPException(status_code=404, detail="Bot instance not found")
+
+    # Clean up shares
+    await async_resource_share_manager.remove_all_shares(RESOURCE_TYPE_BOT, instance_id)
 
     # Audit log
     await async_audit_logger.log(
@@ -491,6 +557,9 @@ async def admin_start_bot_instance(
     )
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
+
+    # Shared users need edit permission
+    await _check_share_edit_permission(instance_id, user, RESOURCE_TYPE_BOT)
 
     # Re-fetch with token for start logic
     instance = await async_bot_instance_manager.get_instance_with_token(instance_id)
@@ -522,6 +591,9 @@ async def admin_stop_bot_instance(
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
 
+    # Shared users need edit permission
+    await _check_share_edit_permission(instance_id, user, RESOURCE_TYPE_BOT)
+
     result = await multi_bot_manager.stop_bot(instance_id)
 
     # Save auto_start=False so bot doesn't restart on app launch
@@ -542,6 +614,9 @@ async def admin_restart_bot_instance(
     )
     if not instance:
         raise HTTPException(status_code=404, detail="Bot instance not found")
+
+    # Shared users need edit permission
+    await _check_share_edit_permission(instance_id, user, RESOURCE_TYPE_BOT)
 
     result = await multi_bot_manager.restart_bot(instance_id)
     return result
@@ -852,3 +927,104 @@ async def admin_yoomoney_disconnect(
         yoomoney_wallet_id=None,
     )
     return {"status": "disconnected"}
+
+
+# ============== Resource Sharing Endpoints ==============
+
+
+@router.get("/shareable-users")
+async def list_shareable_users(user: User = Depends(require_permission("channels", "view"))):
+    """List users eligible for resource sharing."""
+    users = await async_resource_share_manager.list_shareable_users(exclude_user_id=user.id)
+    return {"users": users}
+
+
+@router.get("/instances/{instance_id}/shares")
+async def get_instance_shares(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
+    """List shares for a bot instance."""
+    await _check_instance_owner_or_admin(instance_id, user)
+    shares = await async_resource_share_manager.get_shares(RESOURCE_TYPE_BOT, instance_id)
+    return {"shares": shares}
+
+
+@router.post("/instances/{instance_id}/shares")
+async def add_instance_share(
+    instance_id: str,
+    request: InstanceShareRequest,
+    user: User = Depends(require_permission("channels", "edit")),
+):
+    """Share a bot instance with another user."""
+    await _check_instance_owner_or_admin(instance_id, user)
+
+    if request.permission not in ("view", "edit"):
+        raise HTTPException(status_code=400, detail="Permission must be 'view' or 'edit'")
+    if request.user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot share with yourself")
+
+    share = await async_resource_share_manager.add_share(
+        RESOURCE_TYPE_BOT,
+        instance_id,
+        request.user_id,
+        request.permission,
+        shared_by=user.id,
+    )
+
+    await async_audit_logger.log(
+        action="share",
+        resource="bot_instance",
+        resource_id=instance_id,
+        user_id=user.username,
+        details={"shared_with": request.user_id, "permission": request.permission},
+    )
+
+    return {"share": share}
+
+
+@router.put("/instances/{instance_id}/shares/{target_user_id}")
+async def update_instance_share(
+    instance_id: str,
+    target_user_id: int,
+    request: InstanceUpdateShareRequest,
+    user: User = Depends(require_permission("channels", "edit")),
+):
+    """Update share permission for a bot instance."""
+    await _check_instance_owner_or_admin(instance_id, user)
+
+    if request.permission not in ("view", "edit"):
+        raise HTTPException(status_code=400, detail="Permission must be 'view' or 'edit'")
+
+    success = await async_resource_share_manager.update_permission(
+        RESOURCE_TYPE_BOT, instance_id, target_user_id, request.permission
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Share not found")
+
+    return {"status": "ok"}
+
+
+@router.delete("/instances/{instance_id}/shares/{target_user_id}")
+async def remove_instance_share(
+    instance_id: str,
+    target_user_id: int,
+    user: User = Depends(require_permission("channels", "edit")),
+):
+    """Remove a share from a bot instance."""
+    await _check_instance_owner_or_admin(instance_id, user)
+
+    success = await async_resource_share_manager.remove_share(
+        RESOURCE_TYPE_BOT, instance_id, target_user_id
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Share not found")
+
+    await async_audit_logger.log(
+        action="unshare",
+        resource="bot_instance",
+        resource_id=instance_id,
+        user_id=user.username,
+        details={"removed_user": target_user_id},
+    )
+
+    return {"status": "ok"}

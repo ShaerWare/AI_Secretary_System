@@ -37,6 +37,11 @@ export interface WhatsAppInstance {
   // Status (added by API)
   running?: boolean
   pid?: number
+  // Sharing (added by API)
+  owner_id?: number | null
+  share_count?: number
+  is_shared_with_me?: boolean
+  share_permission?: string | null
   // Timestamps
   created?: string
   updated?: string
@@ -89,4 +94,17 @@ export const whatsappInstancesApi = {
   // Get logs
   getLogs: (instanceId: string, lines = 100) =>
     api.get<{ logs: string }>(`/admin/whatsapp/instances/${instanceId}/logs?lines=${lines}`),
+
+  // Sharing
+  getShares: (instanceId: string) =>
+    api.get<{ shares: Array<{ id: number; resource_type: string; resource_id: string; user_id: number; permission: string; shared_by: number | null; shared_at: string | null; username: string; display_name: string | null }> }>(`/admin/whatsapp/instances/${instanceId}/shares`),
+
+  shareInstance: (instanceId: string, userId: number, permission: string) =>
+    api.post(`/admin/whatsapp/instances/${instanceId}/shares`, { user_id: userId, permission }),
+
+  updateSharePermission: (instanceId: string, userId: number, permission: string) =>
+    api.put(`/admin/whatsapp/instances/${instanceId}/shares/${userId}`, { permission }),
+
+  removeShare: (instanceId: string, userId: number) =>
+    api.delete(`/admin/whatsapp/instances/${instanceId}/shares/${userId}`),
 }

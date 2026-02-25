@@ -211,4 +211,27 @@ export const whatsappRoutes: DemoRoute[] = [
     pattern: /^\/admin\/whatsapp\/instances\/([^/]+)\/logs$/,
     handler: () => ({ logs: demoLogs }),
   },
+  // Instance shares
+  {
+    method: 'GET',
+    pattern: /^\/admin\/whatsapp\/instances\/([^/]+)\/shares$/,
+    handler: () => ({ shares: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/admin\/whatsapp\/instances\/([^/]+)\/shares$/,
+    handler: ({ body }) => ({
+      share: { id: Date.now(), ...(body as Record<string, unknown>), shared_at: new Date().toISOString(), username: 'user', display_name: null },
+    }),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/admin\/whatsapp\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/whatsapp\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
 ]

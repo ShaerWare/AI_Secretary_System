@@ -299,4 +299,38 @@ export const telegramRoutes: DemoRoute[] = [
       return { status: 'ok', message: 'Instance deleted' }
     },
   },
+  // Shareable users
+  {
+    method: 'GET',
+    pattern: /^\/admin\/telegram\/shareable-users$/,
+    handler: () => ({
+      users: [
+        { id: 1, username: 'admin', display_name: 'Администратор', role: 'admin' },
+        { id: 2, username: 'operator', display_name: 'Оператор', role: 'user' },
+      ],
+    }),
+  },
+  // Instance shares
+  {
+    method: 'GET',
+    pattern: /^\/admin\/telegram\/instances\/([^/]+)\/shares$/,
+    handler: () => ({ shares: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/admin\/telegram\/instances\/([^/]+)\/shares$/,
+    handler: ({ body }) => ({
+      share: { id: Date.now(), ...(body as Record<string, unknown>), shared_at: new Date().toISOString(), username: 'user', display_name: null },
+    }),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/admin\/telegram\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/admin\/telegram\/instances\/([^/]+)\/shares\/(\d+)$/,
+    handler: () => ({ status: 'ok' }),
+  },
 ]

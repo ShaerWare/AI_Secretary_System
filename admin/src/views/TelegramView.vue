@@ -38,10 +38,12 @@ import {
   BarChart3,
   GitBranch,
   Wallet,
+  Share2,
 } from 'lucide-vue-next'
 import { botInstancesApi, botSalesApi, llmApi, wikiRagApi, type BotInstance, type BotInstanceSession, type ActionButton, type PaymentProduct } from '@/api'
 import type { AgentPrompt, QuizQuestion, Segment, FollowupRule, Testimonial, HardwareSpec, GithubConfig, FunnelData, Subscriber } from '@/api/bot-sales'
 import { useToastStore } from '@/stores/toast'
+import ResourceShareDialog from '@/components/ResourceShareDialog.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -56,6 +58,7 @@ const selectedInstanceId = ref<string | null>(null)
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showLogsDialog = ref(false)
+const showShareDialog = ref(false)
 const activeTab = ref<'settings' | 'users' | 'messages' | 'ai' | 'sessions' | 'buttons' | 'sales'>('settings')
 
 // Button editing state
@@ -789,6 +792,7 @@ watch(instances, (newInstances) => {
                   instance.running ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
                 ]" />
                 <span class="font-medium truncate">{{ instance.name }}</span>
+                <Share2 v-if="instance.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('resourceShare.sharedWithYou')" />
               </div>
               <ChevronRight class="w-4 h-4 text-muted-foreground" />
             </div>
@@ -878,6 +882,15 @@ watch(instances, (newInstances) => {
               @click="openLogs"
             >
               <FileText class="w-4 h-4" />
+            </button>
+            <!-- Share button -->
+            <button
+              v-if="selectedInstance?.owner_id"
+              class="p-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+              :title="t('resourceShare.title')"
+              @click="showShareDialog = true"
+            >
+              <Share2 class="w-4 h-4" />
             </button>
             <button
               class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
@@ -2224,6 +2237,19 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
         </div>
       </div>
     </Teleport>
+
+    <!-- Resource Share Dialog -->
+    <ResourceShareDialog
+      :resource-type="'bot_instance'"
+      :resource-id="selectedInstanceId || ''"
+      :open="showShareDialog"
+      :get-shares="botInstancesApi.getShares"
+      :add-share="botInstancesApi.shareInstance"
+      :update-permission="botInstancesApi.updateSharePermission"
+      :remove-share="botInstancesApi.removeShare"
+      @close="showShareDialog = false"
+      @updated="queryClient.invalidateQueries({ queryKey: ['bot-instances'] })"
+    />
 
     <!-- Sales CRUD Dialog -->
     <Teleport to="body">

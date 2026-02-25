@@ -45,7 +45,14 @@ async def delete_admin_user_data(session: AsyncSession, user_id: int) -> Dict[st
     r = await session.execute(text("DELETE FROM user_consents WHERE user_id = :uid"), {"uid": uid})
     report["user_consents"] = r.rowcount
 
-    # 5. SET NULL on resource ownership (keep configs, remove owner)
+    # 5. Resource shares (user_id FK CASCADE handles owned shares,
+    #    but also clean up shared_by references and shares granted TO this user)
+    r = await session.execute(
+        text("DELETE FROM resource_shares WHERE user_id = :uid"), {"uid": user_id}
+    )
+    report["resource_shares"] = r.rowcount
+
+    # 6. SET NULL on resource ownership (keep configs, remove owner)
     for table in [
         "bot_instances",
         "widget_instances",
