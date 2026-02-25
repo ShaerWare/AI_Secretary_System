@@ -667,7 +667,7 @@ Authorization: Bearer <token>
 
 **Ответ:** `{"dashboard": "manage", "chat": "manage", ...}`
 
-В облачном режиме модули `speech`, `gsm`, `system` автоматически исключаются.
+В облачном режиме (`DEPLOYMENT_MODE=cloud`) модули `speech` и `gsm` исключаются. Модуль `system` остаётся доступным (логи, finetune). Фильтрация происходит в `get_user_permissions()` и распространяется на `require_permission()` (PR #428).
 
 #### Управление ролями (admin only)
 
