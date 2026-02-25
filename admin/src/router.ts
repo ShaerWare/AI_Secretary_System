@@ -22,6 +22,7 @@ import KanbanView from './views/KanbanView.vue'
 import SalesView from './views/SalesView.vue'
 import WooCommerceView from './views/WooCommerceView.vue'
 import AboutView from './views/AboutView.vue'
+import UsersView from './views/UsersView.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -151,6 +152,12 @@ const router = createRouter({
       name: 'woocommerce',
       component: WooCommerceView,
       meta: { title: 'WooCommerce', icon: 'ShoppingBag', module: 'sales' }
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: UsersView,
+      meta: { title: 'Users', icon: 'UserCog', module: 'users', minLevel: 'view' }
     },
     {
       path: '/about',

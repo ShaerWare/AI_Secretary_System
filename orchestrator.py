@@ -61,6 +61,7 @@ from app.routers import (
     widget,
     wiki_rag,
     woocommerce,
+    workspace,
     yoomoney_webhook,
 )
 from app.security_headers import (
@@ -443,6 +444,7 @@ app.include_router(woocommerce.router)
 app.include_router(claude_code.router)
 app.include_router(kanban.router)
 app.include_router(roles.router)
+app.include_router(workspace.router)
 
 # Hardware/GPU routers — skip in cloud mode
 if DEPLOYMENT_MODE != "cloud":

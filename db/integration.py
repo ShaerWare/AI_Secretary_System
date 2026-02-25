@@ -2065,6 +2065,40 @@ class AsyncWorkspaceManager:
             repo = WorkspaceRepository(session)
             return await repo.create_default(name, slug)
 
+    # ============== Members Management ==============
+
+    async def get_workspace_info(self, workspace_id: int) -> Optional[dict]:
+        """Get workspace by ID with member count."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.get_workspace_info(workspace_id)
+
+    async def list_members(self, workspace_id: int) -> List[dict]:
+        """List all members of a workspace with user details."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.list_members(workspace_id)
+
+    async def update_member_role(
+        self, workspace_id: int, user_id: int, role_name: str
+    ) -> Optional[dict]:
+        """Change a member's role."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.update_member_role(workspace_id, user_id, role_name)
+
+    async def remove_member(self, workspace_id: int, user_id: int) -> bool:
+        """Remove a member from workspace."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.remove_member(workspace_id, user_id)
+
+    async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:
+        """Get the owner_id for a workspace."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.get_workspace_owner_id(workspace_id)
+
 
 async_workspace_manager = AsyncWorkspaceManager()
 

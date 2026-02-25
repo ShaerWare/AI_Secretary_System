@@ -24,6 +24,7 @@ from app.routers import (
     widget,
     wiki_rag,
     woocommerce,
+    workspace,
     yoomoney_webhook,
 )
 
@@ -66,5 +67,6 @@ __all__ = [
     "wiki_rag",
     "woocommerce",
     "github_webhook",
+    "workspace",
     "yoomoney_webhook",
 ]
