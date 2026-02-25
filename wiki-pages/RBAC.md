@@ -361,6 +361,15 @@ Frontend:
 | C3 | TTS preset UPDATE без проверки workspace | Добавлен `workspace_context()` в `tts.py`, `workspace_id` в `preset.py:update_preset()` |
 | L3 | `POST /change-password` без rate-limit | Добавлен `@limiter.limit(RATE_LIMIT_AUTH)` |
 
+### Security-фиксы аудита — средние (PR #420, Issue #412)
+
+| # | Проблема | Фикс |
+|---|----------|------|
+| C1 | Consent grant-эндпоинты под `/admin/` без auth, но вызываются виджетами/ботами | Перенесены на публичный путь: `/admin/legal/consents/grant*` → `/legal/consents/grant*`. `GET /admin/legal/consents/check/{user_id}` — добавлен `require_permission("settings", "view")` |
+| H3 | Legacy fallback `admin/admin` при ошибке БД | `except Exception` в `authenticate_user()` теперь возвращает `None`, не падает в фоллбэк. Legacy вход только при `user_count == 0` (пустая БД, первый запуск) |
+| H5 | SSE-эндпоинты без JWT (backend) | Дубликат `GET /admin/monitor/gpu/stream` из `orchestrator.py` удалён (auth-версия в `monitor.py`). Добавлен `require_permission("system", "view")` на `GET /admin/logs/stream/{logfile}` и `GET /admin/finetune/train/log` |
+| H5 | SSE-эндпоинты без JWT (frontend) | `createSSE()`, `useSSE`, `useRealtimeMetrics` переписаны с `EventSource` на `fetch + ReadableStream` — отправляют `Authorization: Bearer` заголовок. Polling fallback тоже с JWT. Auto-reconnect через 3 сек |
+
 ### Внешние контакты — user_identities
 
 Контакты из Telegram, WhatsApp и виджетов автоматически становятся пользователями с привязанными `user_identities` (миграция `0011`, PR #370).
@@ -572,9 +581,10 @@ WebSocket `/ws/claude-code` использует собственный `_ws_aut
 
 | Уровень | Кол-во | Эндпоинты |
 |---------|--------|-----------|
-| `manage` | 4 | GET/PUT terms, GET/PUT privacy |
+| `view` | 1 | GET consents/check/{user_id} (PR #420) |
+| `manage` | 4 | GET consents/{user_id}, POST revoke, GET stats, POST gdpr/delete |
 
-7 публичных эндпоинтов без авторизации: GET/POST consent, GET terms/privacy (public), GET consent/status, GET consent/export.
+7 публичных эндпоинтов без авторизации: GET/POST consent grant/grant-bulk/grant-required (виджеты/боты), GET privacy-policy, GET terms, GET consent-types.
 
 ### auth.py — инфраструктурный роутер
 

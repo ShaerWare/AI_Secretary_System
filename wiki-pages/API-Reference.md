@@ -462,6 +462,31 @@ Content-Type: application/json
 
 Возвращает **409** если зависимость создаёт цикл или целевая задача приватная.
 
+## Legal / Consent (Согласия)
+
+### Публичные эндпоинты (без авторизации)
+
+Вызываются виджетами, Telegram-ботами, внешними клиентами. Пути без `/admin/` (PR #420).
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/privacy-policy?lang=ru` | Страница политики конфиденциальности (HTML) |
+| GET | `/terms?lang=ru` | Страница условий использования (HTML) |
+| GET | `/consent-types` | Список типов согласий |
+| POST | `/legal/consents/grant` | Дать согласие (user_id, user_type, consent_type) |
+| POST | `/legal/consents/grant-bulk` | Дать несколько согласий (consent_types[]) |
+| POST | `/legal/consents/grant-required` | Дать все обязательные согласия |
+
+### Защищённые эндпоинты (требуют JWT)
+
+| Метод | Эндпоинт | Доступ | Описание |
+|-------|----------|--------|----------|
+| GET | `/admin/legal/consents/{user_id}` | `settings:manage` | Все согласия пользователя |
+| GET | `/admin/legal/consents/check/{user_id}` | `settings:view` | Проверка обязательных согласий |
+| POST | `/admin/legal/consents/revoke` | `settings:manage` | Отозвать согласие |
+| GET | `/admin/legal/stats` | `settings:manage` | Статистика согласий |
+| POST | `/admin/legal/gdpr/delete` | `settings:manage` | Удаление данных пользователя (GDPR) |
+
 ## URL паттерны
 
 ### CRUD ресурсов
@@ -489,13 +514,22 @@ Content-Type: application/json
 
 | Паттерн | Описание | Пример |
 |---------|----------|--------|
-| `GET /admin/{resource}/stream` | Server-Sent Events | `/admin/chat/stream` |
+| `GET /admin/{resource}/stream` | Server-Sent Events | `/admin/monitor/gpu/stream` |
 
 **Формат SSE:**
 ```
 data: {"message": "chunk"}\n\n
 data: [DONE]\n\n
 ```
+
+Все SSE-эндпоинты требуют JWT-авторизацию (PR #420). Фронтенд использует `fetch + ReadableStream` вместо `EventSource`, чтобы передавать `Authorization: Bearer` заголовок. Эндпоинты:
+
+| Эндпоинт | Доступ | Описание |
+|----------|--------|----------|
+| `GET /admin/monitor/gpu/stream` | `system:view` | GPU-метрики (SSE) |
+| `GET /admin/logs/stream/{logfile}` | `system:view` | Стриминг логов |
+| `GET /admin/finetune/train/log` | `system:view` | Стриминг лога обучения |
+| `POST /admin/chat/stream` | `chat:edit` | Стриминг чата (отдельный flow) |
 
 ### Webhooks
 
