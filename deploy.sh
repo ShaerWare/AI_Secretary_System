@@ -48,7 +48,7 @@ log "Installing bridge dependencies..."
 # Install/update npm deps
 log "Installing npm dependencies..."
 cd "$REPO_DIR/admin"
-npm ci --silent 2>&1 | tee -a "$LOG_FILE"
+npm ci --include=dev 2>&1 | tee -a "$LOG_FILE"
 
 # Ensure .env.production.local exists (base path override)
 if [ ! -f "$REPO_DIR/admin/.env.production.local" ]; then
