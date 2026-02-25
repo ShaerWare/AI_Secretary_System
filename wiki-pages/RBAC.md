@@ -288,6 +288,36 @@ Content-Type: application/json
 
 Bot-scoped таблицы (`telegram_sessions`, `bot_agent_prompts`, `bot_quiz_questions` и др.) **не** содержат `workspace_id` — они фильтруются через `bot_instances.workspace_id`.
 
+### Этап 8: Инвайт-система + UI workspace (#330)
+
+**8-1: Управление участниками workspace** (PR #406, Issue #398) — ✅ Done
+
+Backend — новый роутер `app/routers/workspace.py` (prefix `/admin/workspace`):
+
+| Метод | Путь | Доступ | Описание |
+|-------|------|--------|----------|
+| GET | `/admin/workspace` | users:view | Информация о текущем workspace |
+| GET | `/admin/workspace/members` | users:view | Список участников с данными пользователя |
+| PUT | `/admin/workspace/members/{user_id}/role` | users:manage | Смена роли участника |
+| DELETE | `/admin/workspace/members/{user_id}` | users:manage | Удаление участника |
+
+Бизнес-правила:
+- Нельзя менять роль себе и owner
+- Нельзя удалить себя и owner
+- Валидация `role_name` через `async_role_manager.get_by_name()`
+- Инвалидация `MemberRoleCache` после смены роли
+- `revoke_all_user_sessions()` после удаления участника
+- Audit log на все мутации
+
+Frontend — `UsersView.vue` (`/admin/#/users`):
+- Карточка workspace (название, количество участников, дата создания)
+- Таблица участников: имя, логин, роль (dropdown для manage), дата входа, статус (active/inactive)
+- Crown-бейдж на владельце, dropdown и remove disabled для self и owner
+- Demo-мок: `admin/src/api/demo/workspace.ts`
+- i18n: ru/en/kk (секция `users`)
+
+**8-2: Инвайт-система** (Issue #399) — в ожидании
+
 ### Внешние контакты — user_identities
 
 Контакты из Telegram, WhatsApp и виджетов автоматически становятся пользователями с привязанными `user_identities` (миграция `0011`, PR #370).
