@@ -86,9 +86,9 @@ export const api = {
   },
 };
 
-// SSE helper with generic type support
+// SSE helper with generic type support (fetch-based to send JWT)
 export function createSSE<T = unknown>(endpoint: string, onMessage: (data: T) => void) {
-  // In demo mode, use polling via fetch instead of real EventSource
+  // In demo mode, use polling via fetch instead of real SSE
   if (import.meta.env.VITE_DEMO_MODE === "true") {
     let stopped = false;
     const poll = async () => {
@@ -115,23 +115,63 @@ export function createSSE<T = unknown>(endpoint: string, onMessage: (data: T) =>
     };
   }
 
-  const eventSource = new EventSource(`${BASE_URL}${endpoint}`);
+  // Real mode: fetch-based SSE with JWT auth
+  const controller = new AbortController();
+  let stopped = false;
 
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data) as T;
-      onMessage(data);
-    } catch {
-      onMessage(event.data as T);
+  const connect = async () => {
+    while (!stopped) {
+      try {
+        const response = await fetch(`${BASE_URL}${endpoint}`, {
+          headers: { ...getAuthHeaders(), Accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`SSE connection failed: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!stopped) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const payload = line.slice(6);
+              try {
+                onMessage(JSON.parse(payload) as T);
+              } catch {
+                onMessage(payload as T);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (stopped) return;
+        console.error("SSE error, reconnecting in 3s:", e);
+      }
+
+      if (!stopped) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
     }
   };
 
-  eventSource.onerror = () => {
-    console.error("SSE error");
-  };
+  connect();
 
   return {
-    close: () => eventSource.close(),
-    eventSource,
+    close: () => {
+      stopped = true;
+      controller.abort();
+    },
+    eventSource: null as unknown as EventSource,
   };
 }

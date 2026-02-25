@@ -94,8 +94,8 @@ async def admin_get_user_consents(
         return {"consents": consents, "user_id": user_id}
 
 
-@router.post("/admin/legal/consents/grant")
-async def admin_grant_consent(
+@router.post("/legal/consents/grant")
+async def grant_consent(
     request: ConsentRequest,
     req: Request,
 ):
@@ -126,8 +126,8 @@ async def admin_grant_consent(
         return {"consent": consent}
 
 
-@router.post("/admin/legal/consents/grant-bulk")
-async def admin_grant_bulk_consents(
+@router.post("/legal/consents/grant-bulk")
+async def grant_bulk_consents(
     request: ConsentBulkRequest,
     req: Request,
 ):
@@ -161,8 +161,8 @@ async def admin_grant_bulk_consents(
         return {"consents": granted}
 
 
-@router.post("/admin/legal/consents/grant-required")
-async def admin_grant_required_consents(
+@router.post("/legal/consents/grant-required")
+async def grant_required_consents(
     request: ConsentRequest,
     req: Request,
 ):
@@ -204,8 +204,11 @@ async def admin_revoke_consent(
 
 
 @router.get("/admin/legal/consents/check/{user_id}")
-async def admin_check_consents(user_id: str):
-    """Check if user has granted all required consents."""
+async def admin_check_consents(
+    user_id: str,
+    user: User = Depends(require_permission("settings", "view")),
+):
+    """Check if user has granted all required consents (admin only)."""
     async with AsyncSessionLocal() as session:
         repo = ConsentRepository(session)
         result = await repo.check_required_consents(user_id)

@@ -76,6 +76,7 @@ from auth_manager import (
     create_session,
     get_auth_status,
     get_current_user,
+    require_permission,
 )
 
 # Cloud LLM service for multi-provider support
@@ -2319,7 +2320,10 @@ async def admin_read_log(
 
 
 @app.get("/admin/logs/stream/{logfile}")
-async def admin_stream_log(logfile: str):
+async def admin_stream_log(
+    logfile: str,
+    user: User = Depends(require_permission("system", "view")),
+):
     """SSE streaming логов"""
     manager = get_service_manager()
 
@@ -3064,7 +3068,9 @@ async def admin_get_training_status():
 
 
 @app.get("/admin/finetune/train/log")
-async def admin_stream_training_log():
+async def admin_stream_training_log(
+    user: User = Depends(require_permission("system", "view")),
+):
     """SSE streaming лога обучения"""
     manager = get_finetune_manager()
 
@@ -3308,42 +3314,6 @@ async def admin_get_gpu_stats():
             logger.warning(f"Error getting GPU {i} stats: {e}")
 
     return {"available": True, "gpus": gpus}
-
-
-@app.get("/admin/monitor/gpu/stream")
-async def admin_stream_gpu_stats():
-    """SSE streaming статистики GPU"""
-    import torch
-
-    async def generate():
-        while True:
-            if torch.cuda.is_available():
-                gpus = []
-                for i in range(torch.cuda.device_count()):
-                    try:
-                        allocated = torch.cuda.memory_allocated(i) / (1024**3)
-                        reserved = torch.cuda.memory_reserved(i) / (1024**3)
-                        gpus.append(
-                            {
-                                "id": i,
-                                "allocated_gb": round(allocated, 2),
-                                "reserved_gb": round(reserved, 2),
-                            }
-                        )
-                    except Exception:
-                        pass
-
-                yield f"data: {json.dumps({'gpus': gpus, 'timestamp': datetime.now().isoformat()})}\n\n"
-            else:
-                yield f"data: {json.dumps({'available': False})}\n\n"
-
-            await asyncio.sleep(5)
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
 
 
 @app.get("/admin/monitor/health")
