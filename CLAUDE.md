@@ -152,9 +152,9 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (24 routers, ~400 endpoints) │
+│  orchestrator.py + app/routers/ (26 routers, ~400 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │        Vue 3 Admin Panel (21 views, PWA)                │  │
+│  │        Vue 3 Admin Panel (23 views, PWA)                │  │
 │  │                admin/dist/                              │  │
 │  └────────────────────────────────────────────────────────┘  │
 └────────────┬──────────────┬──────────────┬───────────────────┘
@@ -181,7 +181,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 ### Key Architectural Decisions
 
-**Global state in orchestrator.py** (~3670 lines, ~100 legacy endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
+**Global state in orchestrator.py** (~4100 lines, ~100 legacy endpoints): This is the FastAPI entry point. It initializes all services as module-level globals, populates the `ServiceContainer`, and includes all routers. Legacy endpoints (OpenAI-compatible `/v1/*`) still live here alongside the modular router system.
 
 **ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
 
@@ -272,7 +272,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Chat session sharing**: `ChatSessionShare` model (`chat_session_shares` table) enables sharing chat sessions between users. `ChatShareDialog.vue` component in frontend.
 
-**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler), `workspace.py` (workspace info + member management: list, role change, remove).
+**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler), `workspace.py` (workspace info + member management + invite system: CRUD, public accept, auto-login).
 
 ## Code Patterns
 
@@ -309,6 +309,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 - Frontend uses `GET /admin/auth/permissions` → `hasModule()`/`canView()`/`canEdit()`/`canManage()`
 - CLI: `python scripts/manage_users.py create <user> <pass> --role web` (also populates `workspace_members`)
 - **Workspace members management:** `app/routers/workspace.py` (prefix `/admin/workspace`) — 4 endpoints: GET info, GET members, PUT member role, DELETE member. Business rules: cannot change own role or owner's role, cannot remove self or owner. After role change: `_member_role_cache.invalidate_user()`. After remove: `revoke_all_user_sessions()`. Admin UI: `UsersView.vue` at `/admin/#/users` (module `users`, minLevel `view`).
+- **Invite system:** 5 additional endpoints on `workspace.py` for invite CRUD + public accept. `POST /invites` creates invite with `secrets.token_urlsafe(32)`, optional `max_uses` and `expires_hours`. `GET /invites/{code}/info` and `POST /invites/accept` are public (no auth). Accept creates user + workspace membership in one transaction, returns JWT (auto-login). Rate limited via `@limit_auth`. Cannot invite with "owner" role. Frontend: `InviteDialog.vue` (create modal with URL copy), `InviteView.vue` (public `/invite/:code` registration page), invites table in `UsersView.vue`. Migration: `alembic/versions/20260225_0012_add_workspace_invite_fields.py`.
 
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, and `kk` (Kazakh)
@@ -355,7 +356,7 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 
 ## Frontend Architecture
 
-**Tech stack**: Vue 3 + Composition API + TypeScript, Vite, Pinia (persisted state), Vue Router (hash history), TanStack Vue Query, vue-i18n (ru/en), TailwindCSS + radix-vue, lucide-vue-next, chart.js/vue-chartjs, marked + DOMPurify (markdown rendering). Path alias `@` → `admin/src/`.
+**Tech stack**: Vue 3 + Composition API + TypeScript, Vite, Pinia (persisted state), Vue Router (hash history), TanStack Vue Query, vue-i18n (ru/en/kk), TailwindCSS + radix-vue, lucide-vue-next, chart.js/vue-chartjs, marked + DOMPurify (markdown rendering). Path alias `@` → `admin/src/`.
 
 **Routing** (`admin/src/router.ts`): Single flat router with `createWebHashHistory`. Routes use rich `meta` fields for access control:
 - `meta.public` — bypass auth guard (only `/login`)
@@ -364,11 +365,11 @@ RATE_LIMIT_DEFAULT=60/minute        # Default rate limit for all endpoints
 - `meta.minLevel` — minimum permission level (`'view'` default, `'edit'`, or `'manage'`)
 - Navigation guard checks `permissions[module] >= minLevel`, redirects unauthorized users to `/chat` or `/login`
 
-**Stores** (`admin/src/stores/`): Pinia stores re-exported from `stores/index.ts`. Key store: `auth.ts` holds JWT token, decoded user (id, username, role), `deploymentMode` (`full|cloud|local`), `permissions` (from `GET /admin/auth/permissions`). Exposes `isAdmin` (= `canManage('users')`), `isCloudMode`, `hasModule()`, `canView()`, `canEdit()`, `canManage()`. UI state stores: `toast`, `confirm`, `search`, `theme` — decouple trigger sites from rendering.
+**Stores** (`admin/src/stores/`): Pinia stores re-exported from `stores/index.ts`. Key store: `auth.ts` holds JWT token, decoded user (id, username, role), `deploymentMode` (`full|cloud|local`), `permissions` (from `GET /admin/auth/permissions`). Exposes `isAdmin` (= `canManage('users')`), `isCloudMode`, `hasModule()`, `canView()`, `canEdit()`, `canManage()`. UI state stores: `toast`, `confirm`, `search`, `theme` — decouple trigger sites from rendering. **Toast API**: `toast.success(title)`, `toast.error(title)`, `toast.warning(title)`, `toast.info(title)` — do NOT use `toast.show(title, type)` (the `show()` signature is `(type, title, message?)` with type as first arg). **Confirm API**: `confirm.confirm({ title, message, confirmText, type })` returns `Promise<boolean>` — there is no `ask()` method; also: `confirmDelete(itemName, itemType)`, `confirmDangerousAction(title, message, confirmPhrase)`.
 
 **API layer** (`admin/src/api/`): `client.ts` provides `api.get/post/put/delete/upload` + `createSSE()` helper (auto-injects JWT from `localStorage('admin_token')`). Domain-specific files (`chat.ts`, `telegram.ts`, `llm.ts`, etc.) build on it. All re-exported from `api/index.ts`. In demo mode, `client.ts` awaits `demoReady` promise before any API call.
 
-**Demo mode** (`admin/src/api/demo/`): Activated via `VITE_DEMO_MODE=true`. `setupDemoInterceptor()` monkey-patches `window.fetch` globally to intercept all `/admin/`, `/v1/`, `/health` requests. Routes through `matchDemoRoute()` — regex pattern matcher across 22 domain route files (each exports `DemoRoute[]`). Handlers return JSON data, `'__BLOB__'` (minimal WAV audio), or `'__STREAM__'` (SSE chunks). Adds 100–300ms artificial delay. Config: `VITE_DEMO_ROLE`, `VITE_DEMO_DEPLOYMENT_MODE` env vars.
+**Demo mode** (`admin/src/api/demo/`): Activated via `VITE_DEMO_MODE=true`. `setupDemoInterceptor()` monkey-patches `window.fetch` globally to intercept all `/admin/`, `/v1/`, `/health` requests. Routes through `matchDemoRoute()` — regex pattern matcher across 23 domain route files (each exports `DemoRoute[]`). Handlers return JSON data, `'__BLOB__'` (minimal WAV audio), or `'__STREAM__'` (SSE chunks). Adds 100–300ms artificial delay. Config: `VITE_DEMO_ROLE`, `VITE_DEMO_DEPLOYMENT_MODE` env vars.
 
 **Components** (`admin/src/components/`): Flat structure, no `ui/` subdirectory. UI state components (`ConfirmDialog`, `SearchPalette`, `ToastContainer`, `ThemeToggle`) driven by dedicated Pinia stores. `BranchTree.vue` / `BranchTreeNode.vue` for chat branching. `CrmInboxAmoCRM.vue` — extracted amojo messenger (used as sub-tab in `CrmInbox.vue`). `charts/` for Chart.js wrappers.
 
@@ -526,7 +527,7 @@ Both demos live on `demo.ai-sekretar24.ru` with path-based routing. Single scrip
 **Shared architecture:**
 - **How it works**: monkey-patches `window.fetch` in `demo/index.ts` to intercept all API calls with mock data
 - **SSE**: polling (3s interval) instead of real EventSource
-- **Mock data**: 22 files in `admin/src/api/demo/`, in-memory store for session-persistent mutations
+- **Mock data**: 23 domain files in `admin/src/api/demo/`, in-memory store for session-persistent mutations
 - **Role config**: `VITE_DEMO_ROLE` and `VITE_DEMO_DEPLOYMENT_MODE` env vars control role in JWT and deployment mode mock
 - **Auto-login**: inline `<script>` in `index.html` injects JWT with correct role before Vue app loads
 - **Nginx**: path-based routing (`/full/`, `/cloud/`), root `/` redirects to `/full/`

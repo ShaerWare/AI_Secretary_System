@@ -588,6 +588,16 @@ Workspace — контейнер всех ресурсов. Default workspace (i
 | `PUT` | `/admin/workspace/members/{user_id}/role` | `users:manage` | Смена роли. Body: `{"role_name": "operator"}`. Нельзя менять себе и owner |
 | `DELETE` | `/admin/workspace/members/{user_id}` | `users:manage` | Удаление участника. Нельзя удалить себя и owner. Ревокация сессий удалённого |
 
+#### Инвайт-система (PR #408)
+
+| Метод | Путь | Доступ | Описание |
+|-------|------|--------|----------|
+| `POST` | `/admin/workspace/invites` | `users:manage` | Создать инвайт. Body: `{role_name, email?, max_uses?, expires_hours?}`. Нельзя инвайтить на роль "owner" |
+| `GET` | `/admin/workspace/invites` | `users:manage` | Список инвайтов текущего workspace |
+| `DELETE` | `/admin/workspace/invites/{id}` | `users:manage` | Удалить инвайт |
+| `GET` | `/admin/workspace/invites/{code}/info` | Public | Информация для страницы принятия (workspace_name, role_name, expires_at) |
+| `POST` | `/admin/workspace/invites/accept` | Public + rate limit | Регистрация по инвайту. Body: `{invite_code, username, password, display_name?}`. Возвращает JWT (auto-login) |
+
 ### Совместный доступ к чатам
 
 Чат-сессии (admin source) могут быть расшарены другим пользователям с уровнями доступа `read` или `write`.
