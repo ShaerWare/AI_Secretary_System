@@ -297,9 +297,11 @@ async def authenticate_user(username: str, password: str) -> Optional[User]:
             return None
 
     except Exception as e:
-        logger.warning(f"DB auth failed, trying legacy: {e}")
+        # DB error — do NOT fall through to legacy fallback (security: H3)
+        logger.error(f"DB auth error (not falling back to legacy): {e}")
+        return None
 
-    # Fallback: legacy env-var admin (when no users in DB or DB unavailable)
+    # Fallback: legacy env-var admin ONLY when no users in DB (first run)
     if username == _LEGACY_USERNAME and _verify_legacy_password(password, _LEGACY_PASSWORD_HASH):
         return User(id=0, username=username, role="admin")
 
