@@ -175,7 +175,7 @@ When diagnosing production or demo issues, check in this order — **infrastruct
 - `cloud` — cloud LLM only, no GPU/TTS/STT/GSM services, hardware routers not registered, hardware admin tabs hidden
 - `local` — same as `full` (explicit opt-in for documentation clarity)
 
-Backend: `orchestrator.py` conditionally registers hardware routers (`services`, `monitor`, `gsm`, `stt`, `tts`) and skips TTS/STT/GPU initialization in cloud mode. Health endpoint includes `deployment_mode` and adjusts health logic (TTS not required in cloud). `GET /admin/deployment-mode` returns current mode. `/auth/me` includes `deployment_mode`.
+Backend: `orchestrator.py` conditionally registers hardware routers (`services`, `monitor`, `gsm`, `stt`, `tts`) and skips TTS/STT/GPU initialization in cloud mode. Health endpoint includes `deployment_mode` and adjusts health logic (TTS not required in cloud). `GET /admin/deployment-mode` returns current mode. `/auth/me` includes `deployment_mode`. `get_user_permissions()` in `auth_manager.py` filters out `speech` and `gsm` modules in cloud mode (defense-in-depth: `require_permission()` will also reject these). `system` module stays available in cloud mode (covers logs, finetune).
 
 Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mode`, exposes `isCloudMode` computed. Nav items and routes with `localOnly: true` are hidden/guarded in cloud mode (Dashboard, Services, TTS, Monitoring, Models, GSM). Cloud users redirect to `/chat`.
 
@@ -272,7 +272,9 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **Chat session sharing**: `ChatSessionShare` model (`chat_session_shares` table) enables sharing chat sessions between users. `ChatShareDialog.vue` component in frontend.
 
-**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler), `workspace.py` (workspace info + member management + invite system: CRUD, public accept, auto-login).
+**Other routers**: `audit.py` (audit log viewer/export/cleanup), `usage.py` (usage statistics/analytics), `legal.py` (legal compliance + GDPR data deletion, migration: `scripts/migrate_legal_compliance.py`), `wiki_rag.py` (Wiki RAG stats/search/reload + Knowledge Base CRUD + collections management), `github_webhook.py` (GitHub CI/CD webhook handler), `workspace.py` (workspace info + member management + invite system: CRUD, public accept, auto-login).
+
+**GDPR data deletion** (`app/services/gdpr_service.py`): Full cascade delete/anonymization via `POST /admin/legal/gdpr/delete`. Two modes: admin user (by `user_id`) — deletes sessions/chats, nullifies resource ownership, anonymizes audit/usage logs; external contact (by `provider`+`provider_uid`) — deletes bot profiles/subscribers/events/sessions, anonymizes payment/audit logs. Financial and audit records are anonymized (not deleted) for legal retention.
 
 ## Code Patterns
 
@@ -294,9 +296,10 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **RBAC auth guards** (in `auth_manager.py`):
 - `Depends(require_permission(module, level))` — checks module permission (all routers)
 - `user_has_level(user, module, level)` — inline check within endpoint (owner/manage logic)
-- `workspace_context(user, module)` — returns `(owner_id, workspace_id)` tuple for repository calls; `owner_id` is `None` for manage-level users, `workspace_id` always from JWT
+- `workspace_context(user, module)` — returns `(owner_id, workspace_id)` tuple for repository calls; `owner_id` is `None` for manage-level users, `workspace_id` always from JWT. **`owner_id=NULL` is a design decision**: means "shared within workspace" (admin-created, legacy, or system resource). Non-admin users see own resources + NULL-owned. Admins see all. Known limitation: admin cannot create private (non-shared) resources.
 - `Depends(get_current_user)` — auth only, no RBAC check (self-service: auth.py)
 - Data isolation: `owner_id, workspace_id = workspace_context(user, module)` → pass both to repository/manager
+- Exception: `KanbanTask` always sets `owner_id=user.id` (even for admins), uses `is_admin` flag for visibility. `ClaudeCodeSession` has `owner_id` NOT NULL.
 
 **Workspaces + RBAC roles:** Permission resolution goes through `workspace_members` table (not legacy `users.role`). Default workspace (id=1) is seeded at startup; all users are auto-mapped using legacy role → RBAC role:
 - `admin` → RBAC `admin` — all 16 modules `manage`, sees all resources
