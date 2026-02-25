@@ -1,12 +1,14 @@
 """Repository for workspace operations."""
 
+import secrets
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import Workspace, WorkspaceMember
+from db.models import Workspace, WorkspaceInvite, WorkspaceMember
 from db.repositories.base import BaseRepository
 
 
@@ -133,3 +135,69 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         """Get the owner_id for a workspace."""
         ws = await self.get_by_id(workspace_id)
         return ws.owner_id if ws else None
+
+    # ============== Invites ==============
+
+    async def create_invite(
+        self,
+        workspace_id: int,
+        role_name: str,
+        created_by: int,
+        email: Optional[str] = None,
+        max_uses: Optional[int] = None,
+        expires_hours: Optional[int] = None,
+    ) -> dict:
+        """Create a new invite link."""
+        invite = WorkspaceInvite(
+            workspace_id=workspace_id,
+            invite_code=secrets.token_urlsafe(32),
+            role_name=role_name,
+            created_by=created_by,
+            email=email,
+            max_uses=max_uses,
+            expires_at=(
+                datetime.utcnow() + timedelta(hours=expires_hours) if expires_hours else None
+            ),
+        )
+        self.session.add(invite)
+        await self.session.commit()
+        await self.session.refresh(invite)
+        return invite.to_dict()
+
+    async def list_invites(self, workspace_id: int) -> List[dict]:
+        """List all invites for a workspace."""
+        result = await self.session.execute(
+            select(WorkspaceInvite)
+            .where(WorkspaceInvite.workspace_id == workspace_id)
+            .order_by(WorkspaceInvite.id.desc())
+        )
+        return [inv.to_dict() for inv in result.scalars().all()]
+
+    async def get_invite_by_code(self, invite_code: str) -> Optional[WorkspaceInvite]:
+        """Get invite ORM object by code."""
+        result = await self.session.execute(
+            select(WorkspaceInvite).where(WorkspaceInvite.invite_code == invite_code)
+        )
+        return result.scalar_one_or_none()
+
+    async def use_invite(self, invite: WorkspaceInvite, user_id: int) -> None:
+        """Record invite usage: increment used_count, set used_at/used_by."""
+        invite.used_count += 1
+        invite.used_at = datetime.utcnow()
+        invite.used_by = user_id
+        await self.session.commit()
+
+    async def delete_invite(self, workspace_id: int, invite_id: int) -> bool:
+        """Delete an invite. Returns True if deleted."""
+        result = await self.session.execute(
+            select(WorkspaceInvite).where(
+                WorkspaceInvite.id == invite_id,
+                WorkspaceInvite.workspace_id == workspace_id,
+            )
+        )
+        invite = result.scalar_one_or_none()
+        if not invite:
+            return False
+        await self.session.delete(invite)
+        await self.session.commit()
+        return True

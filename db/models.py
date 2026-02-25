@@ -318,6 +318,31 @@ class WorkspaceInvite(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     used_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+
+    @property
+    def is_valid(self) -> bool:
+        """Check if invite is still usable (not expired, not exhausted)."""
+        if self.expires_at and datetime.utcnow() > self.expires_at:
+            return False
+        return not (self.max_uses is not None and self.used_count >= self.max_uses)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workspace_id": self.workspace_id,
+            "email": self.email,
+            "invite_code": self.invite_code,
+            "role_name": self.role_name,
+            "created_by": self.created_by,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "used_at": self.used_at.isoformat() if self.used_at else None,
+            "used_by": self.used_by,
+            "max_uses": self.max_uses,
+            "used_count": self.used_count,
+            "is_valid": self.is_valid,
+        }
 
 
 # ============== Chat ==============
