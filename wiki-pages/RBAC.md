@@ -350,6 +350,17 @@ Frontend:
 
 **Этап 8 завершён. Вся RBAC-система (#322) полностью реализована.**
 
+### Security-фиксы аудита (PR #418, Issue #411)
+
+Быстрые исправления по результатам аудита #315:
+
+| # | Проблема | Фикс |
+|---|----------|------|
+| C2 | `api.upload()` не передавал JWT-токен | Добавлен `headers: getAuthHeaders()` в `client.ts:upload()` |
+| C2+ | `stt.ts:transcribe()` — та же проблема | Добавлен `getAuthHeaders()` в fetch |
+| C3 | TTS preset UPDATE без проверки workspace | Добавлен `workspace_context()` в `tts.py`, `workspace_id` в `preset.py:update_preset()` |
+| L3 | `POST /change-password` без rate-limit | Добавлен `@limiter.limit(RATE_LIMIT_AUTH)` |
+
 ### Внешние контакты — user_identities
 
 Контакты из Telegram, WhatsApp и виджетов автоматически становятся пользователями с привязанными `user_identities` (миграция `0011`, PR #370).
@@ -571,7 +582,7 @@ WebSocket `/ws/claude-code` использует собственный `_ws_aut
 - `POST /login` — передаёт `workspace_id=1` в `create_session()`
 - `GET /me` — возвращает `workspace_id` в ответе
 - `PUT /profile` — использует `require_permission("settings", "edit")` Depends
-- `POST /change-password` — использует `require_permission("settings", "edit")` Depends, передаёт `workspace_id` в новый токен
+- `POST /change-password` — использует `require_permission("settings", "edit")` Depends, передаёт `workspace_id` в новый токен, rate-limit `RATE_LIMIT_AUTH` (PR #418)
 - `DELETE /sessions/{jti}` — inline `level_gte(user.permissions.get("users", ""), "manage")`
 - Остальные (`GET /sessions`, `GET /permissions`, `GET /status`, `GET /profile`) — `get_current_user` без RBAC-gate
 
