@@ -35,6 +35,10 @@ _LEGACY_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "") or ""
 if not _LEGACY_PASSWORD_HASH:
     _LEGACY_PASSWORD_HASH = hashlib.sha256(b"admin").hexdigest()
 
+# Deployment mode — hardware modules excluded in cloud mode
+_DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "full").lower()
+_CLOUD_EXCLUDED_MODULES = ("speech", "gsm")
+
 
 # ============== Pydantic Models ==============
 
@@ -122,15 +126,17 @@ class PermissionsCache:
         self._cache: Dict[str, Dict[str, str]] = {}
 
     async def get(self, role_name: str) -> Dict[str, str]:
-        """Get permissions for role, loading from DB on cache miss."""
-        if role_name in self._cache:
-            return self._cache[role_name]
-        from db.integration import async_role_manager
+        """Get permissions for role, loading from DB on cache miss.
 
-        role = await async_role_manager.get_by_name(role_name)
-        perms = role.get("permissions", {}) if role else {}
-        self._cache[role_name] = perms
-        return perms
+        Returns a **copy** so callers can mutate (e.g. pop modules) without
+        corrupting the cached entry.
+        """
+        if role_name not in self._cache:
+            from db.integration import async_role_manager
+
+            role = await async_role_manager.get_by_name(role_name)
+            self._cache[role_name] = role.get("permissions", {}) if role else {}
+        return dict(self._cache[role_name])
 
     def invalidate(self, role_name: Optional[str] = None) -> None:
         """Clear cache. If role_name given, clear only that entry."""
@@ -456,7 +462,12 @@ def workspace_context(user: User, module: str) -> tuple[Optional[int], int]:
 
 
 async def get_user_permissions(user: User) -> Dict[str, str]:
-    """Get permissions dict for user via workspace_members lookup. Uses cache."""
+    """Get permissions dict for user via workspace_members lookup. Uses cache.
+
+    In cloud deployment mode, hardware-only modules (speech, gsm) are removed
+    from the result. The ``system`` module is kept — it covers logs and
+    finetune endpoints that are available in cloud mode.
+    """
     # Internal bot users (user_id=0) with admin role get full manage access
     if user.id == 0 and user.role == "admin":
         return dict.fromkeys(("chat", "bots", "widgets", "llm", "tts", "system"), "manage")
@@ -469,7 +480,14 @@ async def get_user_permissions(user: User) -> Dict[str, str]:
         if role_name is None:
             role_name = "viewer"  # safe fallback
         _member_role_cache.put(user.id, user.workspace_id, role_name)
-    return await _permissions_cache.get(role_name)
+    perms = await _permissions_cache.get(role_name)
+
+    # Filter out hardware-only modules in cloud deployment mode
+    if _DEPLOYMENT_MODE == "cloud":
+        for module in _CLOUD_EXCLUDED_MODULES:
+            perms.pop(module, None)
+
+    return perms
 
 
 def invalidate_permissions_cache(role_name: Optional[str] = None) -> None:

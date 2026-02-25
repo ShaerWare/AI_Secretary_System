@@ -172,15 +172,7 @@ async def delete_session(
 @router.get("/permissions")
 async def get_permissions(user: User = Depends(get_current_user)):
     """Get effective permissions for the current user."""
-    permissions = await get_user_permissions(user)
-
-    # Filter out modules unavailable in cloud mode
-    deployment_mode = os.getenv("DEPLOYMENT_MODE", "full").lower()
-    if deployment_mode == "cloud":
-        for module in ("speech", "gsm", "system"):
-            permissions.pop(module, None)
-
-    return permissions
+    return await get_user_permissions(user)
 
 
 @router.get("/status")
