@@ -370,6 +370,32 @@ Frontend:
 | H5 | SSE-эндпоинты без JWT (backend) | Дубликат `GET /admin/monitor/gpu/stream` из `orchestrator.py` удалён (auth-версия в `monitor.py`). Добавлен `require_permission("system", "view")` на `GET /admin/logs/stream/{logfile}` и `GET /admin/finetune/train/log` |
 | H5 | SSE-эндпоинты без JWT (frontend) | `createSSE()`, `useSSE`, `useRealtimeMetrics` переписаны с `EventSource` на `fetch + ReadableStream` — отправляют `Authorization: Bearer` заголовок. Polling fallback тоже с JWT. Auto-reconnect через 3 сек |
 
+### Security-фиксы аудита — CSP (PR #422, Issue #413)
+
+JWT хранится в `localStorage` — доступен любому JS на странице. CSP-заголовок блокирует инъекцию скриптов через XSS, даже если DOMPurify обойдут.
+
+**Content-Security-Policy** добавлен в `SecurityHeadersMiddleware` (`app/security_headers.py`):
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: https:; font-src 'self'; connect-src 'self';
+frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+```
+
+| Директива | Зачем |
+|-----------|-------|
+| `script-src 'self'` | Блокирует инъекцию скриптов — основная защита JWT |
+| `style-src 'unsafe-inline'` | Vue `:style` bindings, виджет, chart.js требуют inline styles |
+| `frame-ancestors 'none'` | Усиленная версия X-Frame-Options (CSP Level 2) |
+| `object-src 'none'` | Блокирует Flash/Java plugins |
+| `connect-src 'self'` | WebSocket, SSE, fetch — только same-origin |
+
+Inline-скрипт Service Worker вынесен из `admin/index.html` в `admin/public/sw-cleanup.js` для совместимости с `script-src 'self'`.
+
+Конфигурация: `CSP_ENABLED=false` env var для отключения отдельно от остальных security headers.
+
+Существующая XSS-защита (без изменений): все 9 мест с `v-html` проходят через `DOMPurify.sanitize(marked.parse(...))`. DOMPurify 3.3.1, marked 17.0.2.
+
 ### Внешние контакты — user_identities
 
 Контакты из Telegram, WhatsApp и виджетов автоматически становятся пользователями с привязанными `user_identities` (миграция `0011`, PR #370).
