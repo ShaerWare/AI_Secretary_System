@@ -22,6 +22,7 @@ import { amocrmRoutes } from './amocrm'
 import { whatsappRoutes, initWhatsAppData } from './whatsapp'
 import { claudeCodeRoutes } from './claudeCode'
 import { kanbanRoutes } from './kanban'
+import { workspaceRoutes } from './workspace'
 
 // All routes — order matters: more specific patterns first
 const allRoutes: DemoRoute[] = [
@@ -47,6 +48,7 @@ const allRoutes: DemoRoute[] = [
   ...sttRoutes,
   ...ttsFinetueRoutes,
   ...kanbanRoutes,
+  ...workspaceRoutes,
 ]
 
 function matchDemoRoute(url: string, method: HttpMethod): { route: DemoRoute; matches: RegExpExecArray } | null {

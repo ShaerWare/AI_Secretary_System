@@ -23,7 +23,8 @@ import {
   Users,
   Settings,
   Info,
-  ClipboardList
+  ClipboardList,
+  UserCog
 } from 'lucide-vue-next'
 import { markRaw } from 'vue'
 import WhatsAppIcon from './WhatsAppIcon.vue'
@@ -97,6 +98,7 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.system',
     icon: Settings,
     items: [
+      { path: '/users', nameKey: 'nav.users', icon: UserCog, module: 'users' },
       { path: '/wiki', nameKey: 'nav.wiki', icon: BookOpen, module: 'faq' },
       { path: '/settings', nameKey: 'common.settings', icon: Settings },
       { path: '/about', nameKey: 'nav.about', icon: Info },

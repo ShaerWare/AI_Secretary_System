@@ -1,9 +1,10 @@
 """Repository for workspace operations."""
 
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from db.models import Workspace, WorkspaceMember
 from db.repositories.base import BaseRepository
@@ -58,3 +59,77 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         await self.session.commit()
         await self.session.refresh(ws)
         return ws.to_dict()
+
+    # ============== Members Management ==============
+
+    async def get_workspace_info(self, workspace_id: int) -> Optional[dict]:
+        """Get workspace by ID with member count."""
+        ws = await self.get_by_id(workspace_id)
+        if not ws:
+            return None
+        data = ws.to_dict()
+        count_result = await self.session.execute(
+            select(func.count())
+            .select_from(WorkspaceMember)
+            .where(WorkspaceMember.workspace_id == workspace_id)
+        )
+        data["member_count"] = count_result.scalar() or 0
+        return data
+
+    async def list_members(self, workspace_id: int) -> List[dict]:
+        """List all members of a workspace with user details."""
+        result = await self.session.execute(
+            select(WorkspaceMember)
+            .where(WorkspaceMember.workspace_id == workspace_id)
+            .options(selectinload(WorkspaceMember.user))
+            .order_by(WorkspaceMember.joined_at)
+        )
+        members = result.scalars().all()
+        out: List[dict] = []
+        for m in members:
+            d = m.to_dict()
+            if m.user:
+                d["username"] = m.user.username
+                d["display_name"] = m.user.display_name
+                d["email"] = m.user.email
+                d["is_active"] = m.user.is_active
+                d["last_login"] = m.user.last_login.isoformat() if m.user.last_login else None
+            out.append(d)
+        return out
+
+    async def update_member_role(
+        self, workspace_id: int, user_id: int, role_name: str
+    ) -> Optional[dict]:
+        """Change a member's role. Returns updated member dict or None."""
+        result = await self.session.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            return None
+        member.role_name = role_name
+        await self.session.commit()
+        return member.to_dict()
+
+    async def remove_member(self, workspace_id: int, user_id: int) -> bool:
+        """Remove a member from workspace. Returns True if removed."""
+        result = await self.session.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            return False
+        await self.session.delete(member)
+        await self.session.commit()
+        return True
+
+    async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:
+        """Get the owner_id for a workspace."""
+        ws = await self.get_by_id(workspace_id)
+        return ws.owner_id if ws else None
