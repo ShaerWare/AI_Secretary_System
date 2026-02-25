@@ -4075,4 +4075,12 @@ if __name__ == "__main__":
     load_dotenv()
     port = int(os.getenv("ORCHESTRATOR_PORT", 8002))
     logger.info(f"🎯 Запуск Orchestrator на порту {port}")
-    uvicorn.run("orchestrator:app", host="0.0.0.0", port=port, reload=False, log_level="info")
+    uvicorn.run(
+        "orchestrator:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+        log_level="info",
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
