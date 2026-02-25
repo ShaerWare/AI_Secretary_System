@@ -542,6 +542,26 @@ data: [DONE]\n\n
 - `/webhooks/yoomoney` — YooMoney payments
 - `/webhooks/github` — GitHub PR events + Issues (kanban sync)
 
+## Security Headers
+
+Middleware `SecurityHeadersMiddleware` (`app/security_headers.py`) добавляет защитные заголовки ко всем HTTP-ответам.
+
+| Заголовок | Значение | Назначение |
+|-----------|----------|------------|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` | Блокирует XSS-инъекции скриптов (PR #422) |
+| `X-Content-Type-Options` | `nosniff` | Блокирует MIME-sniffing |
+| `X-Frame-Options` | `DENY` | Предотвращает clickjacking |
+| `X-XSS-Protection` | `1; mode=block` | Legacy XSS-защита |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Контроль Referer |
+| `Permissions-Policy` | `geolocation=()` | Ограничение browser API |
+
+**Конфигурация (env vars):**
+- `SECURITY_HEADERS_ENABLED` — включить все заголовки (default: `true`)
+- `CSP_ENABLED` — включить CSP отдельно (default: `true`)
+- `X_FRAME_OPTIONS` — значение X-Frame-Options (default: `DENY`)
+
+**Эндпоинт мониторинга:** `GET /admin/monitor/security` (system:view) — возвращает текущие заголовки и статус.
+
 ## RBAC (контроль доступа)
 
 Все роутеры мигрированы на RBAC. Legacy guard-функции (`require_admin`, `require_not_guest`, `verify_ownership`) удалены в PR #358.
