@@ -3297,6 +3297,9 @@ class KanbanTask(Base):
     is_private: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     assignee: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_by: Mapped[str] = mapped_column(String(100), index=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     start_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     due_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -3349,6 +3352,7 @@ class KanbanTask(Base):
             "is_private": self.is_private,
             "assignee": self.assignee,
             "created_by": self.created_by,
+            "owner_id": self.owner_id,
             "start_date": self.start_date,
             "due_date": self.due_date,
             "position": self.position,

@@ -35,7 +35,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
 
     async def get_visible_tasks(
         self,
-        current_user: str,
+        current_user_id: int,
         is_admin: bool,
         workspace_id: Optional[int] = None,
     ) -> List[dict]:
@@ -45,13 +45,13 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         Others see their own tasks + non-draft public tasks.
         """
         return await self.get_visible_tasks_for_project(
-            None, current_user, is_admin, workspace_id=workspace_id
+            None, current_user_id, is_admin, workspace_id=workspace_id
         )
 
     async def get_visible_tasks_for_project(
         self,
         project_id: Optional[int],
-        current_user: str,
+        current_user_id: int,
         is_admin: bool,
         workspace_id: Optional[int] = None,
     ) -> List[dict]:
@@ -70,7 +70,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
 
         if not is_admin:
             stmt = stmt.where(
-                (KanbanTask.created_by == current_user)
+                (KanbanTask.owner_id == current_user_id)
                 | ((KanbanTask.is_private == False) & (KanbanTask.status != "draft"))
             )
 
@@ -83,6 +83,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         self,
         title: str,
         created_by: str,
+        owner_id: Optional[int] = None,
         description: Optional[str] = None,
         status: str = "todo",
         assignee: Optional[str] = None,
@@ -99,6 +100,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             is_private=True,
             assignee=assignee,
             created_by=created_by,
+            owner_id=owner_id,
             start_date=start_date,
             due_date=due_date,
             tags=tags,

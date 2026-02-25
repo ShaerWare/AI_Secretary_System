@@ -1815,13 +1815,15 @@ class AsyncKanbanManager:
 
     async def get_visible_tasks(
         self,
-        current_user: str,
+        current_user_id: int,
         is_admin: bool,
         workspace_id: Optional[int] = None,
     ) -> list:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.get_visible_tasks(current_user, is_admin, workspace_id=workspace_id)
+            return await repo.get_visible_tasks(
+                current_user_id, is_admin, workspace_id=workspace_id
+            )
 
     async def get_task(self, task_id: int, workspace_id: Optional[int] = None) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
@@ -1877,14 +1879,14 @@ class AsyncKanbanManager:
     async def get_visible_tasks_for_project(
         self,
         project_id,
-        current_user: str,
+        current_user_id: int,
         is_admin: bool,
         workspace_id: Optional[int] = None,
     ) -> list:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
             return await repo.get_visible_tasks_for_project(
-                project_id, current_user, is_admin, workspace_id=workspace_id
+                project_id, current_user_id, is_admin, workspace_id=workspace_id
             )
 
     async def find_by_github_issue(self, project_id: int, issue_number: int):

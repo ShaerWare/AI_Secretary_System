@@ -222,7 +222,7 @@ async def get_tasks(
     _owner_id, ws_id = workspace_context(user, "kanban")
     is_admin = user_has_level(user, "kanban", "manage")
     tasks = await async_kanban_manager.get_visible_tasks_for_project(
-        project_id, user.username, is_admin, workspace_id=ws_id
+        project_id, user.id, is_admin, workspace_id=ws_id
     )
     return {"tasks": tasks}
 
@@ -245,6 +245,7 @@ async def create_task(
         due_date=request.due_date,
         tags=tags_json,
         created_by=user.username,
+        owner_id=user.id,
         workspace_id=ws_id,
     )
     await async_audit_logger.log(
@@ -269,7 +270,7 @@ async def update_task(
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if not user_has_level(user, "kanban", "manage") and existing["created_by"] != user.username:
+    if not user_has_level(user, "kanban", "manage") and existing.get("owner_id") != user.id:
         raise HTTPException(status_code=403, detail="Can only edit own tasks")
 
     update_data = {}
@@ -370,7 +371,7 @@ async def add_dependency(
         raise HTTPException(status_code=404, detail="Blocker task not found")
     if (
         target["is_private"]
-        and target["created_by"] != user.username
+        and target.get("owner_id") != user.id
         and not user_has_level(user, "kanban", "manage")
     ):
         raise HTTPException(status_code=409, detail="Cannot depend on a private task")
