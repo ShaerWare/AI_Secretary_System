@@ -2099,6 +2099,98 @@ class AsyncWorkspaceManager:
             repo = WorkspaceRepository(session)
             return await repo.get_workspace_owner_id(workspace_id)
 
+    # ============== Invites ==============
+
+    async def create_invite(
+        self,
+        workspace_id: int,
+        role_name: str,
+        created_by: int,
+        email: Optional[str] = None,
+        max_uses: Optional[int] = None,
+        expires_hours: Optional[int] = None,
+    ) -> dict:
+        """Create an invite link."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.create_invite(
+                workspace_id, role_name, created_by, email, max_uses, expires_hours
+            )
+
+    async def list_invites(self, workspace_id: int) -> List[dict]:
+        """List all invites for a workspace."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.list_invites(workspace_id)
+
+    async def delete_invite(self, workspace_id: int, invite_id: int) -> bool:
+        """Delete an invite."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            return await repo.delete_invite(workspace_id, invite_id)
+
+    async def get_invite_info(self, invite_code: str) -> Optional[dict]:
+        """Get public invite info by code (workspace name, role, expiry)."""
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            invite = await repo.get_invite_by_code(invite_code)
+            if not invite or not invite.is_valid:
+                return None
+            ws = await repo.get_by_id(invite.workspace_id)
+            return {
+                "workspace_name": ws.name if ws else "Unknown",
+                "role_name": invite.role_name,
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+            }
+
+    async def accept_invite(
+        self,
+        invite_code: str,
+        username: str,
+        password: str,
+        display_name: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Accept an invite: create user + membership. Returns user dict or None."""
+        from db.models import User, WorkspaceMember
+        from utils.password import hash_password
+
+        async with AsyncSessionLocal() as session:
+            repo = WorkspaceRepository(session)
+            invite = await repo.get_invite_by_code(invite_code)
+            if not invite or not invite.is_valid:
+                return None
+            # Create user
+            pw_hash, salt = hash_password(password)
+            user = User(
+                username=username,
+                password_hash=pw_hash,
+                salt=salt,
+                role="user",
+                display_name=display_name or username,
+                is_active=True,
+            )
+            session.add(user)
+            await session.flush()  # get user.id
+            # Create membership
+            session.add(
+                WorkspaceMember(
+                    workspace_id=invite.workspace_id,
+                    user_id=user.id,
+                    role_name=invite.role_name,
+                )
+            )
+            # Record usage
+            invite.used_count += 1
+            invite.used_at = datetime.utcnow()
+            invite.used_by = user.id
+            await session.commit()
+            await session.refresh(user)
+            return {
+                "user": user.to_dict(),
+                "workspace_id": invite.workspace_id,
+                "role_name": invite.role_name,
+            }
+
 
 async_workspace_manager = AsyncWorkspaceManager()
 

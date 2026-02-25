@@ -58,6 +58,39 @@ const demoRoles = [
   { id: 4, name: "viewer", display_name: "Наблюдатель", is_system: true },
 ];
 
+interface DemoInvite {
+  id: number;
+  workspace_id: number;
+  email: string | null;
+  invite_code: string;
+  role_name: string;
+  created_by: number;
+  expires_at: string | null;
+  used_at: string | null;
+  used_by: number | null;
+  max_uses: number | null;
+  used_count: number;
+  is_valid: boolean;
+}
+
+let nextInviteId = 2;
+const demoInvites: DemoInvite[] = [
+  {
+    id: 1,
+    workspace_id: 1,
+    email: null,
+    invite_code: "demo-invite-abc123",
+    role_name: "operator",
+    created_by: 1,
+    expires_at: "2026-03-01T10:00:00",
+    used_at: null,
+    used_by: null,
+    max_uses: 5,
+    used_count: 1,
+    is_valid: true,
+  },
+];
+
 export const workspaceRoutes: DemoRoute[] = [
   // GET /admin/workspace
   {
@@ -110,5 +143,96 @@ export const workspaceRoutes: DemoRoute[] = [
     method: "GET",
     pattern: /^\/admin\/roles$/,
     handler: () => [...demoRoles],
+  },
+  // POST /admin/workspace/invites
+  {
+    method: "POST",
+    pattern: /^\/admin\/workspace\/invites$/,
+    handler: ({ body }) => {
+      const { role_name, email, max_uses, expires_hours } = body as {
+        role_name: string;
+        email?: string;
+        max_uses?: number;
+        expires_hours?: number;
+      };
+      const invite = {
+        id: nextInviteId++,
+        workspace_id: 1,
+        email: email || null,
+        invite_code: `demo-invite-${Date.now().toString(36)}`,
+        role_name,
+        created_by: 1,
+        expires_at: expires_hours
+          ? new Date(Date.now() + expires_hours * 3600000).toISOString()
+          : null,
+        used_at: null,
+        used_by: null,
+        max_uses: max_uses || null,
+        used_count: 0,
+        is_valid: true,
+      };
+      demoInvites.push(invite);
+      return invite;
+    },
+  },
+  // GET /admin/workspace/invites
+  {
+    method: "GET",
+    pattern: /^\/admin\/workspace\/invites$/,
+    handler: () => [...demoInvites],
+  },
+  // DELETE /admin/workspace/invites/:id
+  {
+    method: "DELETE",
+    pattern: /^\/admin\/workspace\/invites\/(\d+)$/,
+    handler: ({ matches }) => {
+      const id = parseInt(matches[1]);
+      const idx = demoInvites.findIndex((i) => i.id === id);
+      if (idx === -1) throw new Error("Invite not found");
+      demoInvites.splice(idx, 1);
+      return { message: "Invite deleted" };
+    },
+  },
+  // GET /admin/workspace/invites/:code/info (public)
+  {
+    method: "GET",
+    pattern: /^\/admin\/workspace\/invites\/([^/]+)\/info$/,
+    handler: ({ matches }) => {
+      const code = matches[1];
+      const invite = demoInvites.find((i) => i.invite_code === code);
+      if (!invite || !invite.is_valid) throw new Error("Invite not found or expired");
+      return {
+        workspace_name: "Default",
+        role_name: invite.role_name,
+        expires_at: invite.expires_at,
+      };
+    },
+  },
+  // POST /admin/workspace/invites/accept (public)
+  {
+    method: "POST",
+    pattern: /^\/admin\/workspace\/invites\/accept$/,
+    handler: ({ body }) => {
+      const { invite_code, username, display_name } = body as {
+        invite_code: string;
+        username: string;
+        password: string;
+        display_name?: string;
+      };
+      const invite = demoInvites.find((i) => i.invite_code === invite_code);
+      if (!invite || !invite.is_valid) throw new Error("Invite is invalid or expired");
+      invite.used_count++;
+      return {
+        access_token: "demo-token",
+        token_type: "bearer",
+        expires_in: 86400,
+        user: {
+          id: 100,
+          username,
+          display_name: display_name || username,
+          role: "user",
+        },
+      };
+    },
   },
 ];
