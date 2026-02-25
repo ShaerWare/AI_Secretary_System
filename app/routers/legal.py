@@ -1,7 +1,8 @@
 # app/routers/legal.py
 """Legal compliance router - privacy policy, terms, consents."""
 
-from typing import List
+import logging
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -11,6 +12,9 @@ from auth_manager import User, require_permission
 from db.database import AsyncSessionLocal
 from db.models import CONSENT_TYPES
 from db.repositories.consent import ConsentRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(tags=["legal"])
@@ -40,9 +44,16 @@ class ConsentBulkRequest(BaseModel):
 
 
 class DataDeletionRequest(BaseModel):
-    """Request for GDPR data deletion."""
+    """Request for GDPR data deletion.
 
-    user_id: str
+    Two modes:
+    - Admin user: set user_id (int) to delete by users.id
+    - External contact: set provider + provider_uid to delete by channel identity
+    """
+
+    user_id: Optional[int] = Field(None, description="Internal user ID (admin users)")
+    provider: Optional[str] = Field(None, description="Channel: telegram, whatsapp, widget")
+    provider_uid: Optional[str] = Field(None, description="External user ID in channel")
     confirm: bool = Field(..., description="Must be true to confirm deletion")
 
 
@@ -234,27 +245,92 @@ async def admin_gdpr_delete_data(
     request: DataDeletionRequest,
     user: User = Depends(require_permission("settings", "manage")),
 ):
-    """Delete all user data (GDPR right to erasure)."""
+    """Delete all user data (GDPR right to erasure).
+
+    Two modes:
+    - Admin user: {"user_id": 5, "confirm": true}
+    - External contact: {"provider": "telegram", "provider_uid": "123456", "confirm": true}
+
+    Cascade-deletes PII data, anonymizes audit/payment logs.
+    """
     if not request.confirm:
         raise HTTPException(
             status_code=400,
             detail="Must confirm deletion by setting confirm=true",
         )
 
-    # Delete consent records
-    async with AsyncSessionLocal() as session:
-        repo = ConsentRepository(session)
-        result = await repo.delete_user_data(request.user_id)
+    from app.services.gdpr_service import delete_admin_user_data, delete_contact_data
+    from db.integration import async_audit_logger
 
-    # TODO: Add deletion from other tables (chat_sessions, telegram_sessions, etc.)
-    # This would require calling other repositories
+    if request.user_id is not None:
+        # Admin user deletion
+        if request.user_id == user.id:
+            raise HTTPException(status_code=400, detail="Cannot delete own account")
 
-    return {
-        "status": "deleted",
-        "user_id": request.user_id,
-        "consents_deleted": result["deleted"],
-        "note": "Additional data may need manual cleanup from chat_sessions, telegram_sessions tables",
-    }
+        await async_audit_logger.log(
+            action="gdpr_delete",
+            resource="user",
+            resource_id=str(request.user_id),
+            user_id=user.username,
+            details=f"GDPR cascade delete for admin user {request.user_id}",
+        )
+
+        async with AsyncSessionLocal() as session:
+            report = await delete_admin_user_data(session, request.user_id)
+
+        logger.info(
+            "GDPR delete admin user %d by %s: %s",
+            request.user_id,
+            user.username,
+            report,
+        )
+        return {
+            "status": "deleted",
+            "mode": "admin_user",
+            "user_id": request.user_id,
+            "report": report,
+        }
+
+    elif request.provider and request.provider_uid:
+        # External contact deletion
+        valid_providers = ("telegram", "whatsapp", "widget")
+        if request.provider not in valid_providers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid provider. Must be one of: {valid_providers}",
+            )
+
+        await async_audit_logger.log(
+            action="gdpr_delete",
+            resource="contact",
+            resource_id=f"{request.provider}:{request.provider_uid}",
+            user_id=user.username,
+            details=f"GDPR cascade delete for {request.provider} contact {request.provider_uid}",
+        )
+
+        async with AsyncSessionLocal() as session:
+            report = await delete_contact_data(session, request.provider, request.provider_uid)
+
+        logger.info(
+            "GDPR delete contact %s:%s by %s: %s",
+            request.provider,
+            request.provider_uid,
+            user.username,
+            report,
+        )
+        return {
+            "status": "deleted",
+            "mode": "contact",
+            "provider": request.provider,
+            "provider_uid": request.provider_uid,
+            "report": report,
+        }
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either user_id (admin user) or provider+provider_uid (external contact)",
+        )
 
 
 # =============================================================================
