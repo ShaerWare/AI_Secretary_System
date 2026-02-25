@@ -49,14 +49,14 @@ Legacy роли (`users.role`) сохраняются для обратной с
 | `sales` | Воронка продаж |
 | `kanban` | Kanban-доска |
 | `gsm` | GSM телефония (только full mode) |
-| `system` | Системные настройки (только full mode) |
+| `system` | Системные настройки, логи, finetune |
 | `audit` | Журнал аудита |
 | `usage` | Статистика использования |
 | `settings` | Настройки пользователя |
 | `users` | Управление пользователями |
 | `claude_code` | Claude Code терминал |
 
-В облачном режиме (`DEPLOYMENT_MODE=cloud`) модули `speech`, `gsm`, `system` автоматически фильтруются из ответа `GET /admin/auth/permissions`.
+В облачном режиме (`DEPLOYMENT_MODE=cloud`) модули `speech` и `gsm` автоматически исключаются из permissions (фильтрация в `get_user_permissions()`, PR #428). Модуль `system` **остаётся** доступным — он покрывает логи и finetune, которые работают в cloud mode.
 
 ## Системные роли
 
@@ -425,6 +425,24 @@ Kanban-задачи ранее использовали `created_by` (строк
 - Событие логируется в `audit_log` **до** удаления данных
 
 **Сервис:** `app/services/gdpr_service.py` — две функции `delete_admin_user_data()` и `delete_contact_data()`, возвращают отчёт `{table: count}`.
+
+### Deployment mode — формализация в модели доступа (PR #428, Issue #416)
+
+`DEPLOYMENT_MODE` (full/cloud/local) ограничивает доступ к hardware-модулям ортогонально RBAC-ролям. Три уровня защиты:
+
+| Слой | Механизм | Где |
+|------|----------|-----|
+| 1. Роутеры | Hardware-роутеры не регистрируются в cloud mode → FastAPI 404 | `orchestrator.py` |
+| 2. Permissions | `speech`/`gsm` исключаются из `get_user_permissions()` → `require_permission()` вернёт 403 | `auth_manager.py` |
+| 3. Frontend | `meta.localOnly` + `isCloudMode` guard скрывают UI | `router.ts`, `auth.ts` |
+
+**До PR #428:** фильтрация была только в HTTP-ответе `GET /admin/auth/permissions` (post-hoc `pop()`). `require_permission()` использовал полные permissions из БД — если бы hardware-роутер случайно зарегистрировался, auth его пропустил бы.
+
+**После PR #428:** фильтрация перенесена в `get_user_permissions()` — единый источник для всех потребителей (HTTP endpoint, `require_permission()`, `workspace_context()`).
+
+**Модуль `system` оставлен в cloud mode** — покрывает `/admin/logs/stream/{logfile}` и `/admin/finetune/train/log`, которые работают без hardware.
+
+**Баг-фикс:** `PermissionsCache.get()` возвращал ссылку на кешированный dict. `pop()` мутировал кеш — после первого запроса в cloud mode модули навсегда исчезали из кеша для всех последующих запросов. Теперь возвращается копия.
 
 ### Security-фиксы аудита — CSP (PR #422, Issue #413)
 
