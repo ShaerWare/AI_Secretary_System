@@ -370,6 +370,27 @@ Frontend:
 | H5 | SSE-эндпоинты без JWT (backend) | Дубликат `GET /admin/monitor/gpu/stream` из `orchestrator.py` удалён (auth-версия в `monitor.py`). Добавлен `require_permission("system", "view")` на `GET /admin/logs/stream/{logfile}` и `GET /admin/finetune/train/log` |
 | H5 | SSE-эндпоинты без JWT (frontend) | `createSSE()`, `useSSE`, `useRealtimeMetrics` переписаны с `EventSource` на `fetch + ReadableStream` — отправляют `Authorization: Bearer` заголовок. Polling fallback тоже с JWT. Auto-reconnect через 3 сек |
 
+### Kanban owner_id — RBAC ownership (PR #424, Issue #414)
+
+Kanban-задачи ранее использовали `created_by` (строка username) для проверки владения. Это ненадёжно: переименование пользователя ломает доступ, а строковое сравнение не использует FK-связи.
+
+**Фикс:** добавлена колонка `owner_id` (INT FK → `users.id`) рядом с существующей `created_by`:
+
+| Колонка | Тип | Назначение |
+|---------|-----|-----------|
+| `owner_id` | INTEGER FK → users.id | RBAC: контроль доступа, фильтрация видимости |
+| `created_by` | VARCHAR | Аудит: кто создал (отображение, лог) |
+
+**Изменения в логике:**
+- Фильтр видимости: `KanbanTask.owner_id == user.id` (вместо `created_by == username`)
+- Проверка владения при редактировании: `existing["owner_id"] != user.id` (вместо строкового сравнения)
+- Проверка приватности при создании зависимостей: `target["owner_id"] != user.id`
+- Создание задачи: `owner_id=user.id` передаётся вместе с `created_by=user.username`
+
+**GitHub-синхронизированные задачи:** `owner_id=NULL` (нет локального пользователя), `created_by` — GitHub username. Эти задачи видны всем (т.к. `is_private=False`).
+
+**Миграция 0013:** Добавляет колонку + FK + индекс, бэкфиллит `owner_id` из `created_by → users.username`.
+
 ### Security-фиксы аудита — CSP (PR #422, Issue #413)
 
 JWT хранится в `localStorage` — доступен любому JS на странице. CSP-заголовок блокирует инъекцию скриптов через XSS, даже если DOMPurify обойдут.
