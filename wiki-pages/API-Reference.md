@@ -417,6 +417,7 @@ Content-Type: application/json
     "is_private": true,
     "assignee": "admin",
     "created_by": "admin",
+    "owner_id": 1,
     "start_date": null,
     "due_date": "2026-03-01",
     "position": 0,
@@ -446,6 +447,16 @@ Content-Type: application/json
 ```
 
 При смене статуса с `draft` на любой другой — задача автоматически становится публичной (`is_private: false`). Для GitHub-привязанных задач статус также обновляется на GitHub (лейблы + open/close).
+
+### Владение задачами (owner_id)
+
+С PR #424 задачи используют `owner_id` (INT FK → `users.id`) для контроля доступа:
+
+- **Локальные задачи:** `owner_id` = ID создателя, `created_by` = username (аудит)
+- **GitHub-задачи:** `owner_id = null`, `created_by` = GitHub username
+- **Видимость:** non-admin видит задачи с `owner_id == user.id` + публичные не-draft
+- **Редактирование:** non-admin может редактировать только задачи с `owner_id == user.id`
+- **Зависимости:** нельзя зависеть от приватной задачи другого пользователя (проверка по `owner_id`)
 
 ### Добавить зависимость
 
