@@ -120,9 +120,13 @@ class PresetRepository(BaseRepository[TTSPreset]):
         self,
         name: str,
         params: dict,
+        workspace_id: Optional[int] = None,
     ) -> Optional[dict]:
-        """Update existing preset parameters."""
-        result = await self.session.execute(select(TTSPreset).where(TTSPreset.name == name))
+        """Update existing preset parameters, with optional workspace check."""
+        query = select(TTSPreset).where(TTSPreset.name == name)
+        if workspace_id is not None and hasattr(TTSPreset, "workspace_id"):
+            query = query.where(TTSPreset.workspace_id == workspace_id)
+        result = await self.session.execute(query)
         preset = result.scalar_one_or_none()
 
         if not preset:

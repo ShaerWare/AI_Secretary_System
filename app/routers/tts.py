@@ -371,7 +371,8 @@ async def admin_update_custom_preset(
     user: User = Depends(require_permission("speech", "edit")),
 ):
     """Обновить пользовательский пресет TTS"""
-    result = await async_preset_manager.update(name, request.params)
+    _owner_id, ws_id = workspace_context(user, "speech")
+    result = await async_preset_manager.update(name, request.params, workspace_id=ws_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Preset not found: {name}")
 
