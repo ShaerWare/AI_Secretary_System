@@ -168,6 +168,18 @@ def _get_wiki_rag():
     return container.wiki_rag_service
 
 
+async def _get_collection_dir(collection_id: int | None) -> Path:
+    """Get the base directory for a collection's files.
+
+    Returns the collection's base_dir if set, otherwise WIKI_DIR.
+    """
+    if collection_id is not None:
+        col = await async_knowledge_collection_manager.get_by_id(collection_id)
+        if col and col.get("base_dir"):
+            return Path(col["base_dir"])
+    return WIKI_DIR
+
+
 # ---- Collection Endpoints ----
 
 
@@ -315,8 +327,9 @@ async def reload_collection_index(
         raise HTTPException(status_code=404, detail="Коллекция не найдена")
 
     filenames = await async_knowledge_collection_manager.get_document_filenames(collection_id)
+    collection_dir = await _get_collection_dir(collection_id)
     if filenames:
-        idx = wiki_rag.reload_collection(collection_id, filenames, WIKI_DIR)
+        idx = wiki_rag.reload_collection(collection_id, filenames, collection_dir)
         result = {
             "sections_indexed": idx.total_docs,
             "files_indexed": idx.files_indexed,
@@ -464,9 +477,10 @@ async def upload_document(
     content_bytes = await file.read()
     content = content_bytes.decode("utf-8")
 
-    # Write to wiki-pages/
-    WIKI_DIR.mkdir(exist_ok=True)
-    target = WIKI_DIR / filename
+    # Write to collection directory
+    upload_dir = await _get_collection_dir(collection_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    target = upload_dir / filename
     target.write_text(content, encoding="utf-8")
 
     # Count sections
@@ -496,11 +510,12 @@ async def upload_document(
     if wiki_rag:
         wiki_rag.reload(WIKI_DIR)
         if collection_id:
+            col_dir = await _get_collection_dir(collection_id)
             filenames = await async_knowledge_collection_manager.get_document_filenames(
                 collection_id
             )
             if filenames:
-                wiki_rag.reload_collection(collection_id, filenames, WIKI_DIR)
+                wiki_rag.reload_collection(collection_id, filenames, col_dir)
 
     await async_audit_logger.log(
         action="upload",
@@ -523,7 +538,8 @@ async def get_document(doc_id: int, user: User = Depends(require_permission("wik
 
     # Read content preview from disk
     content_preview = ""
-    file_path = WIKI_DIR / doc["filename"]
+    doc_dir = await _get_collection_dir(doc.get("collection_id"))
+    file_path = doc_dir / doc["filename"]
     if file_path.exists():
         try:
             full_content = file_path.read_text(encoding="utf-8")
@@ -548,7 +564,8 @@ async def update_document(
 
     # Update file content if provided
     if request.content is not None:
-        file_path = WIKI_DIR / doc["filename"]
+        doc_dir = await _get_collection_dir(doc.get("collection_id"))
+        file_path = doc_dir / doc["filename"]
         file_path.write_text(request.content, encoding="utf-8")
 
         sections = len(re.findall(r"^#{2,3}\s+.+$", request.content, re.MULTILINE))
@@ -566,9 +583,10 @@ async def update_document(
             # Reload collection index if document belongs to one
             cid = doc.get("collection_id")
             if cid:
+                col_dir = await _get_collection_dir(cid)
                 filenames = await async_knowledge_collection_manager.get_document_filenames(cid)
                 if filenames:
-                    wiki_rag.reload_collection(cid, filenames, WIKI_DIR)
+                    wiki_rag.reload_collection(cid, filenames, col_dir)
     elif request.title is not None:
         await async_knowledge_doc_manager.update(doc_id, title=request.title)
 
@@ -593,9 +611,10 @@ async def delete_document(doc_id: int, user: User = Depends(require_permission("
         raise HTTPException(status_code=404, detail="Документ не найден")
 
     collection_id = doc.get("collection_id")
+    doc_dir = await _get_collection_dir(collection_id)
 
     # Delete file from disk
-    file_path = WIKI_DIR / doc["filename"]
+    file_path = doc_dir / doc["filename"]
     if file_path.exists():
         file_path.unlink()
 
@@ -611,7 +630,7 @@ async def delete_document(doc_id: int, user: User = Depends(require_permission("
                 collection_id
             )
             if filenames:
-                wiki_rag.reload_collection(collection_id, filenames, WIKI_DIR)
+                wiki_rag.reload_collection(collection_id, filenames, doc_dir)
             else:
                 wiki_rag.unload_collection(collection_id)
 
