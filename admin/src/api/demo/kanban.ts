@@ -1,169 +1,175 @@
-import type { DemoRoute } from './types'
+import type { DemoRoute } from "./types";
 
 interface MockChecklistItem {
-  id: number
-  task_id: number
-  text: string
-  is_done: boolean
-  position: number
+  id: number;
+  task_id: number;
+  text: string;
+  is_done: boolean;
+  position: number;
 }
 
 interface MockTask {
-  id: number
-  title: string
-  description: string | null
-  status: string
-  is_private: boolean
-  assignee: string | null
-  created_by: string
-  start_date: string | null
-  due_date: string | null
-  position: number
-  tags: string[]
-  project_id: number | null
-  github_issue_number: number | null
-  checklist: MockChecklistItem[]
-  blockers: number[]
-  dependents: number[]
-  created: string
-  updated: string
+  id: number;
+  title: string;
+  description: string | null;
+  status: string;
+  is_private: boolean;
+  assignee: string | null;
+  created_by: string;
+  owner_id: number | null;
+  start_date: string | null;
+  due_date: string | null;
+  position: number;
+  tags: string[];
+  project_id: number | null;
+  github_issue_number: number | null;
+  checklist: MockChecklistItem[];
+  blockers: number[];
+  dependents: number[];
+  created: string;
+  updated: string;
 }
 
 interface MockProject {
-  id: number
-  name: string
-  github_owner: string
-  github_repo: string
-  has_token: boolean
-  webhook_secret_set: boolean
-  label_mapping: Record<string, string>
-  sync_enabled: boolean
-  last_synced: string | null
-  created: string | null
-  updated: string | null
+  id: number;
+  name: string;
+  github_owner: string;
+  github_repo: string;
+  has_token: boolean;
+  webhook_secret_set: boolean;
+  label_mapping: Record<string, string>;
+  sync_enabled: boolean;
+  last_synced: string | null;
+  created: string | null;
+  updated: string | null;
 }
 
-let nextProjectId = 2
+let nextProjectId = 2;
 const projects: MockProject[] = [
   {
     id: 1,
-    name: 'AI Secretary System',
-    github_owner: 'ShaerWare',
-    github_repo: 'AI_Secretary_System',
+    name: "AI Secretary System",
+    github_owner: "ShaerWare",
+    github_repo: "AI_Secretary_System",
     has_token: true,
     webhook_secret_set: true,
     label_mapping: {
-      todo: 'status:todo',
-      in_progress: 'status:in_progress',
-      review: 'status:review',
+      todo: "status:todo",
+      in_progress: "status:in_progress",
+      review: "status:review",
     },
     sync_enabled: true,
-    last_synced: '2026-02-22T10:00:00',
-    created: '2026-02-20T08:00:00',
-    updated: '2026-02-22T10:00:00',
+    last_synced: "2026-02-22T10:00:00",
+    created: "2026-02-20T08:00:00",
+    updated: "2026-02-22T10:00:00",
   },
-]
+];
 
-let nextId = 10
+let nextId = 10;
 const tasks: MockTask[] = [
   {
     id: 1,
-    title: 'Настроить интеграцию с Telegram',
-    description: 'Подключить бота к Telegram API и настроить вебхуки',
-    status: 'done',
+    title: "Настроить интеграцию с Telegram",
+    description: "Подключить бота к Telegram API и настроить вебхуки",
+    status: "done",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-01-10',
-    due_date: '2026-01-20',
+    assignee: "admin",
+    created_by: "admin",
+    owner_id: 1,
+    start_date: "2026-01-10",
+    due_date: "2026-01-20",
     position: 0,
-    tags: ['интеграция', 'telegram'],
+    tags: ["интеграция", "telegram"],
     project_id: null,
     github_issue_number: null,
     checklist: [
-      { id: 1, task_id: 1, text: 'Получить токен бота', is_done: true, position: 0 },
-      { id: 2, task_id: 1, text: 'Настроить вебхук', is_done: true, position: 1 },
+      { id: 1, task_id: 1, text: "Получить токен бота", is_done: true, position: 0 },
+      { id: 2, task_id: 1, text: "Настроить вебхук", is_done: true, position: 1 },
     ],
     blockers: [],
     dependents: [2],
-    created: '2026-01-10T10:00:00',
-    updated: '2026-01-20T15:30:00',
+    created: "2026-01-10T10:00:00",
+    updated: "2026-01-20T15:30:00",
   },
   {
     id: 2,
-    title: 'Тестирование Telegram-бота',
-    description: 'Провести полное тестирование бота в Telegram',
-    status: 'in_progress',
+    title: "Тестирование Telegram-бота",
+    description: "Провести полное тестирование бота в Telegram",
+    status: "in_progress",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-01-21',
-    due_date: '2026-02-01',
+    assignee: "admin",
+    created_by: "admin",
+    owner_id: 1,
+    start_date: "2026-01-21",
+    due_date: "2026-02-01",
     position: 0,
-    tags: ['тестирование'],
+    tags: ["тестирование"],
     project_id: null,
     github_issue_number: null,
     checklist: [
-      { id: 3, task_id: 2, text: 'Тест отправки сообщений', is_done: true, position: 0 },
-      { id: 4, task_id: 2, text: 'Тест голосовых сообщений', is_done: false, position: 1 },
+      { id: 3, task_id: 2, text: "Тест отправки сообщений", is_done: true, position: 0 },
+      { id: 4, task_id: 2, text: "Тест голосовых сообщений", is_done: false, position: 1 },
     ],
     blockers: [1],
     dependents: [],
-    created: '2026-01-21T09:00:00',
-    updated: '2026-01-25T12:00:00',
+    created: "2026-01-21T09:00:00",
+    updated: "2026-01-25T12:00:00",
   },
   {
     id: 3,
-    title: 'Добавить FAQ раздел',
-    description: 'Создать базу часто задаваемых вопросов для бота',
-    status: 'todo',
+    title: "Добавить FAQ раздел",
+    description: "Создать базу часто задаваемых вопросов для бота",
+    status: "todo",
     is_private: false,
     assignee: null,
-    created_by: 'admin',
+    created_by: "admin",
+    owner_id: 1,
     start_date: null,
-    due_date: '2026-02-15',
+    due_date: "2026-02-15",
     position: 0,
-    tags: ['контент', 'faq'],
+    tags: ["контент", "faq"],
     project_id: null,
     github_issue_number: null,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-01-15T14:00:00',
-    updated: '2026-01-15T14:00:00',
+    created: "2026-01-15T14:00:00",
+    updated: "2026-01-15T14:00:00",
   },
   {
     id: 4,
-    title: 'Настроить виджет на сайте',
-    description: 'Установить чат-виджет на основной сайт компании',
-    status: 'review',
+    title: "Настроить виджет на сайте",
+    description: "Установить чат-виджет на основной сайт компании",
+    status: "review",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-02-01',
-    due_date: '2026-02-10',
+    assignee: "admin",
+    created_by: "admin",
+    owner_id: 1,
+    start_date: "2026-02-01",
+    due_date: "2026-02-10",
     position: 0,
-    tags: ['виджет', 'сайт'],
+    tags: ["виджет", "сайт"],
     project_id: null,
     github_issue_number: null,
     checklist: [
-      { id: 5, task_id: 4, text: 'Сгенерировать код виджета', is_done: true, position: 0 },
-      { id: 6, task_id: 4, text: 'Встроить на сайт', is_done: true, position: 1 },
-      { id: 7, task_id: 4, text: 'Проверить на мобильных', is_done: false, position: 2 },
+      { id: 5, task_id: 4, text: "Сгенерировать код виджета", is_done: true, position: 0 },
+      { id: 6, task_id: 4, text: "Встроить на сайт", is_done: true, position: 1 },
+      { id: 7, task_id: 4, text: "Проверить на мобильных", is_done: false, position: 2 },
     ],
     blockers: [],
     dependents: [],
-    created: '2026-02-01T08:00:00',
-    updated: '2026-02-08T16:00:00',
+    created: "2026-02-01T08:00:00",
+    updated: "2026-02-08T16:00:00",
   },
   {
     id: 5,
-    title: 'Обновить модель LLM',
+    title: "Обновить модель LLM",
     description: null,
-    status: 'draft',
+    status: "draft",
     is_private: true,
     assignee: null,
-    created_by: 'admin',
+    created_by: "admin",
+    owner_id: 1,
     start_date: null,
     due_date: null,
     position: 0,
@@ -173,205 +179,210 @@ const tasks: MockTask[] = [
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-02-10T11:00:00',
-    updated: '2026-02-10T11:00:00',
+    created: "2026-02-10T11:00:00",
+    updated: "2026-02-10T11:00:00",
   },
   {
     id: 6,
-    title: 'Подготовить документацию',
-    description: 'Написать пользовательскую документацию для админ-панели',
-    status: 'todo',
+    title: "Подготовить документацию",
+    description: "Написать пользовательскую документацию для админ-панели",
+    status: "todo",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'admin',
-    start_date: '2026-02-15',
-    due_date: '2026-03-01',
+    assignee: "admin",
+    created_by: "admin",
+    owner_id: 1,
+    start_date: "2026-02-15",
+    due_date: "2026-03-01",
     position: 1,
-    tags: ['документация'],
+    tags: ["документация"],
     project_id: null,
     github_issue_number: null,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-02-12T10:00:00',
-    updated: '2026-02-12T10:00:00',
+    created: "2026-02-12T10:00:00",
+    updated: "2026-02-12T10:00:00",
   },
   // GitHub-linked tasks
   {
     id: 7,
-    title: 'Implement multi-project kanban',
-    description: 'Add KanbanProject model and bidirectional GitHub sync',
-    status: 'in_progress',
+    title: "Implement multi-project kanban",
+    description: "Add KanbanProject model and bidirectional GitHub sync",
+    status: "in_progress",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'github',
-    start_date: '2026-02-20',
-    due_date: '2026-02-25',
+    assignee: "admin",
+    created_by: "github",
+    owner_id: null,
+    start_date: "2026-02-20",
+    due_date: "2026-02-25",
     position: 0,
-    tags: ['enhancement'],
+    tags: ["enhancement"],
     project_id: 1,
     github_issue_number: 42,
     checklist: [
-      { id: 8, task_id: 7, text: 'DB models', is_done: true, position: 0 },
-      { id: 9, task_id: 7, text: 'API endpoints', is_done: true, position: 1 },
-      { id: 10, task_id: 7, text: 'Frontend UI', is_done: false, position: 2 },
+      { id: 8, task_id: 7, text: "DB models", is_done: true, position: 0 },
+      { id: 9, task_id: 7, text: "API endpoints", is_done: true, position: 1 },
+      { id: 10, task_id: 7, text: "Frontend UI", is_done: false, position: 2 },
     ],
     blockers: [],
     dependents: [],
-    created: '2026-02-20T09:00:00',
-    updated: '2026-02-22T14:00:00',
+    created: "2026-02-20T09:00:00",
+    updated: "2026-02-22T14:00:00",
   },
   {
     id: 8,
-    title: 'Fix widget loading on mobile',
-    description: 'Widget does not load properly on iOS Safari',
-    status: 'todo',
+    title: "Fix widget loading on mobile",
+    description: "Widget does not load properly on iOS Safari",
+    status: "todo",
     is_private: false,
     assignee: null,
-    created_by: 'github',
+    created_by: "github",
+    owner_id: null,
     start_date: null,
     due_date: null,
     position: 1,
-    tags: ['bug'],
+    tags: ["bug"],
     project_id: 1,
     github_issue_number: 38,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-02-18T10:00:00',
-    updated: '2026-02-18T10:00:00',
+    created: "2026-02-18T10:00:00",
+    updated: "2026-02-18T10:00:00",
   },
   {
     id: 9,
-    title: 'Add WhatsApp channel support',
-    description: 'Integrate WhatsApp Business API',
-    status: 'done',
+    title: "Add WhatsApp channel support",
+    description: "Integrate WhatsApp Business API",
+    status: "done",
     is_private: false,
-    assignee: 'admin',
-    created_by: 'github',
-    start_date: '2026-02-10',
-    due_date: '2026-02-20',
+    assignee: "admin",
+    created_by: "github",
+    owner_id: null,
+    start_date: "2026-02-10",
+    due_date: "2026-02-20",
     position: 0,
-    tags: ['feature'],
+    tags: ["feature"],
     project_id: 1,
     github_issue_number: 35,
     checklist: [],
     blockers: [],
     dependents: [],
-    created: '2026-02-10T08:00:00',
-    updated: '2026-02-20T16:00:00',
+    created: "2026-02-10T08:00:00",
+    updated: "2026-02-20T16:00:00",
   },
-]
+];
 
-let nextChecklistId = 12
+let nextChecklistId = 12;
 
 export const kanbanRoutes: DemoRoute[] = [
   // GET /admin/kanban/projects
   {
-    method: 'GET',
+    method: "GET",
     pattern: /^\/admin\/kanban\/projects$/,
     handler: () => ({ projects }),
   },
   // POST /admin/kanban/projects
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/projects$/,
     handler: ({ body }) => {
-      const b = body as Record<string, unknown>
+      const b = body as Record<string, unknown>;
       const project: MockProject = {
         id: nextProjectId++,
-        name: (b.name as string) || 'New Project',
-        github_owner: (b.github_owner as string) || '',
-        github_repo: (b.github_repo as string) || '',
+        name: (b.name as string) || "New Project",
+        github_owner: (b.github_owner as string) || "",
+        github_repo: (b.github_repo as string) || "",
         has_token: !!(b.github_token as string),
         webhook_secret_set: !!(b.webhook_secret as string),
         label_mapping: (b.label_mapping as Record<string, string>) || {
-          todo: 'status:todo',
-          in_progress: 'status:in_progress',
-          review: 'status:review',
+          todo: "status:todo",
+          in_progress: "status:in_progress",
+          review: "status:review",
         },
         sync_enabled: (b.sync_enabled as boolean) ?? true,
         last_synced: null,
         created: new Date().toISOString(),
         updated: new Date().toISOString(),
-      }
-      projects.push(project)
-      return { project }
+      };
+      projects.push(project);
+      return { project };
     },
   },
   // PATCH /admin/kanban/projects/:id
   {
-    method: 'PATCH',
+    method: "PATCH",
     pattern: /^\/admin\/kanban\/projects\/(\d+)$/,
     handler: ({ matches, body }) => {
-      const id = Number(matches[1])
-      const project = projects.find((p) => p.id === id)
-      if (!project) throw new Error('Project not found')
-      const b = body as Record<string, unknown>
-      if (b.name !== undefined) project.name = b.name as string
-      if (b.github_owner !== undefined) project.github_owner = b.github_owner as string
-      if (b.github_repo !== undefined) project.github_repo = b.github_repo as string
-      if (b.github_token !== undefined) project.has_token = !!(b.github_token as string)
+      const id = Number(matches[1]);
+      const project = projects.find((p) => p.id === id);
+      if (!project) throw new Error("Project not found");
+      const b = body as Record<string, unknown>;
+      if (b.name !== undefined) project.name = b.name as string;
+      if (b.github_owner !== undefined) project.github_owner = b.github_owner as string;
+      if (b.github_repo !== undefined) project.github_repo = b.github_repo as string;
+      if (b.github_token !== undefined) project.has_token = !!(b.github_token as string);
       if (b.webhook_secret !== undefined)
-        project.webhook_secret_set = !!(b.webhook_secret as string)
+        project.webhook_secret_set = !!(b.webhook_secret as string);
       if (b.label_mapping !== undefined)
-        project.label_mapping = b.label_mapping as Record<string, string>
-      if (b.sync_enabled !== undefined) project.sync_enabled = b.sync_enabled as boolean
-      project.updated = new Date().toISOString()
-      return { project }
+        project.label_mapping = b.label_mapping as Record<string, string>;
+      if (b.sync_enabled !== undefined) project.sync_enabled = b.sync_enabled as boolean;
+      project.updated = new Date().toISOString();
+      return { project };
     },
   },
   // DELETE /admin/kanban/projects/:id
   {
-    method: 'DELETE',
+    method: "DELETE",
     pattern: /^\/admin\/kanban\/projects\/(\d+)$/,
     handler: ({ matches }) => {
-      const id = Number(matches[1])
-      const idx = projects.findIndex((p) => p.id === id)
-      if (idx === -1) throw new Error('Project not found')
-      projects.splice(idx, 1)
-      return { status: 'deleted' }
+      const id = Number(matches[1]);
+      const idx = projects.findIndex((p) => p.id === id);
+      if (idx === -1) throw new Error("Project not found");
+      projects.splice(idx, 1);
+      return { status: "deleted" };
     },
   },
   // POST /admin/kanban/projects/:id/sync
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/projects\/(\d+)\/sync$/,
     handler: ({ matches }) => {
-      const id = Number(matches[1])
-      const project = projects.find((p) => p.id === id)
-      if (!project) throw new Error('Project not found')
-      project.last_synced = new Date().toISOString()
-      return { created: 0, updated: 3, total: 3 }
+      const id = Number(matches[1]);
+      const project = projects.find((p) => p.id === id);
+      if (!project) throw new Error("Project not found");
+      project.last_synced = new Date().toISOString();
+      return { created: 0, updated: 3, total: 3 };
     },
   },
   // GET /admin/kanban/tasks
   {
-    method: 'GET',
+    method: "GET",
     pattern: /^\/admin\/kanban\/tasks$/,
     handler: ({ searchParams }) => {
-      const projectIdStr = searchParams.get('project_id')
+      const projectIdStr = searchParams.get("project_id");
       if (projectIdStr !== null) {
-        const projectId = Number(projectIdStr)
-        return { tasks: tasks.filter((t) => t.project_id === projectId) }
+        const projectId = Number(projectIdStr);
+        return { tasks: tasks.filter((t) => t.project_id === projectId) };
       }
-      return { tasks: tasks.filter((t) => t.project_id === null) }
+      return { tasks: tasks.filter((t) => t.project_id === null) };
     },
   },
   // POST /admin/kanban/tasks
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/tasks$/,
     handler: ({ body }) => {
-      const b = body as Record<string, unknown>
+      const b = body as Record<string, unknown>;
       const task: MockTask = {
         id: nextId++,
-        title: (b.title as string) || 'Новая задача',
+        title: (b.title as string) || "Новая задача",
         description: (b.description as string) || null,
-        status: 'draft',
+        status: "draft",
         is_private: true,
         assignee: (b.assignee as string) || null,
-        created_by: 'admin',
+        created_by: "admin",
+        owner_id: 1,
         start_date: (b.start_date as string) || null,
         due_date: (b.due_date as string) || null,
         position: tasks.length,
@@ -383,140 +394,140 @@ export const kanbanRoutes: DemoRoute[] = [
         dependents: [],
         created: new Date().toISOString(),
         updated: new Date().toISOString(),
-      }
-      tasks.push(task)
-      return { task }
+      };
+      tasks.push(task);
+      return { task };
     },
   },
   // PATCH /admin/kanban/tasks/:id
   {
-    method: 'PATCH',
+    method: "PATCH",
     pattern: /^\/admin\/kanban\/tasks\/(\d+)$/,
     handler: ({ matches, body }) => {
-      const id = Number(matches[1])
-      const task = tasks.find((t) => t.id === id)
-      if (!task) throw new Error('Task not found')
-      const b = body as Record<string, unknown>
-      if (b.title !== undefined) task.title = b.title as string
-      if (b.description !== undefined) task.description = b.description as string | null
+      const id = Number(matches[1]);
+      const task = tasks.find((t) => t.id === id);
+      if (!task) throw new Error("Task not found");
+      const b = body as Record<string, unknown>;
+      if (b.title !== undefined) task.title = b.title as string;
+      if (b.description !== undefined) task.description = b.description as string | null;
       if (b.status !== undefined) {
-        task.status = b.status as string
-        if (task.status !== 'draft') task.is_private = false
+        task.status = b.status as string;
+        if (task.status !== "draft") task.is_private = false;
       }
-      if (b.assignee !== undefined) task.assignee = b.assignee as string | null
-      if (b.start_date !== undefined) task.start_date = b.start_date as string | null
-      if (b.due_date !== undefined) task.due_date = b.due_date as string | null
-      if (b.tags !== undefined) task.tags = b.tags as string[]
-      if (b.is_private !== undefined) task.is_private = b.is_private as boolean
-      task.updated = new Date().toISOString()
-      return { task }
+      if (b.assignee !== undefined) task.assignee = b.assignee as string | null;
+      if (b.start_date !== undefined) task.start_date = b.start_date as string | null;
+      if (b.due_date !== undefined) task.due_date = b.due_date as string | null;
+      if (b.tags !== undefined) task.tags = b.tags as string[];
+      if (b.is_private !== undefined) task.is_private = b.is_private as boolean;
+      task.updated = new Date().toISOString();
+      return { task };
     },
   },
   // DELETE /admin/kanban/tasks/:id
   {
-    method: 'DELETE',
+    method: "DELETE",
     pattern: /^\/admin\/kanban\/tasks\/(\d+)$/,
     handler: ({ matches }) => {
-      const id = Number(matches[1])
-      const idx = tasks.findIndex((t) => t.id === id)
-      if (idx === -1) throw new Error('Task not found')
-      tasks.splice(idx, 1)
-      return { status: 'ok' }
+      const id = Number(matches[1]);
+      const idx = tasks.findIndex((t) => t.id === id);
+      if (idx === -1) throw new Error("Task not found");
+      tasks.splice(idx, 1);
+      return { status: "ok" };
     },
   },
   // POST /admin/kanban/reorder
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/reorder$/,
     handler: ({ body }) => {
-      const b = body as Record<string, unknown>
-      const task = tasks.find((t) => t.id === (b.task_id as number))
-      if (!task) throw new Error('Task not found')
-      task.status = b.new_status as string
-      task.position = b.new_position as number
-      if (task.status !== 'draft') task.is_private = false
-      task.updated = new Date().toISOString()
-      return { task }
+      const b = body as Record<string, unknown>;
+      const task = tasks.find((t) => t.id === (b.task_id as number));
+      if (!task) throw new Error("Task not found");
+      task.status = b.new_status as string;
+      task.position = b.new_position as number;
+      if (task.status !== "draft") task.is_private = false;
+      task.updated = new Date().toISOString();
+      return { task };
     },
   },
   // POST /admin/kanban/dependencies
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/dependencies$/,
     handler: ({ body }) => {
-      const b = body as Record<string, unknown>
-      const blocker = tasks.find((t) => t.id === (b.blocker_id as number))
-      const dependent = tasks.find((t) => t.id === (b.dependent_id as number))
-      if (!blocker || !dependent) throw new Error('Task not found')
-      if (!blocker.dependents.includes(dependent.id)) blocker.dependents.push(dependent.id)
-      if (!dependent.blockers.includes(blocker.id)) dependent.blockers.push(blocker.id)
-      return { status: 'ok' }
+      const b = body as Record<string, unknown>;
+      const blocker = tasks.find((t) => t.id === (b.blocker_id as number));
+      const dependent = tasks.find((t) => t.id === (b.dependent_id as number));
+      if (!blocker || !dependent) throw new Error("Task not found");
+      if (!blocker.dependents.includes(dependent.id)) blocker.dependents.push(dependent.id);
+      if (!dependent.blockers.includes(blocker.id)) dependent.blockers.push(blocker.id);
+      return { status: "ok" };
     },
   },
   // DELETE /admin/kanban/dependencies
   {
-    method: 'DELETE',
+    method: "DELETE",
     pattern: /^\/admin\/kanban\/dependencies$/,
     handler: ({ searchParams }) => {
-      const blockerId = Number(searchParams.get('blocker_id'))
-      const dependentId = Number(searchParams.get('dependent_id'))
-      const blocker = tasks.find((t) => t.id === blockerId)
-      const dependent = tasks.find((t) => t.id === dependentId)
-      if (blocker) blocker.dependents = blocker.dependents.filter((d) => d !== dependentId)
-      if (dependent) dependent.blockers = dependent.blockers.filter((b) => b !== blockerId)
-      return { status: 'ok' }
+      const blockerId = Number(searchParams.get("blocker_id"));
+      const dependentId = Number(searchParams.get("dependent_id"));
+      const blocker = tasks.find((t) => t.id === blockerId);
+      const dependent = tasks.find((t) => t.id === dependentId);
+      if (blocker) blocker.dependents = blocker.dependents.filter((d) => d !== dependentId);
+      if (dependent) dependent.blockers = dependent.blockers.filter((b) => b !== blockerId);
+      return { status: "ok" };
     },
   },
   // POST /admin/kanban/tasks/:id/checklist
   {
-    method: 'POST',
+    method: "POST",
     pattern: /^\/admin\/kanban\/tasks\/(\d+)\/checklist$/,
     handler: ({ matches, body }) => {
-      const taskId = Number(matches[1])
-      const task = tasks.find((t) => t.id === taskId)
-      if (!task) throw new Error('Task not found')
-      const b = body as Record<string, unknown>
+      const taskId = Number(matches[1]);
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) throw new Error("Task not found");
+      const b = body as Record<string, unknown>;
       const item = {
         id: nextChecklistId++,
         task_id: taskId,
-        text: (b.text as string) || '',
+        text: (b.text as string) || "",
         is_done: false,
         position: (b.position as number) || 0,
-      }
-      task.checklist.push(item)
-      return { item }
+      };
+      task.checklist.push(item);
+      return { item };
     },
   },
   // PATCH /admin/kanban/checklist/:id/toggle
   {
-    method: 'PATCH',
+    method: "PATCH",
     pattern: /^\/admin\/kanban\/checklist\/(\d+)\/toggle$/,
     handler: ({ matches }) => {
-      const itemId = Number(matches[1])
+      const itemId = Number(matches[1]);
       for (const task of tasks) {
-        const item = task.checklist.find((c) => c.id === itemId)
+        const item = task.checklist.find((c) => c.id === itemId);
         if (item) {
-          item.is_done = !item.is_done
-          return { item }
+          item.is_done = !item.is_done;
+          return { item };
         }
       }
-      throw new Error('Checklist item not found')
+      throw new Error("Checklist item not found");
     },
   },
   // DELETE /admin/kanban/checklist/:id
   {
-    method: 'DELETE',
+    method: "DELETE",
     pattern: /^\/admin\/kanban\/checklist\/(\d+)$/,
     handler: ({ matches }) => {
-      const itemId = Number(matches[1])
+      const itemId = Number(matches[1]);
       for (const task of tasks) {
-        const idx = task.checklist.findIndex((c) => c.id === itemId)
+        const idx = task.checklist.findIndex((c) => c.id === itemId);
         if (idx !== -1) {
-          task.checklist.splice(idx, 1)
-          return { status: 'ok' }
+          task.checklist.splice(idx, 1);
+          return { status: "ok" };
         }
       }
-      throw new Error('Checklist item not found')
+      throw new Error("Checklist item not found");
     },
   },
-]
+];
