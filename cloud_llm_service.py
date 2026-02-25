@@ -233,7 +233,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         )
 
     # HTTP status codes that trigger model fallback
-    _RETRIABLE_STATUSES = {404, 429, 500, 502, 503}
+    # 402 = Payment Required (OpenRouter: model too expensive for account tier)
+    _RETRIABLE_STATUSES = {402, 404, 429, 500, 502, 503}
 
     @staticmethod
     def _ensure_no_proxy_for_localhost():
@@ -331,6 +332,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     continue
                 error_messages = {
                     401: "Invalid API key",
+                    402: "Insufficient credits - top up account or use free models",
                     403: "Access denied - check API key permissions",
                     404: f"Model '{model}' not found - check model name",
                     429: "Rate limit exceeded - wait or upgrade plan",
