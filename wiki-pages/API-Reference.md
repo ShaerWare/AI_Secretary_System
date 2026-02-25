@@ -498,6 +498,60 @@ Content-Type: application/json
 | GET | `/admin/legal/stats` | `settings:manage` | Статистика согласий |
 | POST | `/admin/legal/gdpr/delete` | `settings:manage` | Удаление данных пользователя (GDPR) |
 
+#### GDPR удаление данных — `POST /admin/legal/gdpr/delete`
+
+Полный каскад удаления/анонимизации данных пользователя. Два режима:
+
+**Режим 1 — Admin user** (по `user_id`):
+```json
+POST /admin/legal/gdpr/delete
+Authorization: Bearer <token>
+
+{
+  "user_id": 42,
+  "confirm": true
+}
+```
+
+**Режим 2 — External contact** (по `provider` + `provider_uid`):
+```json
+POST /admin/legal/gdpr/delete
+Authorization: Bearer <token>
+
+{
+  "provider": "telegram",
+  "provider_uid": "123456789",
+  "confirm": true
+}
+```
+
+**Ответ:**
+```json
+{
+  "status": "deleted",
+  "report": {
+    "user_sessions": 3,
+    "chat_sessions": 12,
+    "claude_code_sessions": 1,
+    "user_consents": 2,
+    "bot_instances_nullified": 1,
+    "widget_instances_nullified": 2,
+    "audit_log_anonymized": 45,
+    "usage_log_anonymized": 128
+  }
+}
+```
+
+**Валидация:**
+- `confirm: true` обязателен
+- Нельзя удалить данные текущего пользователя (403)
+- Указать `user_id` **или** `provider`+`provider_uid`, не оба (400)
+- `provider` допустимые значения: `telegram`, `whatsapp`, `widget`
+
+**Действия по режимам:**
+- Admin: DELETE сессии/чаты, SET NULL ownership ресурсов, ANONYMIZE логи
+- Contact: DELETE профили/подписки/события/сессии, ANONYMIZE платежи/логи
+
 ## URL паттерны
 
 ### CRUD ресурсов

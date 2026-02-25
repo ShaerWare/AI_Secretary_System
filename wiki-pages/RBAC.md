@@ -391,6 +391,41 @@ Kanban-задачи ранее использовали `created_by` (строк
 
 **Миграция 0013:** Добавляет колонку + FK + индекс, бэкфиллит `owner_id` из `created_by → users.username`.
 
+### GDPR cascade delete (PR #426, Issue #415)
+
+Эндпоинт `POST /admin/legal/gdpr/delete` ранее удалял только `user_consents`. Теперь выполняет полный каскад удаления/анонимизации данных пользователя.
+
+**Два режима удаления:**
+
+| Режим | Параметры | Кто удаляется |
+|-------|-----------|--------------|
+| Admin user | `user_id: int` | Администраторы, операторы (users.id) |
+| External contact | `provider + provider_uid` | Telegram/WhatsApp/Widget контакты |
+
+**Admin user — действия:**
+
+| Действие | Таблицы |
+|----------|---------|
+| DELETE | `user_sessions`, `chat_sessions` (messages cascade FK), `claude_code_sessions`, `user_consents` |
+| SET NULL owner_id | `bot_instances`, `widget_instances`, `whatsapp_instances`, `cloud_llm_providers`, `tts_presets`, `knowledge_documents`, `kanban_tasks`, `workspace_invites` |
+| ANONYMIZE | `audit_log` (user_id→"gdpr-deleted", user_ip→"0.0.0.0"), `usage_log` (source_id→"gdpr-deleted") |
+
+**External contact — действия:**
+
+| Действие | Таблицы |
+|----------|---------|
+| DELETE | `bot_user_profiles`, `bot_subscribers`, `bot_discovery_responses`, `bot_followup_queue`, `bot_events`, `telegram_sessions`, `user_consents`, `chat_sessions`, `user_sessions`, `user_identities`, `users` (role=contact) |
+| ANONYMIZE | `payment_log` (username→"gdpr-deleted"), `audit_log` (user_id→"gdpr-deleted", user_ip→"0.0.0.0") |
+
+**Ключевые решения:**
+- `audit_log` и `payment_log` **анонимизируются**, не удаляются — требование бухгалтерского и аудит-учёта
+- Ресурсы (боты, виджеты, провайдеры) **сохраняются** с `owner_id=NULL` — рабочая конфигурация не теряется
+- Для контактов: `user_consents.user_id` может быть в разных форматах (`"123"`, `"telegram:123"`), удаление пробует все варианты
+- Защита от самоудаления: нельзя удалить текущего пользователя
+- Событие логируется в `audit_log` **до** удаления данных
+
+**Сервис:** `app/services/gdpr_service.py` — две функции `delete_admin_user_data()` и `delete_contact_data()`, возвращают отчёт `{table: count}`.
+
 ### Security-фиксы аудита — CSP (PR #422, Issue #413)
 
 JWT хранится в `localStorage` — доступен любому JS на странице. CSP-заголовок блокирует инъекцию скриптов через XSS, даже если DOMPurify обойдут.
