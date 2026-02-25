@@ -90,19 +90,15 @@ PROVIDER_TYPES = {
         "name": "OpenRouter",
         "default_base_url": "https://openrouter.ai/api/v1",
         "default_models": [
-            # Free models (январь 2026)
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "nvidia/nemotron-nano-12b-v2-vl:free",
-            "arcee-ai/trinity-large-preview:free",
-            "arcee-ai/trinity-mini:free",
-            "upstage/solar-pro-3:free",
-            "liquid/lfm-2.5-1.2b-instruct:free",
-            "allenai/molmo-2-8b:free",
-            "tngtech/tng-r1t-chimera:free",
-            # Paid (дешёвые)
-            "google/gemini-2.0-flash-001",
-            "openai/gpt-4o-mini",
+            "anthropic/claude-sonnet-4.6",
+            "openai/gpt-4o",
+            "google/gemini-2.5-pro",
+            "google/gemini-2.5-flash",
             "deepseek/deepseek-chat-v3-0324",
+            "openai/gpt-4o-mini",
+            "qwen/qwen3-235b-a22b",
+            "google/gemini-2.0-flash-001",
+            "meta-llama/llama-4-maverick",
         ],
         "requires_base_url": True,
     },
@@ -221,7 +217,23 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             else:
                 raise ValueError(f"Base URL required for provider {self.provider_id}")
 
-        logger.info(f"[{self.provider_id}] Initialized OpenAI-compatible provider: {self.base_url}")
+        # Model fallback chain: primary model + fallback_models from config
+        self.fallback_models: List[str] = self.runtime_params.get("fallback_models", [])
+        self._model_chain: List[str] = [self.model_name] + [
+            m for m in self.fallback_models if m != self.model_name
+        ]
+
+        logger.info(
+            f"[{self.provider_id}] Initialized OpenAI-compatible provider: {self.base_url}"
+            + (
+                f" (fallback chain: {len(self._model_chain)} models)"
+                if self.fallback_models
+                else ""
+            )
+        )
+
+    # HTTP status codes that trigger model fallback
+    _RETRIABLE_STATUSES = {404, 429, 500, 502, 503}
 
     @staticmethod
     def _ensure_no_proxy_for_localhost():
@@ -283,74 +295,107 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             return self._generate_stream(messages)
         return self._generate_non_stream(messages)
 
+    def _build_request_json(self, model: str, messages: List[Dict[str, str]], stream: bool) -> dict:
+        return {
+            "model": model,
+            "messages": messages,
+            "temperature": self.runtime_params.get("temperature", 0.7),
+            "max_tokens": self.runtime_params.get("max_tokens", 512),
+            "top_p": self.runtime_params.get("top_p", 0.9),
+            "stream": stream,
+        }
+
     def _generate_non_stream(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            response = self.client.post(
-                f"{self.base_url}/chat/completions",
-                headers=self._get_headers(),
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "temperature": self.runtime_params.get("temperature", 0.7),
-                    "max_tokens": self.runtime_params.get("max_tokens", 512),
-                    "top_p": self.runtime_params.get("top_p", 0.9),
-                    "stream": False,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"].strip()
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"[{self.provider_id}] HTTP error: {e.response.status_code} - {e.response.text}"
-            )
-            error_messages = {
-                401: "Invalid API key",
-                403: "Access denied - check API key permissions",
-                404: f"Model '{self.model_name}' not found - check model name",
-                429: "Rate limit exceeded - wait or upgrade plan",
-                500: "Provider server error",
-                502: "Provider gateway error",
-                503: "Provider temporarily unavailable",
-            }
-            msg = error_messages.get(e.response.status_code, f"HTTP {e.response.status_code}")
-            return f"Error: {msg}"
-        except Exception as e:
-            logger.error(f"[{self.provider_id}] Error: {e}")
-            return "Извините, произошла техническая ошибка."
+        last_error_msg = "Извините, произошла техническая ошибка."
+
+        for model in self._model_chain:
+            try:
+                response = self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self._get_headers(),
+                    json=self._build_request_json(model, messages, stream=False),
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                if model != self._model_chain[0]:
+                    logger.info(f"[{self.provider_id}] Fallback succeeded with model: {model}")
+                return content
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                logger.warning(
+                    f"[{self.provider_id}] Model '{model}' failed: "
+                    f"HTTP {status} - {e.response.text[:200]}"
+                )
+                if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
+                    continue
+                error_messages = {
+                    401: "Invalid API key",
+                    403: "Access denied - check API key permissions",
+                    404: f"Model '{model}' not found - check model name",
+                    429: "Rate limit exceeded - wait or upgrade plan",
+                    500: "Provider server error",
+                    502: "Provider gateway error",
+                    503: "Provider temporarily unavailable",
+                }
+                last_error_msg = f"Error: {error_messages.get(status, f'HTTP {status}')}"
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.warning(f"[{self.provider_id}] Model '{model}' timeout/connect: {e}")
+                if model != self._model_chain[-1]:
+                    continue
+                last_error_msg = "Извините, произошла техническая ошибка."
+            except Exception as e:
+                logger.error(f"[{self.provider_id}] Error with model '{model}': {e}")
+                last_error_msg = "Извините, произошла техническая ошибка."
+                break  # Unknown error — don't retry
+
+        return last_error_msg
 
     def _generate_stream(self, messages: List[Dict[str, str]]) -> Generator[str, None, None]:
-        try:
-            with self.client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=self._get_headers(),
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "temperature": self.runtime_params.get("temperature", 0.7),
-                    "max_tokens": self.runtime_params.get("max_tokens", 512),
-                    "top_p": self.runtime_params.get("top_p", 0.9),
-                    "stream": True,
-                },
-            ) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if line.startswith("data: "):
-                        data = line[6:]
-                        if data == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data)
-                            delta = chunk["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                yield content
-                        except json.JSONDecodeError:
-                            continue
-        except Exception as e:
-            logger.error(f"[{self.provider_id}] Stream error: {e}")
-            yield "Извините, произошла техническая ошибка."
+        for model in self._model_chain:
+            try:
+                with self.client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._get_headers(),
+                    json=self._build_request_json(model, messages, stream=True),
+                ) as response:
+                    response.raise_for_status()
+                    if model != self._model_chain[0]:
+                        logger.info(
+                            f"[{self.provider_id}] Fallback stream opened with model: {model}"
+                        )
+                    for line in response.iter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                delta = chunk["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield content
+                            except json.JSONDecodeError:
+                                continue
+                    return  # Stream completed successfully
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                logger.warning(
+                    f"[{self.provider_id}] Stream model '{model}' failed: "
+                    f"HTTP {status} - {e.response.text[:200]}"
+                )
+                if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
+                    continue
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.warning(f"[{self.provider_id}] Stream model '{model}' timeout/connect: {e}")
+                if model != self._model_chain[-1]:
+                    continue
+            except Exception as e:
+                logger.error(f"[{self.provider_id}] Stream error with model '{model}': {e}")
+                break  # Unknown error — don't retry
+
+        yield "Извините, произошла техническая ошибка."
 
 
 class GeminiProvider(BaseLLMProvider):

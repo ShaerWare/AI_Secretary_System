@@ -32,7 +32,7 @@ async def _request(
         params = {}
     params["consumer_key"] = consumer_key
     params["consumer_secret"] = consumer_secret
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT, trust_env=False) as client:
         resp = await client.request(method, url, params=params)
         resp.raise_for_status()
         return resp.json()

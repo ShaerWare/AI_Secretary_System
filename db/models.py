@@ -1290,19 +1290,15 @@ PROVIDER_TYPES = {
         "name": "OpenRouter",
         "default_base_url": "https://openrouter.ai/api/v1",
         "default_models": [
-            # Free models (январь 2026)
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "nvidia/nemotron-nano-12b-v2-vl:free",
-            "arcee-ai/trinity-large-preview:free",
-            "arcee-ai/trinity-mini:free",
-            "upstage/solar-pro-3:free",
-            "liquid/lfm-2.5-1.2b-instruct:free",
-            "allenai/molmo-2-8b:free",
-            "tngtech/tng-r1t-chimera:free",
-            # Paid (дешёвые)
-            "google/gemini-2.0-flash-001",
-            "openai/gpt-4o-mini",
+            "anthropic/claude-sonnet-4.6",
+            "openai/gpt-4o",
+            "google/gemini-2.5-pro",
+            "google/gemini-2.5-flash",
             "deepseek/deepseek-chat-v3-0324",
+            "openai/gpt-4o-mini",
+            "qwen/qwen3-235b-a22b",
+            "google/gemini-2.0-flash-001",
+            "meta-llama/llama-4-maverick",
         ],
         "requires_base_url": True,
     },
@@ -3256,7 +3252,8 @@ class KanbanProject(Base):
     def get_label_mapping(self) -> dict:
         if self.label_mapping:
             try:
-                return json.loads(self.label_mapping)
+                result: dict = json.loads(self.label_mapping)
+                return result
             except (json.JSONDecodeError, TypeError):
                 pass
         return dict(self._DEFAULT_LABEL_MAPPING)
