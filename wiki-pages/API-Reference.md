@@ -47,7 +47,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | GET | `/admin/auth/status` | Статус аутентификации |
 | GET | `/admin/auth/profile` | Профиль пользователя |
 | PUT | `/admin/auth/profile` | Обновление профиля |
-| POST | `/admin/auth/change-password` | Смена пароля (отзыв всех сессий + новый токен) |
+| POST | `/admin/auth/change-password` | Смена пароля (отзыв всех сессий + новый токен, rate-limit) |
 | GET | `/admin/auth/sessions` | Список активных сессий текущего пользователя |
 | DELETE | `/admin/auth/sessions/{jti}` | Отзыв конкретной сессии |
 | GET | `/admin/auth/permissions` | Эффективные права текущего пользователя |
@@ -91,6 +91,8 @@ Authorization: Bearer <token>
 **Ответ:** `{"message": "Session revoked"}`
 
 #### Смена пароля (обновлённое поведение)
+
+Требует `settings:edit`. Rate-limit: `RATE_LIMIT_AUTH` (по умолчанию `10/minute`).
 
 ```bash
 POST /admin/auth/change-password
