@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify'
 import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
+import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
@@ -121,8 +122,64 @@ const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSideba
 const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: startSidebarTouchResize } = useResizablePanel('chat-sidebar-width', 288, 200, 480, 'right')
 const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize: startBranchTouchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
 const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
+const { width: artifactWidth, startResize: startArtifactResize, startTouchResize: startArtifactTouchResize } = useResizablePanel('chat-artifact-width', 500, 300, 800, 'left')
 
-// Markdown renderer
+// Artifact viewer state
+const showArtifact = ref(false)
+const activeArtifact = ref<Artifact | null>(null)
+
+function openArtifact(artifact: Artifact) {
+  activeArtifact.value = artifact
+  showArtifact.value = true
+  // Close other panels
+  showBranchTree.value = false
+  showSettings.value = false
+}
+
+function closeArtifact() {
+  showArtifact.value = false
+  activeArtifact.value = null
+}
+
+// Delegated click handler for code block buttons (v-html can't have Vue bindings)
+function handleMessagesClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+
+  // Handle "open in viewer" button
+  const openBtn = target.closest('[data-artifact-open]') as HTMLElement | null
+  if (openBtn) {
+    e.preventDefault()
+    const container = openBtn.closest('.code-block-container') as HTMLElement | null
+    if (container) {
+      const id = container.dataset.artifactId || ''
+      const lang = container.dataset.lang || ''
+      const msgId = container.dataset.msgId || ''
+      const codeEl = container.querySelector('pre code')
+      const code = codeEl?.textContent || ''
+      openArtifact({ id, language: lang, code, messageId: msgId })
+    }
+    return
+  }
+
+  // Handle "copy" button
+  const copyBtn = target.closest('[data-artifact-copy]') as HTMLElement | null
+  if (copyBtn) {
+    e.preventDefault()
+    const container = copyBtn.closest('.code-block-container') as HTMLElement | null
+    if (container) {
+      const codeEl = container.querySelector('pre code')
+      const code = codeEl?.textContent || ''
+      navigator.clipboard.writeText(code)
+      toastStore.success(t('common.copied'))
+    }
+    return
+  }
+}
+
+// Markdown renderer with code block headers
+let codeBlockCounter = 0
+let currentMsgId = ''
+
 marked.use({
   breaks: true,
   gfm: true,
@@ -130,17 +187,49 @@ marked.use({
     link({ href, title, text }) {
       const t = title ? ` title="${title}"` : ''
       return `<a href="${href}"${t} target="_blank" rel="noopener noreferrer">${text}</a>`
+    },
+    code({ text, lang }) {
+      const language = lang || ''
+      const artifactId = `artifact-${currentMsgId}-${codeBlockCounter++}`
+      const escapedCode = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+      // SVG icons for buttons
+      const copySvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+      const viewSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+      return `<div class="code-block-container" data-artifact-id="${artifactId}" data-lang="${language}" data-msg-id="${currentMsgId}">
+        <div class="code-block-header">
+          <span class="code-block-lang">${language || 'code'}</span>
+          <div class="code-block-actions">
+            <button class="code-block-btn" data-artifact-copy="${artifactId}" title="Copy">${copySvg}</button>
+            <button class="code-block-btn" data-artifact-open="${artifactId}" title="Open in viewer">${viewSvg}</button>
+          </div>
+        </div>
+        <pre><code class="language-${language}">${escapedCode}</code></pre>
+      </div>`
     }
   }
 })
 
-function renderMarkdown(content: string): string {
+function renderMarkdown(content: string, messageId?: string): string {
   if (!content) return ''
-  return DOMPurify.sanitize(marked.parse(content) as string)
+  codeBlockCounter = 0
+  currentMsgId = messageId || ''
+  const html = marked.parse(content) as string
+  return DOMPurify.sanitize(html, {
+    ADD_ATTR: ['data-artifact-id', 'data-artifact-open', 'data-artifact-copy', 'data-lang', 'data-code', 'data-msg-id'],
+    ADD_TAGS: ['svg', 'path', 'polyline', 'line', 'rect'],
+  })
 }
 
 // Branch tree toggle
 const showBranchTree = ref(false)
+
+// Mutual exclusivity: panel watchers
+watch(showBranchTree, (v) => { if (v) closeArtifact() })
+watch(showSettings, (v) => { if (v) closeArtifact() })
 
 // File attachment state
 const attachedFiles = ref<{ name: string; content: string }[]>([])
@@ -2234,9 +2323,8 @@ watch(sessions, (newSessions) => {
       >
         <div
           :class="[
-            'flex gap-3',
+            'flex gap-3 max-w-3xl mx-auto',
             inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
-            fullscreenStore.isFullscreen ? 'max-w-3xl mx-auto' : ''
           ]"
         >
           <textarea
@@ -2313,9 +2401,10 @@ watch(sessions, (newSessions) => {
       <div
         ref="messagesContainer"
         :class="[
-          'flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4',
+          'flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 claude-messages-container',
           fullscreenStore.isFullscreen ? 'zen-messages' : ''
         ]"
+        @click="handleMessagesClick"
       >
         <!-- Zen mode: inline session title + new chat button -->
         <div v-if="fullscreenStore.isFullscreen && currentSession" class="text-center mb-4">
@@ -2352,27 +2441,15 @@ watch(sessions, (newSessions) => {
           <div
             v-for="(msg, idx) in cc.messages.value"
             :key="idx"
-            :class="[
-              'flex gap-3 rounded-lg',
-              msg.role === 'user' ? 'justify-end' : 'justify-start'
-            ]"
+            class="claude-message"
           >
-            <!-- Assistant avatar -->
-            <div
-              v-if="msg.role === 'assistant'"
-              class="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0"
-            >
-              <Terminal class="w-4 h-4 text-green-500" />
+            <!-- Avatar (always left) -->
+            <div :class="['claude-avatar', msg.role === 'user' ? 'claude-avatar-user' : '']" :style="msg.role === 'assistant' ? 'background: hsl(var(--primary) / 0.1); color: #22c55e' : ''">
+              <Terminal v-if="msg.role === 'assistant'" class="w-3.5 h-3.5" />
+              <span v-else>{{ authStore.user?.username?.[0]?.toUpperCase() || 'U' }}</span>
             </div>
 
-            <div
-              :class="[
-                'max-w-[85%] rounded-lg p-3',
-                msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary'
-              ]"
-            >
+            <div :class="['claude-message-content group', msg.role === 'user' ? 'claude-message-user' : '']">
               <!-- Thinking block (collapsible, purple) -->
               <div v-if="msg.thinking" class="mb-2 border border-purple-500/30 rounded-lg overflow-hidden">
                 <button
@@ -2421,22 +2498,14 @@ watch(sessions, (newSessions) => {
               <!-- Text content -->
               <div v-if="msg.content" class="chat-markdown break-words" v-html="renderMarkdown(msg.content)"></div>
             </div>
-
-            <!-- User avatar -->
-            <div
-              v-if="msg.role === 'user'"
-              class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0"
-            >
-              <User class="w-4 h-4 text-primary-foreground" />
-            </div>
           </div>
 
           <!-- CC Streaming response -->
-          <div v-if="cc.isProcessing.value" class="flex gap-3 justify-start">
-            <div class="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0">
-              <Terminal class="w-4 h-4 text-green-500" />
+          <div v-if="cc.isProcessing.value" class="claude-message">
+            <div class="claude-avatar" style="background: hsl(var(--primary) / 0.1); color: #22c55e">
+              <Terminal class="w-3.5 h-3.5" />
             </div>
-            <div class="max-w-[85%] rounded-lg p-3 bg-secondary">
+            <div class="claude-message-content">
               <!-- Live thinking -->
               <div v-if="cc.thinkingText.value" class="mb-2 text-xs text-purple-400 whitespace-pre-wrap font-mono">
                 <Brain class="w-3 h-3 inline mr-1" />
@@ -2493,33 +2562,21 @@ watch(sessions, (newSessions) => {
             v-for="message in messages"
             :id="`msg-${message.id}`"
             :key="message.id"
-            :class="[
-              'flex gap-3 rounded-lg transition-shadow duration-500',
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            ]"
+            :class="['claude-message transition-shadow duration-500', message.role === 'user' ? 'claude-message-user' : '']"
           >
-            <!-- Avatar -->
-            <div
-              v-if="message.role === 'assistant'"
-              class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0"
-            >
-              <Bot class="w-4 h-4 text-primary" />
+            <!-- Avatar (always left) -->
+            <div :class="['claude-avatar', message.role === 'user' ? 'claude-avatar-user' : 'claude-avatar-assistant']">
+              <Bot v-if="message.role === 'assistant'" class="w-3.5 h-3.5" />
+              <span v-else>{{ authStore.user?.username?.[0]?.toUpperCase() || 'U' }}</span>
             </div>
 
             <!-- Message Content -->
-            <div
-              :class="[
-                'max-w-[80%] rounded-lg p-3 group',
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary'
-              ]"
-            >
+            <div class="claude-message-content group">
               <!-- Editing mode -->
               <div v-if="editingMessageId === message.id" class="space-y-2">
                 <textarea
                   v-model="editingContent"
-                  class="w-full min-h-[80px] p-2 bg-background text-foreground rounded resize-none"
+                  class="w-full min-h-[80px] p-2 bg-secondary text-foreground rounded resize-none border border-border"
                   @keydown.escape="cancelEditing"
                   @keydown.ctrl.enter.prevent="saveEdit"
                 />
@@ -2544,8 +2601,8 @@ watch(sessions, (newSessions) => {
 
               <!-- Normal mode -->
               <template v-else>
-                <div class="chat-markdown break-words" v-html="renderMarkdown(message.content)"></div>
-                <div class="flex items-center gap-2 mt-2 text-xs opacity-60">
+                <div class="chat-markdown break-words" v-html="renderMarkdown(message.content, message.id)"></div>
+                <div class="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                   <span>{{ formatTime(message.timestamp) }}</span>
                   <span v-if="message.edited" class="italic">(edited)</span>
                   <!-- Version navigation for messages with siblings -->
@@ -2572,7 +2629,7 @@ watch(sessions, (newSessions) => {
                   <button
                     v-if="message.role === 'assistant'"
                     :disabled="ttsLoading === message.id"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     :title="speakingMessageId === message.id && isSpeaking ? 'Stop' : 'Listen'"
                     @click="speakMessage(message.id, message.content)"
                   >
@@ -2584,21 +2641,21 @@ watch(sessions, (newSessions) => {
                   <button
                     v-if="message.role === 'assistant' && !isReadOnly"
                     :disabled="regenerateMutation.isPending.value"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     title="Regenerate response"
                     @click="regenerateAssistantResponse(message.id)"
                   >
                     <RefreshCw class="w-3 h-3" />
                   </button>
                   <button
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     title="Copy"
                     @click="copyToClipboard(message.content)"
                   >
                     <Copy class="w-3 h-3" />
                   </button>
                   <button
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     :title="t('chatView.summarizeBranch')"
                     :disabled="summarizingMessageId !== null"
                     @click.stop="summarizeBranch(message.id)"
@@ -2609,7 +2666,7 @@ watch(sessions, (newSessions) => {
                   <!-- Save to context button for assistant messages -->
                   <button
                     v-if="message.role === 'assistant'"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     :title="t('chatView.saveToContext')"
                     @click="saveMessageToContext(message)"
                   >
@@ -2618,7 +2675,7 @@ watch(sessions, (newSessions) => {
                   <!-- Edit button (both user and assistant messages) -->
                   <button
                     v-if="!isReadOnly"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     :title="message.role === 'assistant' ? t('chatView.editResponse') : 'Edit'"
                     @click="startEditing(message)"
                   >
@@ -2627,7 +2684,7 @@ watch(sessions, (newSessions) => {
                   <button
                     v-if="message.role === 'user' && !isReadOnly"
                     :disabled="regenerateMutation.isPending.value"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-foreground"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     title="Regenerate response"
                     @click="regenerateResponse(message.id)"
                   >
@@ -2635,7 +2692,7 @@ watch(sessions, (newSessions) => {
                   </button>
                   <button
                     v-if="!isReadOnly"
-                    class="p-1 rounded bg-background/80 hover:bg-background text-red-500"
+                    class="p-1 rounded hover:bg-secondary text-red-500"
                     title="Delete"
                     @click="deleteMessage(message.id)"
                   >
@@ -2644,42 +2701,34 @@ watch(sessions, (newSessions) => {
                 </div>
               </template>
             </div>
-
-            <!-- User Avatar -->
-            <div
-              v-if="message.role === 'user'"
-              class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0"
-            >
-              <User class="w-4 h-4 text-primary-foreground" />
-            </div>
           </div>
 
           <!-- Optimistic user message (shown immediately before server confirms) -->
-          <div v-if="pendingUserContent" class="flex gap-3 justify-end">
-            <div class="max-w-[80%] rounded-lg p-3 bg-primary text-primary-foreground">
-              <div class="chat-markdown break-words" v-html="renderMarkdown(pendingUserContent)"></div>
+          <div v-if="pendingUserContent" class="claude-message claude-message-user">
+            <div class="claude-avatar claude-avatar-user">
+              <span>{{ authStore.user?.username?.[0]?.toUpperCase() || 'U' }}</span>
             </div>
-            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <User class="w-4 h-4 text-primary-foreground" />
+            <div class="claude-message-content">
+              <div class="chat-markdown break-words" v-html="renderMarkdown(pendingUserContent)"></div>
             </div>
           </div>
 
           <!-- Streaming response -->
-          <div v-if="isStreaming && streamingContent" class="flex gap-3 justify-start">
-            <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <Bot class="w-4 h-4 text-primary" />
+          <div v-if="isStreaming && streamingContent" class="claude-message">
+            <div class="claude-avatar claude-avatar-assistant">
+              <Bot class="w-3.5 h-3.5" />
             </div>
-            <div class="max-w-[80%] rounded-lg p-3 bg-secondary">
+            <div class="claude-message-content">
               <div class="chat-markdown break-words" v-html="renderMarkdown(streamingContent)"></div>
             </div>
           </div>
 
           <!-- Thinking indicator (waiting for first chunk) -->
-          <div v-if="isStreaming && !streamingContent" class="flex gap-3 justify-start">
-            <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <Bot class="w-4 h-4 text-primary" />
+          <div v-if="isStreaming && !streamingContent" class="claude-message">
+            <div class="claude-avatar claude-avatar-assistant">
+              <Bot class="w-3.5 h-3.5" />
             </div>
-            <div class="rounded-lg p-3 bg-secondary flex items-center gap-1.5">
+            <div class="claude-message-content flex items-center gap-1.5">
               <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:0ms]"></span>
               <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:150ms]"></span>
               <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
@@ -2703,6 +2752,26 @@ watch(sessions, (newSessions) => {
           @scroll-to="onBranchScrollTo"
           @new-branch="startNewBranch"
           @close="showBranchTree = false"
+        />
+      </template>
+
+      <!-- Artifact Panel -->
+      <template v-if="showArtifact && activeArtifact">
+        <div
+          class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+          @mousedown="startArtifactResize"
+          @touchstart="startArtifactTouchResize"
+        />
+        <!-- Mobile backdrop -->
+        <div
+          class="md:hidden fixed inset-0 bg-black/50 z-40"
+          @click="closeArtifact"
+        />
+        <ArtifactPanel
+          :artifact="activeArtifact"
+          class="artifact-panel fixed inset-0 z-50 md:relative md:inset-auto md:z-0 flex-shrink-0 overflow-hidden"
+          :style="{ '--artifact-w': artifactWidth + 'px' }"
+          @close="closeArtifact"
         />
       </template>
 
@@ -2944,14 +3013,15 @@ watch(sessions, (newSessions) => {
   }
 }
 
-/* Zen mode: centered messages */
+@media (min-width: 768px) {
+  .artifact-panel {
+    width: var(--artifact-w);
+  }
+}
+
+/* Zen mode: centered messages (redundant with claude-messages-container but kept for specificity) */
 .zen-messages {
   padding-left: 1rem;
   padding-right: 1rem;
-}
-.zen-messages > * {
-  max-width: 48rem;
-  margin-left: auto;
-  margin-right: auto;
 }
 </style>
