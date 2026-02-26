@@ -207,8 +207,8 @@ marked.use({
   gfm: true,
   renderer: {
     link({ href, title, text }) {
-      const t = title ? ` title="${title}"` : ''
-      return `<a href="${href}"${t} target="_blank" rel="noopener noreferrer">${text}</a>`
+      const titleAttr = title ? ` title="${title}"` : ''
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
     },
     code({ text, lang }) {
       const language = lang || ''
@@ -226,9 +226,9 @@ marked.use({
         <div class="code-block-header">
           <span class="code-block-lang">${language || 'code'}</span>
           <div class="code-block-actions">
-            <button class="code-block-btn" data-artifact-copy="${artifactId}" title="Copy">${copySvg}</button>
-            <button class="code-block-btn" data-artifact-save="${artifactId}" title="Save to context">${saveSvg}</button>
-            <button class="code-block-btn" data-artifact-open="${artifactId}" title="Open in viewer">${viewSvg}</button>
+            <button class="code-block-btn" data-artifact-copy="${artifactId}" title="${t('chatView.copyCode')}">${copySvg}</button>
+            <button class="code-block-btn" data-artifact-save="${artifactId}" title="${t('chatView.saveToContext')}">${saveSvg}</button>
+            <button class="code-block-btn" data-artifact-open="${artifactId}" title="${t('chatView.openInViewer')}">${viewSvg}</button>
           </div>
         </div>
         <pre><code class="language-${language}">${escapedCode}</code></pre>
@@ -2673,7 +2673,7 @@ watch(sessions, (newSessions) => {
                   </button>
                   <button
                     class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-                    title="Copy"
+                    :title="t('common.copy')"
                     @click="copyToClipboard(message.content)"
                   >
                     <Copy class="w-3 h-3" />
