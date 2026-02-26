@@ -44,6 +44,10 @@
 * [[Claude-Code]]
 * [[VLESS-Proxy]]
 
+### Безопасность
+* [[Data-Privacy]]
+* [[RBAC]]
+
 ### Справка
 * [[Installation]]
 * [[Cloud-AI-Training]]
