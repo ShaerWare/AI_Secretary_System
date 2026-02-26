@@ -11,6 +11,7 @@ import {
   Languages,
   PanelLeftClose,
   MessageCircle,
+  ClipboardList,
   Maximize2
 } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
@@ -172,8 +173,8 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
             </button>
           </div>
 
-          <!-- Chat shortcut -->
-          <div v-if="sidebarOpen || isMobile" class="p-2">
+          <!-- Top shortcuts (Chat + Tasks) -->
+          <div v-if="sidebarOpen || isMobile" class="p-2 space-y-1">
             <router-link
               to="/chat"
               class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors"
@@ -183,14 +184,32 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <MessageCircle class="w-4 h-4" />
               <span class="flex-1 text-left">{{ t('nav.chat') }}</span>
             </router-link>
+            <router-link
+              v-if="authStore.canView('kanban')"
+              to="/kanban"
+              class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors"
+              :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground bg-secondary/50 hover:bg-secondary'"
+              @click="isMobile && (mobileMenuOpen = false)"
+            >
+              <ClipboardList class="w-4 h-4" />
+              <span class="flex-1 text-left">{{ t('nav.kanban') }}</span>
+            </router-link>
           </div>
-          <div v-else class="p-2">
+          <div v-else class="p-2 space-y-1">
             <router-link
               to="/chat"
               class="flex items-center justify-center w-full p-2 rounded-lg transition-colors"
               :class="route.path === '/chat' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50'"
             >
               <MessageCircle class="w-5 h-5" />
+            </router-link>
+            <router-link
+              v-if="authStore.canView('kanban')"
+              to="/kanban"
+              class="flex items-center justify-center w-full p-2 rounded-lg transition-colors"
+              :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50'"
+            >
+              <ClipboardList class="w-5 h-5" />
             </router-link>
           </div>
 
