@@ -375,6 +375,11 @@ class SalesDatabase:
         broadcast_set = {row[0] for row in rows}
         return [n for n in pr_numbers if n not in broadcast_set]
 
+    async def has_any_broadcasts(self) -> bool:
+        """Check if there are any broadcast records at all (for first-run detection)."""
+        cursor = await self._db.execute("SELECT 1 FROM news_broadcasts LIMIT 1")
+        return await cursor.fetchone() is not None
+
     # ── Commit News Cache ──────────────────────────────────────────
 
     async def get_cached_commit_news(self, sha: str) -> str | None:
@@ -432,6 +437,11 @@ class SalesDatabase:
         rows = await cursor.fetchall()
         broadcast_set = {row[0] for row in rows}
         return [s for s in shas if s not in broadcast_set]
+
+    async def has_any_commit_broadcasts(self) -> bool:
+        """Check if there are any commit broadcast records (for first-run detection)."""
+        cursor = await self._db.execute("SELECT 1 FROM commit_news_broadcasts LIMIT 1")
+        return await cursor.fetchone() is not None
 
     async def mark_commit_broadcast(self, sha: str, recipients_count: int) -> None:
         """Mark commit as broadcast."""

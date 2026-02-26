@@ -376,8 +376,11 @@ async def check_and_broadcast_news(bot: "Bot", skip_initial: bool = True) -> Non
                     logger.info("All recent PRs in %s already broadcast", repo)
                     continue
 
-                # Check if this is first run (no broadcasts yet)
-                if skip_initial and len(unbroadcast_numbers) == len(pr_numbers):
+                # Check if this is truly first run (no broadcasts in DB at all).
+                # Previous heuristic (all fetched PRs are new) caused false positives
+                # when the bot was offline for weeks and old broadcast records fell out
+                # of the current fetch window.
+                if skip_initial and not await db.has_any_broadcasts():
                     logger.info(
                         "First run: marking %d existing PRs in %s as seen (no broadcast)",
                         len(pr_numbers),
@@ -472,7 +475,7 @@ async def check_and_broadcast_commit_news(bot: "Bot", skip_initial: bool = True)
                     continue
 
                 # First run — mark all as seen without sending
-                if skip_initial and len(unbroadcast_shas) == len(shas):
+                if skip_initial and not await db.has_any_commit_broadcasts():
                     logger.info(
                         "First run: marking %d existing commits in %s as seen (no broadcast)",
                         len(shas),
