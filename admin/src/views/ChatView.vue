@@ -174,6 +174,28 @@ function handleMessagesClick(e: MouseEvent) {
     }
     return
   }
+
+  // Handle "save to context" button
+  const saveBtn = target.closest('[data-artifact-save]') as HTMLElement | null
+  if (saveBtn) {
+    e.preventDefault()
+    if (!currentSessionId.value) return
+    const container = saveBtn.closest('.code-block-container') as HTMLElement | null
+    if (container) {
+      const lang = container.dataset.lang || 'txt'
+      const codeEl = container.querySelector('pre code')
+      const code = codeEl?.textContent || ''
+      const ext = lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang === 'python' ? 'py' : lang || 'txt'
+      const ts = new Date().toISOString().slice(0, 16).replace('T', '_')
+      contextFiles.value.push({ name: `artifact_${ts}.${ext}`, content: code })
+      saveContextFilesMutation.mutate({
+        sessionId: currentSessionId.value,
+        files: contextFiles.value,
+      })
+      toastStore.success(t('chatView.savedToContext'))
+    }
+    return
+  }
 }
 
 // Markdown renderer with code block headers
@@ -199,11 +221,13 @@ marked.use({
       // SVG icons for buttons
       const copySvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
       const viewSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+      const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'
       return `<div class="code-block-container" data-artifact-id="${artifactId}" data-lang="${language}" data-msg-id="${currentMsgId}">
         <div class="code-block-header">
           <span class="code-block-lang">${language || 'code'}</span>
           <div class="code-block-actions">
             <button class="code-block-btn" data-artifact-copy="${artifactId}" title="Copy">${copySvg}</button>
+            <button class="code-block-btn" data-artifact-save="${artifactId}" title="Save to context">${saveSvg}</button>
             <button class="code-block-btn" data-artifact-open="${artifactId}" title="Open in viewer">${viewSvg}</button>
           </div>
         </div>
@@ -219,7 +243,7 @@ function renderMarkdown(content: string, messageId?: string): string {
   currentMsgId = messageId || ''
   const html = marked.parse(content) as string
   return DOMPurify.sanitize(html, {
-    ADD_ATTR: ['data-artifact-id', 'data-artifact-open', 'data-artifact-copy', 'data-lang', 'data-code', 'data-msg-id'],
+    ADD_ATTR: ['data-artifact-id', 'data-artifact-open', 'data-artifact-copy', 'data-artifact-save', 'data-lang', 'data-code', 'data-msg-id'],
     ADD_TAGS: ['svg', 'path', 'polyline', 'line', 'rect'],
   })
 }
