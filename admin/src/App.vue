@@ -62,10 +62,30 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
 })
 
-// Close mobile menu on route change
-watch(() => route.path, () => {
-  mobileMenuOpen.value = false
-})
+// Hide external chat widget on /chat page, show everywhere else
+// Widget loads async (deferred script + await fetch), so poll until it appears
+let widgetFound = false
+watch(
+  () => route.name,
+  () => {
+    const widget = document.querySelector('.ai-chat-widget') as HTMLElement | null
+    if (widget) {
+      widget.classList.toggle('ai-chat-widget-hidden', route.name === 'chat')
+      widgetFound = true
+    }
+    mobileMenuOpen.value = false
+  },
+  { immediate: true },
+)
+const widgetPoll = setInterval(() => {
+  const widget = document.querySelector('.ai-chat-widget') as HTMLElement | null
+  if (widget) {
+    widget.classList.toggle('ai-chat-widget-hidden', route.name === 'chat')
+    widgetFound = true
+  }
+  if (widgetFound) clearInterval(widgetPoll)
+}, 500)
+onUnmounted(() => clearInterval(widgetPoll))
 
 // Page title from route meta
 const currentTitle = computed(() => {
@@ -339,6 +359,15 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
 .scale-leave-to {
   opacity: 0;
   transform: scale(0.95);
+}
+
+/* Hide chat widget on chat page */
+.ai-chat-widget-hidden,
+.ai-chat-widget-hidden .ai-chat-button,
+.ai-chat-widget-hidden .ai-chat-window {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* Smooth hover effects */

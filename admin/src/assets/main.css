@@ -274,13 +274,108 @@
   line-height: 1.5;
 }
 
-/* User message code block overrides */
-.bg-primary .chat-markdown code {
-  background: hsl(var(--primary-foreground) / 0.15);
+/* Claude-style message layout */
+.claude-message {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
 }
-.bg-primary .chat-markdown pre {
-  background: hsl(var(--primary-foreground) / 0.1);
-  border-color: hsl(var(--primary-foreground) / 0.2);
+
+.claude-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.claude-avatar-user {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.claude-avatar-assistant {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.claude-message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Centered message column */
+.claude-messages-container > * {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Code block container (injected by marked renderer) */
+.code-block-container {
+  margin: 0.75em 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: hsl(var(--secondary));
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 0.75rem;
+}
+
+.code-block-lang {
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+}
+
+.code-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.code-block-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.code-block-btn:hover {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Override pre styles when inside code-block-container */
+.code-block-container pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* User message subtle separator */
+.claude-message-user .claude-message-content {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
 }
 
 .chat-markdown ul,
@@ -333,9 +428,6 @@
 }
 .chat-markdown a:hover {
   opacity: 0.8;
-}
-.bg-primary .chat-markdown a {
-  color: hsl(var(--primary-foreground));
 }
 
 .chat-markdown hr {
