@@ -64,13 +64,18 @@ onUnmounted(() => {
 
 // Hide external chat widget on /chat page, show everywhere else
 // Widget loads async (deferred script + await fetch), so poll until it appears
+// Uses inline style (display:none) instead of CSS class because the widget's
+// own !important rules on .ai-chat-button override class-based hiding
+function setWidgetVisibility(widget: HTMLElement, hide: boolean) {
+  widget.style.display = hide ? 'none' : ''
+}
 let widgetFound = false
 watch(
   () => route.name,
   () => {
     const widget = document.querySelector('.ai-chat-widget') as HTMLElement | null
     if (widget) {
-      widget.classList.toggle('ai-chat-widget-hidden', route.name === 'chat')
+      setWidgetVisibility(widget, route.name === 'chat')
       widgetFound = true
     }
     mobileMenuOpen.value = false
@@ -80,7 +85,7 @@ watch(
 const widgetPoll = setInterval(() => {
   const widget = document.querySelector('.ai-chat-widget') as HTMLElement | null
   if (widget) {
-    widget.classList.toggle('ai-chat-widget-hidden', route.name === 'chat')
+    setWidgetVisibility(widget, route.name === 'chat')
     widgetFound = true
   }
   if (widgetFound) clearInterval(widgetPoll)
@@ -359,15 +364,6 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
 .scale-leave-to {
   opacity: 0;
   transform: scale(0.95);
-}
-
-/* Hide chat widget on chat page */
-.ai-chat-widget-hidden,
-.ai-chat-widget-hidden .ai-chat-button,
-.ai-chat-widget-hidden .ai-chat-window {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
 }
 
 /* Smooth hover effects */
