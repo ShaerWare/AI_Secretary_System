@@ -2,6 +2,7 @@
 WhatsApp instance repository for managing WhatsApp bot instances.
 """
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -208,6 +209,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             "tts_preset",
             "rate_limit_count",
             "rate_limit_hours",
+            "rag_mode",
         ]
         for field in simple_fields:
             if field in kwargs:
@@ -220,6 +222,9 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             instance.set_blocked_phones(kwargs["blocked_phones"])
         if "llm_params" in kwargs:
             instance.set_llm_params(kwargs["llm_params"])
+        if "knowledge_collection_ids" in kwargs:
+            ids = kwargs["knowledge_collection_ids"]
+            instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
         await self.session.commit()

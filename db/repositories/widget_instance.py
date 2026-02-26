@@ -2,6 +2,7 @@
 Widget instance repository for managing website widget instances.
 """
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -206,6 +207,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             "tts_engine",
             "tts_voice",
             "tts_preset",
+            "rag_mode",
         ]
         for field in simple_fields:
             if field in kwargs:
@@ -216,6 +218,9 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             instance.set_allowed_domains(kwargs["allowed_domains"])
         if "llm_params" in kwargs:
             instance.set_llm_params(kwargs["llm_params"])
+        if "knowledge_collection_ids" in kwargs:
+            ids = kwargs["knowledge_collection_ids"]
+            instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
         await self.session.commit()

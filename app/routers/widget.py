@@ -89,6 +89,9 @@ class WidgetInstanceUpdateRequest(BaseModel):
     tts_preset: Optional[str] = None
     rate_limit_count: Optional[int] = None
     rate_limit_hours: Optional[int] = None
+    # RAG
+    rag_mode: Optional[str] = None
+    knowledge_collection_ids: Optional[List[int]] = None
 
 
 class WidgetShareRequest(BaseModel):
