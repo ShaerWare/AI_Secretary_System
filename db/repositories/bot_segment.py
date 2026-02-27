@@ -83,8 +83,8 @@ class BotSegmentRepository(BaseRepository[BotSegment]):
         if match_rules:
             segment.set_match_rules(match_rules)
         self.session.add(segment)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(segment)
         logger.info(f"Created segment: bot_id={bot_id}, key={kwargs.get('segment_key')}")
         return segment.to_dict()
 
@@ -100,7 +100,6 @@ class BotSegmentRepository(BaseRepository[BotSegment]):
             if hasattr(segment, k):
                 setattr(segment, k, v)
         await self.session.commit()
-        await self.session.refresh(segment)
         logger.info(f"Updated segment: id={segment_id}")
         return segment.to_dict()
 

@@ -48,8 +48,8 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
         """Create a new project."""
         project = KanbanProject(**kwargs)
         self.session.add(project)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(project)
         return project.to_dict()
 
     async def update_project(self, project_id: int, **kwargs) -> Optional[dict]:
@@ -61,7 +61,6 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
             if hasattr(project, key):
                 setattr(project, key, value)
         await self.session.commit()
-        await self.session.refresh(project)
         return project.to_dict()
 
     async def update_last_synced(self, project_id: int) -> None:

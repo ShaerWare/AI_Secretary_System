@@ -80,8 +80,8 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
             config.set_account_info(kwargs["account_info"])
 
         config.updated = datetime.utcnow()
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(config)
         return config.to_dict()
 
     async def clear_tokens(self, workspace_id: Optional[int] = None) -> dict:
@@ -97,7 +97,6 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
             config.last_sync_at = None
             config.updated = datetime.utcnow()
             await self.session.commit()
-            await self.session.refresh(config)
             return config.to_dict()
         return {}
 
@@ -128,8 +127,8 @@ class AmoCRMSyncLogRepository(BaseRepository[AmoCRMSyncLog]):
             error_message=error_message,
         )
         self.session.add(entry)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(entry)
         return entry.to_dict()
 
     async def get_recent(self, limit: int = 50) -> List[dict]:

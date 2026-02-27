@@ -197,7 +197,6 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
 
         self.session.add(instance)
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Created bot instance: {instance_id}")
         return instance.to_dict()
@@ -262,7 +261,6 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Updated bot instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()

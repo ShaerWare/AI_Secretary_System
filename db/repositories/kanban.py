@@ -207,8 +207,8 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         """Add a checklist item to a task."""
         item = KanbanChecklistItem(task_id=task_id, text=text, position=position)
         self.session.add(item)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(item)
         return item.to_dict()
 
     async def toggle_checklist_item(self, item_id: int) -> Optional[dict]:
@@ -218,7 +218,6 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             return None
         item.is_done = not item.is_done
         await self.session.commit()
-        await self.session.refresh(item)
         return item.to_dict()
 
     async def delete_checklist_item(self, item_id: int) -> bool:

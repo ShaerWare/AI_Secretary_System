@@ -66,7 +66,6 @@ class LLMPresetRepository(BaseRepository[LLMPreset]):
             preset.repetition_penalty = repetition_penalty
 
         await self.session.commit()
-        await self.session.refresh(preset)
         return preset
 
     async def update_prompt(self, preset_id: str, system_prompt: str) -> Optional[LLMPreset]:
@@ -77,7 +76,6 @@ class LLMPresetRepository(BaseRepository[LLMPreset]):
 
         preset.system_prompt = system_prompt
         await self.session.commit()
-        await self.session.refresh(preset)
         return preset
 
     async def ensure_defaults(self) -> int:

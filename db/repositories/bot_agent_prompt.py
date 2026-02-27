@@ -44,8 +44,8 @@ class BotAgentPromptRepository(BaseRepository[BotAgentPrompt]):
         """Create a new agent prompt."""
         prompt = BotAgentPrompt(bot_id=bot_id, **kwargs)
         self.session.add(prompt)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(prompt)
         logger.info(f"Created agent prompt: bot_id={bot_id}, key={kwargs.get('prompt_key')}")
         return prompt.to_dict()
 
@@ -59,7 +59,6 @@ class BotAgentPromptRepository(BaseRepository[BotAgentPrompt]):
                 setattr(prompt, k, v)
         prompt.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(prompt)
         logger.info(f"Updated agent prompt: id={prompt_id}")
         return prompt.to_dict()
 

@@ -47,8 +47,8 @@ class WooCommerceConfigRepository(BaseRepository[WooCommerceConfig]):
                 setattr(config, field, kwargs[field])
 
         config.updated = datetime.utcnow()
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(config)
         return config.to_dict()
 
     async def clear_credentials(self) -> dict:
@@ -61,5 +61,4 @@ class WooCommerceConfigRepository(BaseRepository[WooCommerceConfig]):
         config.is_connected = False
         config.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(config)
         return config.to_dict()

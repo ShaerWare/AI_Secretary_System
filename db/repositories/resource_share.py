@@ -54,7 +54,6 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
             existing.shared_by = shared_by
             existing.shared_at = datetime.utcnow()
             await self.session.commit()
-            await self.session.refresh(existing)
             return existing.to_dict()
 
         share = ResourceShare(
@@ -66,8 +65,8 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
             shared_at=datetime.utcnow(),
         )
         self.session.add(share)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(share)
         return share.to_dict()
 
     async def remove_share(self, resource_type: str, resource_id: str, user_id: int) -> bool:

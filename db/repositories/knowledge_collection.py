@@ -94,8 +94,8 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
             **create_kwargs,
         )
         self.session.add(col)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(col)
         d = col.to_dict()
         d["document_count"] = 0
         return d
@@ -123,7 +123,6 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
             col.enabled = enabled
 
         await self.session.commit()
-        await self.session.refresh(col)
         d = col.to_dict()
         # Count documents
         result = await self.session.execute(

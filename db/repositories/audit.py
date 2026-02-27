@@ -40,8 +40,8 @@ class AuditRepository(BaseRepository[AuditLog]):
         )
 
         self.session.add(entry)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(entry)
 
         return entry
 

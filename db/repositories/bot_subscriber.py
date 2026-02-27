@@ -45,7 +45,6 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
             subscriber.unsubscribed_at = None
             subscriber.subscribed_at = datetime.utcnow()
             await self.session.commit()
-            await self.session.refresh(subscriber)
             logger.info(f"Re-subscribed user: bot_id={bot_id}, user_id={user_id}")
             return subscriber.to_dict()
 
@@ -57,8 +56,8 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
             subscribed_at=datetime.utcnow(),
         )
         self.session.add(subscriber)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(subscriber)
         logger.info(f"Subscribed user: bot_id={bot_id}, user_id={user_id}")
         return subscriber.to_dict()
 
@@ -84,7 +83,6 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
         subscriber.subscribed = False
         subscriber.unsubscribed_at = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(subscriber)
         logger.info(f"Unsubscribed user: bot_id={bot_id}, user_id={user_id}")
         return subscriber.to_dict()
 

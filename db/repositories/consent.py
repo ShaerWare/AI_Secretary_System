@@ -79,8 +79,8 @@ class ConsentRepository(BaseRepository[UserConsent]):
             )
             self.session.add(consent)
 
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(consent)
         return consent.to_dict()
 
     async def revoke_consent(self, user_id: str, consent_type: str) -> Optional[dict]:
@@ -99,7 +99,6 @@ class ConsentRepository(BaseRepository[UserConsent]):
             consent.granted = False
             consent.revoked_at = datetime.utcnow()
             await self.session.commit()
-            await self.session.refresh(consent)
             return consent.to_dict()
         return None
 

@@ -147,7 +147,6 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
 
         self.session.add(provider)
         await self.session.commit()
-        await self.session.refresh(provider)
 
         logger.info(f"Created cloud provider: {provider_id}")
         return provider.to_dict()
@@ -187,7 +186,6 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
 
         provider.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(provider)
 
         logger.info(f"Updated cloud provider: {provider_id}")
         data: dict[str, Any] = provider.to_dict()
