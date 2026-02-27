@@ -108,8 +108,8 @@
       position: fixed !important;
       bottom: 20px !important;
       ${settings.position}: 20px !important;
-      width: 60px !important;
-      height: 60px !important;
+      width: 70px !important;
+      height: 70px !important;
       border-radius: 50% !important;
       background: var(--ai-primary) !important;
       border: none !important;
