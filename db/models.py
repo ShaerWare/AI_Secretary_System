@@ -975,6 +975,9 @@ class WidgetInstance(Base):
     primary_color: Mapped[str] = mapped_column(String(20), default="#c2410c")
     button_icon: Mapped[str] = mapped_column(String(20), default="chat")
     position: Mapped[str] = mapped_column(String(20), default="right")  # left or right
+    button_size: Mapped[int] = mapped_column(Integer, default=60)
+    button_offset_bottom: Mapped[int] = mapped_column(Integer, default=20)
+    button_offset_side: Mapped[int] = mapped_column(Integer, default=20)
 
     # Access control
     allowed_domains: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
@@ -2547,6 +2550,120 @@ class WooCommerceConfig(Base):
                 else ""
             )
         return result
+
+
+# =============================================================================
+# GitHub Repository Projects (Knowledge Base)
+# =============================================================================
+
+# Default file patterns for GitHub repo sync
+GITHUB_DEFAULT_INCLUDE = [
+    "*.md",
+    "*.py",
+    "*.ts",
+    "*.tsx",
+    "*.vue",
+    "*.go",
+    "*.js",
+    "*.jsx",
+    "*.rs",
+    "*.java",
+    "*.yaml",
+    "*.yml",
+    "*.toml",
+    "*.sh",
+    "*.sql",
+    "*.html",
+    "*.css",
+]
+GITHUB_DEFAULT_EXCLUDE = [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+    "*.lock",
+    "*.min.js",
+    "*.min.css",
+    "package-lock.json",
+]
+
+
+class GitHubRepoProject(Base):
+    """GitHub repository connected as a knowledge base collection."""
+
+    __tablename__ = "github_repo_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    github_owner: Mapped[str] = mapped_column(String(100), nullable=False)
+    github_repo: Mapped[str] = mapped_column(String(100), nullable=False)
+    github_token: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    branch: Mapped[str] = mapped_column(String(100), default="main", server_default="main")
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
+    sync_status: Mapped[str] = mapped_column(String(20), default="idle", server_default="idle")
+    sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_commit_sha: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    include_patterns: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    exclude_patterns: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    def get_include_patterns(self) -> list[str]:
+        if self.include_patterns:
+            try:
+                result: list[str] = json.loads(self.include_patterns)
+                return result
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return list(GITHUB_DEFAULT_INCLUDE)
+
+    def get_exclude_patterns(self) -> list[str]:
+        if self.exclude_patterns:
+            try:
+                result: list[str] = json.loads(self.exclude_patterns)
+                return result
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return list(GITHUB_DEFAULT_EXCLUDE)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "github_owner": self.github_owner,
+            "github_repo": self.github_repo,
+            "has_token": bool(self.github_token),
+            "branch": self.branch,
+            "collection_id": self.collection_id,
+            "sync_status": self.sync_status,
+            "sync_error": self.sync_error,
+            "last_synced": self.last_synced.isoformat() if self.last_synced else None,
+            "last_commit_sha": self.last_commit_sha,
+            "include_patterns": self.get_include_patterns(),
+            "exclude_patterns": self.get_exclude_patterns(),
+            "file_count": self.file_count,
+            "total_size_bytes": self.total_size_bytes,
+            "workspace_id": self.workspace_id,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
 
 
 # =============================================================================

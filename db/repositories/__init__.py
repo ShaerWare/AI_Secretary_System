@@ -28,6 +28,7 @@ from db.repositories.cloud_provider import CloudProviderRepository
 from db.repositories.config import ConfigRepository
 from db.repositories.consent import ConsentRepository
 from db.repositories.faq import FAQRepository
+from db.repositories.github_repo_project import GitHubRepoProjectRepository
 from db.repositories.gsm import GSMCallLogRepository, GSMSMSLogRepository
 from db.repositories.kanban import KanbanRepository
 from db.repositories.kanban_project import KanbanProjectRepository
@@ -74,6 +75,7 @@ __all__ = [
     "ConfigRepository",
     "ConsentRepository",
     "FAQRepository",
+    "GitHubRepoProjectRepository",
     "GSMCallLogRepository",
     "GSMSMSLogRepository",
     "KanbanProjectRepository",

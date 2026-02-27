@@ -45,6 +45,7 @@ from app.routers import (
     chat,
     claude_code,
     faq,
+    github_repos,
     github_webhook,
     gsm,
     kanban,
@@ -442,6 +443,7 @@ app.include_router(wiki_rag.router)
 app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
 app.include_router(woocommerce.router)
+app.include_router(github_repos.router)
 app.include_router(claude_code.router)
 app.include_router(kanban.router)
 app.include_router(roles.router)
@@ -3607,7 +3609,10 @@ window.aiChatSettings = {{
   placeholderColor: '{config.get("placeholder_color") or ""}',
   placeholderFont: '{_escape_js_string(config.get("placeholder_font") or "")}',
   buttonIcon: '{config.get("button_icon") or "chat"}',
-  position: '{config.get("position", "right")}'
+  position: '{config.get("position", "right")}',
+  buttonSize: {config.get("button_size", 60)},
+  buttonOffsetBottom: {config.get("button_offset_bottom", 20)},
+  buttonOffsetSide: {config.get("button_offset_side", 20)}
 }};
 
 """

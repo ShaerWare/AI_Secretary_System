@@ -66,6 +66,9 @@ const formData = ref<Partial<WidgetInstance>>({
   primary_color: '#c2410c',
   button_icon: 'chat',
   position: 'right',
+  button_size: 60,
+  button_offset_bottom: 20,
+  button_offset_side: 20,
   allowed_domains: [],
   tunnel_url: '',
   llm_backend: 'vllm',
@@ -654,6 +657,14 @@ function handleTestKeydown(e: KeyboardEvent) {
               <p class="text-lg font-semibold capitalize">{{ t(`widget.positions.${selectedInstance.position}`) }}</p>
             </div>
             <div class="bg-card rounded-xl border border-border p-4">
+              <h3 class="font-medium mb-2">{{ t('widget.buttonSize') }}</h3>
+              <p class="text-lg font-semibold">{{ selectedInstance.button_size ?? 60 }}px</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-4">
+              <h3 class="font-medium mb-2">{{ t('widget.buttonOffsetBottom') }} / {{ t('widget.buttonOffsetSide') }}</h3>
+              <p class="text-lg font-semibold">{{ selectedInstance.button_offset_bottom ?? 20 }}px / {{ selectedInstance.button_offset_side ?? 20 }}px</p>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('widget.placeholder') }}</h3>
               <p class="text-sm bg-secondary rounded-lg p-3">{{ selectedInstance.placeholder }}</p>
             </div>
@@ -1116,6 +1127,40 @@ function handleTestKeydown(e: KeyboardEvent) {
                   >
                     {{ t(`widget.positions.${pos}`) }}
                   </button>
+                </div>
+              </div>
+
+              <!-- Button Size & Offsets -->
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-sm font-medium mb-1">{{ t('widget.buttonSize') }}</label>
+                  <input
+                    v-model.number="formData.button_size"
+                    type="number"
+                    min="30"
+                    max="120"
+                    class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">{{ t('widget.buttonOffsetBottom') }}</label>
+                  <input
+                    v-model.number="formData.button_offset_bottom"
+                    type="number"
+                    min="0"
+                    max="200"
+                    class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">{{ t('widget.buttonOffsetSide') }}</label>
+                  <input
+                    v-model.number="formData.button_offset_side"
+                    type="number"
+                    min="0"
+                    max="200"
+                    class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
                 </div>
               </div>
             </div>
