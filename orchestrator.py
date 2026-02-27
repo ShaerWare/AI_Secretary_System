@@ -562,7 +562,8 @@ async def _auto_start_bridge_if_needed():
 async def _build_wiki_embeddings(wiki_rag):
     """Background task: build embedding vectors for Wiki RAG sections."""
     try:
-        result = wiki_rag.build_embeddings()
+        # Run sync build_embeddings in a thread to avoid blocking the event loop
+        result = await asyncio.to_thread(wiki_rag.build_embeddings)
         if result.get("status") == "ok":
             total = result.get("total", result.get("cached", 0))
             new = result.get("new", 0)
