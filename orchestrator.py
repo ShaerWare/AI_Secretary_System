@@ -585,7 +585,8 @@ async def _load_collection_indexes(wiki_rag):
             filenames = await async_knowledge_collection_manager.get_document_filenames(col["id"])
             if filenames:
                 base_dir = Path(col.get("base_dir", "wiki-pages"))
-                wiki_rag.load_collection(col["id"], filenames, base_dir)
+                # Run sync load_collection in a thread to avoid blocking the event loop
+                await asyncio.to_thread(wiki_rag.load_collection, col["id"], filenames, base_dir)
                 loaded += 1
         if loaded:
             logger.info(f"📚 Wiki RAG: загружено {loaded} коллекционных индексов")
