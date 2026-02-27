@@ -76,8 +76,8 @@ class UserRepository(BaseRepository[User]):
             is_active=True,
         )
         self.session.add(user)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(user)
         return user.to_dict()
 
     async def update_password(self, user_id: int, new_password: str) -> bool:
@@ -105,7 +105,6 @@ class UserRepository(BaseRepository[User]):
             user.display_name = display_name
         user.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(user)
         return user.to_dict()
 
     async def set_role(self, user_id: int, role: str) -> bool:
@@ -146,8 +145,8 @@ class UserRepository(BaseRepository[User]):
             is_active=True,
         )
         self.session.add(user)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(user)
         return user.to_dict()
 
     async def list_users(

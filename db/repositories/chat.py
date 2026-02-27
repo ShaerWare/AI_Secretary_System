@@ -151,7 +151,6 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         self.session.add(session)
         await self.session.commit()
-        await self.session.refresh(session)
 
         # Return dict manually to avoid lazy loading issues
         return {
@@ -354,7 +353,6 @@ class ChatRepository(BaseRepository[ChatSession]):
         session.updated = datetime.utcnow()
 
         await self.session.commit()
-        await self.session.refresh(message)
         await invalidate_session_cache(session_id)
 
         return message.to_dict()
@@ -399,7 +397,6 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.updated = datetime.utcnow()
 
         await self.session.commit()
-        await self.session.refresh(new_message)
         await invalidate_session_cache(session_id)
 
         return new_message.to_dict()

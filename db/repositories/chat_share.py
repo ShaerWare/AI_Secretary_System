@@ -62,7 +62,6 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             existing.shared_at = datetime.utcnow()
             existing.branch_message_id = branch_message_id
             await self.session.commit()
-            await self.session.refresh(existing)
             return existing.to_dict()
 
         share = ChatSessionShare(
@@ -74,8 +73,8 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             branch_message_id=branch_message_id,
         )
         self.session.add(share)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(share)
         return share.to_dict()
 
     async def remove_share(self, session_id: str, user_id: int) -> bool:

@@ -80,8 +80,8 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
             **create_kwargs,
         )
         self.session.add(doc)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(doc)
         return doc.to_dict()
 
     async def update_document(
@@ -107,7 +107,6 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
             doc.collection_id = collection_id
 
         await self.session.commit()
-        await self.session.refresh(doc)
         return doc.to_dict()
 
     async def delete_document(self, doc_id: int) -> bool:

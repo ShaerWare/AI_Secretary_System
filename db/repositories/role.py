@@ -57,8 +57,8 @@ class RoleRepository(BaseRepository[Role]):
                 RolePermission(module=module, level=level) for module, level in permissions.items()
             ]
         self.session.add(role)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(role)
         return role
 
     async def update_role(

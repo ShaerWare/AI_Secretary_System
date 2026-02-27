@@ -48,8 +48,8 @@ class BotQuizRepository(BaseRepository[BotQuizQuestion]):
         if options:
             question.set_options(options)
         self.session.add(question)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(question)
         logger.info(f"Created quiz question: bot_id={bot_id}, key={kwargs.get('question_key')}")
         return question.to_dict()
 
@@ -67,7 +67,6 @@ class BotQuizRepository(BaseRepository[BotQuizQuestion]):
                 setattr(question, k, v)
         question.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(question)
         logger.info(f"Updated quiz question: id={question_id}")
         return question.to_dict()
 

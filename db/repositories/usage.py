@@ -39,8 +39,8 @@ class UsageRepository(BaseRepository[UsageLog]):
             details=json.dumps(details, ensure_ascii=False) if details else None,
         )
         self.session.add(entry)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(entry)
         return entry.to_dict()
 
     async def get_usage(
@@ -252,8 +252,8 @@ class UsageLimitsRepository(BaseRepository[UsageLimits]):
             )
             self.session.add(limit)
 
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(limit)
         return limit.to_dict()
 
     async def delete_limit(self, service_type: str, limit_type: str) -> bool:

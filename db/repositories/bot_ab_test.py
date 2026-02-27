@@ -94,8 +94,8 @@ class BotAbTestRepository(BaseRepository[BotAbTest]):
         if variants:
             test.set_variants(variants)
         self.session.add(test)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(test)
         logger.info(f"Created A/B test: bot_id={bot_id}, key={kwargs.get('test_key')}")
         return test.to_dict()
 
@@ -112,7 +112,6 @@ class BotAbTestRepository(BaseRepository[BotAbTest]):
                 setattr(test, k, v)
         test.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(test)
         logger.info(f"Updated A/B test: id={test_id}")
         return test.to_dict()
 

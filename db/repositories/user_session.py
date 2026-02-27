@@ -36,8 +36,8 @@ class UserSessionRepository(BaseRepository[UserSession]):
             workspace_id=workspace_id,
         )
         self.session.add(user_session)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(user_session)
         return user_session.to_dict()
 
     async def get_by_jti(self, jti: str) -> Optional[UserSession]:

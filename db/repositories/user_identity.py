@@ -79,7 +79,6 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
         )
         self.session.add(identity)
         await self.session.commit()
-        await self.session.refresh(user)
         return user.to_dict()
 
     async def get_identities_for_user(self, user_id: int) -> List[dict]:
@@ -107,8 +106,8 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
             last_seen=datetime.utcnow(),
         )
         self.session.add(identity)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(identity)
         return identity.to_dict()
 
     async def update_last_seen(self, provider: str, provider_uid: str) -> bool:

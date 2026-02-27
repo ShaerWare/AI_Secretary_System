@@ -47,8 +47,8 @@ class PaymentRepository(BaseRepository[PaymentLog]):
             status="completed",
         )
         self.session.add(entry)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(entry)
         logger.info(f"Payment logged: bot={bot_id}, user={user_id}, {amount} {currency}")
         return entry.to_dict()
 

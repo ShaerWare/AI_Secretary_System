@@ -179,7 +179,6 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
 
         self.session.add(instance)
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Created WhatsApp instance: {instance_id}")
         return instance.to_dict()
@@ -228,7 +227,6 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Updated WhatsApp instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()

@@ -176,7 +176,6 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
 
         self.session.add(instance)
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Created widget instance: {instance_id}")
         return instance.to_dict()
@@ -224,7 +223,6 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
 
         instance.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(instance)
 
         logger.info(f"Updated widget instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()

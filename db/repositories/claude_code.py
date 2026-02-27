@@ -54,7 +54,6 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
         entity = ClaudeCodeSession(**create_kwargs)
         self.session.add(entity)
         await self.session.commit()
-        await self.session.refresh(entity)
         return entity.to_dict()
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
@@ -66,7 +65,6 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
                 setattr(entity, key, value)
         entity.updated = datetime.utcnow()
         await self.session.commit()
-        await self.session.refresh(entity)
         return entity.to_dict()
 
     async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:

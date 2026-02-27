@@ -65,7 +65,6 @@ class BotGithubRepository(BaseRepository[BotGithubConfig]):
                     setattr(config, k, v)
             config.updated = datetime.utcnow()
             await self.session.commit()
-            await self.session.refresh(config)
             logger.info(f"Updated GitHub config: bot_id={bot_id}")
             return config.to_dict()
 
@@ -80,8 +79,8 @@ class BotGithubRepository(BaseRepository[BotGithubConfig]):
         if events is not None:
             config.set_events(events)
         self.session.add(config)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(config)
         logger.info(f"Created GitHub config: bot_id={bot_id}")
         return config.to_dict()
 

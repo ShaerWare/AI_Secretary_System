@@ -110,8 +110,8 @@ class PresetRepository(BaseRepository[TTSPreset]):
         )
 
         self.session.add(preset)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(preset)
         await self._invalidate_cache()
 
         return preset.to_dict()

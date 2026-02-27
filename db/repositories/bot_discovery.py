@@ -51,8 +51,8 @@ class BotDiscoveryRepository(BaseRepository[BotDiscoveryResponse]):
             created=datetime.utcnow(),
         )
         self.session.add(response)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(response)
         logger.debug(f"Saved discovery response: bot_id={bot_id}, user_id={user_id}, step={step}")
         return response.to_dict()
 

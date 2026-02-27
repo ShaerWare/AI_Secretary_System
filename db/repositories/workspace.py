@@ -58,8 +58,8 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         """Create the default workspace (id=1)."""
         ws = Workspace(name=name, slug=slug)
         self.session.add(ws)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(ws)
         return ws.to_dict()
 
     # ============== Members Management ==============
@@ -160,8 +160,8 @@ class WorkspaceRepository(BaseRepository[Workspace]):
             ),
         )
         self.session.add(invite)
+        await self.session.flush()
         await self.session.commit()
-        await self.session.refresh(invite)
         return invite.to_dict()
 
     async def list_invites(self, workspace_id: int) -> List[dict]:
