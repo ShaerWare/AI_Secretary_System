@@ -106,7 +106,7 @@
 
     .ai-chat-button {
       position: fixed !important;
-      bottom: 20px !important;
+      bottom: 70px !important;
       ${settings.position}: 20px !important;
       width: 70px !important;
       height: 70px !important;
@@ -150,7 +150,7 @@
 
     .ai-chat-window {
       position: fixed;
-      bottom: 90px;
+      bottom: 150px;
       ${settings.position}: 20px;
       width: 380px;
       max-width: calc(100vw - 40px);
