@@ -416,8 +416,7 @@ async def sync_project(
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr if e.stderr else str(e)
         logger.error(
-            f"Git pull failed for {project_orm.github_owner}/{project_orm.github_repo}: "
-            f"{error_msg}"
+            f"Git pull failed for {project_orm.github_owner}/{project_orm.github_repo}: {error_msg}"
         )
         await async_github_repo_project_manager.update_sync_status(
             project_id, status="error", error=error_msg
