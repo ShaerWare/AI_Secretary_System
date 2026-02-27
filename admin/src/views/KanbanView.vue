@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, defineAsyncComponent } from 'vue'
+import { ref, watch, onMounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ClipboardList,
@@ -13,11 +13,13 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Database,
 } from 'lucide-vue-next'
 import { useKanbanStore } from '@/stores/kanban'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
+import { kanbanApi } from '@/api'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import type { KanbanTask, TaskCreateData, TaskUpdateData } from '@/api'
@@ -249,6 +251,60 @@ async function handleProjectDelete(id: number) {
 function selectProject(id: number | null) {
   kanbanStore.selectProject(id)
 }
+
+// ============== Dataset (RAG Knowledge Base) ==============
+const datasetSyncing = ref(false)
+const datasetStatus = ref<{ synced: boolean; documents: number; sections: number } | null>(null)
+
+async function fetchDatasetStatus() {
+  if (!kanbanStore.currentProject) {
+    datasetStatus.value = null
+    return
+  }
+  try {
+    datasetStatus.value = await kanbanApi.datasetStatus(kanbanStore.currentProject.id)
+  } catch {
+    datasetStatus.value = null
+  }
+}
+
+async function handleDatasetSync() {
+  if (!kanbanStore.currentProject) return
+  datasetSyncing.value = true
+  try {
+    const result = await kanbanApi.datasetSync(kanbanStore.currentProject.id)
+    toast.success(
+      `${t('kanban.dataset.syncSuccess')}: ${result.tasks} ${t('kanban.dataset.tasks')}, ${result.documents} ${t('kanban.dataset.files')}`,
+    )
+    await fetchDatasetStatus()
+  } catch {
+    toast.error(t('kanban.dataset.syncFailed'))
+  } finally {
+    datasetSyncing.value = false
+  }
+}
+
+async function handleDatasetClear() {
+  if (!kanbanStore.currentProject) return
+  const confirmed = await confirmStore.confirm({
+    title: t('kanban.dataset.clear'),
+    message: t('kanban.dataset.clearConfirm'),
+    confirmText: t('kanban.dataset.clear'),
+    type: 'danger',
+  })
+  if (!confirmed) return
+  try {
+    await kanbanApi.datasetClear(kanbanStore.currentProject.id)
+    toast.success(t('kanban.dataset.clearSuccess'))
+    datasetStatus.value = null
+  } catch {
+    toast.error(t('kanban.dataset.clearFailed'))
+  }
+}
+
+watch(() => kanbanStore.selectedProjectId, () => {
+  fetchDatasetStatus()
+})
 </script>
 
 <template>
@@ -444,6 +500,25 @@ function selectProject(id: number | null) {
             <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': kanbanStore.syncing }" />
             <span class="hidden sm:inline">{{ t('kanban.syncGithub') }}</span>
           </button>
+
+          <!-- Knowledge Base button (GitHub projects only) -->
+          <template v-if="kanbanStore.currentProject && authStore.canEdit('kanban')">
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
+              :disabled="datasetSyncing"
+              :title="t('kanban.dataset.syncTooltip')"
+              @click="handleDatasetSync"
+            >
+              <Database class="w-4 h-4" :class="{ 'animate-pulse': datasetSyncing }" />
+              <span class="hidden sm:inline">{{ datasetSyncing ? t('kanban.dataset.syncing') : t('kanban.dataset.sync') }}</span>
+            </button>
+            <span
+              v-if="datasetStatus?.synced"
+              class="text-xs text-muted-foreground hidden lg:inline"
+            >
+              RAG: {{ datasetStatus.documents }} {{ t('kanban.dataset.files') }}
+            </span>
+          </template>
 
           <!-- View toggle -->
           <div class="flex rounded-lg border border-border overflow-hidden">

@@ -55,6 +55,9 @@ class WidgetInstanceCreateRequest(BaseModel):
     primary_color: str = "#c2410c"
     button_icon: str = "chat"
     position: str = "right"
+    button_size: int = 60
+    button_offset_bottom: int = 20
+    button_offset_side: int = 20
     allowed_domains: List[str] = []
     tunnel_url: Optional[str] = None
     llm_backend: str = "vllm"

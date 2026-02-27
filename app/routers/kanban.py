@@ -2,13 +2,21 @@
 
 import json
 import logging
+import re
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth_manager import User, require_permission, user_has_level, workspace_context
-from db.integration import async_audit_logger, async_kanban_manager, async_kanban_project_manager
+from db.integration import (
+    async_audit_logger,
+    async_kanban_manager,
+    async_kanban_project_manager,
+    async_knowledge_collection_manager,
+    async_knowledge_doc_manager,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -439,4 +447,224 @@ async def delete_checklist_item(
     deleted = await async_kanban_manager.delete_checklist_item(item_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Checklist item not found")
+    return {"status": "ok"}
+
+
+# ============== Dataset (RAG Knowledge Base) ==============
+
+
+@router.post("/projects/{project_id}/dataset-sync")
+async def dataset_sync(
+    project_id: int,
+    user: User = Depends(require_permission("kanban", "edit")),
+):
+    """Sync kanban project tasks to a RAG knowledge base collection."""
+    from app.services.kanban_dataset_service import (
+        build_project_summary,
+        build_status_document,
+        get_project_dir,
+    )
+
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    project = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dict = {
+        "id": project.id,
+        "name": project.name,
+        "github_owner": project.github_owner,
+        "github_repo": project.github_repo,
+    }
+
+    # Fetch all tasks for this project
+    is_admin = user_has_level(user, "kanban", "manage")
+    tasks = await async_kanban_manager.get_visible_tasks_for_project(
+        project_id, user.id, is_admin, workspace_id=ws_id
+    )
+
+    sync_time = datetime.utcnow().strftime("%d.%m.%Y %H:%M")
+    slug = f"kanban-{project.github_owner}-{project.github_repo}".lower()
+    project_dir = get_project_dir(slug)
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Group tasks by status
+    tasks_by_status: Dict[str, list] = {}
+    for task in tasks:
+        s = task.get("status", "todo")
+        tasks_by_status.setdefault(s, []).append(task)
+
+    # Build markdown documents
+    documents: list[tuple[str, str, str]] = []  # (filename, title, content)
+
+    for status, status_tasks in tasks_by_status.items():
+        content = build_status_document(project.name, status, status_tasks, sync_time)
+        filename = f"kanban-{slug}-{status}.md"
+        (project_dir / filename).write_text(content, encoding="utf-8")
+        documents.append((filename, f"{project.name}: {status}", content))
+
+    # Summary document
+    summary = build_project_summary(project.name, project_dict, tasks, sync_time)
+    summary_filename = f"kanban-{slug}-summary.md"
+    (project_dir / summary_filename).write_text(summary, encoding="utf-8")
+    documents.append((summary_filename, f"{project.name}: Сводка", summary))
+
+    # Auto-create or find collection
+    collection = None
+    existing_collections = await async_knowledge_collection_manager.get_all()
+    for col in existing_collections:
+        if col.get("slug") == slug:
+            collection = col
+            break
+
+    if not collection:
+        collection = await async_knowledge_collection_manager.create(
+            name=f"Kanban: {project.name}",
+            slug=slug,
+            description=f"Задачи: {project.github_owner}/{project.github_repo}",
+            enabled=True,
+            base_dir=str(project_dir),
+        )
+
+    collection_id = collection["id"]
+
+    # Clear existing documents for this collection
+    existing_docs = await async_knowledge_doc_manager.get_by_collection(collection_id)
+    for doc in existing_docs:
+        await async_knowledge_doc_manager.delete(doc["id"])
+
+    # Create new knowledge document records
+    total_sections = 0
+    for filename, title, content in documents:
+        sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
+        total_sections += sections
+        await async_knowledge_doc_manager.create(
+            filename=filename,
+            title=title,
+            source_type="kanban",
+            file_size_bytes=len(content.encode("utf-8")),
+            section_count=sections,
+            collection_id=collection_id,
+        )
+
+    # Reload RAG index
+    from app.dependencies import get_container
+
+    container = get_container()
+    wiki_rag = container.wiki_rag_service
+    if wiki_rag:
+        filenames = [d[0] for d in documents]
+        wiki_rag.reload_collection(collection_id, filenames, project_dir)
+
+    await async_audit_logger.log(
+        action="dataset_sync",
+        resource="kanban_project",
+        resource_id=str(project_id),
+        user_id=user.username,
+        details={"tasks": len(tasks), "documents": len(documents)},
+    )
+
+    return {
+        "status": "ok",
+        "tasks": len(tasks),
+        "documents": len(documents),
+        "sections": total_sections,
+        "collection_id": collection_id,
+        "synced_at": sync_time,
+    }
+
+
+@router.get("/projects/{project_id}/dataset-status")
+async def dataset_status(
+    project_id: int,
+    user: User = Depends(require_permission("kanban", "view")),
+):
+    """Get dataset status for a kanban project."""
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    project = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    slug = f"kanban-{project.github_owner}-{project.github_repo}".lower()
+
+    # Find collection
+    existing_collections = await async_knowledge_collection_manager.get_all()
+    collection = None
+    for col in existing_collections:
+        if col.get("slug") == slug:
+            collection = col
+            break
+
+    if not collection:
+        return {
+            "synced": False,
+            "collection_id": None,
+            "documents": 0,
+            "sections": 0,
+        }
+
+    collection_id = collection["id"]
+    docs = await async_knowledge_doc_manager.get_by_collection(collection_id)
+    total_sections = sum(d.get("section_count", 0) for d in docs)
+
+    return {
+        "synced": True,
+        "collection_id": collection_id,
+        "documents": len(docs),
+        "sections": total_sections,
+    }
+
+
+@router.delete("/projects/{project_id}/dataset")
+async def dataset_clear(
+    project_id: int,
+    user: User = Depends(require_permission("kanban", "manage")),
+):
+    """Clear kanban dataset — remove files, DB records, and unload RAG collection."""
+    from app.services.kanban_dataset_service import clean_kanban_files, get_project_dir
+
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    project = await async_kanban_project_manager.get_project(project_id, workspace_id=ws_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    slug = f"kanban-{project.github_owner}-{project.github_repo}".lower()
+
+    # Find and delete collection
+    existing_collections = await async_knowledge_collection_manager.get_all()
+    collection = None
+    for col in existing_collections:
+        if col.get("slug") == slug:
+            collection = col
+            break
+
+    if collection:
+        collection_id = collection["id"]
+
+        # Delete knowledge documents
+        docs = await async_knowledge_doc_manager.get_by_collection(collection_id)
+        for doc in docs:
+            await async_knowledge_doc_manager.delete(doc["id"])
+
+        # Clear RAG index
+        from app.dependencies import get_container
+
+        container = get_container()
+        wiki_rag = container.wiki_rag_service
+        if wiki_rag:
+            project_dir = get_project_dir(slug)
+            wiki_rag.reload_collection(collection_id, [], project_dir)
+
+        await async_knowledge_collection_manager.delete(collection_id)
+
+    # Remove files
+    clean_kanban_files(slug)
+
+    await async_audit_logger.log(
+        action="dataset_clear",
+        resource="kanban_project",
+        resource_id=str(project_id),
+        user_id=user.username,
+    )
+
     return {"status": "ok"}

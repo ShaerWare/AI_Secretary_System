@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { finetuneApi, ttsFinetune, wikiRagApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult, type KnowledgeCollection } from '@/api'
+import { finetuneApi, ttsFinetune, wikiRagApi, githubReposApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult, type KnowledgeCollection, type GitHubRepoProject, type GitHubProjectCreateData } from '@/api'
 import {
   Sparkles,
   Upload,
@@ -39,9 +39,15 @@ import {
 } from 'lucide-vue-next'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
+import { useConfirmStore } from '@/stores/confirm'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const queryClient = useQueryClient()
 const authStore = useAuthStore()
+const toast = useToastStore()
+const confirmStore = useConfirmStore()
 
 // Active tab
 const activeTab = ref<'llm' | 'tts'>('llm')
@@ -317,6 +323,69 @@ const deleteCollectionMutation = useMutation({
   },
 })
 
+// ============== GitHub Repos Queries & Mutations ==============
+const showGitHubRepoForm = ref(false)
+const gitHubRepoFormData = ref<GitHubProjectCreateData>({
+  name: '',
+  github_owner: '',
+  github_repo: '',
+  github_token: '',
+  branch: 'main',
+})
+
+const { data: gitHubReposData, refetch: refetchGitHubRepos } = useQuery({
+  queryKey: ['github-repos'],
+  queryFn: () => githubReposApi.listProjects(),
+  enabled: computed(() => activeTab.value === 'llm' && llmMode.value === 'cloud'),
+})
+
+const gitHubRepos = computed(() => gitHubReposData.value?.projects || [])
+
+const connectGitHubRepoMutation = useMutation({
+  mutationFn: (data: GitHubProjectCreateData) => githubReposApi.createProject(data),
+  onSuccess: (data) => {
+    refetchGitHubRepos()
+    refetchCollections()
+    refetchWikiDocs()
+    refetchWikiStats()
+    showGitHubRepoForm.value = false
+    gitHubRepoFormData.value = { name: '', github_owner: '', github_repo: '', github_token: '', branch: 'main' }
+    toast.success(t('githubRepos.connectSuccess', { count: data.files_indexed }))
+  },
+  onError: (error: Error) => {
+    toast.error(error.message || t('githubRepos.syncFail'))
+  },
+})
+
+const syncGitHubRepoMutation = useMutation({
+  mutationFn: (id: number) => githubReposApi.syncProject(id),
+  onSuccess: (data) => {
+    refetchGitHubRepos()
+    refetchCollections()
+    refetchWikiDocs()
+    refetchWikiStats()
+    if (data.changed) {
+      toast.success(t('githubRepos.syncSuccess', { count: data.files_indexed || 0 }))
+    } else {
+      toast.info(t('githubRepos.syncUpToDate'))
+    }
+  },
+  onError: () => {
+    toast.error(t('githubRepos.syncFail'))
+  },
+})
+
+const deleteGitHubRepoMutation = useMutation({
+  mutationFn: (id: number) => githubReposApi.deleteProject(id),
+  onSuccess: () => {
+    refetchGitHubRepos()
+    refetchCollections()
+    refetchWikiDocs()
+    refetchWikiStats()
+    toast.success(t('githubRepos.deleteSuccess'))
+  },
+})
+
 // ============== TTS Mutations ==============
 const uploadTtsSampleMutation = useMutation({
   mutationFn: (file: File) => ttsFinetune.uploadSample(file),
@@ -494,6 +563,28 @@ function submitCreateCollection() {
 function confirmDeleteCollection(col: KnowledgeCollection) {
   if (confirm(`Удалить коллекцию "${col.name}"? Документы останутся, но будут откреплены.`)) {
     deleteCollectionMutation.mutate(col.id)
+  }
+}
+
+// ============== GitHub Repos Methods ==============
+function submitConnectGitHubRepo() {
+  const d = gitHubRepoFormData.value
+  if (!d.name.trim() || !d.github_owner.trim() || !d.github_repo.trim()) return
+  connectGitHubRepoMutation.mutate({
+    ...d,
+    github_token: d.github_token || undefined,
+  })
+}
+
+async function confirmDeleteGitHubRepo(project: GitHubRepoProject) {
+  const confirmed = await confirmStore.confirm({
+    title: t('githubRepos.delete'),
+    message: t('githubRepos.deleteConfirm', { name: `${project.github_owner}/${project.github_repo}` }),
+    confirmText: t('githubRepos.delete'),
+    type: 'danger',
+  })
+  if (confirmed) {
+    deleteGitHubRepoMutation.mutate(project.id)
   }
 }
 
@@ -1181,6 +1272,159 @@ v-if="!adapter.active" :disabled="deleteAdapterMutation.isPending.value" class="
               <div v-if="createCollectionMutation.error.value" class="mt-2 text-red-500 text-xs">
                 {{ createCollectionMutation.error.value }}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GitHub Repositories -->
+        <div class="bg-card rounded-lg border border-border">
+          <div class="p-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <Github class="w-5 h-5" />
+                {{ t('githubRepos.title') }}
+              </h2>
+              <p class="text-sm text-muted-foreground mt-1">{{ t('githubRepos.description') }}</p>
+            </div>
+            <button
+              class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
+              @click="showGitHubRepoForm = !showGitHubRepoForm"
+            >
+              <Plus class="w-4 h-4" />
+              {{ t('githubRepos.connectRepo') }}
+            </button>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <!-- Connect form -->
+            <div v-if="showGitHubRepoForm" class="p-4 bg-secondary/50 rounded-lg border border-border space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('githubRepos.name') }}</label>
+                  <input
+                    v-model="gitHubRepoFormData.name"
+                    type="text"
+                    :placeholder="t('githubRepos.namePlaceholder')"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('githubRepos.branch') }}</label>
+                  <input
+                    v-model="gitHubRepoFormData.branch"
+                    type="text"
+                    placeholder="main"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">GitHub Owner</label>
+                  <input
+                    v-model="gitHubRepoFormData.github_owner"
+                    type="text"
+                    placeholder="owner"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">GitHub Repo</label>
+                  <input
+                    v-model="gitHubRepoFormData.github_repo"
+                    type="text"
+                    placeholder="repo"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('githubRepos.token') }}</label>
+                  <input
+                    v-model="gitHubRepoFormData.github_token"
+                    type="password"
+                    :placeholder="t('githubRepos.tokenPlaceholder')"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                  <p class="text-xs text-muted-foreground mt-1">{{ t('githubRepos.tokenHint') }}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  :disabled="!gitHubRepoFormData.name.trim() || !gitHubRepoFormData.github_owner.trim() || !gitHubRepoFormData.github_repo.trim() || connectGitHubRepoMutation.isPending.value"
+                  class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors text-sm"
+                  @click="submitConnectGitHubRepo"
+                >
+                  <Loader2 v-if="connectGitHubRepoMutation.isPending.value" class="w-3.5 h-3.5 animate-spin" />
+                  {{ connectGitHubRepoMutation.isPending.value ? t('githubRepos.connecting') : t('githubRepos.connectRepo') }}
+                </button>
+                <button
+                  class="px-3 py-1.5 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors text-sm"
+                  @click="showGitHubRepoForm = false"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+              <div v-if="connectGitHubRepoMutation.error.value" class="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
+                <AlertCircle class="w-4 h-4 flex-shrink-0" />
+                {{ connectGitHubRepoMutation.error.value }}
+              </div>
+            </div>
+
+            <!-- Connected repos table -->
+            <div v-if="gitHubRepos.length" class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-border">
+                    <th class="text-left p-2 font-medium text-muted-foreground">{{ t('githubRepos.name') }}</th>
+                    <th class="text-left p-2 font-medium text-muted-foreground">{{ t('githubRepos.repository') }}</th>
+                    <th class="text-left p-2 font-medium text-muted-foreground">{{ t('githubRepos.status') }}</th>
+                    <th class="text-right p-2 font-medium text-muted-foreground">{{ t('githubRepos.files') }}</th>
+                    <th class="text-right p-2 font-medium text-muted-foreground">{{ t('githubRepos.lastSynced') }}</th>
+                    <th class="text-right p-2 font-medium text-muted-foreground">{{ t('githubRepos.actions') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="repo in gitHubRepos" :key="repo.id" class="border-b border-border/50 hover:bg-secondary/50">
+                    <td class="p-2 font-medium">{{ repo.name }}</td>
+                    <td class="p-2 text-muted-foreground font-mono text-xs">{{ repo.github_owner }}/{{ repo.github_repo }}</td>
+                    <td class="p-2">
+                      <span
+                        class="px-1.5 py-0.5 text-xs rounded"
+                        :class="{
+                          'bg-green-500/10 text-green-500': repo.sync_status === 'idle',
+                          'bg-blue-500/10 text-blue-500': repo.sync_status === 'syncing',
+                          'bg-red-500/10 text-red-500': repo.sync_status === 'error',
+                        }"
+                      >
+                        {{ repo.sync_status === 'idle' ? t('githubRepos.statusIdle') : repo.sync_status === 'syncing' ? t('githubRepos.statusSyncing') : t('githubRepos.statusError') }}
+                      </span>
+                    </td>
+                    <td class="p-2 text-right">{{ repo.file_count }}</td>
+                    <td class="p-2 text-right text-muted-foreground text-xs">{{ repo.last_synced || '—' }}</td>
+                    <td class="p-2 text-right">
+                      <div class="flex items-center justify-end gap-1">
+                        <button
+                          :disabled="syncGitHubRepoMutation.isPending.value"
+                          class="p-1.5 hover:bg-secondary rounded-lg transition-colors"
+                          :title="t('githubRepos.sync')"
+                          @click="syncGitHubRepoMutation.mutate(repo.id)"
+                        >
+                          <RefreshCw :class="['w-4 h-4', syncGitHubRepoMutation.isPending.value && syncGitHubRepoMutation.variables.value === repo.id && 'animate-spin']" />
+                        </button>
+                        <button
+                          :disabled="deleteGitHubRepoMutation.isPending.value"
+                          class="p-1.5 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors"
+                          :title="t('githubRepos.delete')"
+                          @click="confirmDeleteGitHubRepo(repo)"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else-if="!showGitHubRepoForm" class="text-center p-6 text-muted-foreground text-sm">
+              {{ t('githubRepos.noProjects') }}
             </div>
           </div>
         </div>

@@ -144,4 +144,26 @@ export const kanbanApi = {
 
   deleteChecklistItem: (itemId: number) =>
     api.delete<{ status: string }>(`/admin/kanban/checklist/${itemId}`),
+
+  // Dataset (RAG Knowledge Base)
+  datasetSync: (projectId: number) =>
+    api.post<{
+      status: string;
+      tasks: number;
+      documents: number;
+      sections: number;
+      collection_id: number;
+      synced_at: string;
+    }>(`/admin/kanban/projects/${projectId}/dataset-sync`),
+
+  datasetStatus: (projectId: number) =>
+    api.get<{
+      synced: boolean;
+      collection_id: number | null;
+      documents: number;
+      sections: number;
+    }>(`/admin/kanban/projects/${projectId}/dataset-status`),
+
+  datasetClear: (projectId: number) =>
+    api.delete<{ status: string }>(`/admin/kanban/projects/${projectId}/dataset`),
 };

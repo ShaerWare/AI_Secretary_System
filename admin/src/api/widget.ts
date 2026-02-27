@@ -29,6 +29,9 @@ export interface WidgetInstance {
   placeholder_font?: string
   primary_color: string
   button_icon?: string
+  button_size?: number
+  button_offset_bottom?: number
+  button_offset_side?: number
   position: 'left' | 'right'
   // Access
   allowed_domains: string[]

@@ -24,6 +24,7 @@ from db.repositories import (
     CloudProviderRepository,
     ConfigRepository,
     FAQRepository,
+    GitHubRepoProjectRepository,
     GSMCallLogRepository,
     GSMSMSLogRepository,
     KanbanProjectRepository,
@@ -1150,6 +1151,64 @@ class AsyncWooCommerceManager:
             return await repo.clear_credentials()
 
 
+# ============== GitHub Repo Project Manager ==============
+
+
+class AsyncGitHubRepoProjectManager:
+    """Async wrapper for GitHub repo project repository."""
+
+    async def list_projects(self, workspace_id: Optional[int] = None) -> list[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            return await repo.list_projects(workspace_id)
+
+    async def get_project(
+        self, project_id: int, workspace_id: Optional[int] = None
+    ) -> Optional["GitHubRepoProject"]:  # noqa: F821
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            return await repo.get_project(project_id, workspace_id)
+
+    async def get_by_repo(self, owner: str, repo_name: str) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            project = await repo.get_by_repo(owner, repo_name)
+            return project.to_dict() if project else None
+
+    async def create_project(self, **kwargs) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            project = await repo.create_project(**kwargs)
+            return project.to_dict()
+
+    async def update_project(
+        self, project_id: int, workspace_id: Optional[int] = None, **kwargs
+    ) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            return await repo.update_project(project_id, workspace_id, **kwargs)
+
+    async def update_sync_status(
+        self,
+        project_id: int,
+        status: str,
+        error: Optional[str] = None,
+        commit_sha: Optional[str] = None,
+        file_count: Optional[int] = None,
+        total_size: Optional[int] = None,
+    ) -> None:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            await repo.update_sync_status(
+                project_id, status, error, commit_sha, file_count, total_size
+            )
+
+    async def delete_project(self, project_id: int, workspace_id: Optional[int] = None) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = GitHubRepoProjectRepository(session)
+            return await repo.delete_project(project_id, workspace_id)
+
+
 # ============== GSM Manager ==============
 
 
@@ -1895,6 +1954,7 @@ async_cloud_provider_manager = AsyncCloudProviderManager()
 async_payment_manager = AsyncPaymentManager()
 async_amocrm_manager = AsyncAmoCRMManager()
 async_woocommerce_manager = AsyncWooCommerceManager()
+async_github_repo_project_manager = AsyncGitHubRepoProjectManager()
 async_gsm_manager = AsyncGSMManager()
 async_user_manager = AsyncUserManager()
 async_user_identity_manager = AsyncUserIdentityManager()

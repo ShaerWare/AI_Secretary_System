@@ -28,6 +28,9 @@
     placeholderFont: '',
     buttonIcon: 'chat', // chat, headset, robot, comment, support, wave
     position: 'right', // 'left' or 'right'
+    buttonSize: 60,
+    buttonOffsetBottom: 20,
+    buttonOffsetSide: 20,
     sessionKey: 'ai_chat_session'
   };
 
@@ -106,10 +109,10 @@
 
     .ai-chat-button {
       position: fixed !important;
-      bottom: 70px !important;
-      ${settings.position}: 20px !important;
-      width: 70px !important;
-      height: 70px !important;
+      bottom: ${settings.buttonOffsetBottom}px !important;
+      ${settings.position}: ${settings.buttonOffsetSide}px !important;
+      width: ${settings.buttonSize}px !important;
+      height: ${settings.buttonSize}px !important;
       border-radius: 50% !important;
       background: var(--ai-primary) !important;
       border: none !important;
@@ -131,8 +134,8 @@
     }
 
     .ai-chat-button svg {
-      width: 28px;
-      height: 28px;
+      width: ${Math.round(settings.buttonSize * 0.47)}px;
+      height: ${Math.round(settings.buttonSize * 0.47)}px;
       fill: white;
     }
 
@@ -150,8 +153,8 @@
 
     .ai-chat-window {
       position: fixed;
-      bottom: 150px;
-      ${settings.position}: 20px;
+      bottom: ${settings.buttonOffsetBottom + settings.buttonSize + 10}px;
+      ${settings.position}: ${settings.buttonOffsetSide}px;
       width: 380px;
       max-width: calc(100vw - 40px);
       height: 520px;
@@ -461,8 +464,8 @@
       }
 
       .ai-chat-button {
-        bottom: 15px;
-        ${settings.position}: 15px;
+        bottom: ${Math.min(settings.buttonOffsetBottom, 15)}px;
+        ${settings.position}: ${Math.min(settings.buttonOffsetSide, 15)}px;
       }
     }
   `;
