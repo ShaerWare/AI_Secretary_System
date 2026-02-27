@@ -1,16 +1,19 @@
 # app/routers/github_webhook.py
 """GitHub webhook handler — receives PR events, posts AI comments, broadcasts to subscribers."""
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
+import re
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from db.database import AsyncSessionLocal
+from db.models import BotInstance
 from db.repositories.bot_github import BotGithubRepository
 from db.repositories.bot_subscriber import BotSubscriberRepository
 
@@ -93,18 +96,57 @@ async def _post_github_comment(
         return False
 
 
-async def _generate_news(system_prompt: str, pr_data: dict) -> Optional[str]:
-    """Generate Telegram news message about PR."""
-    return await _generate_comment(system_prompt, pr_data)
+_NEWS_PATTERN = re.compile(
+    r"##\s*(?:\U0001f4e2\s*)?NEWS\s*\n(.*?)(?=\n##|\Z)", re.IGNORECASE | re.DOTALL
+)
+
+
+def _parse_news_from_pr(pr_body: str) -> Optional[str]:
+    """Extract ## NEWS section from PR body and clean it up."""
+    if not pr_body:
+        return None
+    match = _NEWS_PATTERN.search(pr_body)
+    if not match:
+        return None
+    lines = []
+    for line in match.group(1).strip().splitlines():
+        if "Generated with" in line and "Claude" in line:
+            continue
+        if "Co-Authored-By:" in line:
+            continue
+        lines.append(line)
+    text = "\n".join(lines).rstrip()
+    if not text:
+        return None
+    if "ai-sekretar24.ru" not in text:
+        text += "\n\n\U0001f5a5 Демо: https://ai-sekretar24.ru"
+    if "@shaerware" not in text.lower():
+        text += "\n\n\U0001f517 @shaerware"
+    return text
 
 
 async def _broadcast_to_subscribers(
     bot_id: str,
     message: str,
-    pr_url: str,
 ) -> int:
-    """Send broadcast message to all subscribers. Returns count of user_ids retrieved."""
+    """Send message to all subscribers via Telegram Bot API (direct HTTP).
+
+    Fetches bot_token from BotInstance, then sends to each subscriber.
+    Returns number of successfully sent messages.
+    """
+    from sqlalchemy import select
+
+    # Get bot token and subscriber list
     async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(BotInstance.bot_token).where(BotInstance.id == bot_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            logger.warning(f"No bot_token for bot_id={bot_id}, cannot broadcast")
+            return 0
+        bot_token = row
+
         sub_repo = BotSubscriberRepository(session)
         user_ids = await sub_repo.get_active_subscribers(bot_id)
 
@@ -112,31 +154,24 @@ async def _broadcast_to_subscribers(
         logger.info(f"No subscribers for bot_id={bot_id}, skipping broadcast")
         return 0
 
-    # Store broadcast task for the bot service to pick up
-    # The actual sending happens via the Telegram bot process
-    broadcast_data = {
-        "bot_id": bot_id,
-        "user_ids": user_ids,
-        "message": message,
-        "pr_url": pr_url,
-    }
+    sent = 0
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for user_id in user_ids:
+            try:
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user_id, "text": message},
+                )
+                if resp.status_code == 200:
+                    sent += 1
+                else:
+                    logger.warning(f"Telegram send failed for user {user_id}: {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Failed to send news to user {user_id}: {e}")
+            await asyncio.sleep(0.05)
 
-    # Write to a simple file-based queue that the bot service checks
-    from datetime import datetime
-    from pathlib import Path
-
-    queue_dir = Path("data") / "broadcast_queue"
-    queue_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{bot_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-
-    (queue_dir / filename).write_text(
-        json.dumps(broadcast_data, ensure_ascii=False), encoding="utf-8"
-    )
-
-    logger.info(
-        f"Queued broadcast for {len(user_ids)} subscribers: bot_id={bot_id}, file={filename}"
-    )
-    return len(user_ids)
+    logger.info(f"Broadcast sent to {sent}/{len(user_ids)} subscribers (bot_id={bot_id})")
+    return sent
 
 
 async def _handle_issue_event(payload: bytes, signature: Optional[str]) -> dict:
@@ -209,7 +244,16 @@ async def handle_github_webhook(
     repo = event_data.get("repository", {})
     repo_full_name = repo.get("full_name", "")  # e.g. "ShaerWare/AI_Secretary_System"
 
-    logger.info(f"GitHub webhook: event={x_github_event}, action={action}, repo={repo_full_name}")
+    # GitHub sends action=closed with merged=true for merged PRs.
+    # Normalize to "merged" for config matching (configs use "merged" in events list).
+    effective_action = action
+    if action == "closed" and pr_data.get("merged"):
+        effective_action = "merged"
+
+    logger.info(
+        f"GitHub webhook: event={x_github_event}, action={action}"
+        f" (effective={effective_action}), repo={repo_full_name}"
+    )
 
     # Find all bot configs that match this repo
     async with AsyncSessionLocal() as session:
@@ -225,7 +269,7 @@ async def handle_github_webhook(
                 cfg_events = json.loads(cfg_events)
             except (json.JSONDecodeError, TypeError):
                 cfg_events = []
-        if cfg_full == repo_full_name and action in cfg_events:
+        if cfg_full == repo_full_name and effective_action in cfg_events:
             # Verify signature if webhook_secret is configured
             secret = cfg.get("webhook_secret")
             if secret and x_hub_signature_256:
@@ -258,16 +302,14 @@ async def handle_github_webhook(
                 )
                 result["comment"] = posted
 
-        # 2. Broadcast to Telegram subscribers
-        if cfg.get("broadcast_enabled"):
-            prompt = cfg.get("broadcast_prompt") or (
-                "Сформируй короткую новость для Telegram-подписчиков о PR."
-            )
-            news = await _generate_news(prompt, pr_data)
-            if news:
-                pr_url = pr_data.get("html_url", "")
-                count = await _broadcast_to_subscribers(bot_id, news, pr_url)
+        # 2. Broadcast ## NEWS to Telegram subscribers (on merged PRs)
+        if cfg.get("broadcast_enabled") and pr_data.get("merged"):
+            news_text = _parse_news_from_pr(pr_data.get("body") or "")
+            if news_text:
+                count = await _broadcast_to_subscribers(bot_id, news_text)
                 result["broadcast"] = count
+            else:
+                logger.info(f"PR #{pr_data.get('number')} has no NEWS section, skip broadcast")
 
         results.append(result)
 
