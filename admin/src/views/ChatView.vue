@@ -314,9 +314,12 @@ function saveRagToSession() {
   if (ragSaveTimer) clearTimeout(ragSaveTimer)
   ragSaveTimer = setTimeout(() => {
     if (!currentSessionId.value) return
+    // Auto-determine rag_mode from selected collections
+    const hasCollections = selectedCollectionIds.value.length > 0
+    const mode = hasCollections ? 'selected' : 'all'
     chatApi.updateSession(currentSessionId.value, {
-      rag_mode: selectedRagMode.value || 'none',
-      knowledge_collection_ids: selectedRagMode.value === 'selected' ? selectedCollectionIds.value : [],
+      rag_mode: mode,
+      knowledge_collection_ids: hasCollections ? selectedCollectionIds.value : [],
     })
   }, 500)
 }
