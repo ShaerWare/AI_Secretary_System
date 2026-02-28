@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from auth_manager import TokenPayload, decode_token, require_permission, workspace_context
 
@@ -31,7 +31,7 @@ from auth_manager import TokenPayload, decode_token, require_permission, workspa
 router = APIRouter(prefix="/admin/claude-code", tags=["claude-code"])
 logger = logging.getLogger(__name__)
 
-CLAUDE_CLI = "/root/.local/bin/claude"
+CLAUDE_CLI = shutil.which("claude") or "/usr/local/bin/claude"
 _ALLOWED_USERS = {"shaerware", "ivan"}
 _ALLOWED_CWDS = ["/root", "/opt/ai-secretary", "/tmp"]
 _DEFAULT_CWD = "/root"
@@ -58,8 +58,8 @@ async def _send(ws: WebSocket, msg: dict) -> None:
     """Send JSON to WebSocket, ignore if already closed."""
     try:
         await ws.send_json(msg)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("WS send failed (%s): %s", msg.get("type", "?"), exc)
 
 
 def _prepare_context_files(
@@ -95,6 +95,19 @@ def _validate_cwd(cwd: Optional[str]) -> str:
     return _DEFAULT_CWD
 
 
+async def _resolve_project(project_id: Optional[int], owner_id: int) -> Optional[dict]:
+    """Look up a CC project by ID. Returns project dict or None."""
+    if not project_id:
+        return None
+    from db.integration import async_claude_code_project_manager
+
+    projects = await async_claude_code_project_manager.list_projects(owner_id=owner_id)
+    for p in projects:
+        if p["id"] == project_id:
+            return p
+    return None
+
+
 async def _run_claude(
     ws: WebSocket,
     user_id: int,
@@ -103,42 +116,49 @@ async def _run_claude(
     db_session_id: str,
     cwd: Optional[str] = None,
     context_files: Optional[list[dict[str, str]]] = None,
+    project: Optional[dict] = None,
 ) -> Optional[str]:
     """
     Spawn claude CLI subprocess, parse NDJSON stream, relay events over WS.
     Returns the CLI session_id (for resume).
+
+    If *project* is an SSH project, wraps the claude command in an SSH call.
     """
     from db.integration import async_claude_code_manager
 
-    working_dir = _validate_cwd(cwd)
+    is_ssh = project and project.get("type") == "ssh"
 
-    cmd = [
-        CLAUDE_CLI,
+    if is_ssh:
+        working_dir = _DEFAULT_CWD  # local cwd for the ssh subprocess
+    elif project:
+        working_dir = _validate_cwd(project.get("path"))
+    else:
+        working_dir = _validate_cwd(cwd)
+
+    # Build the base claude command parts
+    claude_args = [
         "-p",
         "--output-format",
         "stream-json",
         "--verbose",
         "--max-turns",
         "50",
+        "--permission-mode",
+        "acceptEdits",
     ]
 
-    # Full permissions when running from /root
-    if working_dir == "/root":
-        cmd.append("--dangerously-skip-permissions")
-
     if session_id:
-        cmd.extend(["--resume", session_id])
+        claude_args.extend(["--resume", session_id])
 
-    # Write context files and add paths to prompt
+    # Write context files and add paths to prompt (local mode only)
     file_paths: list[str] = []
-    if context_files:
+    if context_files and not is_ssh:
         ctx_dir, file_paths = _prepare_context_files(user_id, context_files)
-        # Allow access to the temp context dir
-        cmd.extend(["--add-dir", ctx_dir])
+        claude_args.extend(["--add-dir", ctx_dir])
 
-    # Allow access to additional directories if cwd is not /root
-    if working_dir != "/root":
-        cmd.extend(["--add-dir", working_dir])
+    # Allow access to additional directories if cwd is not /root (local mode only)
+    if not is_ssh and working_dir != "/root":
+        claude_args.extend(["--add-dir", working_dir])
 
     env = dict(os.environ)
     env.pop("CLAUDECODE", None)  # prevent nested-session guard
@@ -150,6 +170,37 @@ async def _run_claude(
             files_section += f"  - {fp}\n"
         files_section += "\nPlease read these files first, then proceed with the task.\n\n"
         prompt = files_section + prompt
+
+    if is_ssh:
+        # SSH mode: run claude on remote host
+        ssh_host = project["ssh_host"]
+        ssh_user = project.get("ssh_user", "root")
+        ssh_port = project.get("ssh_port", 22)
+        ssh_key_path = project.get("ssh_key_path")
+        remote_path = project.get("path", "/root")
+
+        # Build the remote claude command string
+        remote_claude_cmd = "claude " + " ".join(claude_args)
+        # Wrap in cd + exec on remote
+        remote_full = f"cd {remote_path} && {remote_claude_cmd}"
+
+        ssh_cmd: list[str] = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(ssh_port),
+        ]
+        if ssh_key_path:
+            ssh_cmd.extend(["-i", ssh_key_path])
+        ssh_cmd.append(f"{ssh_user}@{ssh_host}")
+        ssh_cmd.append(remote_full)
+
+        cmd = ssh_cmd
+    else:
+        cmd = [CLAUDE_CLI] + claude_args
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -235,11 +286,27 @@ async def _run_claude(
         stderr_data = await asyncio.wait_for(process.stderr.read(), timeout=2)
     except Exception:
         pass
-    if stderr_data:
-        logger.debug("Claude CLI stderr: %s", stderr_data.decode(errors="replace")[:500])
+    stderr_text = stderr_data.decode(errors="replace")[:500] if stderr_data else ""
+    if stderr_text:
+        logger.warning("Claude CLI stderr: %s", stderr_text)
 
     exit_code = process.returncode
     final_status = "completed" if exit_code == 0 else "error"
+
+    # If process failed, notify the client (it may not have received a result event)
+    if exit_code != 0:
+        err_msg = stderr_text.strip() or f"Claude CLI exited with code {exit_code}"
+        await _send(ws, {"type": "error", "error": err_msg})
+        await _send(
+            ws,
+            {
+                "type": "done",
+                "session_id": cli_session_id,
+                "cost_usd": None,
+                "duration_ms": None,
+                "result": "",
+            },
+        )
 
     await async_claude_code_manager.update_session(
         db_session_id,
@@ -496,6 +563,10 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict, workspace_id: in
 
     cwd = raw.get("cwd")
     context_files = raw.get("context_files")
+    project_id = raw.get("project_id")
+
+    # Resolve project from DB if provided
+    project = await _resolve_project(project_id, user_id) if project_id else None
 
     # Create DB session
     title = prompt[:50]
@@ -513,6 +584,7 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict, workspace_id: in
         db_session_id=db_session["id"],
         cwd=cwd,
         context_files=context_files,
+        project=project,
     )
 
     if cli_session_id:
@@ -617,3 +689,73 @@ async def delete_session(
 async def list_directories(user=Depends(require_permission("claude_code", "manage"))):
     """List allowed working directories for Claude Code."""
     return {"directories": _ALLOWED_CWDS, "default": _DEFAULT_CWD}
+
+
+# ============== Project CRUD ==============
+
+
+@router.get("/projects")
+async def list_projects(user=Depends(require_permission("claude_code", "manage"))):
+    """List Claude Code projects (DB + built-in defaults)."""
+    from db.integration import async_claude_code_project_manager
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    db_projects = await async_claude_code_project_manager.list_projects(
+        owner_id=user.id, workspace_id=ws_id
+    )
+
+    # Prepend built-in defaults so they always show
+    builtins = [
+        {"id": None, "name": d, "path": d, "type": "local", "builtin": True} for d in _ALLOWED_CWDS
+    ]
+    return {"projects": builtins + db_projects}
+
+
+@router.post("/projects")
+async def create_project(
+    body: dict = Body(...),
+    user=Depends(require_permission("claude_code", "manage")),
+):
+    """Create a new Claude Code project."""
+    from db.integration import async_claude_code_project_manager
+
+    name = (body.get("name") or "").strip()
+    path = (body.get("path") or "").strip()
+    ptype = body.get("type", "local")
+    if not name or not path:
+        raise HTTPException(status_code=400, detail="name and path are required")
+    if ptype not in ("local", "ssh"):
+        raise HTTPException(status_code=400, detail="type must be 'local' or 'ssh'")
+    if ptype == "ssh" and not body.get("ssh_host"):
+        raise HTTPException(status_code=400, detail="ssh_host is required for SSH projects")
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    project = await async_claude_code_project_manager.create_project(
+        name=name,
+        path=path,
+        owner_id=user.id,
+        type=ptype,
+        ssh_host=body.get("ssh_host"),
+        ssh_user=body.get("ssh_user", "root"),
+        ssh_port=int(body.get("ssh_port", 22)),
+        ssh_key_path=body.get("ssh_key_path"),
+        workspace_id=ws_id,
+    )
+    return {"project": project}
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project(
+    project_id: int,
+    user=Depends(require_permission("claude_code", "manage")),
+):
+    """Delete a Claude Code project."""
+    from db.integration import async_claude_code_project_manager
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    deleted = await async_claude_code_project_manager.delete_project(
+        project_id, owner_id=user.id, workspace_id=ws_id
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "deleted"}

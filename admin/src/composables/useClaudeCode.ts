@@ -35,9 +35,13 @@ const messages = ref<CcMessage[]>([])
 const currentModel = ref<string | null>(null)
 const error = ref<string | null>(null)
 const workingDir = ref('/root')
+const projectId = ref<number | null>(null)
 const pendingContextFiles = ref<CcContextFile[]>([])
 
 let ws: ReturnType<typeof createClaudeCodeWs> | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let reconnectAttempts = 0
+const MAX_RECONNECT_ATTEMPTS = 5
 const isDemo = import.meta.env.VITE_DEMO_MODE === 'true'
 
 function handleEvent(event: CcWsEvent) {
@@ -150,16 +154,42 @@ function connect() {
   ws.ws.onopen = () => {
     isConnected.value = true
     error.value = null
+    reconnectAttempts = 0
   }
   const origClose = ws.ws.onclose
   ws.ws.onclose = (e) => {
     isConnected.value = false
     if (origClose) (origClose as (ev: CloseEvent) => void)(e)
     ws = null
+    // Auto-reconnect if CC mode is still active and not a deliberate close
+    if (isActive.value && e.code !== 1000 && e.code !== 4003) {
+      _scheduleReconnect()
+    }
   }
 }
 
+function _scheduleReconnect() {
+  if (reconnectTimer) return
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    error.value = `Reconnect failed after ${MAX_RECONNECT_ATTEMPTS} attempts`
+    return
+  }
+  const delay = Math.min(1000 * 2 ** reconnectAttempts, 15000)
+  reconnectAttempts++
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    if (isActive.value && !ws) {
+      connect()
+    }
+  }, delay)
+}
+
 function disconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  reconnectAttempts = 0
   if (ws) {
     ws.close()
     ws = null
@@ -177,6 +207,7 @@ function _resetState() {
   dbSessionId.value = null
   currentModel.value = null
   error.value = null
+  projectId.value = null
   pendingContextFiles.value = []
 }
 
@@ -242,11 +273,14 @@ function sendMessage(prompt: string) {
       cli_session_id: cliSessionId.value,
     })
   } else {
-    // First message — include cwd and context files
+    // First message — include cwd/project_id and context files
     const startCmd: Record<string, unknown> = {
       action: 'start',
       prompt,
       cwd: workingDir.value,
+    }
+    if (projectId.value) {
+      startCmd.project_id = projectId.value
     }
     if (pendingContextFiles.value.length > 0) {
       startCmd.context_files = pendingContextFiles.value
@@ -298,6 +332,7 @@ export function useClaudeCode() {
     currentModel,
     error,
     workingDir,
+    projectId,
     pendingContextFiles,
     toggle,
     newSession,

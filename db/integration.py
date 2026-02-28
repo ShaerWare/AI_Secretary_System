@@ -20,6 +20,7 @@ from db.repositories import (
     BotInstanceRepository,
     ChatRepository,
     ChatShareRepository,
+    ClaudeCodeProjectRepository,
     ClaudeCodeRepository,
     CloudProviderRepository,
     ConfigRepository,
@@ -1796,6 +1797,51 @@ class AsyncClaudeCodeManager:
             return await repo.delete_session(session_id, workspace_id=workspace_id)
 
 
+# ============== Claude Code Project Manager ==============
+
+
+class AsyncClaudeCodeProjectManager:
+    """Manager for Claude Code project CRUD."""
+
+    async def list_projects(self, owner_id: int, workspace_id: Optional[int] = None) -> List[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeProjectRepository(session)
+            return await repo.list_projects(owner_id=owner_id, workspace_id=workspace_id)
+
+    async def create_project(
+        self,
+        name: str,
+        path: str,
+        owner_id: int,
+        type: str = "local",
+        ssh_host: Optional[str] = None,
+        ssh_user: str = "root",
+        ssh_port: int = 22,
+        ssh_key_path: Optional[str] = None,
+        workspace_id: Optional[int] = None,
+    ) -> dict:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeProjectRepository(session)
+            return await repo.create_project(
+                name=name,
+                path=path,
+                owner_id=owner_id,
+                type=type,
+                ssh_host=ssh_host,
+                ssh_user=ssh_user,
+                ssh_port=ssh_port,
+                ssh_key_path=ssh_key_path,
+                workspace_id=workspace_id,
+            )
+
+    async def delete_project(
+        self, project_id: int, owner_id: int, workspace_id: Optional[int] = None
+    ) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeProjectRepository(session)
+            return await repo.delete_project(project_id, owner_id, workspace_id=workspace_id)
+
+
 # ============== User Identity Manager ==============
 
 
@@ -1963,6 +2009,7 @@ async_knowledge_collection_manager = AsyncKnowledgeCollectionManager()
 async_chat_share_manager = AsyncChatShareManager()
 async_resource_share_manager = AsyncResourceShareManager()
 async_claude_code_manager = AsyncClaudeCodeManager()
+async_claude_code_project_manager = AsyncClaudeCodeProjectManager()
 
 
 # ============== Kanban Manager ==============

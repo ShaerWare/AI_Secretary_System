@@ -3362,6 +3362,50 @@ class ClaudeCodeSession(Base):
         }
 
 
+class ClaudeCodeProject(Base):
+    """Claude Code project directory (local or SSH remote)."""
+
+    __tablename__ = "claude_code_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))
+    path: Mapped[str] = mapped_column(String(500))
+    type: Mapped[str] = mapped_column(String(20), default="local")  # "local" or "ssh"
+    ssh_host: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ssh_user: Mapped[str] = mapped_column(String(100), default="root")
+    ssh_port: Mapped[int] = mapped_column(Integer, default=22)
+    ssh_key_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "path": self.path,
+            "type": self.type,
+            "ssh_host": self.ssh_host,
+            "ssh_user": self.ssh_user,
+            "ssh_port": self.ssh_port,
+            "ssh_key_path": self.ssh_key_path,
+            "owner_id": self.owner_id,
+            "workspace_id": self.workspace_id,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
 class KanbanTaskStatus(str, enum.Enum):
     """Status values for kanban tasks."""
 

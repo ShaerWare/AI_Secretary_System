@@ -36,9 +36,32 @@ export interface CcContextFile {
   content: string
 }
 
+/** Claude Code project (local or SSH) */
+export interface CcProject {
+  id: number | null
+  name: string
+  path: string
+  type: 'local' | 'ssh'
+  ssh_host?: string | null
+  ssh_user?: string
+  ssh_port?: number
+  ssh_key_path?: string | null
+  builtin?: boolean
+}
+
+export interface CcProjectInput {
+  name: string
+  path: string
+  type: 'local' | 'ssh'
+  ssh_host?: string
+  ssh_user?: string
+  ssh_port?: number
+  ssh_key_path?: string
+}
+
 /** Commands sent FROM client TO server over WebSocket */
 export type CcWsCommand =
-  | { action: 'start'; prompt: string; cwd?: string; context_files?: CcContextFile[] }
+  | { action: 'start'; prompt: string; cwd?: string; project_id?: number; context_files?: CcContextFile[] }
   | { action: 'message'; prompt: string; session_id?: string; cli_session_id?: string }
   | { action: 'abort' }
 
@@ -97,4 +120,13 @@ export const claudeCodeApi = {
 
   listDirectories: () =>
     api.get<{ directories: string[]; default: string }>('/admin/claude-code/directories'),
+
+  listProjects: () =>
+    api.get<{ projects: CcProject[] }>('/admin/claude-code/projects'),
+
+  addProject: (data: CcProjectInput) =>
+    api.post<{ project: CcProject }>('/admin/claude-code/projects', data),
+
+  deleteProject: (id: number) =>
+    api.delete<{ status: string }>('/admin/claude-code/projects/' + id),
 }
