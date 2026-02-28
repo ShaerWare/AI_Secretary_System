@@ -53,10 +53,13 @@ import {
   ChevronDown,
   FolderOpen,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Globe,
+  Server
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
+import { claudeCodeApi, type CcProject, type CcProjectInput } from '@/api/claudeCode'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
 import { useChatFullscreenStore } from '@/stores/chatFullscreen'
@@ -106,6 +109,9 @@ const showSidebar = ref(true)
 const showExportMenu = ref(false)
 const showRagMenu = ref(false)
 const showCcDirMenu = ref(false)
+const ccProjects = ref<CcProject[]>([])
+const showCcAddProject = ref(false)
+const ccNewProject = ref<CcProjectInput>({ name: '', path: '', type: 'local' })
 const showCcFilesMenu = ref(false)
 const showShareDialog = ref(false)
 const showZenSettings = ref(false)
@@ -787,8 +793,50 @@ function isCcFileSelected(name: string) {
 
 function selectCcDir(dir: string) {
   cc.workingDir.value = dir
+  cc.projectId.value = null
   showCcDirMenu.value = false
 }
+
+function selectProject(project: CcProject) {
+  cc.workingDir.value = project.path
+  cc.projectId.value = project.id
+  showCcDirMenu.value = false
+}
+
+async function fetchCcProjects() {
+  try {
+    const res = await claudeCodeApi.listProjects()
+    ccProjects.value = res.projects
+  } catch {
+    ccProjects.value = []
+  }
+}
+
+async function addCcProject() {
+  const p = ccNewProject.value
+  if (!p.name.trim() || !p.path.trim()) return
+  try {
+    await claudeCodeApi.addProject(p)
+    ccNewProject.value = { name: '', path: '', type: 'local' }
+    showCcAddProject.value = false
+    await fetchCcProjects()
+  } catch (e: unknown) {
+    console.error('Failed to add project', e)
+  }
+}
+
+async function deleteCcProject(id: number) {
+  try {
+    await claudeCodeApi.deleteProject(id)
+    await fetchCcProjects()
+  } catch (e: unknown) {
+    console.error('Failed to delete project', e)
+  }
+}
+
+watch(showCcDirMenu, (open) => {
+  if (open) fetchCcProjects()
+})
 
 function startEditing(message: ChatMessage) {
   editingMessageId.value = message.id
@@ -1746,22 +1794,68 @@ watch(sessions, (newSessions) => {
         </button>
         <div
           v-if="showCcDirMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] animate-scale-in"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[260px] animate-scale-in"
           @click.stop
         >
           <button
-            v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
-            :key="dir"
+            v-for="proj in ccProjects"
+            :key="proj.id ?? proj.path"
             :class="[
-              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
-              cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary/30'
+              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left group',
+              cc.workingDir.value === proj.path && cc.projectId.value === proj.id ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary/30'
             ]"
-            @click="selectCcDir(dir)"
+            @click="proj.builtin ? selectCcDir(proj.path) : selectProject(proj)"
           >
-            <FolderOpen class="w-3.5 h-3.5 shrink-0" />
-            <span class="font-mono text-xs">{{ dir }}</span>
-            <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
+            <Server v-if="proj.type === 'ssh'" class="w-3.5 h-3.5 shrink-0 text-blue-400" />
+            <FolderOpen v-else class="w-3.5 h-3.5 shrink-0" />
+            <span class="font-mono text-xs truncate">{{ proj.name }}</span>
+            <span v-if="proj.type === 'ssh'" class="text-[10px] px-1 rounded bg-blue-500/20 text-blue-400">SSH</span>
+            <Check v-if="cc.workingDir.value === proj.path && cc.projectId.value === proj.id" class="w-3.5 h-3.5 ml-auto text-green-400" />
+            <button
+              v-if="proj.id && !proj.builtin"
+              class="ml-auto p-0.5 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Delete project"
+              @click.stop="deleteCcProject(proj.id)"
+            >
+              <Trash2 class="w-3 h-3" />
+            </button>
           </button>
+          <!-- Add project inline form -->
+          <div class="border-t border-border mt-1 pt-1 px-2">
+            <button
+              v-if="!showCcAddProject"
+              class="flex items-center gap-1.5 w-full px-1 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              @click.stop="showCcAddProject = true"
+            >
+              <Plus class="w-3 h-3" /> Add project
+            </button>
+            <div v-else class="space-y-1.5 py-1" @click.stop>
+              <input v-model="ccNewProject.name" placeholder="Name" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary" />
+              <input v-model="ccNewProject.path" placeholder="/path/to/project" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+              <div class="flex gap-1">
+                <button
+                  :class="['flex-1 text-xs px-2 py-0.5 rounded transition-colors', ccNewProject.type === 'local' ? 'bg-green-600/20 text-green-400' : 'bg-secondary text-muted-foreground']"
+                  @click.stop="ccNewProject.type = 'local'"
+                >Local</button>
+                <button
+                  :class="['flex-1 text-xs px-2 py-0.5 rounded transition-colors', ccNewProject.type === 'ssh' ? 'bg-blue-600/20 text-blue-400' : 'bg-secondary text-muted-foreground']"
+                  @click.stop="ccNewProject.type = 'ssh'"
+                >SSH</button>
+              </div>
+              <template v-if="ccNewProject.type === 'ssh'">
+                <input v-model="ccNewProject.ssh_host" placeholder="Host (e.g. 192.168.1.10)" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                <div class="flex gap-1">
+                  <input v-model="ccNewProject.ssh_user" placeholder="User" class="flex-1 text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                  <input v-model.number="ccNewProject.ssh_port" placeholder="Port" type="number" class="w-16 text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                </div>
+                <input v-model="ccNewProject.ssh_key_path" placeholder="SSH key path (optional)" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+              </template>
+              <div class="flex gap-1">
+                <button class="flex-1 text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors" @click.stop="addCcProject">Save</button>
+                <button class="flex-1 text-xs px-2 py-1 rounded bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors" @click.stop="showCcAddProject = false; ccNewProject = { name: '', path: '', type: 'local' }">Cancel</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2075,21 +2169,68 @@ watch(sessions, (newSessions) => {
             </button>
             <div
               v-if="showCcDirMenu"
-              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[200px]"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[260px]"
+              @click.stop
             >
               <button
-                v-for="dir in ['/root', '/opt/ai-secretary', '/tmp']"
-                :key="dir"
+                v-for="proj in ccProjects"
+                :key="proj.id ?? proj.path"
                 :class="[
-                  'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
-                  cc.workingDir.value === dir ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-foreground'
+                  'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left group',
+                  cc.workingDir.value === proj.path && cc.projectId.value === proj.id ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-foreground'
                 ]"
-                @click="selectCcDir(dir)"
+                @click="proj.builtin ? selectCcDir(proj.path) : selectProject(proj)"
               >
-                <FolderOpen class="w-3.5 h-3.5 shrink-0" />
-                <span class="font-mono text-xs">{{ dir }}</span>
-                <Check v-if="cc.workingDir.value === dir" class="w-3.5 h-3.5 ml-auto text-green-400" />
+                <Server v-if="proj.type === 'ssh'" class="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                <FolderOpen v-else class="w-3.5 h-3.5 shrink-0" />
+                <span class="font-mono text-xs truncate">{{ proj.name }}</span>
+                <span v-if="proj.type === 'ssh'" class="text-[10px] px-1 rounded bg-blue-500/20 text-blue-400">SSH</span>
+                <Check v-if="cc.workingDir.value === proj.path && cc.projectId.value === proj.id" class="w-3.5 h-3.5 ml-auto text-green-400" />
+                <button
+                  v-if="proj.id && !proj.builtin"
+                  class="ml-auto p-0.5 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete project"
+                  @click.stop="deleteCcProject(proj.id)"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
               </button>
+              <!-- Add project inline form -->
+              <div class="border-t border-border mt-1 pt-1 px-2">
+                <button
+                  v-if="!showCcAddProject"
+                  class="flex items-center gap-1.5 w-full px-1 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  @click.stop="showCcAddProject = true"
+                >
+                  <Plus class="w-3 h-3" /> Add project
+                </button>
+                <div v-else class="space-y-1.5 py-1" @click.stop>
+                  <input v-model="ccNewProject.name" placeholder="Name" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <input v-model="ccNewProject.path" placeholder="/path/to/project" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                  <div class="flex gap-1">
+                    <button
+                      :class="['flex-1 text-xs px-2 py-0.5 rounded transition-colors', ccNewProject.type === 'local' ? 'bg-green-600/20 text-green-400' : 'bg-secondary text-muted-foreground']"
+                      @click.stop="ccNewProject.type = 'local'"
+                    >Local</button>
+                    <button
+                      :class="['flex-1 text-xs px-2 py-0.5 rounded transition-colors', ccNewProject.type === 'ssh' ? 'bg-blue-600/20 text-blue-400' : 'bg-secondary text-muted-foreground']"
+                      @click.stop="ccNewProject.type = 'ssh'"
+                    >SSH</button>
+                  </div>
+                  <template v-if="ccNewProject.type === 'ssh'">
+                    <input v-model="ccNewProject.ssh_host" placeholder="Host (e.g. 192.168.1.10)" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                    <div class="flex gap-1">
+                      <input v-model="ccNewProject.ssh_user" placeholder="User" class="flex-1 text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                      <input v-model.number="ccNewProject.ssh_port" placeholder="Port" type="number" class="w-16 text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                    </div>
+                    <input v-model="ccNewProject.ssh_key_path" placeholder="SSH key path (optional)" class="w-full text-xs px-2 py-1 rounded bg-secondary border-none focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                  </template>
+                  <div class="flex gap-1">
+                    <button class="flex-1 text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors" @click.stop="addCcProject">Save</button>
+                    <button class="flex-1 text-xs px-2 py-1 rounded bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors" @click.stop="showCcAddProject = false; ccNewProject = { name: '', path: '', type: 'local' }">Cancel</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <!-- CC: Context files from chat dropdown -->
@@ -2273,21 +2414,6 @@ watch(sessions, (newSessions) => {
           >
             <Send v-if="!isStreaming" class="w-5 h-5" />
             <Loader2 v-else class="w-5 h-5 animate-spin" />
-          </button>
-          <!-- Scroll up/down buttons -->
-          <button
-            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
-            title="Scroll to top"
-            @click="scrollToTop"
-          >
-            <ArrowUpToLine class="w-5 h-5" />
-          </button>
-          <button
-            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
-            title="Scroll to bottom"
-            @click="scrollToBottom"
-          >
-            <ArrowDownToLine class="w-5 h-5" />
           </button>
           <!-- New branch button (yellow) -->
           <button
@@ -2686,6 +2812,27 @@ watch(sessions, (newSessions) => {
             </div>
           </div>
         </template>
+      </div>
+
+      <!-- Floating scroll buttons -->
+      <div
+        v-if="currentSession && !cc.isActive.value"
+        class="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5"
+      >
+        <button
+          class="p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          title="Scroll to top"
+          @click="scrollToTop"
+        >
+          <ArrowUpToLine class="w-4 h-4" />
+        </button>
+        <button
+          class="p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          title="Scroll to bottom"
+          @click="scrollToBottom"
+        >
+          <ArrowDownToLine class="w-4 h-4" />
+        </button>
       </div>
 
       <!-- Branch Tree Panel -->
