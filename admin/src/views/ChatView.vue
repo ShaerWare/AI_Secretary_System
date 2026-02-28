@@ -2893,21 +2893,21 @@ watch(sessions, (newSessions) => {
       <!-- Floating scroll buttons -->
       <div
         v-if="currentSession && !cc.isActive.value"
-        class="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5"
+        class="fixed right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1"
       >
         <button
-          class="p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           title="Scroll to top"
           @click="scrollToTop"
         >
-          <ArrowUpToLine class="w-4 h-4" />
+          <ArrowUpToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
         <button
-          class="p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           title="Scroll to bottom"
           @click="scrollToBottom"
         >
-          <ArrowDownToLine class="w-4 h-4" />
+          <ArrowDownToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
 
