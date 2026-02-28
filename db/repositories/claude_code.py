@@ -27,13 +27,13 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
             query = query.where(ClaudeCodeSession.owner_id == owner_id)
         query = query.limit(limit)
         result = await self.session.execute(query)
-        return [s.to_dict() for s in result.scalars().all()]
+        return [s.to_summary() for s in result.scalars().all()]
 
     async def get_session(
         self, session_id: str, workspace_id: Optional[int] = None
     ) -> Optional[dict]:
         entity = await self.get_by_id_ws(session_id, workspace_id)
-        return entity.to_dict() if entity else None
+        return entity.to_summary() if entity else None
 
     async def create_session(
         self,
@@ -41,6 +41,8 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
         owner_id: int,
         working_directory: str = "/opt/ai-secretary",
         workspace_id: Optional[int] = None,
+        chat_session_id: Optional[str] = None,
+        kanban_task_id: Optional[int] = None,
     ) -> dict:
         session_id = f"cc-{uuid.uuid4().hex[:12]}"
         create_kwargs: dict = dict(
@@ -51,10 +53,14 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
         )
         if workspace_id is not None:
             create_kwargs["workspace_id"] = workspace_id
+        if chat_session_id is not None:
+            create_kwargs["chat_session_id"] = chat_session_id
+        if kanban_task_id is not None:
+            create_kwargs["kanban_task_id"] = kanban_task_id
         entity = ClaudeCodeSession(**create_kwargs)
         self.session.add(entity)
         await self.session.commit()
-        return entity.to_dict()
+        return entity.to_summary()
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
         entity = await self.get_by_id(session_id)
@@ -65,7 +71,7 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
                 setattr(entity, key, value)
         entity.updated = datetime.utcnow()
         await self.session.commit()
-        return entity.to_dict()
+        return entity.to_summary()
 
     async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:
         entity = await self.get_by_id_ws(session_id, workspace_id)
@@ -73,3 +79,46 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
             await self.delete(entity)
             return True
         return False
+
+    async def save_transcript(self, session_id: str, transcript_json: str) -> bool:
+        """Write transcript JSON to events_json column."""
+        entity = await self.get_by_id(session_id)
+        if not entity:
+            return False
+        entity.events_json = transcript_json
+        entity.updated = datetime.utcnow()
+        await self.session.commit()
+        return True
+
+    async def get_session_with_transcript(
+        self, session_id: str, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
+        """Return full session dict including events_json."""
+        entity = await self.get_by_id_ws(session_id, workspace_id)
+        return entity.to_dict() if entity else None
+
+    async def list_by_chat_session(
+        self, chat_session_id: str, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        """CC sessions linked to a parent chat session."""
+        query = (
+            select(ClaudeCodeSession)
+            .where(ClaudeCodeSession.chat_session_id == chat_session_id)
+            .order_by(ClaudeCodeSession.created.desc())
+        )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        return [s.to_summary() for s in result.scalars().all()]
+
+    async def list_by_kanban_task(
+        self, kanban_task_id: int, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        """CC sessions linked to a kanban task."""
+        query = (
+            select(ClaudeCodeSession)
+            .where(ClaudeCodeSession.kanban_task_id == kanban_task_id)
+            .order_by(ClaudeCodeSession.created.desc())
+        )
+        query = self._apply_workspace_filter(query, workspace_id)
+        result = await self.session.execute(query)
+        return [s.to_summary() for s in result.scalars().all()]

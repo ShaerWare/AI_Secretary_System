@@ -166,4 +166,10 @@ export const kanbanApi = {
 
   datasetClear: (projectId: number) =>
     api.delete<{ status: string }>(`/admin/kanban/projects/${projectId}/dataset`),
+
+  // CC sessions linked to a task
+  getTaskCcSessions: (taskId: number) =>
+    api.get<{ sessions: import("./claudeCode").CcSessionSummary[] }>(
+      `/admin/kanban/tasks/${taskId}/cc-sessions`
+    ),
 };

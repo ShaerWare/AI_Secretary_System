@@ -1779,11 +1779,18 @@ class AsyncClaudeCodeManager:
         owner_id: int,
         working_directory: str = "/opt/ai-secretary",
         workspace_id: Optional[int] = None,
+        chat_session_id: Optional[str] = None,
+        kanban_task_id: Optional[int] = None,
     ) -> dict:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
             return await repo.create_session(
-                title, owner_id, working_directory, workspace_id=workspace_id
+                title,
+                owner_id,
+                working_directory,
+                workspace_id=workspace_id,
+                chat_session_id=chat_session_id,
+                kanban_task_id=kanban_task_id,
             )
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
@@ -1795,6 +1802,32 @@ class AsyncClaudeCodeManager:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
             return await repo.delete_session(session_id, workspace_id=workspace_id)
+
+    async def save_transcript(self, session_id: str, transcript_json: str) -> bool:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.save_transcript(session_id, transcript_json)
+
+    async def get_session_with_transcript(
+        self, session_id: str, workspace_id: Optional[int] = None
+    ) -> Optional[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.get_session_with_transcript(session_id, workspace_id=workspace_id)
+
+    async def list_by_chat_session(
+        self, chat_session_id: str, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.list_by_chat_session(chat_session_id, workspace_id=workspace_id)
+
+    async def list_by_kanban_task(
+        self, kanban_task_id: int, workspace_id: Optional[int] = None
+    ) -> List[dict]:
+        async with AsyncSessionLocal() as session:
+            repo = ClaudeCodeRepository(session)
+            return await repo.list_by_kanban_task(kanban_task_id, workspace_id=workspace_id)
 
 
 # ============== Claude Code Project Manager ==============

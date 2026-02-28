@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   X,
@@ -12,8 +12,11 @@ import {
   Calendar,
   User,
   ExternalLink,
+  Terminal,
 } from 'lucide-vue-next'
 import type { KanbanTask, KanbanProject } from '@/api'
+import { kanbanApi } from '@/api/kanban'
+import type { CcSessionSummary } from '@/api/claudeCode'
 import { useAuthStore } from '@/stores/auth'
 import KanbanStatusBadge from './KanbanStatusBadge.vue'
 
@@ -84,6 +87,32 @@ function handleAddDependency() {
 function getTaskTitle(id: number): string {
   const task = props.allTasks.find((t) => t.id === id)
   return task ? task.title : `#${id}`
+}
+
+// CC sessions linked to this task
+const ccSessions = ref<CcSessionSummary[]>([])
+
+watch(
+  () => props.task?.id,
+  async (taskId) => {
+    ccSessions.value = []
+    if (!taskId) return
+    try {
+      const result = await kanbanApi.getTaskCcSessions(taskId)
+      ccSessions.value = result.sessions
+    } catch { /* ignore */ }
+  },
+  { immediate: true }
+)
+
+function ccStatusColor(status: string): string {
+  switch (status) {
+    case 'active': return 'bg-green-500/20 text-green-400'
+    case 'completed': return 'bg-blue-500/20 text-blue-400'
+    case 'error': return 'bg-red-500/20 text-red-400'
+    case 'aborted': return 'bg-yellow-500/20 text-yellow-400'
+    default: return 'bg-muted text-muted-foreground'
+  }
 }
 </script>
 
@@ -274,6 +303,26 @@ function getTaskTitle(id: number): string {
             >
               {{ t('kanban.addDependency') }}
             </button>
+          </div>
+
+          <!-- Claude Code Sessions -->
+          <div v-if="ccSessions.length" class="pt-2 border-t border-border">
+            <h4 class="text-sm font-medium mb-2 flex items-center gap-1.5">
+              <Terminal class="w-4 h-4 text-green-500" />
+              Claude Code Sessions
+            </h4>
+            <div class="space-y-1">
+              <div
+                v-for="ccS in ccSessions"
+                :key="ccS.id"
+                class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-secondary/50 text-sm"
+              >
+                <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
+                <span class="truncate flex-1">{{ ccS.title }}</span>
+                <span class="text-[10px] text-muted-foreground">{{ ccS.total_turns }}t</span>
+                <span :class="['text-[10px] px-1.5 py-0.5 rounded-full', ccStatusColor(ccS.status)]">{{ ccS.status }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Delete button (admin only) -->

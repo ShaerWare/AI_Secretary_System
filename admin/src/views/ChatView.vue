@@ -61,6 +61,7 @@ import {
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
 import { claudeCodeApi, type CcProject, type CcProjectInput } from '@/api/claudeCode'
+import { kanbanApi, type KanbanTask } from '@/api/kanban'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
 import { useChatFullscreenStore } from '@/stores/chatFullscreen'
@@ -114,6 +115,8 @@ const ccProjects = ref<CcProject[]>([])
 const showCcAddProject = ref(false)
 const ccNewProject = ref<CcProjectInput>({ name: '', path: '', type: 'local' })
 const showCcFilesMenu = ref(false)
+const showCcKanbanMenu = ref(false)
+const ccKanbanTasks = ref<KanbanTask[]>([])
 const showShareDialog = ref(false)
 const showZenSettings = ref(false)
 const showZenLlmMenu = ref(false)
@@ -376,6 +379,87 @@ const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
 const branchTree = computed(() => branchData.value?.branches || [])
 const siblingInfo = computed(() => currentSession.value?.sibling_info || {})
+
+// CC sub-sessions per chat
+const ccSubSessionsMap = ref<Record<string, import('@/api/claudeCode').CcSessionSummary[]>>({})
+const standaloneCcSessions = ref<import('@/api/claudeCode').CcSessionSummary[]>([])
+
+function getCcSubSessions(chatSessionId: string) {
+  return ccSubSessionsMap.value[chatSessionId] || []
+}
+
+async function fetchCcSubSessions(chatSessionId: string) {
+  try {
+    const result = await claudeCodeApi.listByChatSession(chatSessionId)
+    ccSubSessionsMap.value[chatSessionId] = result.sessions
+  } catch {
+    // ignore
+  }
+}
+
+async function fetchAllCcSessions() {
+  try {
+    const result = await claudeCodeApi.listSessions()
+    // Standalone = those without chat_session_id
+    standaloneCcSessions.value = result.sessions.filter((s: import('@/api/claudeCode').CcSessionSummary) => !s.chat_session_id)
+    // Group by chat_session_id
+    const map: Record<string, import('@/api/claudeCode').CcSessionSummary[]> = {}
+    for (const s of result.sessions) {
+      if (s.chat_session_id) {
+        if (!map[s.chat_session_id]) map[s.chat_session_id] = []
+        map[s.chat_session_id].push(s)
+      }
+    }
+    ccSubSessionsMap.value = map
+  } catch {
+    // ignore
+  }
+}
+
+function loadCcSession(ccSessionId: string) {
+  currentSessionId.value = null
+  cc.loadSession(ccSessionId)
+  showSidebar.value = false
+}
+
+function toggleCcMode() {
+  if (!cc.isActive.value) {
+    // Activating CC — link to current chat if one is selected
+    cc.chatSessionId.value = currentSessionId.value
+    cc.toggle()
+  } else {
+    cc.toggle()
+  }
+}
+
+async function openCcKanbanMenu() {
+  showCcKanbanMenu.value = !showCcKanbanMenu.value
+  if (showCcKanbanMenu.value && ccKanbanTasks.value.length === 0) {
+    try {
+      const result = await kanbanApi.getTasks()
+      ccKanbanTasks.value = result.tasks
+    } catch { /* ignore */ }
+  }
+}
+
+async function linkCcToKanbanTask(task: KanbanTask) {
+  cc.kanbanTaskId.value = task.id
+  showCcKanbanMenu.value = false
+  // Persist to DB if session already exists
+  if (cc.dbSessionId.value) {
+    try {
+      await claudeCodeApi.patchSession(cc.dbSessionId.value, { kanban_task_id: task.id })
+    } catch { /* ignore */ }
+  }
+}
+
+function unlinkCcKanbanTask() {
+  cc.kanbanTaskId.value = null
+  showCcKanbanMenu.value = false
+  if (cc.dbSessionId.value) {
+    claudeCodeApi.patchSession(cc.dbSessionId.value, { kanban_task_id: null as unknown as number }).catch(() => {})
+  }
+}
 
 // Token usage
 const tokenUsage = computed(() => currentSession.value?.token_usage)
@@ -1402,6 +1486,9 @@ function handleGlobalClick(e: MouseEvent) {
   if (showCcFilesMenu.value && !target.closest('.relative')) {
     showCcFilesMenu.value = false
   }
+  if (showCcKanbanMenu.value && !target.closest('.relative')) {
+    showCcKanbanMenu.value = false
+  }
   if (showZenSettings.value && !target.closest('.zen-settings-anchor')) {
     showZenSettings.value = false
   }
@@ -1432,11 +1519,19 @@ onMounted(() => {
   if (sessions.value.length > 0) {
     currentSessionId.value = sessions.value[0].id
   }
+  fetchAllCcSessions()
 })
 
 watch(sessions, (newSessions) => {
   if (!currentSessionId.value && newSessions.length > 0) {
     currentSessionId.value = newSessions[0].id
+  }
+})
+
+// Refresh CC sidebar sessions when CC processing finishes
+watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
+  if (wasProcesing && !processing) {
+    fetchAllCcSessions()
   }
 })
 </script>
@@ -1562,88 +1657,131 @@ watch(sessions, (newSessions) => {
 
       <!-- Sessions List -->
       <div class="flex-1 overflow-y-auto">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          :class="[
-            'p-3 cursor-pointer border-b border-border transition-colors group',
-            currentSessionId === session.id
-              ? 'bg-primary/10 border-l-2 border-l-primary'
-              : 'hover:bg-secondary/50'
-          ]"
-          @click="!selectionMode && selectSession(session.id)"
-        >
-          <div class="flex items-start gap-2">
-            <!-- Checkbox (selection mode) -->
-            <input
-              v-if="selectionMode"
-              type="checkbox"
-              :checked="selectedIds.has(session.id)"
-              class="mt-1 rounded border-border"
-              @click.stop="toggleSelection(session.id)"
-            />
-
-            <div class="flex-1 min-w-0">
-              <!-- Title (normal or editing) -->
-              <template v-if="renamingSessionId === session.id">
-                <input
-                  v-model="renamingTitle"
-                  class="rename-input w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                  @keydown.enter="saveRename"
-                  @keydown.escape="cancelRename"
-                  @blur="saveRename"
-                  @click.stop
-                />
-              </template>
-              <template v-else>
-                <p
-                  class="font-medium text-sm truncate flex items-center gap-1"
-                  @dblclick="startRename(session, $event)"
-                >
-                  <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
-                  <Users v-if="session.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('chatView.sharedWithYou')" />
-                  <Share2 v-else-if="(session.share_count ?? 0) > 0" class="w-3 h-3 text-green-400 shrink-0" :title="t('chatView.sharedByYou', { count: session.share_count })" />
-                  {{ session.title }}
-                </p>
-              </template>
-
-              <p class="text-xs text-muted-foreground truncate mt-1">
-                {{ session.last_message || 'No messages' }}
-              </p>
-              <p class="text-xs text-muted-foreground mt-1">
-                {{ session.message_count }} messages
-              </p>
-            </div>
-
-            <!-- Action buttons (on hover, not in selection mode) -->
-            <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
-              <button
-                class="p-1 rounded hover:bg-background text-muted-foreground"
-                :title="session.pinned ? 'Unpin' : 'Pin'"
-                @click.stop="togglePin(session.id, session.pinned)"
-              >
-                <PinOff v-if="session.pinned" class="w-3 h-3" />
-                <Pin v-else class="w-3 h-3" />
-              </button>
-              <button
-                class="p-1 rounded hover:bg-background text-muted-foreground"
-                :title="t('chatView.rename')"
-                @click.stop="startRename(session, $event)"
-              >
-                <Edit3 class="w-3 h-3" />
-              </button>
-              <button
-                class="p-1 rounded hover:bg-background text-red-500"
-                :title="t('chatView.deleteChat')"
-                @click.stop="deleteSingleSession(session, $event)"
-              >
-                <Trash2 class="w-3 h-3" />
-              </button>
+        <!-- Standalone CC sessions (no parent chat) -->
+        <template v-if="standaloneCcSessions.length">
+          <div class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-green-500/70 bg-green-500/5 border-b border-border/50">
+            Claude Code
+          </div>
+          <div
+            v-for="ccSub in standaloneCcSessions"
+            :key="ccSub.id"
+            :class="[
+              'pl-4 pr-3 py-2 cursor-pointer border-b border-border/50 transition-colors group',
+              cc.dbSessionId.value === ccSub.id
+                ? 'bg-green-600/10 border-l-2 border-l-green-500'
+                : 'hover:bg-secondary/30'
+            ]"
+            @click="loadCcSession(ccSub.id)"
+          >
+            <div class="flex items-center gap-2">
+              <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
+              <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
             </div>
           </div>
-        </div>
+        </template>
 
-        <div v-if="!sessions.length" class="p-4 text-center text-muted-foreground">
+        <template v-for="session in sessions" :key="session.id">
+          <div
+            :class="[
+              'p-3 cursor-pointer border-b border-border transition-colors group',
+              currentSessionId === session.id
+                ? 'bg-primary/10 border-l-2 border-l-primary'
+                : 'hover:bg-secondary/50'
+            ]"
+            @click="!selectionMode && selectSession(session.id)"
+          >
+            <div class="flex items-start gap-2">
+              <!-- Checkbox (selection mode) -->
+              <input
+                v-if="selectionMode"
+                type="checkbox"
+                :checked="selectedIds.has(session.id)"
+                class="mt-1 rounded border-border"
+                @click.stop="toggleSelection(session.id)"
+              />
+
+              <div class="flex-1 min-w-0">
+                <!-- Title (normal or editing) -->
+                <template v-if="renamingSessionId === session.id">
+                  <input
+                    v-model="renamingTitle"
+                    class="rename-input w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                    @keydown.enter="saveRename"
+                    @keydown.escape="cancelRename"
+                    @blur="saveRename"
+                    @click.stop
+                  />
+                </template>
+                <template v-else>
+                  <p
+                    class="font-medium text-sm truncate flex items-center gap-1"
+                    @dblclick="startRename(session, $event)"
+                  >
+                    <Pin v-if="session.pinned" class="w-3 h-3 text-primary shrink-0" />
+                    <Users v-if="session.is_shared_with_me" class="w-3 h-3 text-blue-400 shrink-0" :title="t('chatView.sharedWithYou')" />
+                    <Share2 v-else-if="(session.share_count ?? 0) > 0" class="w-3 h-3 text-green-400 shrink-0" :title="t('chatView.sharedByYou', { count: session.share_count })" />
+                    {{ session.title }}
+                  </p>
+                </template>
+
+                <p class="text-xs text-muted-foreground truncate mt-1">
+                  {{ session.last_message || 'No messages' }}
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  {{ session.message_count }} messages
+                </p>
+              </div>
+
+              <!-- Action buttons (on hover, not in selection mode) -->
+              <div v-if="!selectionMode && renamingSessionId !== session.id" class="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                <button
+                  class="p-1 rounded hover:bg-background text-muted-foreground"
+                  :title="session.pinned ? 'Unpin' : 'Pin'"
+                  @click.stop="togglePin(session.id, session.pinned)"
+                >
+                  <PinOff v-if="session.pinned" class="w-3 h-3" />
+                  <Pin v-else class="w-3 h-3" />
+                </button>
+                <button
+                  class="p-1 rounded hover:bg-background text-muted-foreground"
+                  :title="t('chatView.rename')"
+                  @click.stop="startRename(session, $event)"
+                >
+                  <Edit3 class="w-3 h-3" />
+                </button>
+                <button
+                  class="p-1 rounded hover:bg-background text-red-500"
+                  :title="t('chatView.deleteChat')"
+                  @click.stop="deleteSingleSession(session, $event)"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- CC sub-sessions for this chat -->
+          <div
+            v-for="ccSub in getCcSubSessions(session.id)"
+            :key="ccSub.id"
+            :class="[
+              'pl-8 pr-3 py-2 cursor-pointer border-b border-border/50 transition-colors group',
+              cc.dbSessionId.value === ccSub.id
+                ? 'bg-green-600/10 border-l-2 border-l-green-500'
+                : 'hover:bg-secondary/30'
+            ]"
+            @click="loadCcSession(ccSub.id)"
+          >
+            <div class="flex items-center gap-2">
+              <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
+              <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="!sessions.length && !standaloneCcSessions.length" class="p-4 text-center text-muted-foreground">
           <p>{{ t('chatView.noChats') }}</p>
           <button
             class="mt-2 text-primary hover:underline"
@@ -1713,7 +1851,7 @@ watch(sessions, (newSessions) => {
           cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
         ]"
         :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-        @click="cc.toggle()"
+        @click="toggleCcMode()"
       >
         <Terminal class="w-4 h-4" />
       </button>
@@ -2045,7 +2183,7 @@ watch(sessions, (newSessions) => {
         v-if="cc.isActive.value || isSessionOwner"
         class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
         :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
-        @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
+        @click="cc.isActive.value ? toggleCcMode() : deleteCurrentSession()"
       >
         <Trash2 class="w-4 h-4" />
       </button>
@@ -2117,7 +2255,7 @@ watch(sessions, (newSessions) => {
               cc.isActive.value ? 'border-green-600 bg-green-600 text-white' : 'border-border text-muted-foreground hover:bg-secondary/50'
             ]"
             :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-            @click="cc.toggle()"
+            @click="toggleCcMode()"
           >
             <Terminal class="w-4 h-4" />
           </button>
@@ -2384,6 +2522,45 @@ watch(sessions, (newSessions) => {
               </label>
             </div>
           </div>
+          <!-- CC: Kanban task link -->
+          <div v-if="cc.isActive.value" class="relative">
+            <button
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                cc.kanbanTaskId.value ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-muted-foreground'
+              ]"
+              title="Link to Kanban task"
+              @click="openCcKanbanMenu()"
+            >
+              <ListChecks class="w-4 h-4" />
+            </button>
+            <div
+              v-if="showCcKanbanMenu"
+              class="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[220px] max-h-[280px] overflow-y-auto"
+              @click.stop
+            >
+              <button
+                v-if="cc.kanbanTaskId.value"
+                class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                @click="unlinkCcKanbanTask()"
+              >
+                <X class="w-3 h-3" /> Unlink task
+              </button>
+              <div v-if="!ccKanbanTasks.length" class="px-3 py-2 text-xs text-muted-foreground">No tasks</div>
+              <button
+                v-for="task in ccKanbanTasks"
+                :key="task.id"
+                :class="[
+                  'flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors text-left',
+                  cc.kanbanTaskId.value === task.id ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary'
+                ]"
+                @click="linkCcToKanbanTask(task)"
+              >
+                <span class="truncate">{{ task.title }}</span>
+                <Check v-if="cc.kanbanTaskId.value === task.id" class="w-3 h-3 ml-auto shrink-0 text-green-400" />
+              </button>
+            </div>
+          </div>
           <!-- New CC session -->
           <button
             v-if="!isReadOnly && cc.isActive.value"
@@ -2398,7 +2575,7 @@ watch(sessions, (newSessions) => {
             v-if="cc.isActive.value || isSessionOwner"
             class="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
             :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
-            @click="cc.isActive.value ? cc.toggle() : deleteCurrentSession()"
+            @click="cc.isActive.value ? toggleCcMode() : deleteCurrentSession()"
           >
             <Trash2 class="w-4 h-4" />
           </button>
