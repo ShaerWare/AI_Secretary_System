@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_CLI = shutil.which("claude") or "/usr/local/bin/claude"
 _ALLOWED_USERS = {"shaerware", "ivan"}
-_ALLOWED_CWDS = ["/root", "/opt/ai-secretary", "/tmp"]
-_DEFAULT_CWD = "/root"
+_ALLOWED_CWDS = ["/opt/ai-secretary", "/root", "/tmp"]
+_DEFAULT_CWD = "/opt/ai-secretary"
 
 # One active WS per user
 _active_connections: dict[int, WebSocket] = {}

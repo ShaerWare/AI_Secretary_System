@@ -34,7 +34,7 @@ const currentToolBlocks = ref<CcToolBlock[]>([])
 const messages = ref<CcMessage[]>([])
 const currentModel = ref<string | null>(null)
 const error = ref<string | null>(null)
-const workingDir = ref('/root')
+const workingDir = ref('/opt/ai-secretary')
 const projectId = ref<number | null>(null)
 const pendingContextFiles = ref<CcContextFile[]>([])
 
