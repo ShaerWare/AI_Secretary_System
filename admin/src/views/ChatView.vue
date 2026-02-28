@@ -1901,7 +1901,7 @@ watch(sessions, (newSessions) => {
         <button
           :class="[
             'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-            cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+            cc.workingDir.value !== '/opt/ai-secretary' ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
           ]"
           :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
           @click="showCcDirMenu = !showCcDirMenu"
@@ -2276,7 +2276,7 @@ watch(sessions, (newSessions) => {
             <button
               :class="[
                 'p-2 rounded-lg transition-colors',
-                cc.workingDir.value !== '/root' ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-muted-foreground'
+                cc.workingDir.value !== '/opt/ai-secretary' ? 'bg-green-600/20 text-green-400' : 'hover:bg-secondary text-muted-foreground'
               ]"
               :title="t('chatView.claudeCode.workDir') + ': ' + cc.workingDir.value"
               @click="showCcDirMenu = !showCcDirMenu"
