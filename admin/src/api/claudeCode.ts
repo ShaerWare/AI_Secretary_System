@@ -12,6 +12,24 @@ export interface ClaudeCodeSession {
   total_turns: number
   max_turns: number
   working_directory: string
+  chat_session_id: string | null
+  kanban_task_id: number | null
+  events_json: string | null
+  created: string
+  updated: string
+}
+
+/** Lightweight session without transcript (for sidebar lists) */
+export interface CcSessionSummary {
+  id: string
+  cli_session_id: string | null
+  title: string
+  owner_id: number
+  status: 'active' | 'completed' | 'error' | 'aborted'
+  model: string | null
+  total_turns: number
+  chat_session_id: string | null
+  kanban_task_id: number | null
   created: string
   updated: string
 }
@@ -61,9 +79,10 @@ export interface CcProjectInput {
 
 /** Commands sent FROM client TO server over WebSocket */
 export type CcWsCommand =
-  | { action: 'start'; prompt: string; cwd?: string; project_id?: number; context_files?: CcContextFile[] }
+  | { action: 'start'; prompt: string; cwd?: string; project_id?: number; context_files?: CcContextFile[]; chat_session_id?: string; kanban_task_id?: number }
   | { action: 'message'; prompt: string; session_id?: string; cli_session_id?: string }
   | { action: 'abort' }
+  | { action: 'save_transcript'; session_id: string; transcript: string }
 
 // ============== WebSocket ==============
 
@@ -110,10 +129,19 @@ export function createClaudeCodeWs(onEvent: (event: CcWsEvent) => void) {
 
 export const claudeCodeApi = {
   listSessions: () =>
-    api.get<{ sessions: ClaudeCodeSession[] }>('/admin/claude-code/sessions'),
+    api.get<{ sessions: CcSessionSummary[] }>('/admin/claude-code/sessions'),
 
   getSession: (id: string) =>
-    api.get<{ session: ClaudeCodeSession }>(`/admin/claude-code/sessions/${id}`),
+    api.get<{ session: CcSessionSummary }>(`/admin/claude-code/sessions/${id}`),
+
+  getSessionTranscript: (id: string) =>
+    api.get<{ session: ClaudeCodeSession }>(`/admin/claude-code/sessions/${id}/transcript`),
+
+  listByChatSession: (chatSessionId: string) =>
+    api.get<{ sessions: CcSessionSummary[] }>(`/admin/claude-code/sessions/by-chat/${chatSessionId}`),
+
+  patchSession: (id: string, data: Partial<Pick<ClaudeCodeSession, 'title' | 'kanban_task_id' | 'chat_session_id'>>) =>
+    api.patch<{ session: CcSessionSummary }>(`/admin/claude-code/sessions/${id}`, data),
 
   deleteSession: (id: string) =>
     api.delete<{ status: string }>(`/admin/claude-code/sessions/${id}`),

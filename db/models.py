@@ -3335,6 +3335,18 @@ class ClaudeCodeSession(Base):
     total_turns: Mapped[int] = mapped_column(Integer, default=0)
     max_turns: Mapped[int] = mapped_column(Integer, default=50)
     working_directory: Mapped[str] = mapped_column(String(500), default="/opt/ai-secretary")
+    chat_session_id: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        ForeignKey("chat_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    kanban_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("kanban_tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     events_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
@@ -3357,6 +3369,25 @@ class ClaudeCodeSession(Base):
             "total_turns": self.total_turns,
             "max_turns": self.max_turns,
             "working_directory": self.working_directory,
+            "chat_session_id": self.chat_session_id,
+            "kanban_task_id": self.kanban_task_id,
+            "events_json": self.events_json,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+    def to_summary(self) -> dict:
+        """Lightweight dict without events_json (for sidebar lists)."""
+        return {
+            "id": self.id,
+            "cli_session_id": self.cli_session_id,
+            "title": self.title,
+            "owner_id": self.owner_id,
+            "status": self.status,
+            "model": self.model,
+            "total_turns": self.total_turns,
+            "chat_session_id": self.chat_session_id,
+            "kanban_task_id": self.kanban_task_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }

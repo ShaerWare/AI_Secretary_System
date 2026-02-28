@@ -336,6 +336,18 @@ async def delete_task(task_id: int, user: User = Depends(require_permission("kan
     return {"status": "ok"}
 
 
+@router.get("/tasks/{task_id}/cc-sessions")
+async def list_cc_sessions_for_task(
+    task_id: int, user: User = Depends(require_permission("kanban", "view"))
+):
+    """List Claude Code sessions linked to a kanban task."""
+    from db.integration import async_claude_code_manager
+
+    _owner_id, ws_id = workspace_context(user, "kanban")
+    sessions = await async_claude_code_manager.list_by_kanban_task(task_id, workspace_id=ws_id)
+    return {"sessions": sessions}
+
+
 # ============== Reorder ==============
 
 

@@ -527,6 +527,8 @@ async def claude_code_ws(websocket: WebSocket, token: str = ""):
                 await _handle_message(websocket, user_id, raw, payload.workspace_id)
             elif action == "abort":
                 await _handle_abort(user_id)
+            elif action == "save_transcript":
+                await _handle_save_transcript(raw)
             else:
                 await _send(websocket, {"type": "error", "error": f"Unknown action: {action}"})
 
@@ -564,6 +566,10 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict, workspace_id: in
     cwd = raw.get("cwd")
     context_files = raw.get("context_files")
     project_id = raw.get("project_id")
+    chat_session_id = raw.get("chat_session_id")
+    kanban_task_id = raw.get("kanban_task_id")
+    if kanban_task_id is not None:
+        kanban_task_id = int(kanban_task_id)
 
     # Resolve project from DB if provided
     project = await _resolve_project(project_id, user_id) if project_id else None
@@ -571,7 +577,11 @@ async def _handle_start(ws: WebSocket, user_id: int, raw: dict, workspace_id: in
     # Create DB session
     title = prompt[:50]
     db_session = await async_claude_code_manager.create_session(
-        title=title, owner_id=user_id, workspace_id=workspace_id
+        title=title,
+        owner_id=user_id,
+        workspace_id=workspace_id,
+        chat_session_id=chat_session_id,
+        kanban_task_id=kanban_task_id,
     )
 
     await _send(ws, {"type": "session_created", "session": db_session})
@@ -646,6 +656,17 @@ async def _handle_abort(user_id: int) -> None:
         logger.info("Claude Code process killed for user=%d", user_id)
 
 
+async def _handle_save_transcript(raw: dict) -> None:
+    """Save transcript JSON to DB session."""
+    from db.integration import async_claude_code_manager
+
+    session_id = raw.get("session_id", "").strip()
+    transcript = raw.get("transcript", "")
+    if not session_id or not transcript:
+        return
+    await async_claude_code_manager.save_transcript(session_id, transcript)
+
+
 # ============== REST Endpoints ==============
 
 
@@ -659,6 +680,20 @@ async def list_sessions(user=Depends(require_permission("claude_code", "manage")
     return {"sessions": sessions}
 
 
+@router.get("/sessions/by-chat/{chat_session_id}")
+async def list_sessions_by_chat(
+    chat_session_id: str, user=Depends(require_permission("claude_code", "manage"))
+):
+    """List CC sessions linked to a parent chat session."""
+    from db.integration import async_claude_code_manager
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    sessions = await async_claude_code_manager.list_by_chat_session(
+        chat_session_id, workspace_id=ws_id
+    )
+    return {"sessions": sessions}
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str, user=Depends(require_permission("claude_code", "manage"))):
     """Get a specific Claude Code session."""
@@ -669,6 +704,45 @@ async def get_session(session_id: str, user=Depends(require_permission("claude_c
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"session": session}
+
+
+@router.get("/sessions/{session_id}/transcript")
+async def get_session_transcript(
+    session_id: str, user=Depends(require_permission("claude_code", "manage"))
+):
+    """Get full session with transcript (events_json)."""
+    from db.integration import async_claude_code_manager
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    session = await async_claude_code_manager.get_session_with_transcript(
+        session_id, workspace_id=ws_id
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session": session}
+
+
+@router.patch("/sessions/{session_id}")
+async def patch_session(
+    session_id: str,
+    body: dict = Body(...),
+    user=Depends(require_permission("claude_code", "manage")),
+):
+    """Update title, kanban_task_id, or chat_session_id of a session."""
+    from db.integration import async_claude_code_manager
+
+    allowed_fields = {"title", "kanban_task_id", "chat_session_id"}
+    updates = {k: v for k, v in body.items() if k in allowed_fields}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    _owner_id, ws_id = workspace_context(user, "claude_code")
+    existing = await async_claude_code_manager.get_session(session_id, workspace_id=ws_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = await async_claude_code_manager.update_session(session_id, **updates)
+    return {"session": result}
 
 
 @router.delete("/sessions/{session_id}")

@@ -1,8 +1,10 @@
 import { ref } from 'vue'
 import {
   createClaudeCodeWs,
+  claudeCodeApi,
   type CcWsEvent,
   type CcContextFile,
+  type CcSessionSummary,
 } from '@/api/claudeCode'
 
 export interface CcMessage {
@@ -37,6 +39,8 @@ const error = ref<string | null>(null)
 const workingDir = ref('/opt/ai-secretary')
 const projectId = ref<number | null>(null)
 const pendingContextFiles = ref<CcContextFile[]>([])
+const chatSessionId = ref<string | null>(null)
+const kanbanTaskId = ref<number | null>(null)
 
 let ws: ReturnType<typeof createClaudeCodeWs> | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -108,6 +112,7 @@ function handleEvent(event: CcWsEvent) {
       _flushMessage()
       if (event.session_id) cliSessionId.value = event.session_id
       isProcessing.value = false
+      _autoSaveTranscript()
       break
     }
 
@@ -117,6 +122,7 @@ function handleEvent(event: CcWsEvent) {
       if (streamingText.value || currentToolBlocks.value.length) {
         _flushMessage()
       }
+      _autoSaveTranscript()
       break
 
     case 'aborted':
@@ -124,6 +130,7 @@ function handleEvent(event: CcWsEvent) {
       if (streamingText.value || currentToolBlocks.value.length) {
         _flushMessage()
       }
+      _autoSaveTranscript()
       break
   }
 }
@@ -142,6 +149,19 @@ function _flushMessage() {
   streamingText.value = ''
   thinkingText.value = ''
   currentToolBlocks.value = []
+}
+
+function _autoSaveTranscript() {
+  if (!dbSessionId.value || messages.value.length === 0 || !ws) return
+  try {
+    ws.send({
+      action: 'save_transcript',
+      session_id: dbSessionId.value,
+      transcript: JSON.stringify(messages.value),
+    })
+  } catch {
+    // WS might be closed — ignore
+  }
 }
 
 function connect() {
@@ -209,6 +229,8 @@ function _resetState() {
   error.value = null
   projectId.value = null
   pendingContextFiles.value = []
+  chatSessionId.value = null
+  kanbanTaskId.value = null
 }
 
 /** Activate / deactivate Claude Code mode */
@@ -273,7 +295,7 @@ function sendMessage(prompt: string) {
       cli_session_id: cliSessionId.value,
     })
   } else {
-    // First message — include cwd/project_id and context files
+    // First message — include cwd/project_id, context files, and link IDs
     const startCmd: Record<string, unknown> = {
       action: 'start',
       prompt,
@@ -282,11 +304,58 @@ function sendMessage(prompt: string) {
     if (projectId.value) {
       startCmd.project_id = projectId.value
     }
+    if (chatSessionId.value) {
+      startCmd.chat_session_id = chatSessionId.value
+    }
+    if (kanbanTaskId.value) {
+      startCmd.kanban_task_id = kanbanTaskId.value
+    }
     if (pendingContextFiles.value.length > 0) {
       startCmd.context_files = pendingContextFiles.value
       pendingContextFiles.value = [] // clear after sending
     }
     ws.send(startCmd as never)
+  }
+}
+
+/**
+ * Load a previously saved CC session by its DB id.
+ * Fetches transcript from backend, populates messages, and activates CC mode.
+ */
+async function loadSession(sessionId: string) {
+  if (isProcessing.value) return
+
+  _resetState()
+
+  try {
+    const result = await claudeCodeApi.getSessionTranscript(sessionId)
+    const session = result.session
+
+    dbSessionId.value = session.id
+    cliSessionId.value = session.cli_session_id
+    currentModel.value = session.model
+    chatSessionId.value = session.chat_session_id
+    kanbanTaskId.value = session.kanban_task_id
+
+    // Parse saved transcript
+    if (session.events_json) {
+      try {
+        const parsed = JSON.parse(session.events_json) as CcMessage[]
+        messages.value = parsed
+      } catch {
+        // Corrupted transcript — start fresh
+      }
+    }
+
+    // Activate CC mode + connect WS if needed
+    if (!isActive.value) {
+      isActive.value = true
+    }
+    if (!ws && !isDemo) {
+      connect()
+    }
+  } catch {
+    error.value = 'Failed to load session'
   }
 }
 
@@ -334,11 +403,14 @@ export function useClaudeCode() {
     workingDir,
     projectId,
     pendingContextFiles,
+    chatSessionId,
+    kanbanTaskId,
     toggle,
     newSession,
     connect,
     disconnect,
     sendMessage,
+    loadSession,
     abort,
   }
 }
