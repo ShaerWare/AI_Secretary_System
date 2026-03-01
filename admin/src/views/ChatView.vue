@@ -901,6 +901,22 @@ async function deleteSingleSession(session: ChatSessionSummary, event: Event) {
   }
 }
 
+async function deleteCcSession(ccSessionId: string, title: string, event: Event) {
+  event.stopPropagation()
+  const confirmed = await confirmStore.confirmDelete(title, 'chat')
+  if (!confirmed) return
+  try {
+    await claudeCodeApi.deleteSession(ccSessionId)
+    // If viewing this session, deactivate CC mode
+    if (cc.dbSessionId.value === ccSessionId) {
+      if (cc.isActive.value) cc.toggle()
+    }
+    await fetchAllCcSessions()
+  } catch {
+    // ignore
+  }
+}
+
 function sendMessage() {
   if (!inputMessage.value.trim() || !currentSessionId.value || isStreaming.value) return
 
@@ -1677,6 +1693,13 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
               <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
               <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
               <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
+              <button
+                class="p-0.5 rounded hover:bg-background text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                :title="t('chatView.deleteChat')"
+                @click.stop="deleteCcSession(ccSub.id, ccSub.title, $event)"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
             </div>
           </div>
         </template>
@@ -1777,6 +1800,13 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
               <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
               <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
               <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
+              <button
+                class="p-0.5 rounded hover:bg-background text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                :title="t('chatView.deleteChat')"
+                @click.stop="deleteCcSession(ccSub.id, ccSub.title, $event)"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
             </div>
           </div>
         </template>

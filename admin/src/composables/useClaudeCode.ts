@@ -54,6 +54,8 @@ function handleEvent(event: CcWsEvent) {
   switch (event.type) {
     case 'session_created':
       dbSessionId.value = event.session.id
+      // Save user message immediately so it persists even if CLI hangs
+      _autoSaveTranscript()
       break
 
     case 'session_init':
@@ -105,6 +107,9 @@ function handleEvent(event: CcWsEvent) {
         block.result = event.content
         block.is_error = event.is_error
       }
+      // Save progress after each tool turn so partial results survive refresh
+      _flushMessage()
+      _autoSaveTranscript()
       break
     }
 
@@ -236,6 +241,8 @@ function _resetState() {
 /** Activate / deactivate Claude Code mode */
 function toggle() {
   if (isActive.value) {
+    // Save transcript before deactivating
+    _autoSaveTranscript()
     // Deactivate: abort if running, disconnect, reset
     if (isProcessing.value && ws) {
       ws.send({ action: 'abort' })
@@ -251,6 +258,7 @@ function toggle() {
 
 /** Stop current session and start fresh (keeps CC mode active) */
 function newSession() {
+  _autoSaveTranscript()
   if (isProcessing.value && ws) {
     ws.send({ action: 'abort' })
   }
@@ -325,6 +333,8 @@ function sendMessage(prompt: string) {
 async function loadSession(sessionId: string) {
   if (isProcessing.value) return
 
+  // Save current session before switching
+  _autoSaveTranscript()
   _resetState()
 
   try {
