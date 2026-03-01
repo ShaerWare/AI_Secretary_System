@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_CLI = shutil.which("claude") or "/usr/local/bin/claude"
 _ALLOWED_USERS = {"shaerware", "ivan"}
-_ALLOWED_CWDS = ["/opt/ai-secretary", "/root", "/tmp"]
-_DEFAULT_CWD = "/opt/ai-secretary"
+_ALLOWED_CWDS = ["/opt/ai-secretary", "/app", "/root", "/tmp"]
+# Inside Docker the repo is at /app; on the host it's /opt/ai-secretary
+_DEFAULT_CWD = "/app" if Path("/app/orchestrator.py").is_file() else "/opt/ai-secretary"
 
 # One active WS per user
 _active_connections: dict[int, WebSocket] = {}
