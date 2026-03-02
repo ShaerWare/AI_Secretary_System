@@ -1132,6 +1132,20 @@ async def startup_event():
 
         asyncio.get_event_loop().create_task(_cleanup_expired_sessions())
 
+        # Start background VACUUM (first run after 24h, then weekly)
+        async def _periodic_vacuum():
+            await asyncio.sleep(24 * 3600)  # first run after 24 h
+            while True:
+                try:
+                    from db.database import run_vacuum
+
+                    await run_vacuum()
+                except Exception as e:
+                    logger.warning("Periodic VACUUM failed: %s", e)
+                await asyncio.sleep(7 * 24 * 3600)  # then every 7 days
+
+        asyncio.get_event_loop().create_task(_periodic_vacuum())
+
         logger.info("✅ Основные сервисы загружены успешно")
 
     except Exception as e:
