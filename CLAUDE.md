@@ -50,7 +50,13 @@ python scripts/manage_users.py delete <user>                 # Delete user
 
 ### Database Migrations
 
-Two migration systems: **Alembic** (preferred for new migrations) and legacy manual scripts in `scripts/migrate_*.py`. New tables are auto-created by `Base.metadata.create_all` on startup; **schema changes to existing tables need migration scripts**. Seed scripts: `scripts/seed_*.py`.
+Three migration systems:
+
+- **Alembic** (preferred) — for schema changes (`ALTER TABLE`, new tables, indexes)
+- **`scripts/migrate_*.py`** — for data migrations (backfills, renames, data transforms). New scripts **must** use `scripts/_migration_template.py` (transaction-safe: `BEGIN IMMEDIATE` / `ROLLBACK` on failure)
+- **`Base.metadata.create_all`** — auto-creates missing tables on startup (does **not** alter existing tables)
+
+Run migrations only when the application is stopped or during a maintenance window. Seed scripts: `scripts/seed_*.py`.
 
 ```bash
 # Alembic (preferred)
@@ -58,10 +64,13 @@ alembic upgrade head                        # Apply all pending migrations
 alembic revision --autogenerate -m "desc"   # Generate migration from model changes
 alembic history                             # List migrations
 
-# Legacy manual scripts
-ls scripts/migrate_*.py                     # List all available migrations
-python scripts/migrate_json_to_db.py        # Initial JSON → SQLite migration (first-time)
-python scripts/migrate_<feature>.py         # Run specific migration after adding new columns/tables
+# Data migrations (copy template first)
+cp scripts/_migration_template.py scripts/migrate_<name>.py
+# Edit migrate() function, then:
+python scripts/migrate_<name>.py            # Runs in transaction, rolls back on failure
+
+# Legacy manual scripts (already executed, do not re-run)
+ls scripts/migrate_*.py
 python scripts/seed_tz_generator.py         # Seed TZ generator bot data
 ```
 
@@ -185,7 +194,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 
 **ServiceContainer (`app/dependencies.py`)**: Singleton holding references to all initialized services (TTS, LLM, STT, Wiki RAG). Routers get services via FastAPI `Depends`. Populated during app startup in `orchestrator.py`.
 
-**Database layer** (`db/`): Async SQLAlchemy with aiosqlite. `db/database.py` creates the engine and `AsyncSessionLocal` factory. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`, `AsyncFAQManager`) that wrap repository calls — these are used as module-level singletons imported by `orchestrator.py` and routers. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter(query, workspace_id)` for workspace-aware queries. **Unit of Work pattern**: Repositories only `flush()` — never `commit()`. Transaction boundaries are owned by the caller: manager methods in `integration.py` call `await session.commit()` after repo operations; FastAPI dependency `get_async_session()` auto-commits on success / rollbacks on exception; `get_session_context()` does the same. Routers using `AsyncSessionLocal()` directly must commit explicitly. This ensures multi-repo operations are atomic (all-or-nothing in one session). **SQLITE_BUSY retry**: `db/retry.py` provides `@retry_on_busy()` decorator — exponential backoff (3 retries, 0.1s base) for `OperationalError("database is locked")` after `busy_timeout=5000` exhaustion. Applied to all 16 write methods in `integration.py` managers. Module-level `_busy_retry_count` counter exposed via `get_busy_retry_count()` in `/health` endpoint.
+**Database layer** (`db/`): Async SQLAlchemy with aiosqlite. `db/database.py` creates the engine and `AsyncSessionLocal` factory. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`, `AsyncFAQManager`) that wrap repository calls — these are used as module-level singletons imported by `orchestrator.py` and routers. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter(query, workspace_id)` for workspace-aware queries. **Unit of Work pattern**: Repositories only `flush()` — never `commit()`. Transaction boundaries are owned by the caller: manager methods in `integration.py` call `await session.commit()` after repo operations; FastAPI dependency `get_async_session()` auto-commits on success / rollbacks on exception; `get_session_context()` does the same. Routers using `AsyncSessionLocal()` directly must commit explicitly. This ensures multi-repo operations are atomic (all-or-nothing in one session). **SQLITE_BUSY retry**: `db/retry.py` provides `@retry_on_busy()` decorator — exponential backoff (3 retries, 0.1s base) for `OperationalError("database is locked")` after `busy_timeout=5000` exhaustion. Applied to all 16 write methods in `integration.py` managers. Module-level `_busy_retry_count` counter exposed via `get_busy_retry_count()` in `/health` endpoint. **Maintenance**: `run_vacuum()` in `db/database.py` runs `VACUUM` via `AUTOCOMMIT` isolation; scheduled as weekly background task in `orchestrator.py` (first run after 24h). Health check (`get_db_status()`) includes `integrity_check`, WAL file size, PRAGMA values, wrapped in 5s `asyncio.wait_for` timeout. `close_db()` does `PRAGMA wal_checkpoint(TRUNCATE)` before `engine.dispose()`.
 
 **Telegram bots**: Run as subprocesses managed by `multi_bot_manager.py`. Each bot instance has independent config (LLM backend, TTS, prompts, system prompt). Bots with `auto_start=true` restart on app startup. Two Telegram frameworks: `python-telegram-bot` (legacy) and `aiogram` (new bots). In multi-instance mode, `BOT_INSTANCE_ID`, `BOT_INTERNAL_TOKEN`, and `ORCHESTRATOR_URL` env vars are passed to the subprocess. Config loading: manager pre-fetches config from DB and writes it to `/tmp/bot_config_{id}.json` (`BOT_CONFIG_FILE` env var); bot tries this file first (`load_config_from_file()`), then falls back to orchestrator API with retry logic (5 attempts, exponential backoff). `LLMRouter` in `telegram_bot/services/llm_router.py` routes LLM requests through the orchestrator chat API, auto-creates orchestrator DB sessions (mapping bot session IDs to real DB sessions via `_ensure_session()`), and uses the bot instance's `llm_backend` setting. `stream_renderer.py` handles both plain string chunks and OpenAI-format dicts.
 
@@ -323,7 +332,7 @@ Frontend: `auth.ts` store fetches deployment mode via `GET /admin/deployment-mod
 **Adding i18n translations:**
 1. Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, and `kk` (Kazakh)
 
-**Database migrations:** Two systems — **Alembic** (preferred for new work, `alembic revision --autogenerate -m "desc"`) and legacy manual scripts in `scripts/migrate_*.py`. New tables auto-created by `Base.metadata.create_all` on startup; schema changes to existing tables need migration scripts.
+**Database migrations:** Three systems — **Alembic** (preferred for schema changes), **`scripts/migrate_*.py`** (data migrations — new scripts must use `scripts/_migration_template.py` for transaction safety), and **`Base.metadata.create_all`** (auto-creates missing tables on startup, does not alter existing). Run migrations only when the app is stopped.
 
 **API URL patterns:**
 - `GET/POST /admin/{resource}` — List/create

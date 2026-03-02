@@ -3,7 +3,9 @@ SQLite database connection and session management.
 Uses async SQLAlchemy with aiosqlite driver.
 """
 
+import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
@@ -114,34 +116,58 @@ async def get_session_context() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-async def get_db_status() -> dict:
-    """
-    Get database connection status for health checks.
-    """
-    try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-            journal_mode = (await session.execute(text("PRAGMA journal_mode"))).scalar()
-            fk_enabled = (await session.execute(text("PRAGMA foreign_keys"))).scalar()
+async def _collect_db_status() -> dict:
+    """Inner health check logic (separated for timeout wrapper)."""
+    from db.retry import get_busy_retry_count
 
-        from db.retry import get_busy_retry_count
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("SELECT 1"))
+        journal_mode = (await session.execute(text("PRAGMA journal_mode"))).scalar()
+        fk_enabled = (await session.execute(text("PRAGMA foreign_keys"))).scalar()
+        busy_timeout = (await session.execute(text("PRAGMA busy_timeout"))).scalar()
+        integrity = (await session.execute(text("PRAGMA integrity_check(1)"))).scalar()
 
-        db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
-        return {
-            "status": "ok",
-            "path": str(DB_PATH),
-            "size_bytes": db_size,
-            "size_mb": round(db_size / (1024 * 1024), 2),
+    db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    wal_path = DB_PATH.with_suffix(".db-wal")
+    wal_size = wal_path.stat().st_size if wal_path.exists() else 0
+
+    return {
+        "status": "ok",
+        "path": str(DB_PATH),
+        "size_bytes": db_size,
+        "size_mb": round(db_size / (1024 * 1024), 2),
+        "wal_size_bytes": wal_size,
+        "integrity": integrity == "ok",
+        "pragma": {
             "journal_mode": journal_mode,
-            "foreign_keys_enabled": bool(fk_enabled),
-            "busy_retry_count": get_busy_retry_count(),
-        }
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
+            "foreign_keys": bool(fk_enabled),
+            "busy_timeout": busy_timeout,
+        },
+        "busy_retry_count": get_busy_retry_count(),
+    }
+
+
+async def get_db_status() -> dict:
+    """Get database connection status for health checks (5 s timeout)."""
+    try:
+        return await asyncio.wait_for(_collect_db_status(), timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.error("Database health check timed out (5s)")
         from db.retry import get_busy_retry_count
 
-        return {
-            "status": "error",
-            "error": str(e),
-            "busy_retry_count": get_busy_retry_count(),
-        }
+        return {"status": "timeout", "busy_retry_count": get_busy_retry_count()}
+    except Exception as e:
+        logger.error("Database health check failed: %s", e)
+        from db.retry import get_busy_retry_count
+
+        return {"status": "error", "error": str(e), "busy_retry_count": get_busy_retry_count()}
+
+
+async def run_vacuum() -> None:
+    """Run VACUUM to reclaim disk space. Requires AUTOCOMMIT (no transaction)."""
+    t0 = time.monotonic()
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text("VACUUM"))
+    elapsed = time.monotonic() - t0
+    logger.info("Database VACUUM completed in %.1fms", elapsed * 1000)

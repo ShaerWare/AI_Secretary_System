@@ -12,6 +12,7 @@ from db.database import (
     get_async_session,
     get_db_status,
     init_db,
+    run_vacuum,
 )
 from db.models import (
     PROVIDER_TYPES,
@@ -53,6 +54,7 @@ __all__ = [
     "close_db",
     "get_db_status",
     "AsyncSessionLocal",
+    "run_vacuum",
     # Retry
     "retry_on_busy",
     "get_busy_retry_count",
