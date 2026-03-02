@@ -154,8 +154,9 @@ async def create_project(
             )
 
         # Summary doc
+        summary_fname = f"{data.github_owner}-{data.github_repo}--_summary.md"
         await async_knowledge_doc_manager.create(
-            filename="_summary.md",
+            filename=summary_fname,
             title=f"GitHub: {data.github_owner}/{data.github_repo}",
             source_type="github",
             file_size_bytes=len(summary.encode("utf-8")),
@@ -392,8 +393,9 @@ async def sync_project(
                     collection_id=collection_id,
                 )
 
+            summary_filename = f"{project_orm.github_owner}-{project_orm.github_repo}--_summary.md"
             await async_knowledge_doc_manager.create(
-                filename="_summary.md",
+                filename=summary_filename,
                 title=f"GitHub: {project_orm.github_owner}/{project_orm.github_repo}",
                 source_type="github",
                 file_size_bytes=len(summary.encode("utf-8")),
