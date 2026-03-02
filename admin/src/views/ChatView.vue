@@ -901,6 +901,23 @@ async function deleteSingleSession(session: ChatSessionSummary, event: Event) {
   }
 }
 
+function getCcIndicator(session: { id: string; status: string }) {
+  const isCurrent = cc.dbSessionId.value === session.id
+  if (isCurrent && cc.isProcessing.value) {
+    return { bg: 'bg-green-500', pulse: true, title: 'Работает…' }
+  }
+  if (isCurrent && session.status === 'active') {
+    return { bg: 'bg-yellow-400', pulse: true, title: 'Ждёт вашего ответа' }
+  }
+  switch (session.status) {
+    case 'active':    return { bg: 'bg-green-500/50', pulse: false, title: 'Активна' }
+    case 'completed': return { bg: 'bg-gray-400',     pulse: false, title: 'Завершена' }
+    case 'error':     return { bg: 'bg-red-500',      pulse: false, title: 'Ошибка' }
+    case 'aborted':   return { bg: 'bg-orange-400',   pulse: false, title: 'Прервана' }
+    default:          return { bg: 'bg-gray-400',     pulse: false, title: '' }
+  }
+}
+
 async function deleteCcSession(ccSessionId: string, title: string, event: Event) {
   event.stopPropagation()
   const confirmed = await confirmStore.confirmDelete(title, 'chat')
@@ -1690,6 +1707,12 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @click="loadCcSession(ccSub.id)"
           >
             <div class="flex items-center gap-2">
+              <span
+                :class="['w-2 h-2 rounded-full flex-shrink-0',
+                         getCcIndicator(ccSub).bg,
+                         getCcIndicator(ccSub).pulse ? 'animate-pulse' : '']"
+                :title="getCcIndicator(ccSub).title"
+              />
               <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
               <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
               <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
@@ -1797,6 +1820,12 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @click="loadCcSession(ccSub.id)"
           >
             <div class="flex items-center gap-2">
+              <span
+                :class="['w-2 h-2 rounded-full flex-shrink-0',
+                         getCcIndicator(ccSub).bg,
+                         getCcIndicator(ccSub).pulse ? 'animate-pulse' : '']"
+                :title="getCcIndicator(ccSub).title"
+              />
               <Terminal class="w-3.5 h-3.5 text-green-500 shrink-0" />
               <p class="text-xs truncate text-green-400/80">{{ ccSub.title }}</p>
               <span class="text-[10px] text-muted-foreground ml-auto">{{ ccSub.total_turns }}t</span>
