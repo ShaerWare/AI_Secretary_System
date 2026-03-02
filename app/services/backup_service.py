@@ -319,8 +319,7 @@ class BackupService:
 
                     # Find all .db files in the archive
                     db_files = [
-                        n for n in zf.namelist()
-                        if n.startswith("data/") and n.endswith(".db")
+                        n for n in zf.namelist() if n.startswith("data/") and n.endswith(".db")
                     ]
 
                     for db_arcname in db_files:
@@ -407,11 +406,13 @@ class BackupService:
         # Discover sales databases
         sales_dbs = []
         for sales_db in sorted(self.data_dir.glob("*sales*.db")):
-            sales_dbs.append({
-                "path": str(sales_db),
-                "name": sales_db.name,
-                "size": sales_db.stat().st_size,
-            })
+            sales_dbs.append(
+                {
+                    "path": str(sales_db),
+                    "name": sales_db.name,
+                    "size": sales_db.stat().st_size,
+                }
+            )
 
         return {
             "database": {
