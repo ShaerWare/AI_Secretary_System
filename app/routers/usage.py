@@ -128,6 +128,7 @@ async def admin_log_usage(request: UsageLogRequest):
             cost_usd=request.cost_usd,
             details=request.details,
         )
+        await session.commit()
         return {"log": log}
 
 
@@ -145,6 +146,7 @@ async def admin_cleanup_usage_logs(
     async with AsyncSessionLocal() as session:
         repo = UsageRepository(session)
         deleted = await repo.cleanup_old_logs(days=days)
+        await session.commit()
         return {"status": "ok", "deleted": deleted, "retention_days": days}
 
 
@@ -200,6 +202,7 @@ async def admin_set_limit(
             hard_limit=request.hard_limit,
             warning_threshold=request.warning_threshold,
         )
+        await session.commit()
         return {"limit": limit}
 
 
@@ -213,6 +216,7 @@ async def admin_delete_limit(
     async with AsyncSessionLocal() as session:
         repo = UsageLimitsRepository(session)
         deleted = await repo.delete_limit(service_type, limit_type)
+        await session.commit()
         if not deleted:
             raise HTTPException(status_code=404, detail="Limit not found")
         return {"status": "ok"}

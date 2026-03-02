@@ -164,7 +164,7 @@ class AsyncChatManager:
         """Create new session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.create_session(
+            result = await repo.create_session(
                 title,
                 system_prompt,
                 source,
@@ -174,6 +174,8 @@ class AsyncChatManager:
                 knowledge_collection_id=knowledge_collection_id,
                 workspace_id=workspace_id,
             )
+            await session.commit()
+            return result
 
     async def update_session(
         self,
@@ -189,7 +191,7 @@ class AsyncChatManager:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.update_session(
+            result = await repo.update_session(
                 session_id,
                 title,
                 system_prompt,
@@ -199,6 +201,8 @@ class AsyncChatManager:
                 knowledge_collection_ids=knowledge_collection_ids,
                 context_files=context_files,
             )
+            await session.commit()
+            return result
 
     async def delete_session(
         self,
@@ -209,9 +213,11 @@ class AsyncChatManager:
         """Delete session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.delete_session(
+            result = await repo.delete_session(
                 session_id, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def delete_sessions_bulk(
         self,
@@ -222,9 +228,11 @@ class AsyncChatManager:
         """Delete multiple sessions by ID list."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.delete_sessions_bulk(
+            result = await repo.delete_sessions_bulk(
                 session_ids, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def list_sessions_grouped(
         self, owner_id: Optional[int] = None, workspace_id: Optional[int] = None
@@ -256,7 +264,9 @@ class AsyncChatManager:
         """Add message to session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.add_message(session_id, role, content, parent_id=parent_id)
+            result = await repo.add_message(session_id, role, content, parent_id=parent_id)
+            await session.commit()
+            return result
 
     async def edit_message(
         self,
@@ -267,7 +277,9 @@ class AsyncChatManager:
         """Non-destructive edit: creates new sibling branch."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.edit_message(session_id, message_id, content)
+            result = await repo.edit_message(session_id, message_id, content)
+            await session.commit()
+            return result
 
     async def branch_regenerate(
         self,
@@ -277,7 +289,9 @@ class AsyncChatManager:
         """Non-destructive regenerate: deactivate and return parent user msg."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.branch_regenerate(session_id, message_id)
+            result = await repo.branch_regenerate(session_id, message_id)
+            await session.commit()
+            return result
 
     async def delete_message(
         self,
@@ -287,7 +301,9 @@ class AsyncChatManager:
         """Delete message and all subsequent messages."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.delete_message(session_id, message_id)
+            result = await repo.delete_message(session_id, message_id)
+            await session.commit()
+            return result
 
     async def get_branch_tree(
         self, session_id: str, visible_ids: Optional[set[str]] = None
@@ -313,13 +329,17 @@ class AsyncChatManager:
         """Switch active branch to the given message."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.switch_branch(session_id, message_id)
+            result = await repo.switch_branch(session_id, message_id)
+            await session.commit()
+            return result
 
     async def start_new_branch(self, session_id: str) -> bool:
         """Deactivate all active messages to start a fresh branch."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.start_new_branch(session_id)
+            result = await repo.start_new_branch(session_id)
+            await session.commit()
+            return result
 
     async def count_messages(
         self,
@@ -383,7 +403,9 @@ class AsyncFAQManager:
         """Add new FAQ entry."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.create_entry(question, answer, workspace_id=workspace_id)
+            result = await repo.create_entry(question, answer, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
     async def update(
         self,
@@ -401,22 +423,28 @@ class AsyncFAQManager:
                 existing = await repo.get_by_question(old_question)
                 if existing:
                     await repo.delete_by_question(old_question)
-                return await repo.create_entry(question, answer, workspace_id=workspace_id)
+                result = await repo.create_entry(question, answer, workspace_id=workspace_id)
+                await session.commit()
+                return result
             else:
                 existing = await repo.get_by_question(question)
                 if existing:
-                    return await repo.update_entry(
+                    result = await repo.update_entry(
                         existing["id"],
                         question=question,
                         answer=answer,
                     )
+                    await session.commit()
+                    return result
             return None
 
     async def delete(self, question: str, workspace_id: Optional[int] = None) -> bool:
         """Delete FAQ entry."""
         async with AsyncSessionLocal() as session:
             repo = FAQRepository(session)
-            return await repo.delete_by_question(question, workspace_id=workspace_id)
+            result = await repo.delete_by_question(question, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
     async def search(self, query: str, workspace_id: Optional[int] = None) -> List[dict]:
         """Search FAQ entries."""
@@ -457,9 +485,11 @@ class AsyncPresetManager:
         """Create new preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.create_preset(
+            result = await repo.create_preset(
                 name, params, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def update(
         self, name: str, params: dict, workspace_id: Optional[int] = None
@@ -467,13 +497,17 @@ class AsyncPresetManager:
         """Update preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.update_preset(name, params, workspace_id=workspace_id)
+            result = await repo.update_preset(name, params, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
     async def delete(self, name: str, workspace_id: Optional[int] = None) -> bool:
         """Delete preset."""
         async with AsyncSessionLocal() as session:
             repo = PresetRepository(session)
-            return await repo.delete_preset(name, workspace_id=workspace_id)
+            result = await repo.delete_preset(name, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
 
 # ============== Config Manager ==============
@@ -492,7 +526,9 @@ class AsyncConfigManager:
         """Set config value."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
-            return await repo.set_config(key, value)
+            result = await repo.set_config(key, value)
+            await session.commit()
+            return result
 
     async def get_telegram(self) -> dict:
         """Get Telegram config."""
@@ -504,7 +540,9 @@ class AsyncConfigManager:
         """Set Telegram config."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
-            return await repo.set_telegram_config(config)
+            result = await repo.set_telegram_config(config)
+            await session.commit()
+            return result
 
     async def get_widget(self) -> dict:
         """Get widget config."""
@@ -516,7 +554,9 @@ class AsyncConfigManager:
         """Set widget config."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
-            return await repo.set_widget_config(config)
+            result = await repo.set_widget_config(config)
+            await session.commit()
+            return result
 
 
 # ============== Telegram Session Manager ==============
@@ -564,6 +604,8 @@ class AsyncTelegramSessionManager:
             except Exception:
                 logger.debug("Failed to track Telegram identity for %s", user_id, exc_info=True)
 
+            await session.commit()
+
     async def get_all_sessions(self, bot_id: Optional[str] = None) -> List[dict]:
         """Get all sessions (optionally for specific bot)."""
         async with AsyncSessionLocal() as session:
@@ -586,13 +628,17 @@ class AsyncTelegramSessionManager:
         """Clear all sessions (optionally for specific bot)."""
         async with AsyncSessionLocal() as session:
             repo = TelegramRepository(session)
-            return await repo.clear_all_sessions(bot_id=bot_id)
+            result = await repo.clear_all_sessions(bot_id=bot_id)
+            await session.commit()
+            return result
 
     async def clear_sessions_for_bot(self, bot_id: str) -> int:
         """Clear sessions for specific bot instance."""
         async with AsyncSessionLocal() as session:
             repo = TelegramRepository(session)
-            return await repo.clear_sessions_for_bot(bot_id)
+            result = await repo.clear_sessions_for_bot(bot_id)
+            await session.commit()
+            return result
 
     async def get_session_count(self, bot_id: Optional[str] = None) -> int:
         """Get session count (optionally for specific bot)."""
@@ -649,13 +695,17 @@ class AsyncBotInstanceManager:
         """Create new bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.create_instance(name, **kwargs)
+            result = await repo.create_instance(name, **kwargs)
+            await session.commit()
+            return result
 
     async def update_instance(self, instance_id: str, **kwargs: Any) -> Optional[dict]:
         """Update bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.update_instance(instance_id, **kwargs)
+            result = await repo.update_instance(instance_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_instance(
         self,
@@ -666,21 +716,27 @@ class AsyncBotInstanceManager:
         """Delete bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.delete_instance(
+            result = await repo.delete_instance(
                 instance_id, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.set_enabled(instance_id, enabled)
+            result = await repo.set_enabled(instance_id, enabled)
+            await session.commit()
+            return result
 
     async def set_auto_start(self, instance_id: str, auto_start: bool) -> bool:
         """Set auto-start flag for bot instance."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.set_auto_start(instance_id, auto_start)
+            result = await repo.set_auto_start(instance_id, auto_start)
+            await session.commit()
+            return result
 
     async def get_auto_start_instances(self) -> List[dict]:
         """Get all bot instances that should auto-start."""
@@ -710,7 +766,9 @@ class AsyncBotInstanceManager:
         """Import from legacy telegram_config format."""
         async with AsyncSessionLocal() as session:
             repo = BotInstanceRepository(session)
-            return await repo.import_from_legacy_config(config, instance_id)
+            result = await repo.import_from_legacy_config(config, instance_id)
+            await session.commit()
+            return result
 
 
 # ============== Widget Instance Manager ==============
@@ -749,13 +807,17 @@ class AsyncWidgetInstanceManager:
         """Create new widget instance."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.create_instance(name, **kwargs)
+            result = await repo.create_instance(name, **kwargs)
+            await session.commit()
+            return result
 
     async def update_instance(self, instance_id: str, **kwargs: Any) -> Optional[dict]:
         """Update widget instance."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.update_instance(instance_id, **kwargs)
+            result = await repo.update_instance(instance_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_instance(
         self,
@@ -766,15 +828,19 @@ class AsyncWidgetInstanceManager:
         """Delete widget instance."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.delete_instance(
+            result = await repo.delete_instance(
                 instance_id, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable widget instance."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.set_enabled(instance_id, enabled)
+            result = await repo.set_enabled(instance_id, enabled)
+            await session.commit()
+            return result
 
     async def get_enabled_instances(self) -> List[dict]:
         """Get all enabled widget instances."""
@@ -798,7 +864,9 @@ class AsyncWidgetInstanceManager:
         """Import from legacy widget_config format."""
         async with AsyncSessionLocal() as session:
             repo = WidgetInstanceRepository(session)
-            return await repo.import_from_legacy_config(config, instance_id)
+            result = await repo.import_from_legacy_config(config, instance_id)
+            await session.commit()
+            return result
 
 
 # ============== WhatsApp Instance Manager ==============
@@ -843,13 +911,17 @@ class AsyncWhatsAppInstanceManager:
         """Create new WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.create_instance(name, **kwargs)
+            result = await repo.create_instance(name, **kwargs)
+            await session.commit()
+            return result
 
     async def update_instance(self, instance_id: str, **kwargs: Any) -> Optional[dict]:
         """Update WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.update_instance(instance_id, **kwargs)
+            result = await repo.update_instance(instance_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_instance(
         self,
@@ -860,21 +932,27 @@ class AsyncWhatsAppInstanceManager:
         """Delete WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.delete_instance(
+            result = await repo.delete_instance(
                 instance_id, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def set_enabled(self, instance_id: str, enabled: bool) -> bool:
         """Enable or disable WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.set_enabled(instance_id, enabled)
+            result = await repo.set_enabled(instance_id, enabled)
+            await session.commit()
+            return result
 
     async def set_auto_start(self, instance_id: str, auto_start: bool) -> bool:
         """Set auto-start flag for WhatsApp instance."""
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
-            return await repo.set_auto_start(instance_id, auto_start)
+            result = await repo.set_auto_start(instance_id, auto_start)
+            await session.commit()
+            return result
 
     async def get_auto_start_instances(self) -> List[dict]:
         """Get all WhatsApp instances that should auto-start."""
@@ -955,13 +1033,17 @@ class AsyncCloudProviderManager:
         """Create new cloud provider."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.create_provider(name, provider_type, **kwargs)
+            result = await repo.create_provider(name, provider_type, **kwargs)
+            await session.commit()
+            return result
 
     async def update_provider(self, provider_id: str, **kwargs: Any) -> Optional[dict]:
         """Update cloud provider."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.update_provider(provider_id, **kwargs)
+            result = await repo.update_provider(provider_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_provider(
         self,
@@ -972,15 +1054,19 @@ class AsyncCloudProviderManager:
         """Delete cloud provider."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.delete_provider(
+            result = await repo.delete_provider(
                 provider_id, owner_id=owner_id, workspace_id=workspace_id
             )
+            await session.commit()
+            return result
 
     async def set_default(self, provider_id: str) -> bool:
         """Set provider as default."""
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
-            return await repo.set_default(provider_id)
+            result = await repo.set_default(provider_id)
+            await session.commit()
+            return result
 
     async def get_by_type(self, provider_type: str, enabled_only: bool = True) -> List[dict]:
         """Get providers by type."""
@@ -1020,6 +1106,7 @@ class AsyncAuditLogger:
         async with AsyncSessionLocal() as session:
             repo = AuditRepository(session)
             await repo.log(action, resource, resource_id, user_id, user_ip, details)
+            await session.commit()
 
     async def get_logs(
         self,
@@ -1049,7 +1136,9 @@ class AsyncPaymentManager:
         """Log a completed payment."""
         async with AsyncSessionLocal() as session:
             repo = PaymentRepository(session)
-            return await repo.log_payment(**kwargs)
+            result = await repo.log_payment(**kwargs)
+            await session.commit()
+            return result
 
     async def get_payments_for_bot(self, bot_id: str, limit: int = 100) -> List[dict]:
         """Get payment history for a bot instance."""
@@ -1097,19 +1186,25 @@ class AsyncAmoCRMManager:
         """Create or update amoCRM config."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            return await repo.save_config(workspace_id=workspace_id, **kwargs)
+            result = await repo.save_config(workspace_id=workspace_id, **kwargs)
+            await session.commit()
+            return result
 
     async def clear_tokens(self, workspace_id: Optional[int] = None) -> dict:
         """Clear OAuth tokens (disconnect)."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMConfigRepository(session)
-            return await repo.clear_tokens(workspace_id=workspace_id)
+            result = await repo.clear_tokens(workspace_id=workspace_id)
+            await session.commit()
+            return result
 
     async def log_sync(self, **kwargs: Any) -> dict:
         """Log a sync event."""
         async with AsyncSessionLocal() as session:
             repo = AmoCRMSyncLogRepository(session)
-            return await repo.log_sync(**kwargs)
+            result = await repo.log_sync(**kwargs)
+            await session.commit()
+            return result
 
     async def get_sync_logs(self, limit: int = 50) -> List[dict]:
         """Get recent sync log entries."""
@@ -1143,13 +1238,17 @@ class AsyncWooCommerceManager:
         """Create or update WooCommerce config."""
         async with AsyncSessionLocal() as session:
             repo = WooCommerceConfigRepository(session)
-            return await repo.save_config(**kwargs)
+            result = await repo.save_config(**kwargs)
+            await session.commit()
+            return result
 
     async def clear_credentials(self) -> dict:
         """Clear store credentials (disconnect)."""
         async with AsyncSessionLocal() as session:
             repo = WooCommerceConfigRepository(session)
-            return await repo.clear_credentials()
+            result = await repo.clear_credentials()
+            await session.commit()
+            return result
 
 
 # ============== GitHub Repo Project Manager ==============
@@ -1180,6 +1279,7 @@ class AsyncGitHubRepoProjectManager:
         async with AsyncSessionLocal() as session:
             repo = GitHubRepoProjectRepository(session)
             project = await repo.create_project(**kwargs)
+            await session.commit()
             return project.to_dict()
 
     async def update_project(
@@ -1187,7 +1287,9 @@ class AsyncGitHubRepoProjectManager:
     ) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = GitHubRepoProjectRepository(session)
-            return await repo.update_project(project_id, workspace_id, **kwargs)
+            result = await repo.update_project(project_id, workspace_id, **kwargs)
+            await session.commit()
+            return result
 
     async def update_sync_status(
         self,
@@ -1203,11 +1305,14 @@ class AsyncGitHubRepoProjectManager:
             await repo.update_sync_status(
                 project_id, status, error, commit_sha, file_count, total_size
             )
+            await session.commit()
 
     async def delete_project(self, project_id: int, workspace_id: Optional[int] = None) -> bool:
         async with AsyncSessionLocal() as session:
             repo = GitHubRepoProjectRepository(session)
-            return await repo.delete_project(project_id, workspace_id)
+            result = await repo.delete_project(project_id, workspace_id)
+            await session.commit()
+            return result
 
 
 # ============== GSM Manager ==============
@@ -1227,6 +1332,7 @@ class AsyncGSMManager:
         async with AsyncSessionLocal() as session:
             repo = GSMCallLogRepository(session)
             call = await repo.create_call(direction, state, caller_number, call_id)
+            await session.commit()
             return call.to_dict()
 
     async def update_call_state(
@@ -1240,6 +1346,7 @@ class AsyncGSMManager:
         async with AsyncSessionLocal() as session:
             repo = GSMCallLogRepository(session)
             call = await repo.update_call_state(call_id, state, answered_at, ended_at)
+            await session.commit()
             return call.to_dict() if call else None
 
     async def get_recent_calls(
@@ -1271,6 +1378,7 @@ class AsyncGSMManager:
         async with AsyncSessionLocal() as session:
             repo = GSMSMSLogRepository(session)
             sms = await repo.create_sms(direction, number, text, status)
+            await session.commit()
             return sms.to_dict()
 
     async def get_recent_sms(self, limit: int = 50, offset: int = 0) -> List[dict]:
@@ -1305,7 +1413,7 @@ class AsyncUserSessionManager:
         """Create a new session record."""
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
-            return await repo.create_session(
+            result = await repo.create_session(
                 user_id,
                 jti,
                 ip_address,
@@ -1313,6 +1421,8 @@ class AsyncUserSessionManager:
                 expires_at,
                 workspace_id=workspace_id,
             )
+            await session.commit()
+            return result
 
     async def get_by_jti(self, jti: str):
         """Get session by JTI with user join."""
@@ -1330,19 +1440,25 @@ class AsyncUserSessionManager:
         """Revoke a single session."""
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
-            return await repo.revoke_by_jti(jti)
+            result = await repo.revoke_by_jti(jti)
+            await session.commit()
+            return result
 
     async def revoke_all_for_user(self, user_id: int) -> int:
         """Revoke all sessions for a user."""
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
-            return await repo.revoke_all_for_user(user_id)
+            result = await repo.revoke_all_for_user(user_id)
+            await session.commit()
+            return result
 
     async def cleanup_expired(self, days: int = 7) -> int:
         """Delete old expired sessions."""
         async with AsyncSessionLocal() as session:
             repo = UserSessionRepository(session)
-            return await repo.cleanup_expired(days)
+            result = await repo.cleanup_expired(days)
+            await session.commit()
+            return result
 
 
 async_session_manager = AsyncUserSessionManager()
@@ -1384,13 +1500,16 @@ class AsyncUserManager:
         """Create a new user."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.create_user(username, password, role, display_name)
+            result = await repo.create_user(username, password, role, display_name)
+            await session.commit()
+            return result
 
     async def update_password(self, user_id: int, new_password: str) -> bool:
         """Update user password. Revokes all existing sessions."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.update_password(user_id, new_password)
+            await session.commit()
         if result:
             await self._revoke_user_sessions(user_id)
         return result
@@ -1401,13 +1520,16 @@ class AsyncUserManager:
         """Update user profile."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.update_profile(user_id, display_name)
+            result = await repo.update_profile(user_id, display_name)
+            await session.commit()
+            return result
 
     async def set_role(self, user_id: int, role: str) -> bool:
         """Change user role. Revokes all existing sessions."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.set_role(user_id, role)
+            await session.commit()
         if result:
             await self._revoke_user_sessions(user_id)
         return result
@@ -1417,6 +1539,7 @@ class AsyncUserManager:
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.set_active(user_id, active)
+            await session.commit()
         if result and not active:
             await self._revoke_user_sessions(user_id)
         return result
@@ -1440,7 +1563,9 @@ class AsyncUserManager:
         """Delete user."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            return await repo.delete_user(user_id)
+            result = await repo.delete_user(user_id)
+            await session.commit()
+            return result
 
     async def get_user_count(self) -> int:
         """Get active user count."""
@@ -1497,7 +1622,7 @@ class AsyncKnowledgeDocManager:
         """Create a knowledge document record."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.create_document(
+            result = await repo.create_document(
                 filename=filename,
                 title=title,
                 source_type=source_type,
@@ -1507,6 +1632,8 @@ class AsyncKnowledgeDocManager:
                 collection_id=collection_id,
                 workspace_id=workspace_id,
             )
+            await session.commit()
+            return result
 
     async def update(
         self,
@@ -1519,15 +1646,19 @@ class AsyncKnowledgeDocManager:
         """Update document metadata."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.update_document(
+            result = await repo.update_document(
                 doc_id, title, file_size_bytes, section_count, collection_id
             )
+            await session.commit()
+            return result
 
     async def delete(self, doc_id: int) -> bool:
         """Delete document record."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeDocumentRepository(session)
-            return await repo.delete_document(doc_id)
+            result = await repo.delete_document(doc_id)
+            await session.commit()
+            return result
 
 
 # ============== Knowledge Collection Manager ==============
@@ -1607,7 +1738,7 @@ class AsyncKnowledgeCollectionManager:
         """Create a collection."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            return await repo.create_collection(
+            result = await repo.create_collection(
                 name=name,
                 slug=slug,
                 description=description,
@@ -1615,6 +1746,8 @@ class AsyncKnowledgeCollectionManager:
                 base_dir=base_dir,
                 workspace_id=workspace_id,
             )
+            await session.commit()
+            return result
 
     async def update(
         self,
@@ -1627,13 +1760,17 @@ class AsyncKnowledgeCollectionManager:
         """Update collection metadata."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            return await repo.update_collection(collection_id, name, slug, description, enabled)
+            result = await repo.update_collection(collection_id, name, slug, description, enabled)
+            await session.commit()
+            return result
 
     async def delete(self, collection_id: int) -> bool:
         """Delete collection (orphans documents)."""
         async with AsyncSessionLocal() as session:
             repo = KnowledgeCollectionRepository(session)
-            return await repo.delete_collection(collection_id)
+            result = await repo.delete_collection(collection_id)
+            await session.commit()
+            return result
 
     async def get_document_filenames(self, collection_id: int) -> List[str]:
         """Get filenames of all documents in a collection."""
@@ -1677,9 +1814,11 @@ class AsyncChatShareManager:
         """Add or update a share."""
         async with AsyncSessionLocal() as session:
             repo = ChatShareRepository(session)
-            return await repo.add_share(
+            result = await repo.add_share(
                 session_id, user_id, permission, shared_by, branch_message_id
             )
+            await session.commit()
+            return result
 
     async def get_user_share(self, session_id: str, user_id: int) -> Optional[dict]:
         """Get full share record for a user (with branch_message_id)."""
@@ -1692,13 +1831,17 @@ class AsyncChatShareManager:
         """Remove a share."""
         async with AsyncSessionLocal() as session:
             repo = ChatShareRepository(session)
-            return await repo.remove_share(session_id, user_id)
+            result = await repo.remove_share(session_id, user_id)
+            await session.commit()
+            return result
 
     async def update_permission(self, session_id: str, user_id: int, permission: str) -> bool:
         """Update share permission."""
         async with AsyncSessionLocal() as session:
             repo = ChatShareRepository(session)
-            return await repo.update_permission(session_id, user_id, permission)
+            result = await repo.update_permission(session_id, user_id, permission)
+            await session.commit()
+            return result
 
     async def get_user_permission(self, session_id: str, user_id: int) -> Optional[str]:
         """Get user's permission for a session."""
@@ -1727,7 +1870,9 @@ class AsyncChatShareManager:
         """Fork (deep copy) a session to a new owner."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            return await repo.fork_session(session_id, new_owner_id, new_title)
+            result = await repo.fork_session(session_id, new_owner_id, new_title)
+            await session.commit()
+            return result
 
     async def list_shareable_users(self, exclude_user_id: Optional[int] = None) -> List[dict]:
         """Get list of active non-guest users for sharing."""
@@ -1784,7 +1929,7 @@ class AsyncClaudeCodeManager:
     ) -> dict:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.create_session(
+            result = await repo.create_session(
                 title,
                 owner_id,
                 working_directory,
@@ -1792,21 +1937,29 @@ class AsyncClaudeCodeManager:
                 chat_session_id=chat_session_id,
                 kanban_task_id=kanban_task_id,
             )
+            await session.commit()
+            return result
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.update_session(session_id, **kwargs)
+            result = await repo.update_session(session_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.delete_session(session_id, workspace_id=workspace_id)
+            result = await repo.delete_session(session_id, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
     async def save_transcript(self, session_id: str, transcript_json: str) -> bool:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeRepository(session)
-            return await repo.save_transcript(session_id, transcript_json)
+            result = await repo.save_transcript(session_id, transcript_json)
+            await session.commit()
+            return result
 
     async def get_session_with_transcript(
         self, session_id: str, workspace_id: Optional[int] = None
@@ -1855,7 +2008,7 @@ class AsyncClaudeCodeProjectManager:
     ) -> dict:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeProjectRepository(session)
-            return await repo.create_project(
+            result = await repo.create_project(
                 name=name,
                 path=path,
                 owner_id=owner_id,
@@ -1866,13 +2019,17 @@ class AsyncClaudeCodeProjectManager:
                 ssh_key_path=ssh_key_path,
                 workspace_id=workspace_id,
             )
+            await session.commit()
+            return result
 
     async def delete_project(
         self, project_id: int, owner_id: int, workspace_id: Optional[int] = None
     ) -> bool:
         async with AsyncSessionLocal() as session:
             repo = ClaudeCodeProjectRepository(session)
-            return await repo.delete_project(project_id, owner_id, workspace_id=workspace_id)
+            result = await repo.delete_project(project_id, owner_id, workspace_id=workspace_id)
+            await session.commit()
+            return result
 
 
 # ============== User Identity Manager ==============
@@ -1891,7 +2048,9 @@ class AsyncUserIdentityManager:
         """Find existing identity or create contact user + identity."""
         async with AsyncSessionLocal() as session:
             repo = UserIdentityRepository(session)
-            return await repo.find_or_create(provider, provider_uid, display_name, metadata_dict)
+            result = await repo.find_or_create(provider, provider_uid, display_name, metadata_dict)
+            await session.commit()
+            return result
 
     async def get_identities_for_user(self, user_id: int) -> List[dict]:
         """Get all identities linked to a user."""
@@ -1910,15 +2069,19 @@ class AsyncUserIdentityManager:
         """Link an external identity to an existing user."""
         async with AsyncSessionLocal() as session:
             repo = UserIdentityRepository(session)
-            return await repo.link_identity(
+            result = await repo.link_identity(
                 user_id, provider, provider_uid, display_name, metadata_dict
             )
+            await session.commit()
+            return result
 
     async def update_last_seen(self, provider: str, provider_uid: str) -> bool:
         """Touch the last_seen timestamp for an identity."""
         async with AsyncSessionLocal() as session:
             repo = UserIdentityRepository(session)
-            return await repo.update_last_seen(provider, provider_uid)
+            result = await repo.update_last_seen(provider, provider_uid)
+            await session.commit()
+            return result
 
 
 # ============== Resource Share Manager ==============
@@ -1944,13 +2107,19 @@ class AsyncResourceShareManager:
         """Add or update a share."""
         async with AsyncSessionLocal() as session:
             repo = ResourceShareRepository(session)
-            return await repo.add_share(resource_type, resource_id, user_id, permission, shared_by)
+            result = await repo.add_share(
+                resource_type, resource_id, user_id, permission, shared_by
+            )
+            await session.commit()
+            return result
 
     async def remove_share(self, resource_type: str, resource_id: str, user_id: int) -> bool:
         """Remove a share."""
         async with AsyncSessionLocal() as session:
             repo = ResourceShareRepository(session)
-            return await repo.remove_share(resource_type, resource_id, user_id)
+            result = await repo.remove_share(resource_type, resource_id, user_id)
+            await session.commit()
+            return result
 
     async def update_permission(
         self,
@@ -1962,7 +2131,9 @@ class AsyncResourceShareManager:
         """Update share permission."""
         async with AsyncSessionLocal() as session:
             repo = ResourceShareRepository(session)
-            return await repo.update_permission(resource_type, resource_id, user_id, permission)
+            result = await repo.update_permission(resource_type, resource_id, user_id, permission)
+            await session.commit()
+            return result
 
     async def get_user_permission(
         self, resource_type: str, resource_id: str, user_id: int
@@ -1990,13 +2161,17 @@ class AsyncResourceShareManager:
         """Remove all shares for a resource."""
         async with AsyncSessionLocal() as session:
             repo = ResourceShareRepository(session)
-            return await repo.remove_all_shares(resource_type, resource_id)
+            result = await repo.remove_all_shares(resource_type, resource_id)
+            await session.commit()
+            return result
 
     async def remove_all_user_shares(self, user_id: int) -> int:
         """Remove all shares for a user (GDPR)."""
         async with AsyncSessionLocal() as session:
             repo = ResourceShareRepository(session)
-            return await repo.remove_all_user_shares(user_id)
+            result = await repo.remove_all_user_shares(user_id)
+            await session.commit()
+            return result
 
     async def list_shareable_users(self, exclude_user_id: Optional[int] = None) -> List[dict]:
         """Get list of active non-guest users for sharing."""
@@ -2072,47 +2247,64 @@ class AsyncKanbanManager:
     async def create_task(self, **kwargs) -> dict:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.create_task(**kwargs)
+            result = await repo.create_task(**kwargs)
+            await session.commit()
+            return result
 
     async def update_task(self, task_id: int, **kwargs) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.update_task(task_id, **kwargs)
+            result = await repo.update_task(task_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_task(self, task_id: int) -> bool:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.delete_by_id(task_id)
+            result = await repo.delete_by_id(task_id)
+            await session.commit()
+            return result
 
     async def reorder(self, task_id: int, new_status: str, new_position: int) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.reorder(task_id, new_status, new_position)
+            result = await repo.reorder(task_id, new_status, new_position)
+            await session.commit()
+            return result
 
     async def add_dependency(self, blocker_id: int, dependent_id: int) -> None:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
             await repo.add_dependency(blocker_id, dependent_id)
+            await session.commit()
 
     async def remove_dependency(self, blocker_id: int, dependent_id: int) -> bool:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.remove_dependency(blocker_id, dependent_id)
+            result = await repo.remove_dependency(blocker_id, dependent_id)
+            await session.commit()
+            return result
 
     async def add_checklist_item(self, task_id: int, text: str, position: int = 0) -> dict:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.add_checklist_item(task_id, text, position)
+            result = await repo.add_checklist_item(task_id, text, position)
+            await session.commit()
+            return result
 
     async def toggle_checklist_item(self, item_id: int) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.toggle_checklist_item(item_id)
+            result = await repo.toggle_checklist_item(item_id)
+            await session.commit()
+            return result
 
     async def delete_checklist_item(self, item_id: int) -> bool:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.delete_checklist_item(item_id)
+            result = await repo.delete_checklist_item(item_id)
+            await session.commit()
+            return result
 
     async def get_visible_tasks_for_project(
         self,
@@ -2136,7 +2328,9 @@ class AsyncKanbanManager:
     async def upsert_from_github(self, project_id: int, issue_number: int, **fields) -> dict:
         async with AsyncSessionLocal() as session:
             repo = KanbanRepository(session)
-            return await repo.upsert_from_github(project_id, issue_number, **fields)
+            result = await repo.upsert_from_github(project_id, issue_number, **fields)
+            await session.commit()
+            return result
 
 
 async_kanban_manager = AsyncKanbanManager()
@@ -2193,22 +2387,29 @@ class AsyncKanbanProjectManager:
     async def create_project(self, **kwargs) -> dict:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
-            return await repo.create_project(**kwargs)
+            result = await repo.create_project(**kwargs)
+            await session.commit()
+            return result
 
     async def update_project(self, project_id: int, **kwargs) -> Optional[dict]:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
-            return await repo.update_project(project_id, **kwargs)
+            result = await repo.update_project(project_id, **kwargs)
+            await session.commit()
+            return result
 
     async def delete_project(self, project_id: int) -> bool:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
-            return await repo.delete_by_id(project_id)
+            result = await repo.delete_by_id(project_id)
+            await session.commit()
+            return result
 
     async def update_last_synced(self, project_id: int) -> None:
         async with AsyncSessionLocal() as session:
             repo = KanbanProjectRepository(session)
             await repo.update_last_synced(project_id)
+            await session.commit()
 
 
 async_kanban_project_manager = AsyncKanbanProjectManager()
@@ -2249,6 +2450,7 @@ class AsyncRoleManager:
         async with AsyncSessionLocal() as session:
             repo = RoleRepository(session)
             role = await repo.create_role(name, display_name, description, is_system, permissions)
+            await session.commit()
             return role.to_dict()
 
     async def update_role(
@@ -2261,12 +2463,15 @@ class AsyncRoleManager:
         async with AsyncSessionLocal() as session:
             repo = RoleRepository(session)
             role = await repo.update_role(role_id, display_name, description, permissions)
+            await session.commit()
             return role.to_dict() if role else None
 
     async def delete_role(self, role_id: int) -> bool:
         async with AsyncSessionLocal() as session:
             repo = RoleRepository(session)
-            return await repo.delete_role(role_id)
+            result = await repo.delete_role(role_id)
+            await session.commit()
+            return result
 
     async def count(self) -> int:
         async with AsyncSessionLocal() as session:
@@ -2294,6 +2499,7 @@ class AsyncWorkspaceManager:
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
             await repo.ensure_membership(workspace_id, user_id, role_name)
+            await session.commit()
 
     async def get_default_workspace(self) -> Optional[dict]:
         """Get workspace with id=1."""
@@ -2305,7 +2511,9 @@ class AsyncWorkspaceManager:
         """Create the default workspace."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
-            return await repo.create_default(name, slug)
+            result = await repo.create_default(name, slug)
+            await session.commit()
+            return result
 
     # ============== Members Management ==============
 
@@ -2327,13 +2535,17 @@ class AsyncWorkspaceManager:
         """Change a member's role."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
-            return await repo.update_member_role(workspace_id, user_id, role_name)
+            result = await repo.update_member_role(workspace_id, user_id, role_name)
+            await session.commit()
+            return result
 
     async def remove_member(self, workspace_id: int, user_id: int) -> bool:
         """Remove a member from workspace."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
-            return await repo.remove_member(workspace_id, user_id)
+            result = await repo.remove_member(workspace_id, user_id)
+            await session.commit()
+            return result
 
     async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:
         """Get the owner_id for a workspace."""
@@ -2355,9 +2567,11 @@ class AsyncWorkspaceManager:
         """Create an invite link."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
-            return await repo.create_invite(
+            result = await repo.create_invite(
                 workspace_id, role_name, created_by, email, max_uses, expires_hours
             )
+            await session.commit()
+            return result
 
     async def list_invites(self, workspace_id: int) -> List[dict]:
         """List all invites for a workspace."""
@@ -2369,7 +2583,9 @@ class AsyncWorkspaceManager:
         """Delete an invite."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
-            return await repo.delete_invite(workspace_id, invite_id)
+            result = await repo.delete_invite(workspace_id, invite_id)
+            await session.commit()
+            return result
 
     async def get_invite_info(self, invite_code: str) -> Optional[dict]:
         """Get public invite info by code (workspace name, role, expiry)."""

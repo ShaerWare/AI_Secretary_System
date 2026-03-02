@@ -121,4 +121,5 @@ async def admin_cleanup_audit_logs(
     async with AsyncSessionLocal() as session:
         repo = AuditRepository(session)
         deleted = await repo.cleanup_old_logs(days=days)
+        await session.commit()
         return {"status": "ok", "deleted": deleted, "retention_days": days}
