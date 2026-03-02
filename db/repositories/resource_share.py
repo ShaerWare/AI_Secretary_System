@@ -53,7 +53,7 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
             existing.permission = permission
             existing.shared_by = shared_by
             existing.shared_at = datetime.utcnow()
-            await self.session.commit()
+            await self.session.flush()
             return existing.to_dict()
 
         share = ResourceShare(
@@ -66,7 +66,6 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
         )
         self.session.add(share)
         await self.session.flush()
-        await self.session.commit()
         return share.to_dict()
 
     async def remove_share(self, resource_type: str, resource_id: str, user_id: int) -> bool:
@@ -78,7 +77,7 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
                 ResourceShare.user_id == user_id,
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def update_permission(
@@ -98,7 +97,7 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
             )
             .values(permission=permission)
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def remove_all_shares(self, resource_type: str, resource_id: str) -> int:
@@ -109,7 +108,7 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
                 ResourceShare.resource_id == resource_id,
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
     async def get_shared_resource_ids(self, resource_type: str, user_id: int) -> List[str]:
@@ -167,7 +166,7 @@ class ResourceShareRepository(BaseRepository[ResourceShare]):
         result = await self.session.execute(
             delete(ResourceShare).where(ResourceShare.user_id == user_id)
         )
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
     async def _get_share(

@@ -150,7 +150,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         session = ChatSession(**kwargs)
 
         self.session.add(session)
-        await self.session.commit()
+        await self.session.flush()
 
         # Return dict manually to avoid lazy loading issues
         return {
@@ -215,7 +215,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             )
         session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         data_result: dict[str, Any] = session.to_dict()
@@ -233,7 +233,7 @@ class ChatRepository(BaseRepository[ChatSession]):
                 (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
             )
         result = await self.session.execute(query)
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
@@ -255,7 +255,7 @@ class ChatRepository(BaseRepository[ChatSession]):
                 (ChatSession.owner_id == owner_id) | (ChatSession.owner_id.is_(None))
             )
         result = await self.session.execute(query)
-        await self.session.commit()
+        await self.session.flush()
 
         # Invalidate cache for all deleted sessions
         for sid in session_ids:
@@ -352,7 +352,7 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         return message.to_dict()
@@ -396,7 +396,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         if session:
             session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         return new_message.to_dict()
@@ -425,7 +425,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         if session:
             session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         # Return the parent message (user message) so caller can generate response
@@ -586,7 +586,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             .where(ChatMessage.is_active.is_(True))
             .values(is_active=False)
         )
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
         return True
 
@@ -643,7 +643,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         if session:
             session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         return True
@@ -716,7 +716,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         if session:
             session.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_session_cache(session_id)
 
         return True
@@ -847,7 +847,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             )
             self.session.add(new_msg)
 
-        await self.session.commit()
+        await self.session.flush()
 
         # Return the new session
         return await self.get_session(new_session_id)

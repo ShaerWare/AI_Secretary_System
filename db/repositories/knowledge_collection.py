@@ -95,7 +95,6 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         )
         self.session.add(col)
         await self.session.flush()
-        await self.session.commit()
         d = col.to_dict()
         d["document_count"] = 0
         return d
@@ -122,7 +121,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
         if enabled is not None:
             col.enabled = enabled
 
-        await self.session.commit()
+        await self.session.flush()
         d = col.to_dict()
         # Count documents
         result = await self.session.execute(
@@ -147,7 +146,7 @@ class KnowledgeCollectionRepository(BaseRepository[KnowledgeCollection]):
             doc.collection_id = None
 
         await self.session.delete(col)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def get_document_filenames(self, collection_id: int) -> List[str]:

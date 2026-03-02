@@ -81,7 +81,6 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
 
         config.updated = datetime.utcnow()
         await self.session.flush()
-        await self.session.commit()
         return config.to_dict()
 
     async def clear_tokens(self, workspace_id: Optional[int] = None) -> dict:
@@ -96,7 +95,7 @@ class AmoCRMConfigRepository(BaseRepository[AmoCRMConfig]):
             config.leads_count = 0
             config.last_sync_at = None
             config.updated = datetime.utcnow()
-            await self.session.commit()
+            await self.session.flush()
             return config.to_dict()
         return {}
 
@@ -128,7 +127,6 @@ class AmoCRMSyncLogRepository(BaseRepository[AmoCRMSyncLog]):
         )
         self.session.add(entry)
         await self.session.flush()
-        await self.session.commit()
         return entry.to_dict()
 
     async def get_recent(self, limit: int = 50) -> List[dict]:

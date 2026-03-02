@@ -57,7 +57,6 @@ class BotHardwareRepository(BaseRepository[BotHardwareSpec]):
         spec = BotHardwareSpec(bot_id=bot_id, **kwargs)
         self.session.add(spec)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created hardware spec: bot_id={bot_id}, gpu={kwargs.get('gpu_name')}")
         return spec.to_dict()
 
@@ -69,7 +68,7 @@ class BotHardwareRepository(BaseRepository[BotHardwareSpec]):
         for k, v in kwargs.items():
             if hasattr(spec, k):
                 setattr(spec, k, v)
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated hardware spec: id={spec_id}")
         return spec.to_dict()
 

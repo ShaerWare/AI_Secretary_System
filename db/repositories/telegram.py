@@ -63,7 +63,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
             )
             self.session.add(telegram_session)
 
-        await self.session.commit()
+        await self.session.flush()
         return telegram_session
 
     async def delete_session(self, user_id: int, bot_id: Optional[str] = None) -> bool:
@@ -74,7 +74,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
                 and_(TelegramSession.bot_id == bot_id, TelegramSession.user_id == user_id)
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def get_all_sessions(self, bot_id: Optional[str] = None) -> List[dict]:
@@ -106,7 +106,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
         else:
             result = await self.session.execute(delete(TelegramSession))
 
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
     async def clear_sessions_for_bot(self, bot_id: str) -> int:
@@ -144,7 +144,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
             self.session.add(session)
             count += 1
 
-        await self.session.commit()
+        await self.session.flush()
         return count
 
     async def migrate_sessions_to_bot(self, bot_id: str = "default") -> int:
@@ -165,7 +165,7 @@ class TelegramRepository(BaseRepository[TelegramSession]):
             count += 1
 
         if count > 0:
-            await self.session.commit()
+            await self.session.flush()
             logger.info(f"Migrated {count} sessions to bot_id={bot_id}")
 
         return count

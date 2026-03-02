@@ -55,18 +55,17 @@ class BaseRepository(Generic[T]):
         """Create new entity."""
         self.session.add(entity)
         await self.session.flush()
-        await self.session.commit()
         return entity
 
     async def update(self, entity: T) -> T:
         """Update existing entity."""
-        await self.session.commit()
+        await self.session.flush()
         return entity
 
     async def delete(self, entity: T) -> bool:
         """Delete entity."""
         await self.session.delete(entity)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def delete_by_id(self, id_value: Any) -> bool:

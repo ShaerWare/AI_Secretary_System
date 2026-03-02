@@ -45,7 +45,6 @@ class BotAgentPromptRepository(BaseRepository[BotAgentPrompt]):
         prompt = BotAgentPrompt(bot_id=bot_id, **kwargs)
         self.session.add(prompt)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created agent prompt: bot_id={bot_id}, key={kwargs.get('prompt_key')}")
         return prompt.to_dict()
 
@@ -58,7 +57,7 @@ class BotAgentPromptRepository(BaseRepository[BotAgentPrompt]):
             if hasattr(prompt, k):
                 setattr(prompt, k, v)
         prompt.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated agent prompt: id={prompt_id}")
         return prompt.to_dict()
 
@@ -71,7 +70,7 @@ class BotAgentPromptRepository(BaseRepository[BotAgentPrompt]):
         result = await self.session.execute(
             delete(BotAgentPrompt).where(BotAgentPrompt.bot_id == bot_id)
         )
-        await self.session.commit()
+        await self.session.flush()
         deleted: int = result.rowcount  # type: ignore[attr-defined]
         logger.info(f"Deleted {deleted} agent prompts for bot_id={bot_id}")
         return deleted

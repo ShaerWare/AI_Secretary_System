@@ -111,7 +111,6 @@ class PresetRepository(BaseRepository[TTSPreset]):
 
         self.session.add(preset)
         await self.session.flush()
-        await self.session.commit()
         await self._invalidate_cache()
 
         return preset.to_dict()
@@ -135,7 +134,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
         preset.params = json.dumps(params, ensure_ascii=False)
         preset.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await self._invalidate_cache()
 
         data: dict[str, Any] = preset.to_dict()
@@ -151,7 +150,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
         if workspace_id is not None and hasattr(TTSPreset, "workspace_id"):
             query = query.where(TTSPreset.workspace_id == workspace_id)
         result = await self.session.execute(query)
-        await self.session.commit()
+        await self.session.flush()
         await self._invalidate_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
@@ -176,7 +175,7 @@ class PresetRepository(BaseRepository[TTSPreset]):
             self.session.add(preset)
             count += 1
 
-        await self.session.commit()
+        await self.session.flush()
         await self._invalidate_cache()
         return count
 

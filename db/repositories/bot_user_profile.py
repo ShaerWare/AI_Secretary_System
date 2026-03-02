@@ -54,7 +54,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
                 profile.username = username
             if first_name and profile.first_name != first_name:
                 profile.first_name = first_name
-            await self.session.commit()
+            await self.session.flush()
             return profile.to_dict()
 
         # Create new profile
@@ -70,7 +70,6 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
         )
         self.session.add(profile)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created user profile: bot_id={bot_id}, user_id={user_id}")
         return profile.to_dict()
 
@@ -87,7 +86,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
         profile.state = state
         profile.last_activity = datetime.utcnow()
         profile.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.debug(f"Updated state to '{state}': bot_id={bot_id}, user_id={user_id}")
         return profile.to_dict()
 
@@ -107,7 +106,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
         if path is not None:
             profile.path = path
         profile.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated segment to '{segment}': bot_id={bot_id}, user_id={user_id}")
         return profile.to_dict()
 
@@ -123,7 +122,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
             return None
         profile.set_quiz_answers(answers)
         profile.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return profile.to_dict()
 
     async def set_discovery_data(self, bot_id: str, user_id: int, data: dict) -> Optional[dict]:
@@ -138,7 +137,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
             return None
         profile.set_discovery_data(data)
         profile.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return profile.to_dict()
 
     async def set_followup_optout(
@@ -155,7 +154,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
             return None
         profile.followup_optout = optout
         profile.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Set followup_optout={optout}: bot_id={bot_id}, user_id={user_id}")
         return profile.to_dict()
 
@@ -218,7 +217,7 @@ class BotUserProfileRepository(BaseRepository[BotUserProfile]):
         if not profile:
             return False
         await self.session.delete(profile)
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Deleted user profile: bot_id={bot_id}, user_id={user_id}")
         return True
 

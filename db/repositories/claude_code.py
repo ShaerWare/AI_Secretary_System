@@ -59,7 +59,7 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
             create_kwargs["kanban_task_id"] = kanban_task_id
         entity = ClaudeCodeSession(**create_kwargs)
         self.session.add(entity)
-        await self.session.commit()
+        await self.session.flush()
         return entity.to_summary()
 
     async def update_session(self, session_id: str, **kwargs) -> Optional[dict]:
@@ -70,7 +70,7 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
             if hasattr(entity, key):
                 setattr(entity, key, value)
         entity.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return entity.to_summary()
 
     async def delete_session(self, session_id: str, workspace_id: Optional[int] = None) -> bool:
@@ -87,7 +87,7 @@ class ClaudeCodeRepository(BaseRepository[ClaudeCodeSession]):
             return False
         entity.events_json = transcript_json
         entity.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def get_session_with_transcript(

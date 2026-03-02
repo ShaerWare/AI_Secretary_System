@@ -65,7 +65,6 @@ class BotEventRepository(BaseRepository[BotEvent]):
         )
         self.session.add(event)
         await self.session.flush()
-        await self.session.commit()
         logger.debug(f"Logged event: bot_id={bot_id}, user_id={user_id}, type={event_type}")
         return event.to_dict()
 

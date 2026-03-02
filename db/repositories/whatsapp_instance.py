@@ -178,7 +178,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             instance.set_llm_params(kwargs["llm_params"])
 
         self.session.add(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Created WhatsApp instance: {instance_id}")
         return instance.to_dict()
@@ -226,7 +226,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Updated WhatsApp instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()
@@ -252,7 +252,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             return False
 
         await self.session.delete(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Deleted WhatsApp instance: {instance_id}")
         return True
@@ -264,7 +264,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             .where(WhatsAppInstance.id == instance_id)
             .values(enabled=enabled, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def set_auto_start(self, instance_id: str, auto_start: bool) -> bool:
@@ -274,7 +274,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             .where(WhatsAppInstance.id == instance_id)
             .values(auto_start=auto_start, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def get_auto_start_instances(self) -> List[dict]:

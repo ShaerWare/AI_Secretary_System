@@ -109,7 +109,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             create_kwargs["workspace_id"] = workspace_id
         task = KanbanTask(**create_kwargs)
         self.session.add(task)
-        await self.session.commit()
+        await self.session.flush()
         task = await self.get_task_with_relations(task.id)
         return task.to_dict()
 
@@ -127,7 +127,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         if "status" in kwargs and kwargs["status"] != "draft":
             task.is_private = False
 
-        await self.session.commit()
+        await self.session.flush()
         task = await self.get_task_with_relations(task_id)
         return task.to_dict()
 
@@ -142,7 +142,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         if new_status != "draft":
             task.is_private = False
 
-        await self.session.commit()
+        await self.session.flush()
         task = await self.get_task_with_relations(task_id)
         return task.to_dict()
 
@@ -192,7 +192,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
 
         dep = KanbanTaskDependency(blocker_id=blocker_id, dependent_id=dependent_id)
         self.session.add(dep)
-        await self.session.commit()
+        await self.session.flush()
 
     async def remove_dependency(self, blocker_id: int, dependent_id: int) -> bool:
         """Remove a dependency link."""
@@ -200,7 +200,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         if not dep:
             return False
         await self.session.delete(dep)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def add_checklist_item(self, task_id: int, text: str, position: int = 0) -> dict:
@@ -208,7 +208,6 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         item = KanbanChecklistItem(task_id=task_id, text=text, position=position)
         self.session.add(item)
         await self.session.flush()
-        await self.session.commit()
         return item.to_dict()
 
     async def toggle_checklist_item(self, item_id: int) -> Optional[dict]:
@@ -217,7 +216,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         if not item:
             return None
         item.is_done = not item.is_done
-        await self.session.commit()
+        await self.session.flush()
         return item.to_dict()
 
     async def delete_checklist_item(self, item_id: int) -> bool:
@@ -226,7 +225,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
         if not item:
             return False
         await self.session.delete(item)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def find_by_github_issue(
@@ -250,7 +249,7 @@ class KanbanRepository(BaseRepository[KanbanTask]):
             for key, value in fields.items():
                 if hasattr(task, key):
                     setattr(task, key, value)
-            await self.session.commit()
+            await self.session.flush()
             task = await self.get_task_with_relations(task.id)
             return task.to_dict()
         else:
@@ -263,6 +262,6 @@ class KanbanRepository(BaseRepository[KanbanTask]):
                 **fields,
             )
             self.session.add(task)
-            await self.session.commit()
+            await self.session.flush()
             task = await self.get_task_with_relations(task.id)
             return task.to_dict()

@@ -196,7 +196,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         self.session.add(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Created bot instance: {instance_id}")
         return instance.to_dict()
@@ -260,7 +260,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Updated bot instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()
@@ -286,7 +286,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             return False
 
         await self.session.delete(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Deleted bot instance: {instance_id}")
         return True
@@ -298,7 +298,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             .where(BotInstance.id == instance_id)
             .values(enabled=enabled, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def set_auto_start(self, instance_id: str, auto_start: bool) -> bool:
@@ -308,7 +308,7 @@ class BotInstanceRepository(BaseRepository[BotInstance]):
             .where(BotInstance.id == instance_id)
             .values(auto_start=auto_start, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def get_auto_start_instances(self) -> List[dict]:

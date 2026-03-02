@@ -50,7 +50,7 @@ class UserRepository(BaseRepository[User]):
 
         # Update last_login
         user.last_login = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
         return user.to_dict()
 
@@ -77,7 +77,6 @@ class UserRepository(BaseRepository[User]):
         )
         self.session.add(user)
         await self.session.flush()
-        await self.session.commit()
         return user.to_dict()
 
     async def update_password(self, user_id: int, new_password: str) -> bool:
@@ -90,7 +89,7 @@ class UserRepository(BaseRepository[User]):
         user.password_hash = pw_hash
         user.salt = salt
         user.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def update_profile(
@@ -104,7 +103,7 @@ class UserRepository(BaseRepository[User]):
         if display_name is not None:
             user.display_name = display_name
         user.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return user.to_dict()
 
     async def set_role(self, user_id: int, role: str) -> bool:
@@ -118,7 +117,7 @@ class UserRepository(BaseRepository[User]):
 
         user.role = role
         user.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def set_active(self, user_id: int, active: bool) -> bool:
@@ -129,7 +128,7 @@ class UserRepository(BaseRepository[User]):
 
         user.is_active = active
         user.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def create_contact_user(
@@ -146,7 +145,6 @@ class UserRepository(BaseRepository[User]):
         )
         self.session.add(user)
         await self.session.flush()
-        await self.session.commit()
         return user.to_dict()
 
     async def list_users(

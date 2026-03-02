@@ -41,7 +41,6 @@ class AuditRepository(BaseRepository[AuditLog]):
 
         self.session.add(entry)
         await self.session.flush()
-        await self.session.commit()
 
         return entry
 
@@ -88,7 +87,7 @@ class AuditRepository(BaseRepository[AuditLog]):
         """Delete logs older than specified days. Returns count of deleted logs."""
         cutoff = datetime.utcnow() - timedelta(days=days)
         result = await self.session.execute(delete(AuditLog).where(AuditLog.timestamp < cutoff))
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
     async def get_stats(self) -> dict:

@@ -58,7 +58,6 @@ class RoleRepository(BaseRepository[Role]):
             ]
         self.session.add(role)
         await self.session.flush()
-        await self.session.commit()
         return role
 
     async def update_role(
@@ -88,7 +87,7 @@ class RoleRepository(BaseRepository[Role]):
                 for module, level in permissions.items()
             ]
 
-        await self.session.commit()
+        await self.session.flush()
         return await self.get_with_permissions(role_id)
 
     async def delete_role(self, role_id: int) -> bool:
@@ -99,5 +98,5 @@ class RoleRepository(BaseRepository[Role]):
         if role.is_system:
             return False
         await self.session.delete(role)
-        await self.session.commit()
+        await self.session.flush()
         return True

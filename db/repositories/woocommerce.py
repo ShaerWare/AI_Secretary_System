@@ -48,7 +48,6 @@ class WooCommerceConfigRepository(BaseRepository[WooCommerceConfig]):
 
         config.updated = datetime.utcnow()
         await self.session.flush()
-        await self.session.commit()
         return config.to_dict()
 
     async def clear_credentials(self) -> dict:
@@ -60,5 +59,5 @@ class WooCommerceConfigRepository(BaseRepository[WooCommerceConfig]):
         config.consumer_secret = ""
         config.is_connected = False
         config.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return config.to_dict()

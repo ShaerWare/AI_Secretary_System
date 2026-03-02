@@ -175,7 +175,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             instance.set_llm_params(kwargs["llm_params"])
 
         self.session.add(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Created widget instance: {instance_id}")
         return instance.to_dict()
@@ -222,7 +222,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             instance.knowledge_collection_ids = json.dumps(ids) if ids else None
 
         instance.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Updated widget instance: {instance_id}")
         data: dict[str, Any] = instance.to_dict()
@@ -248,7 +248,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             return False
 
         await self.session.delete(instance)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Deleted widget instance: {instance_id}")
         return True
@@ -260,7 +260,7 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             .where(WidgetInstance.id == instance_id)
             .values(enabled=enabled, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def get_enabled_instances(self) -> List[dict]:

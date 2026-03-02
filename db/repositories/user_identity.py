@@ -51,9 +51,9 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
                 changed = True
             identity.last_seen = datetime.utcnow()
             if changed:
-                await self.session.commit()
+                await self.session.flush()
             else:
-                await self.session.commit()
+                await self.session.flush()
 
             user = await self.session.get(User, identity.user_id)
             return user.to_dict() if user else {}
@@ -78,7 +78,7 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
             last_seen=datetime.utcnow(),
         )
         self.session.add(identity)
-        await self.session.commit()
+        await self.session.flush()
         return user.to_dict()
 
     async def get_identities_for_user(self, user_id: int) -> List[dict]:
@@ -107,7 +107,6 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
         )
         self.session.add(identity)
         await self.session.flush()
-        await self.session.commit()
         return identity.to_dict()
 
     async def update_last_seen(self, provider: str, provider_uid: str) -> bool:
@@ -116,5 +115,5 @@ class UserIdentityRepository(BaseRepository[UserIdentity]):
         if not identity:
             return False
         identity.last_seen = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return True

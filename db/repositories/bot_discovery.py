@@ -52,7 +52,6 @@ class BotDiscoveryRepository(BaseRepository[BotDiscoveryResponse]):
         )
         self.session.add(response)
         await self.session.flush()
-        await self.session.commit()
         logger.debug(f"Saved discovery response: bot_id={bot_id}, user_id={user_id}, step={step}")
         return response.to_dict()
 
@@ -92,7 +91,7 @@ class BotDiscoveryRepository(BaseRepository[BotDiscoveryResponse]):
                 BotDiscoveryResponse.user_id == user_id,
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         deleted: int = result.rowcount  # type: ignore[attr-defined]
         logger.info(f"Cleared {deleted} discovery responses: bot_id={bot_id}, user_id={user_id}")
         return deleted

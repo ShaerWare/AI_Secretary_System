@@ -81,7 +81,6 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         )
         self.session.add(doc)
         await self.session.flush()
-        await self.session.commit()
         return doc.to_dict()
 
     async def update_document(
@@ -106,7 +105,7 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         if collection_id is not None:
             doc.collection_id = collection_id
 
-        await self.session.commit()
+        await self.session.flush()
         return doc.to_dict()
 
     async def delete_document(self, doc_id: int) -> bool:
@@ -115,5 +114,5 @@ class KnowledgeDocumentRepository(BaseRepository[KnowledgeDocument]):
         if not doc:
             return False
         await self.session.delete(doc)
-        await self.session.commit()
+        await self.session.flush()
         return True

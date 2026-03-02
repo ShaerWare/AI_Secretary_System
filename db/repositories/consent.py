@@ -80,7 +80,6 @@ class ConsentRepository(BaseRepository[UserConsent]):
             self.session.add(consent)
 
         await self.session.flush()
-        await self.session.commit()
         return consent.to_dict()
 
     async def revoke_consent(self, user_id: str, consent_type: str) -> Optional[dict]:
@@ -98,7 +97,7 @@ class ConsentRepository(BaseRepository[UserConsent]):
         if consent:
             consent.granted = False
             consent.revoked_at = datetime.utcnow()
-            await self.session.commit()
+            await self.session.flush()
             return consent.to_dict()
         return None
 
@@ -152,7 +151,7 @@ class ConsentRepository(BaseRepository[UserConsent]):
         for consent in consents:
             await self.session.delete(consent)
 
-        await self.session.commit()
+        await self.session.flush()
         return {"deleted": count, "user_id": user_id}
 
     async def get_consent_stats(self) -> Dict:

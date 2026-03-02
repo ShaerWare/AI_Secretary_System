@@ -49,7 +49,6 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
         project = KanbanProject(**kwargs)
         self.session.add(project)
         await self.session.flush()
-        await self.session.commit()
         return project.to_dict()
 
     async def update_project(self, project_id: int, **kwargs) -> Optional[dict]:
@@ -60,7 +59,7 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
         for key, value in kwargs.items():
             if hasattr(project, key):
                 setattr(project, key, value)
-        await self.session.commit()
+        await self.session.flush()
         return project.to_dict()
 
     async def update_last_synced(self, project_id: int) -> None:
@@ -68,4 +67,4 @@ class KanbanProjectRepository(BaseRepository[KanbanProject]):
         project = await self.session.get(KanbanProject, project_id)
         if project:
             project.last_synced = datetime.utcnow()
-            await self.session.commit()
+            await self.session.flush()
