@@ -58,7 +58,7 @@ class TelegramSettings(BaseSettings):
     max_messages_per_session: int = Field(default=100, alias="TELEGRAM_MAX_MESSAGES")
 
     # Sales funnel settings
-    sales_db_path: str = Field(default="sales.db", alias="SALES_DB_PATH")
+    sales_db_path: str = Field(default="data/sales.db", alias="SALES_DB_PATH")
     sales_admin_ids: str = Field(default="", alias="SALES_ADMIN_IDS")
     sales_github_repo: str = Field(
         default="ShaerWare/AI_Secretary_System", alias="SALES_GITHUB_REPO"
@@ -140,7 +140,7 @@ class BotConfig:
     stream_edit_interval: float = 1.5
     stream_edit_min_chars: int = 100
     max_messages_per_session: int = 100
-    sales_db_path: str = "sales.db"
+    sales_db_path: str = "data/sales.db"
     admin_ids: set[int] = field(default_factory=set)
 
 

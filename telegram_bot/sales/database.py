@@ -2,6 +2,7 @@
 
 import json
 import logging
+from pathlib import Path
 
 import aiosqlite
 
@@ -102,11 +103,24 @@ CREATE TABLE IF NOT EXISTS commit_news_broadcasts (
 class SalesDatabase:
     """Async SQLite wrapper for sales funnel data."""
 
-    def __init__(self, db_path: str = "sales.db") -> None:
+    def __init__(self, db_path: str = "data/sales.db") -> None:
         self._db_path = db_path
         self._db: aiosqlite.Connection | None = None
 
     async def init(self) -> None:
+        # Migrate legacy sales.db from project root to data/ directory
+        db_path = Path(self._db_path)
+        if str(db_path) == "data/sales.db" and not db_path.exists():
+            legacy = Path("sales.db")
+            if legacy.exists():
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                legacy.rename(db_path)
+                for ext in ("-wal", "-shm"):
+                    sidecar = Path(f"sales.db{ext}")
+                    if sidecar.exists():
+                        sidecar.rename(db_path.parent / f"sales.db{ext}")
+                logger.info("Migrated legacy sales.db → %s", self._db_path)
+
         self._db = await aiosqlite.connect(self._db_path)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
@@ -119,6 +133,10 @@ class SalesDatabase:
 
     async def close(self) -> None:
         if self._db:
+            try:
+                await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception as e:
+                logger.warning("WAL checkpoint on close failed: %s", e)
             await self._db.close()
             self._db = None
 
@@ -478,7 +496,7 @@ async def get_sales_db() -> SalesDatabase:
             from ..config import get_telegram_settings
 
             settings = get_telegram_settings()
-            db_path = getattr(settings, "sales_db_path", "sales.db")
+            db_path = getattr(settings, "sales_db_path", "data/sales.db")
         _db = SalesDatabase(db_path)
         await _db.init()
     return _db
