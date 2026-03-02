@@ -2,11 +2,16 @@
 
 import hashlib
 import json
+import logging
 import shutil
+import sqlite3
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 # Base paths
@@ -47,6 +52,40 @@ class BackupService:
         self.data_dir = DATA_DIR
         self.db_path = DATA_DIR / "secretary.db"
 
+    def _checkpoint_wal(self, db_path: Path) -> None:
+        """Force WAL checkpoint so .db file contains all committed data."""
+        if not db_path.exists():
+            return
+        try:
+            conn = sqlite3.connect(str(db_path))
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.close()
+        except Exception as e:
+            logger.warning("WAL checkpoint failed for %s: %s", db_path, e)
+
+    def _backup_db_file(
+        self, zf: zipfile.ZipFile, db_path: Path, arcname: str, manifest: dict
+    ) -> None:
+        """Backup a database file with its WAL/SHM sidecars."""
+        if not db_path.exists():
+            return
+        self._checkpoint_wal(db_path)
+        zf.write(db_path, arcname)
+        manifest["files"][arcname] = {
+            "size": db_path.stat().st_size,
+            "checksum": _calculate_checksum(db_path),
+        }
+        # Include WAL/SHM sidecars as safety net
+        for ext in ("-wal", "-shm"):
+            sidecar = db_path.parent / (db_path.name + ext)
+            if sidecar.exists() and sidecar.stat().st_size > 0:
+                sidecar_arcname = arcname + ext
+                zf.write(sidecar, sidecar_arcname)
+                manifest["files"][sidecar_arcname] = {
+                    "size": sidecar.stat().st_size,
+                    "checksum": _calculate_checksum(sidecar),
+                }
+
     def create_backup(
         self,
         include_voices: bool = False,
@@ -69,7 +108,7 @@ class BackupService:
         backup_path = self.backups_dir / backup_name
 
         manifest = {
-            "version": "1.0",
+            "version": "1.1",
             "created_at": datetime.utcnow().isoformat(),
             "description": description,
             "includes": {
@@ -81,13 +120,14 @@ class BackupService:
         }
 
         with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            # Always include database
-            if self.db_path.exists():
-                zf.write(self.db_path, "data/secretary.db")
-                manifest["files"]["data/secretary.db"] = {
-                    "size": self.db_path.stat().st_size,
-                    "checksum": _calculate_checksum(self.db_path),
-                }
+            # Always include main database (with WAL checkpoint + sidecars)
+            self._backup_db_file(zf, self.db_path, "data/secretary.db", manifest)
+
+            # Discover and backup sales databases
+            for sales_db in sorted(self.data_dir.glob("*sales*.db")):
+                arcname = f"data/{sales_db.name}"
+                if arcname not in manifest["files"]:
+                    self._backup_db_file(zf, sales_db, arcname, manifest)
 
             # Include voice samples if requested
             if include_voices and VOICES_DIR.exists():
@@ -273,17 +313,39 @@ class BackupService:
             with zipfile.ZipFile(backup_path, "r") as zf:
                 manifest = json.loads(zf.read("manifest.json"))
 
-                # Restore database
-                if restore_database and "data/secretary.db" in zf.namelist():
-                    # Create backup of current database
-                    if self.db_path.exists():
-                        backup_current = self.db_path.with_suffix(".db.bak")
-                        shutil.copy2(self.db_path, backup_current)
-
-                    # Extract new database
+                # Restore databases
+                if restore_database:
                     self.data_dir.mkdir(exist_ok=True)
-                    zf.extract("data/secretary.db", BASE_DIR)
-                    restored_files.append("data/secretary.db")
+
+                    # Find all .db files in the archive
+                    db_files = [
+                        n for n in zf.namelist()
+                        if n.startswith("data/") and n.endswith(".db")
+                    ]
+
+                    for db_arcname in db_files:
+                        db_target = BASE_DIR / db_arcname
+
+                        # Create backup of current file
+                        if db_target.exists():
+                            shutil.copy2(db_target, db_target.with_suffix(".db.bak"))
+
+                        # Remove stale WAL/SHM sidecars before extracting
+                        for ext in ("-wal", "-shm"):
+                            stale = db_target.parent / (db_target.name + ext)
+                            if stale.exists():
+                                stale.unlink()
+
+                        # Extract database
+                        zf.extract(db_arcname, BASE_DIR)
+                        restored_files.append(db_arcname)
+
+                        # Extract sidecars if present in archive
+                        for ext in ("-wal", "-shm"):
+                            sidecar_arcname = db_arcname + ext
+                            if sidecar_arcname in zf.namelist():
+                                zf.extract(sidecar_arcname, BASE_DIR)
+                                restored_files.append(sidecar_arcname)
 
                 # Restore voices
                 if restore_voices:
@@ -342,12 +404,22 @@ class BackupService:
         backups_count = len(list(self.backups_dir.glob("backup_*.zip")))
         backups_size = sum(f.stat().st_size for f in self.backups_dir.glob("backup_*.zip"))
 
+        # Discover sales databases
+        sales_dbs = []
+        for sales_db in sorted(self.data_dir.glob("*sales*.db")):
+            sales_dbs.append({
+                "path": str(sales_db),
+                "name": sales_db.name,
+                "size": sales_db.stat().st_size,
+            })
+
         return {
             "database": {
                 "path": str(self.db_path),
                 "size": db_size,
                 "exists": self.db_path.exists(),
             },
+            "sales_databases": sales_dbs,
             "voices": {
                 "size": voices_size,
                 "available": VOICES_DIR.exists() or (BASE_DIR / "Марина").exists(),

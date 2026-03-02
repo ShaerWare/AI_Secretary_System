@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS custom_discovery (
 class SalesDatabase:
     """Async SQLite wrapper for WhatsApp sales funnel data."""
 
-    def __init__(self, db_path: str = "wa_sales.db") -> None:
+    def __init__(self, db_path: str = "data/wa_sales.db") -> None:
         self._db_path = db_path
         self._db: aiosqlite.Connection | None = None
 
@@ -70,6 +70,10 @@ class SalesDatabase:
 
     async def close(self) -> None:
         if self._db:
+            try:
+                await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception as e:
+                logger.warning("WAL checkpoint on close failed: %s", e)
             await self._db.close()
             self._db = None
 
@@ -202,7 +206,7 @@ async def get_sales_db() -> SalesDatabase:
         if bot_config is not None:
             db_path = f"data/wa_sales_{bot_config.instance_id}.db"
         else:
-            db_path = "wa_sales.db"
+            db_path = "data/wa_sales.db"
         _db = SalesDatabase(db_path)
         await _db.init()
     return _db
