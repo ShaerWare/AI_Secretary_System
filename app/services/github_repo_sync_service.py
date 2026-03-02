@@ -5,6 +5,7 @@ Pure functions: no DB access. Handles git clone/pull, file filtering, and markdo
 
 import fnmatch
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -106,6 +107,14 @@ LANG_MAP = {
 }
 
 
+def _clean_env() -> dict[str, str]:
+    """Return os.environ copy with proxy vars stripped (xray proxy breaks git)."""
+    env = os.environ.copy()
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY"):
+        env.pop(key, None)
+    return env
+
+
 def get_repo_dir(owner: str, repo: str) -> Path:
     """Get the local directory for a cloned repo."""
     return GITHUB_REPOS_DIR / f"{owner}-{repo}"
@@ -146,6 +155,7 @@ def clone_repo(
         capture_output=True,
         text=True,
         timeout=300,
+        env=_clean_env(),
     )
     if result.returncode != 0:
         stderr = result.stderr.strip()
@@ -181,6 +191,7 @@ def pull_repo(
         capture_output=True,
         text=True,
         timeout=300,
+        env=_clean_env(),
     )
     if result.returncode != 0:
         stderr = result.stderr.strip()
@@ -192,7 +203,7 @@ def pull_repo(
 
     # Reset to FETCH_HEAD
     reset_cmd = ["git", "-C", str(target), "reset", "--hard", "FETCH_HEAD"]
-    subprocess.run(reset_cmd, capture_output=True, text=True, timeout=60)
+    subprocess.run(reset_cmd, capture_output=True, text=True, timeout=60, env=_clean_env())
 
     return get_head_sha(target)
 
@@ -305,8 +316,10 @@ def build_repo_documents(
 
         title, content = convert_file_to_markdown(filepath, repo_dir)
         rel_path = filepath.relative_to(repo_dir)
-        # Sanitize filename for RAG: replace / with --
-        safe_name = str(rel_path).replace("/", "--") + ".md"
+        # Sanitize filename for RAG: prefix with owner-repo, replace / with --
+        safe_name = f"{owner}-{repo}--{str(rel_path).replace('/', '--')}"
+        if not safe_name.endswith(".md"):
+            safe_name += ".md"
 
         documents.append((safe_name, title, content, file_size))
 
