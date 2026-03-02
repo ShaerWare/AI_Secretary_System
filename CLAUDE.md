@@ -97,14 +97,14 @@ pre-commit run --all-files
 
 ```bash
 pytest tests/                          # All tests
-pytest tests/unit/test_db.py -v        # Single file
+pytest tests/unit/test_retry_on_busy.py -v  # Single file
 pytest -k "test_chat" -v               # By name pattern
 pytest -m "not slow" -v                # Exclude slow tests
 pytest -m "not integration" -v         # Exclude integration (needs external services)
 pytest -m "not gpu" -v                 # Exclude GPU-required tests
 ```
 
-**Note:** The `tests/` directory does not exist yet — test infrastructure is configured in `pyproject.toml` but tests have not been written. Pytest uses `asyncio_mode = "auto"` — async test functions run without needing `@pytest.mark.asyncio`. Custom markers: `slow`, `integration`, `gpu`.
+Pytest uses `asyncio_mode = "auto"` — async test functions run without needing `@pytest.mark.asyncio`. Custom markers: `slow`, `integration`, `gpu`. Tests run inside Docker: `docker exec ai-secretary python -m pytest tests/ -v -o asyncio_mode=auto`. Current test suite: 49 unit tests across 5 files (`test_sqlite_pragmas`, `test_unit_of_work`, `test_retry_on_busy`, `test_backup_safety`, `test_sales_db_close`).
 
 ### CI
 
@@ -137,9 +137,9 @@ Follow this checklist for every production deploy. Do NOT report deployment as c
 3. **Kill stale processes** — `lsof -i :8002` to check for port conflicts before restart
 4. **Clean build artifacts** — `rm -rf admin/dist admin/node_modules/.vite` before building (prevents demo interceptor leaking into production)
 5. **Build and deploy** — `npm run build` (verify `VITE_DEMO_MODE` is NOT set in environment)
-6. **Restart services** — `systemctl restart ai-secretary`
+6. **Restart services** — Docker (new server): `docker compose restart ai-secretary`; native (old server): `systemctl restart ai-secretary`
 7. **Verify endpoints** — `curl http://localhost:8002/health` and test `/admin/auth/login`
-8. **Check logs** — `journalctl -u ai-secretary --since "2 minutes ago" --no-pager | tail -20`
+8. **Check logs** — Docker: `docker compose logs -f ai-secretary`; native: `journalctl -u ai-secretary --since "2 minutes ago" --no-pager | tail -20`
 
 **After `git reset --hard`** — always check if local-only files (`.env`, `apply_patches.py`, `deploy.sh`, `admin/.env.production.local`) need to be restored before proceeding.
 
@@ -458,6 +458,15 @@ docker compose logs -f ai-secretary          # watch startup
 
 # Restart without rebuild
 docker compose restart ai-secretary
+
+# Rebuild and redeploy admin panel only (WITHOUT full image rebuild)
+# IMPORTANT: Always build from /opt/ai-secretary/admin, NOT from git clone directory.
+# Vite deletes and recreates admin/dist/ on each build (new inode), which breaks the Docker
+# bind mount. The container must be restarted to re-bind to the new directory. Without
+# restart, /admin/ returns 404 even though the files exist.
+cd /opt/ai-secretary/admin && npm run build
+docker compose restart ai-secretary        # re-bind to new admin/dist inode
+curl http://localhost:8002/health          # verify
 
 # View bridge logs
 docker exec ai-secretary cat /app/logs/bridge.log
