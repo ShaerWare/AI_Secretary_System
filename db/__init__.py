@@ -43,6 +43,7 @@ from db.redis_client import (
     get_redis,
     redis_client,
 )
+from db.retry import get_busy_retry_count, retry_on_busy
 
 
 __all__ = [
@@ -52,6 +53,9 @@ __all__ = [
     "close_db",
     "get_db_status",
     "AsyncSessionLocal",
+    # Retry
+    "retry_on_busy",
+    "get_busy_retry_count",
     # Redis
     "get_redis",
     "close_redis",

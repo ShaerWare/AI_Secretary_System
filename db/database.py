@@ -124,6 +124,8 @@ async def get_db_status() -> dict:
             journal_mode = (await session.execute(text("PRAGMA journal_mode"))).scalar()
             fk_enabled = (await session.execute(text("PRAGMA foreign_keys"))).scalar()
 
+        from db.retry import get_busy_retry_count
+
         db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
         return {
             "status": "ok",
@@ -132,10 +134,14 @@ async def get_db_status() -> dict:
             "size_mb": round(db_size / (1024 * 1024), 2),
             "journal_mode": journal_mode,
             "foreign_keys_enabled": bool(fk_enabled),
+            "busy_retry_count": get_busy_retry_count(),
         }
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
+        from db.retry import get_busy_retry_count
+
         return {
             "status": "error",
             "error": str(e),
+            "busy_retry_count": get_busy_retry_count(),
         }
