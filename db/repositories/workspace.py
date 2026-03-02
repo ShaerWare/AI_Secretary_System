@@ -47,7 +47,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
                     role_name=role_name,
                 )
             )
-        await self.session.commit()
+        await self.session.flush()
 
     async def get_default_workspace(self) -> Optional[dict]:
         """Get workspace with id=1."""
@@ -59,7 +59,6 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         ws = Workspace(name=name, slug=slug)
         self.session.add(ws)
         await self.session.flush()
-        await self.session.commit()
         return ws.to_dict()
 
     # ============== Members Management ==============
@@ -113,7 +112,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         if not member:
             return None
         member.role_name = role_name
-        await self.session.commit()
+        await self.session.flush()
         return member.to_dict()
 
     async def remove_member(self, workspace_id: int, user_id: int) -> bool:
@@ -128,7 +127,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         if not member:
             return False
         await self.session.delete(member)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:
@@ -161,7 +160,6 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         )
         self.session.add(invite)
         await self.session.flush()
-        await self.session.commit()
         return invite.to_dict()
 
     async def list_invites(self, workspace_id: int) -> List[dict]:
@@ -185,7 +183,7 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         invite.used_count += 1
         invite.used_at = datetime.utcnow()
         invite.used_by = user_id
-        await self.session.commit()
+        await self.session.flush()
 
     async def delete_invite(self, workspace_id: int, invite_id: int) -> bool:
         """Delete an invite. Returns True if deleted."""
@@ -199,5 +197,5 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         if not invite:
             return False
         await self.session.delete(invite)
-        await self.session.commit()
+        await self.session.flush()
         return True

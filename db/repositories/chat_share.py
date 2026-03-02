@@ -61,7 +61,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             existing.shared_by = shared_by
             existing.shared_at = datetime.utcnow()
             existing.branch_message_id = branch_message_id
-            await self.session.commit()
+            await self.session.flush()
             return existing.to_dict()
 
         share = ChatSessionShare(
@@ -74,7 +74,6 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
         )
         self.session.add(share)
         await self.session.flush()
-        await self.session.commit()
         return share.to_dict()
 
     async def remove_share(self, session_id: str, user_id: int) -> bool:
@@ -85,7 +84,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
                 ChatSessionShare.user_id == user_id,
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def update_permission(self, session_id: str, user_id: int, permission: str) -> bool:
@@ -98,7 +97,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
             )
             .values(permission=permission)
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def get_shared_session_ids(self, user_id: int) -> List[str]:
@@ -124,7 +123,7 @@ class ChatShareRepository(BaseRepository[ChatSessionShare]):
         result = await self.session.execute(
             delete(ChatSessionShare).where(ChatSessionShare.session_id == session_id)
         )
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
     async def get_share_counts(self, session_ids: list[str]) -> dict[str, int]:

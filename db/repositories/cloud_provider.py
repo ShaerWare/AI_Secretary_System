@@ -146,7 +146,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             provider.set_config(kwargs["config"])
 
         self.session.add(provider)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Created cloud provider: {provider_id}")
         return provider.to_dict()
@@ -185,7 +185,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             provider.set_config(kwargs["config"])
 
         provider.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Updated cloud provider: {provider_id}")
         data: dict[str, Any] = provider.to_dict()
@@ -211,7 +211,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             return False
 
         await self.session.delete(provider)
-        await self.session.commit()
+        await self.session.flush()
 
         logger.info(f"Deleted cloud provider: {provider_id}")
         return True
@@ -231,7 +231,7 @@ class CloudProviderRepository(BaseRepository[CloudLLMProvider]):
             .where(CloudLLMProvider.id == provider_id)
             .values(is_default=True, updated=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
     async def _unset_all_defaults(self, workspace_id: Optional[int] = None) -> None:

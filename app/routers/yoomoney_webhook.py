@@ -96,6 +96,7 @@ async def handle_yoomoney_notification(request: Request):
             telegram_payment_id="",
             provider_payment_id=operation_id,
         )
+        await session.commit()
 
     # Notify bot about payment (write to file queue for bot to pick up)
     queue_dir = Path("data") / "payment_notifications"

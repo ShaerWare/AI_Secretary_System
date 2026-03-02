@@ -50,7 +50,7 @@ class ClaudeCodeProjectRepository(BaseRepository[ClaudeCodeProject]):
             create_kwargs["workspace_id"] = workspace_id
         entity = ClaudeCodeProject(**create_kwargs)
         self.session.add(entity)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(entity)
         return entity.to_dict()
 

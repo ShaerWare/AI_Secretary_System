@@ -49,7 +49,6 @@ class BotQuizRepository(BaseRepository[BotQuizQuestion]):
             question.set_options(options)
         self.session.add(question)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created quiz question: bot_id={bot_id}, key={kwargs.get('question_key')}")
         return question.to_dict()
 
@@ -66,7 +65,7 @@ class BotQuizRepository(BaseRepository[BotQuizQuestion]):
             if hasattr(question, k):
                 setattr(question, k, v)
         question.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated quiz question: id={question_id}")
         return question.to_dict()
 
@@ -90,6 +89,6 @@ class BotQuizRepository(BaseRepository[BotQuizQuestion]):
                 .where(BotQuizQuestion.id == qid, BotQuizQuestion.bot_id == bot_id)
                 .values(order=idx + 1, updated=datetime.utcnow())
             )
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Reordered {len(question_ids)} quiz questions for bot_id={bot_id}")
         return True

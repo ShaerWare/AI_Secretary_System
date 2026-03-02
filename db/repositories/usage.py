@@ -40,7 +40,6 @@ class UsageRepository(BaseRepository[UsageLog]):
         )
         self.session.add(entry)
         await self.session.flush()
-        await self.session.commit()
         return entry.to_dict()
 
     async def get_usage(
@@ -190,7 +189,7 @@ class UsageRepository(BaseRepository[UsageLog]):
         """Delete logs older than specified days."""
         cutoff = datetime.utcnow() - timedelta(days=days)
         result = await self.session.execute(delete(UsageLog).where(UsageLog.timestamp < cutoff))
-        await self.session.commit()
+        await self.session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]
 
 
@@ -253,7 +252,6 @@ class UsageLimitsRepository(BaseRepository[UsageLimits]):
             self.session.add(limit)
 
         await self.session.flush()
-        await self.session.commit()
         return limit.to_dict()
 
     async def delete_limit(self, service_type: str, limit_type: str) -> bool:
@@ -267,7 +265,7 @@ class UsageLimitsRepository(BaseRepository[UsageLimits]):
         limit = result.scalars().first()
         if limit:
             await self.session.delete(limit)
-            await self.session.commit()
+            await self.session.flush()
             return True
         return False
 

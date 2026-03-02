@@ -39,7 +39,6 @@ class BotFollowupRuleRepository(BaseRepository[BotFollowupRule]):
             rule.set_buttons(buttons)
         self.session.add(rule)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created follow-up rule: bot_id={bot_id}, name={kwargs.get('name')}")
         return rule.to_dict()
 
@@ -55,7 +54,7 @@ class BotFollowupRuleRepository(BaseRepository[BotFollowupRule]):
             if hasattr(rule, k):
                 setattr(rule, k, v)
         rule.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated follow-up rule: id={rule_id}")
         return rule.to_dict()
 
@@ -94,7 +93,6 @@ class BotFollowupQueueRepository(BaseRepository[BotFollowupQueue]):
         )
         self.session.add(entry)
         await self.session.flush()
-        await self.session.commit()
         logger.info(
             f"Enqueued follow-up: bot_id={bot_id}, user_id={user_id}, "
             f"rule_id={rule_id}, scheduled_at={scheduled_at}"
@@ -128,7 +126,7 @@ class BotFollowupQueueRepository(BaseRepository[BotFollowupQueue]):
         entry.status = "sent"
         entry.sent_at = datetime.utcnow()
         entry.send_count += 1
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Marked follow-up as sent: id={entry_id}")
         return entry.to_dict()
 
@@ -138,7 +136,7 @@ class BotFollowupQueueRepository(BaseRepository[BotFollowupQueue]):
         if not entry:
             return None
         entry.status = "cancelled"
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Marked follow-up as cancelled: id={entry_id}")
         return entry.to_dict()
 

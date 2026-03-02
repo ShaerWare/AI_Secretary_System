@@ -111,7 +111,7 @@ class ConfigRepository(BaseRepository[SystemConfig]):
             )
             self.session.add(config)
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_config_cache(key)
 
         return True
@@ -119,7 +119,7 @@ class ConfigRepository(BaseRepository[SystemConfig]):
     async def delete_config(self, key: str) -> bool:
         """Delete configuration by key."""
         result = await self.session.execute(delete(SystemConfig).where(SystemConfig.key == key))
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_config_cache(key)
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 

@@ -56,7 +56,6 @@ class GitHubRepoProjectRepository(BaseRepository[GitHubRepoProject]):
         project = GitHubRepoProject(**kwargs)
         self.session.add(project)
         await self.session.flush()
-        await self.session.commit()
         return project
 
     async def update_project(
@@ -70,7 +69,7 @@ class GitHubRepoProjectRepository(BaseRepository[GitHubRepoProject]):
             if hasattr(project, key):
                 setattr(project, key, value)
         project.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
         return project.to_dict()
 
     async def update_sync_status(
@@ -97,7 +96,7 @@ class GitHubRepoProjectRepository(BaseRepository[GitHubRepoProject]):
         if total_size is not None:
             project.total_size_bytes = total_size
         project.updated = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()
 
     async def delete_project(self, project_id: int, workspace_id: Optional[int] = None) -> bool:
         """Delete a project. Returns True if deleted."""
@@ -105,5 +104,5 @@ class GitHubRepoProjectRepository(BaseRepository[GitHubRepoProject]):
         if not project:
             return False
         await self.session.delete(project)
-        await self.session.commit()
+        await self.session.flush()
         return True

@@ -37,7 +37,6 @@ class UserSessionRepository(BaseRepository[UserSession]):
         )
         self.session.add(user_session)
         await self.session.flush()
-        await self.session.commit()
         return user_session.to_dict()
 
     async def get_by_jti(self, jti: str) -> Optional[UserSession]:
@@ -71,7 +70,7 @@ class UserSessionRepository(BaseRepository[UserSession]):
             .where(UserSession.token_jti == jti, UserSession.revoked_at.is_(None))
             .values(revoked_at=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return result.rowcount > 0
 
     async def revoke_all_for_user(self, user_id: int) -> int:
@@ -81,7 +80,7 @@ class UserSessionRepository(BaseRepository[UserSession]):
             .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
             .values(revoked_at=datetime.utcnow())
         )
-        await self.session.commit()
+        await self.session.flush()
         return result.rowcount
 
     async def cleanup_expired(self, days: int = 7) -> int:
@@ -90,5 +89,5 @@ class UserSessionRepository(BaseRepository[UserSession]):
         result = await self.session.execute(
             delete(UserSession).where(UserSession.expires_at < cutoff)
         )
-        await self.session.commit()
+        await self.session.flush()
         return result.rowcount

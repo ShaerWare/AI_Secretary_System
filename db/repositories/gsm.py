@@ -60,7 +60,7 @@ class GSMCallLogRepository(BaseRepository[GSMCallLog]):
             if call.answered_at:
                 call.duration_seconds = int((ended_at - call.answered_at).total_seconds())
 
-        await self.session.commit()
+        await self.session.flush()
         return call
 
     async def get_recent_calls(

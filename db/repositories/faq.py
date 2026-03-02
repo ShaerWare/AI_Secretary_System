@@ -72,7 +72,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
 
         if entry:
             entry.hit_count += 1
-            await self.session.commit()
+            await self.session.flush()
             answer: str = entry.answer
             return answer
 
@@ -111,7 +111,6 @@ class FAQRepository(BaseRepository[FAQEntry]):
 
         self.session.add(entry)
         await self.session.flush()
-        await self.session.commit()
 
         # Invalidate cache
         await invalidate_faq_cache()
@@ -142,7 +141,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
             entry.enabled = enabled
         entry.updated = datetime.utcnow()
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_faq_cache()
 
         data_result: dict[str, Any] = entry.to_dict()
@@ -151,7 +150,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
     async def delete_entry(self, entry_id: int) -> bool:
         """Delete FAQ entry by ID."""
         result = await self.session.execute(delete(FAQEntry).where(FAQEntry.id == entry_id))
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_faq_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
@@ -161,7 +160,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
         if workspace_id is not None and hasattr(FAQEntry, "workspace_id"):
             stmt = stmt.where(FAQEntry.workspace_id == workspace_id)
         result = await self.session.execute(stmt)
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_faq_cache()
         return bool(result.rowcount > 0)  # type: ignore[attr-defined]
 
@@ -181,7 +180,7 @@ class FAQRepository(BaseRepository[FAQEntry]):
             self.session.add(entry)
             count += 1
 
-        await self.session.commit()
+        await self.session.flush()
         await invalidate_faq_cache()
         return count
 

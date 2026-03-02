@@ -55,7 +55,6 @@ class BotTestimonialRepository(BaseRepository[BotTestimonial]):
         )
         self.session.add(testimonial)
         await self.session.flush()
-        await self.session.commit()
         logger.info(f"Created testimonial: bot_id={bot_id}, author={kwargs.get('author')}")
         return testimonial.to_dict()
 
@@ -67,7 +66,7 @@ class BotTestimonialRepository(BaseRepository[BotTestimonial]):
         for k, v in kwargs.items():
             if hasattr(testimonial, k):
                 setattr(testimonial, k, v)
-        await self.session.commit()
+        await self.session.flush()
         logger.info(f"Updated testimonial: id={testimonial_id}")
         return testimonial.to_dict()
 

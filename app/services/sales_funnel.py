@@ -78,6 +78,7 @@ class SalesFunnelHandler:
                 first_name=user.first_name if user else None,
             )
             await profile_repo.update_state(self.instance_id, user_id, STATE_QUIZ_Q1)
+            await session.commit()
 
         # Log event
         await self._log_event(user_id, "quiz_started")
@@ -138,6 +139,7 @@ class SalesFunnelHandler:
                     quiz_answers = {}
             quiz_answers[question_key] = answer_value
             await profile_repo.set_quiz_answers(self.instance_id, user_id, quiz_answers)
+            await session.commit()
 
         # Acknowledge the answer
         questions = await self._get_quiz_questions()
@@ -154,6 +156,7 @@ class SalesFunnelHandler:
             async with AsyncSessionLocal() as session:
                 repo = BotUserProfileRepository(session)
                 await repo.update_state(self.instance_id, user_id, state)
+                await session.commit()
 
             # Send next question
             await self._send_quiz_question(update, questions[next_idx], next_idx)
@@ -176,6 +179,7 @@ class SalesFunnelHandler:
             async with AsyncSessionLocal() as session:
                 repo = BotUserProfileRepository(session)
                 await repo.update_state(self.instance_id, user_id, STATE_FREE_CHAT)
+                await session.commit()
             return None
 
         segment_key = matched["segment_key"]
@@ -185,6 +189,7 @@ class SalesFunnelHandler:
             repo = BotUserProfileRepository(session)
             await repo.update_segment(self.instance_id, user_id, segment_key, path)
             await repo.update_state(self.instance_id, user_id, STATE_SEGMENTED)
+            await session.commit()
 
         logger.info(f"User {user_id} matched segment '{segment_key}' (path={path})")
         return segment_key
@@ -199,6 +204,7 @@ class SalesFunnelHandler:
         async with AsyncSessionLocal() as session:
             profile_repo = BotUserProfileRepository(session)
             profile = await profile_repo.get_or_create(self.instance_id, user_id)
+            await session.commit()
 
         segment_key = profile.get("segment")
         if not segment_key:
@@ -234,6 +240,7 @@ class SalesFunnelHandler:
         async with AsyncSessionLocal() as session:
             repo = BotUserProfileRepository(session)
             profile = await repo.get_or_create(self.instance_id, user_id)
+            await session.commit()
         return profile.get("state", STATE_NEW)
 
     # ============== Welcome + Social Proof ==============
@@ -477,6 +484,7 @@ class SalesFunnelHandler:
             async with AsyncSessionLocal() as session:
                 repo = BotSubscriberRepository(session)
                 await repo.subscribe(self.instance_id, user_id)
+                await session.commit()
             await query.message.reply_text(
                 "\U0001f514 \u0412\u044b \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u044b \u043d\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f! "
                 "\u0412\u044b \u0431\u0443\u0434\u0435\u0442\u0435 \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u044c \u043d\u043e\u0432\u043e\u0441\u0442\u0438 \u043e \u043f\u0440\u043e\u0435\u043a\u0442\u0435."
@@ -488,6 +496,7 @@ class SalesFunnelHandler:
             async with AsyncSessionLocal() as session:
                 repo = BotSubscriberRepository(session)
                 await repo.unsubscribe(self.instance_id, user_id)
+                await session.commit()
             await query.message.reply_text(
                 "\U0001f515 \u0412\u044b \u043e\u0442\u043f\u0438\u0441\u0430\u043d\u044b \u043e\u0442 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0439."
             )
@@ -537,6 +546,7 @@ class SalesFunnelHandler:
             async with AsyncSessionLocal() as session:
                 repo = BotEventRepository(session)
                 await repo.log_event(self.instance_id, user_id, event_type, event_data)
+                await session.commit()
         except Exception as e:
             logger.error(f"Failed to log event: {e}")
 
@@ -555,6 +565,7 @@ class SalesFunnelHandler:
         async with AsyncSessionLocal() as session:
             repo = BotSubscriberRepository(session)
             await repo.subscribe(self.instance_id, user_id)
+            await session.commit()
         await self._log_event(user_id, "subscribed")
         return "\U0001f514 \u0412\u044b \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u044b \u043d\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \u043f\u0440\u043e\u0435\u043a\u0442\u0430!"
 
@@ -563,5 +574,6 @@ class SalesFunnelHandler:
         async with AsyncSessionLocal() as session:
             repo = BotSubscriberRepository(session)
             await repo.unsubscribe(self.instance_id, user_id)
+            await session.commit()
         await self._log_event(user_id, "unsubscribed")
         return "\U0001f515 \u0412\u044b \u043e\u0442\u043f\u0438\u0441\u0430\u043d\u044b. \u0427\u0442\u043e\u0431\u044b \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f \u0441\u043d\u043e\u0432\u0430: /subscribe"

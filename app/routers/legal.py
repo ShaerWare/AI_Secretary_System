@@ -134,6 +134,7 @@ async def grant_consent(
             ip_address=ip_address,
             user_agent=user_agent,
         )
+        await session.commit()
         return {"consent": consent}
 
 
@@ -169,6 +170,7 @@ async def grant_bulk_consents(
                 user_agent=user_agent,
             )
             granted.append(consent)
+        await session.commit()
         return {"consents": granted}
 
 
@@ -193,6 +195,7 @@ async def grant_required_consents(
             ip_address=ip_address,
             user_agent=user_agent,
         )
+        await session.commit()
         return {"consents": granted}
 
 
@@ -209,6 +212,7 @@ async def admin_revoke_consent(
     async with AsyncSessionLocal() as session:
         repo = ConsentRepository(session)
         consent = await repo.revoke_consent(user_id, consent_type)
+        await session.commit()
         if not consent:
             raise HTTPException(status_code=404, detail="Consent not found")
         return {"consent": consent}

@@ -88,6 +88,7 @@ async def create_prompt(
     async with AsyncSessionLocal() as session:
         repo = BotAgentPromptRepository(session)
         prompt = await repo.create_prompt(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     await async_audit_logger.log(
         action="create",
         resource="bot_agent_prompt",
@@ -110,6 +111,7 @@ async def update_prompt(
     async with AsyncSessionLocal() as session:
         repo = BotAgentPromptRepository(session)
         prompt = await repo.update_prompt(prompt_id, **kwargs)
+        await session.commit()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
     return {"prompt": prompt}
@@ -124,6 +126,7 @@ async def delete_prompt(
     async with AsyncSessionLocal() as session:
         repo = BotAgentPromptRepository(session)
         ok = await repo.delete_prompt(prompt_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Prompt not found")
     return {"status": "ok"}
@@ -170,6 +173,7 @@ async def create_quiz_question(
     async with AsyncSessionLocal() as session:
         repo = BotQuizRepository(session)
         question = await repo.create_question(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"question": question}
 
 
@@ -186,6 +190,7 @@ async def update_quiz_question(
     async with AsyncSessionLocal() as session:
         repo = BotQuizRepository(session)
         question = await repo.update_question(question_id, **kwargs)
+        await session.commit()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     return {"question": question}
@@ -200,6 +205,7 @@ async def delete_quiz_question(
     async with AsyncSessionLocal() as session:
         repo = BotQuizRepository(session)
         ok = await repo.delete_question(question_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Question not found")
     return {"status": "ok"}
@@ -252,6 +258,7 @@ async def create_segment(
     async with AsyncSessionLocal() as session:
         repo = BotSegmentRepository(session)
         segment = await repo.create_segment(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"segment": segment}
 
 
@@ -268,6 +275,7 @@ async def update_segment(
     async with AsyncSessionLocal() as session:
         repo = BotSegmentRepository(session)
         segment = await repo.update_segment(segment_id, **kwargs)
+        await session.commit()
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
     return {"segment": segment}
@@ -282,6 +290,7 @@ async def delete_segment(
     async with AsyncSessionLocal() as session:
         repo = BotSegmentRepository(session)
         ok = await repo.delete_segment(segment_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Segment not found")
     return {"status": "ok"}
@@ -337,6 +346,7 @@ async def create_followup_rule(
     async with AsyncSessionLocal() as session:
         repo = BotFollowupRuleRepository(session)
         rule = await repo.create_rule(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"rule": rule}
 
 
@@ -353,6 +363,7 @@ async def update_followup_rule(
     async with AsyncSessionLocal() as session:
         repo = BotFollowupRuleRepository(session)
         rule = await repo.update_rule(rule_id, **kwargs)
+        await session.commit()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     return {"rule": rule}
@@ -367,6 +378,7 @@ async def delete_followup_rule(
     async with AsyncSessionLocal() as session:
         repo = BotFollowupRuleRepository(session)
         ok = await repo.delete_rule(rule_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Rule not found")
     return {"status": "ok"}
@@ -428,6 +440,7 @@ async def create_testimonial(
     async with AsyncSessionLocal() as session:
         repo = BotTestimonialRepository(session)
         testimonial = await repo.create_testimonial(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"testimonial": testimonial}
 
 
@@ -444,6 +457,7 @@ async def update_testimonial(
     async with AsyncSessionLocal() as session:
         repo = BotTestimonialRepository(session)
         testimonial = await repo.update_testimonial(testimonial_id, **kwargs)
+        await session.commit()
     if not testimonial:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     return {"testimonial": testimonial}
@@ -458,6 +472,7 @@ async def delete_testimonial(
     async with AsyncSessionLocal() as session:
         repo = BotTestimonialRepository(session)
         ok = await repo.delete_testimonial(testimonial_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     return {"status": "ok"}
@@ -517,6 +532,7 @@ async def create_hardware_spec(
     async with AsyncSessionLocal() as session:
         repo = BotHardwareRepository(session)
         spec = await repo.create_spec(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"spec": spec}
 
 
@@ -533,6 +549,7 @@ async def update_hardware_spec(
     async with AsyncSessionLocal() as session:
         repo = BotHardwareRepository(session)
         spec = await repo.update_spec(spec_id, **kwargs)
+        await session.commit()
     if not spec:
         raise HTTPException(status_code=404, detail="Hardware spec not found")
     return {"spec": spec}
@@ -547,6 +564,7 @@ async def delete_hardware_spec(
     async with AsyncSessionLocal() as session:
         repo = BotHardwareRepository(session)
         ok = await repo.delete_spec(spec_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="Hardware spec not found")
     return {"status": "ok"}
@@ -608,6 +626,7 @@ async def create_ab_test(
     async with AsyncSessionLocal() as session:
         repo = BotAbTestRepository(session)
         test = await repo.create_test(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     return {"test": test}
 
 
@@ -624,6 +643,7 @@ async def update_ab_test(
     async with AsyncSessionLocal() as session:
         repo = BotAbTestRepository(session)
         test = await repo.update_test(test_id, **kwargs)
+        await session.commit()
     if not test:
         raise HTTPException(status_code=404, detail="A/B test not found")
     return {"test": test}
@@ -638,6 +658,7 @@ async def delete_ab_test(
     async with AsyncSessionLocal() as session:
         repo = BotAbTestRepository(session)
         ok = await repo.delete_test(test_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="A/B test not found")
     return {"status": "ok"}
@@ -791,6 +812,7 @@ async def save_github_config(
     async with AsyncSessionLocal() as session:
         repo = BotGithubRepository(session)
         config = await repo.save_config(bot_id=instance_id, **request.model_dump())
+        await session.commit()
     await async_audit_logger.log(
         action="update",
         resource="bot_github_config",
@@ -827,6 +849,7 @@ async def get_user_profile(
     async with AsyncSessionLocal() as session:
         repo = BotUserProfileRepository(session)
         profile = await repo.get_or_create(instance_id, user_id)
+        await session.commit()
     return {"user": profile}
 
 
@@ -839,6 +862,7 @@ async def delete_user_profile(
     async with AsyncSessionLocal() as session:
         repo = BotUserProfileRepository(session)
         ok = await repo.delete_by_bot_user(instance_id, user_id)
+        await session.commit()
     if not ok:
         raise HTTPException(status_code=404, detail="User profile not found")
     return {"status": "ok"}
