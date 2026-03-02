@@ -9,8 +9,8 @@ from fastapi import APIRouter, Request
 
 from app.services.yoomoney_service import verify_notification
 from db.database import AsyncSessionLocal
+from db.integration import async_payment_manager
 from db.repositories.bot_instance import BotInstanceRepository
-from db.repositories.payment import PaymentRepository
 
 
 logger = logging.getLogger(__name__)
@@ -82,21 +82,18 @@ async def handle_yoomoney_notification(request: Request):
     else:
         logger.warning("No notification_secret configured, skipping verification")
 
-    # Log payment
-    async with AsyncSessionLocal() as session:
-        payment_repo = PaymentRepository(session)
-        await payment_repo.log_payment(
-            bot_id=bot_id,
-            user_id=user_id,
-            username=sender,
-            payment_type="yoomoney",
-            product_id=product_id,
-            amount=int(float(withdraw_amount) * 100),  # store in kopecks
-            currency="RUB",
-            telegram_payment_id="",
-            provider_payment_id=operation_id,
-        )
-        await session.commit()
+    # Log payment (uses retry_on_busy via manager)
+    await async_payment_manager.log_payment(
+        bot_id=bot_id,
+        user_id=user_id,
+        username=sender,
+        payment_type="yoomoney",
+        product_id=product_id,
+        amount=int(float(withdraw_amount) * 100),  # store in kopecks
+        currency="RUB",
+        telegram_payment_id="",
+        provider_payment_id=operation_id,
+    )
 
     # Notify bot about payment (write to file queue for bot to pick up)
     queue_dir = Path("data") / "payment_notifications"

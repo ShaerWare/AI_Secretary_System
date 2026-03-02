@@ -45,6 +45,7 @@ from db.repositories import (
     WooCommerceConfigRepository,
     WorkspaceRepository,
 )
+from db.retry import retry_on_busy
 
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,7 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.get_session(session_id, owner_id=owner_id, workspace_id=workspace_id)
 
+    @retry_on_busy()
     async def create_session(
         self,
         title: Optional[str] = None,
@@ -177,6 +179,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def update_session(
         self,
         session_id: str,
@@ -204,6 +207,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def delete_session(
         self,
         session_id: str,
@@ -219,6 +223,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def delete_sessions_bulk(
         self,
         session_ids: List[str],
@@ -254,6 +259,7 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.get_active_messages(session_id)
 
+    @retry_on_busy()
     async def add_message(
         self,
         session_id: str,
@@ -268,6 +274,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def edit_message(
         self,
         session_id: str,
@@ -281,6 +288,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def branch_regenerate(
         self,
         session_id: str,
@@ -293,6 +301,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def delete_message(
         self,
         session_id: str,
@@ -325,6 +334,7 @@ class AsyncChatManager:
             repo = ChatRepository(session)
             return await repo.get_sibling_info(session_id)
 
+    @retry_on_busy()
     async def switch_branch(self, session_id: str, message_id: str) -> bool:
         """Switch active branch to the given message."""
         async with AsyncSessionLocal() as session:
@@ -333,6 +343,7 @@ class AsyncChatManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def start_new_branch(self, session_id: str) -> bool:
         """Deactivate all active messages to start a fresh branch."""
         async with AsyncSessionLocal() as session:
@@ -571,6 +582,7 @@ class AsyncTelegramSessionManager:
             repo = TelegramRepository(session, bot_id=bot_id)
             return await repo.get_session(user_id, bot_id=bot_id)
 
+    @retry_on_busy()
     async def set_session(
         self,
         user_id: int,
@@ -1093,6 +1105,7 @@ class AsyncCloudProviderManager:
 class AsyncAuditLogger:
     """Async audit logger using database."""
 
+    @retry_on_busy()
     async def log(
         self,
         action: str,
@@ -1132,6 +1145,7 @@ class AsyncAuditLogger:
 class AsyncPaymentManager:
     """Async wrapper for PaymentRepository."""
 
+    @retry_on_busy()
     async def log_payment(self, **kwargs: Any) -> dict:
         """Log a completed payment."""
         async with AsyncSessionLocal() as session:
@@ -1401,6 +1415,7 @@ class AsyncGSMManager:
 class AsyncUserSessionManager:
     """Async manager for user session tracking and revocation."""
 
+    @retry_on_busy()
     async def create_session(
         self,
         user_id: int,
@@ -1436,6 +1451,7 @@ class AsyncUserSessionManager:
             repo = UserSessionRepository(session)
             return await repo.get_active_for_user(user_id)
 
+    @retry_on_busy()
     async def revoke_by_jti(self, jti: str) -> bool:
         """Revoke a single session."""
         async with AsyncSessionLocal() as session:
@@ -1452,6 +1468,7 @@ class AsyncUserSessionManager:
             await session.commit()
             return result
 
+    @retry_on_busy()
     async def cleanup_expired(self, days: int = 7) -> int:
         """Delete old expired sessions."""
         async with AsyncSessionLocal() as session:

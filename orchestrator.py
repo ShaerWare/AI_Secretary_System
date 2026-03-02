@@ -82,8 +82,6 @@ from auth_manager import (
 
 # Cloud LLM service for multi-provider support
 from cloud_llm_service import PROVIDER_TYPES, CloudLLMService
-
-# Database integration
 from db.integration import (
     async_audit_logger,
     async_chat_manager,
@@ -99,6 +97,9 @@ from db.integration import (
     init_database,
     shutdown_database,
 )
+
+# Database integration
+from db.retry import retry_on_busy
 from finetune_manager import get_finetune_manager
 from model_manager import get_model_manager
 
@@ -3729,6 +3730,23 @@ async def widget_get_session(session_id: str):
     return {"session": session}
 
 
+@retry_on_busy()
+async def _save_amocrm_lead_id(session_id: str, lead_id: int) -> None:
+    """Persist amoCRM lead_id on a chat session (retryable)."""
+    from sqlalchemy import update as sa_update
+
+    from db.database import AsyncSessionLocal
+    from db.models import ChatSession as ChatSessionModel
+
+    async with AsyncSessionLocal() as db_session:
+        await db_session.execute(
+            sa_update(ChatSessionModel)
+            .where(ChatSessionModel.id == session_id)
+            .values(amocrm_lead_id=lead_id)
+        )
+        await db_session.commit()
+
+
 async def _widget_create_amocrm_lead(session_id: str, session_data: dict, content: str):
     """Fire-and-forget: create amoCRM lead for a widget session."""
     try:
@@ -3765,18 +3783,7 @@ async def _widget_create_amocrm_lead(session_id: str, session_data: dict, conten
             return
 
         # Save lead_id to session
-        from sqlalchemy import update as sa_update
-
-        from db.database import AsyncSessionLocal
-        from db.models import ChatSession as ChatSessionModel
-
-        async with AsyncSessionLocal() as db_session:
-            await db_session.execute(
-                sa_update(ChatSessionModel)
-                .where(ChatSessionModel.id == session_id)
-                .values(amocrm_lead_id=lead_id)
-            )
-            await db_session.commit()
+        await _save_amocrm_lead_id(session_id, lead_id)
 
         # Add first message + metadata as note
         note_parts = [f"Первое сообщение: {content}"]
