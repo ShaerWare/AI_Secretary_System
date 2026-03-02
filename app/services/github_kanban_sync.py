@@ -82,7 +82,8 @@ async def sync_all_issues(project_id: int) -> dict:
     total = 0
     page = 1
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    transport = httpx.AsyncHTTPTransport()
+    async with httpx.AsyncClient(timeout=30.0, transport=transport, mounts={}) as client:
         while True:
             url = f"{GITHUB_API}/repos/{owner}/{repo}/issues"
             params = {"state": "all", "per_page": 100, "page": page}
@@ -133,7 +134,8 @@ async def push_status_to_github(project_id: int, issue_number: int, new_status: 
     # All status labels we manage
     managed_labels = set(label_mapping.values())
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    transport = httpx.AsyncHTTPTransport()
+    async with httpx.AsyncClient(timeout=30.0, transport=transport, mounts={}) as client:
         # Get current issue
         issue_url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{issue_number}"
         resp = await client.get(issue_url, headers=headers)
