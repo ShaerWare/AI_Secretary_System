@@ -123,13 +123,14 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 **Deployment modes** (`DEPLOYMENT_MODE` env var): `full` (default, everything), `cloud` (no GPU/TTS/STT/GSM), `local` (same as full). Cloud mode skips hardware router registration, hides hardware admin tabs, filters out `speech`/`gsm` permissions.
 
-### Modular Infrastructure (`modules/core/`)
+### Modular Infrastructure (`modules/`)
 
-Foundation layer for the ongoing modular decomposition (see issue #489). Purely additive — no existing code modified yet.
+Ongoing modular decomposition (see issue #489). Phase 0 (core infrastructure) and Phase 1 (domain models) are complete.
 
-- **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
-- **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
-- **`HealthRegistry`** (`modules/core/health.py`): Modular health checks with per-check timeout (`asyncio.wait_for`). Status aggregation: all ok → ok, any degraded → degraded, any error → error.
+- **`modules/core/`** — EventBus, TaskRegistry, HealthRegistry (Phase 0, PR #497)
+- **`modules/{domain}/models.py`** — 53 SQLAlchemy models split into 16 domain files (Phase 1, PR #499). `db/models.py` is a facade re-exporting everything.
+
+Domain model files: `core`, `chat`, `channels/telegram`, `channels/whatsapp`, `channels/widget`, `llm`, `knowledge`, `speech`, `monitoring`, `crm`, `ecommerce`, `kanban`, `claude_code`, `sales`, `admin`, `telephony`.
 
 Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`.
 
@@ -141,7 +142,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 **Two service layers**: Core AI services at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `stt_service.py`, etc.). Domain services in `app/services/` (`amocrm_service.py`, `wiki_rag_service.py`, `backup_service.py`, `sales_funnel.py`, etc.).
 
-**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`) used as module-level singletons. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
+**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine and defines `Base(DeclarativeBase)`. Models live in `modules/{domain}/models.py` (16 domain files); `db/models.py` is a thin facade that re-exports all 53 models for backward compatibility. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`) used as module-level singletons. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
 
 **Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: managers call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
 
@@ -151,7 +152,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 **WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`).
 
-**Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `db/models.py`. Supports model fallback via `fallback_models` list.
+**Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `modules/llm/models.py` (re-exported via `db/models.py` facade). Supports model fallback via `fallback_models` list.
 
 **Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming. Multi-collection support. Per-instance RAG config on bots/widgets.
 
@@ -178,9 +179,14 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 4. Register in `orchestrator.py` with `app.include_router()`
 
 **Adding a new cloud LLM provider type:**
-1. Add entry to `PROVIDER_TYPES` dict in `db/models.py`
+1. Add entry to `PROVIDER_TYPES` dict in `modules/llm/models.py`
 2. OpenAI-compatible → works automatically via `OpenAICompatibleProvider`
 3. Custom SDK → create provider class inheriting `BaseLLMProvider` in `cloud_llm_service.py`, register in `CloudLLMService.PROVIDER_CLASSES`
+
+**Adding a new SQLAlchemy model:**
+1. Create or edit `modules/{domain}/models.py` — import `Base` from `db.database`
+2. Add re-export to `db/models.py` facade (import + `__all__` entry)
+3. Create Alembic migration: `alembic revision --autogenerate -m "description"`
 
 **RBAC auth guards** (in `auth_manager.py`):
 - `Depends(require_permission(module, level))` — checks module permission

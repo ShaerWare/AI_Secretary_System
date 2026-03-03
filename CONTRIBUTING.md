@@ -147,9 +147,14 @@ AI_Secretary_System/
 3. Router auto-registers via `app/routers/__init__.py`
 
 ### New Cloud LLM Provider
-1. Add entry to `PROVIDER_TYPES` in `db/models.py`
+1. Add entry to `PROVIDER_TYPES` in `modules/llm/models.py`
 2. If OpenAI-compatible, it works automatically
 3. For custom SDK, create provider class in `cloud_llm_service.py`
+
+### New SQLAlchemy Model
+1. Create or edit `modules/{domain}/models.py` — import `Base` from `db.database`
+2. Add re-export to `db/models.py` facade (import + `__all__` entry)
+3. Create Alembic migration: `alembic revision --autogenerate -m "description"`
 
 ### New Admin Panel Tab
 1. Create view in `admin/src/views/`
