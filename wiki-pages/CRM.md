@@ -449,9 +449,9 @@ redis-cli keys "amocrm:*" | xargs redis-cli del
 ```
 app/routers/amocrm.py
   → app/services/amocrm_service.py (AmoCRMService)
-    → AsyncAmoCRMManager (db/integration.py)
+    → AmoCRMService (modules/crm/service.py)
       → AmoCRMRepository (db/repositories/amocrm.py)
-        → AmoCRMConfig, AmoCRMToken (db/models.py)
+        → AmoCRMConfig, AmoCRMToken (modules/crm/models.py)
 ```
 
 ### AmoCRMService
@@ -468,9 +468,9 @@ app/routers/amocrm.py
 - `refresh_tokens()` — обновить токены при 401
 - `exchange_code(code)` — обмен `authorization_code` на токены
 
-### AsyncAmoCRMManager
+### AmoCRMService
 
-Менеджер в `db/integration.py` для работы с конфигурацией и токенами в БД:
+Доменный сервис в `modules/crm/service.py` (ранее `AsyncAmoCRMManager` в `db/integration.py`) для работы с конфигурацией и токенами в БД:
 
 - `get_config()` — получить конфигурацию
 - `save_config(config)` — сохранить конфигурацию

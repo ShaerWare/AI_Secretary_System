@@ -248,7 +248,7 @@ GET  /admin/legal/consent/stats # Статистика согласий
 - [x] Создать persistent storage (SQLite) — `db/repositories/audit.py`
 - [x] Модель `AuditLog` в `db/models.py`
 - [x] `AuditRepository` с методами: `log()`, `get_logs()`, `get_recent()`
-- [x] `AsyncAuditLogger` wrapper в `db/integration.py`
+- [x] `AuditService` в `modules/monitoring/service.py` (ранее `AsyncAuditLogger` в `db/integration.py`)
 - [x] API эндпоинты: `GET /admin/audit/logs`, `GET /admin/audit/export`
 - [x] Фильтрация по дате, пользователю, типу события
 - [x] Таб "Audit" в админке с таблицей и экспортом (AuditView.vue)
@@ -258,7 +258,7 @@ GET  /admin/legal/consent/stats # Статистика согласий
 ```
 db/models.py                    # AuditLog модель
 db/repositories/audit.py        # AuditRepository
-db/integration.py               # AsyncAuditLogger
+modules/monitoring/service.py   # AuditService (ранее AsyncAuditLogger в db/integration.py)
 admin/src/views/AuditView.vue   # UI
 admin/src/api/audit.ts          # API client
 ```
@@ -584,17 +584,17 @@ models/vosk/              # Директория для моделей
 db/
 ├── __init__.py
 ├── database.py           # SQLite engine
-├── models.py             # 7 ORM models
+├── models.py             # ORM models (imports from modules/*/models.py)
 ├── redis_client.py       # Caching
-├── integration.py        # Backward-compat managers
-└── repositories/
-    ├── base.py
-    ├── chat.py
-    ├── faq.py
-    ├── preset.py
-    ├── config.py
-    ├── telegram.py
-    └── audit.py
+├── integration.py        # Backward-compat facade (aliases + singletons, 93 lines)
+└── repositories/         # Data access layer (25 repositories)
+
+modules/                  # Domain services (31 classes in 15 files)
+├── core/service.py       # DatabaseService, UserService, etc.
+├── chat/service.py       # ChatService, ChatShareService
+├── knowledge/service.py  # FAQService, KnowledgeDocService, etc.
+├── channels/telegram/service.py  # BotInstanceService, TelegramSessionService
+└── ...                   # kanban, llm, monitoring, admin, etc.
 
 scripts/
 ├── migrate_json_to_db.py
@@ -1905,8 +1905,9 @@ pip install zipfile36  # или стандартный zipfile
   db/database.py           # SQLite connection
   db/models.py             # ORM models
   db/redis_client.py       # Redis helpers
-  db/integration.py        # Async managers
+  db/integration.py        # Backward-compat facade (aliases + singletons)
   db/repositories/         # Data access layer
+  modules/*/service.py     # Domain services (31 classes)
   scripts/migrate_json_to_db.py
   scripts/test_db.py
   scripts/setup_db.sh
