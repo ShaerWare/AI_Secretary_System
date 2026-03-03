@@ -123,15 +123,39 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 **Deployment modes** (`DEPLOYMENT_MODE` env var): `full` (default, everything), `cloud` (no GPU/TTS/STT/GSM), `local` (same as full). Cloud mode skips hardware router registration, hides hardware admin tabs, filters out `speech`/`gsm` permissions.
 
-### Modular Infrastructure (`modules/core/`)
+### Modular Infrastructure (`modules/`)
 
-Foundation layer for the ongoing modular decomposition (see issue #489). Purely additive — no existing code modified yet.
+Foundation layer for modular decomposition (issue #489). Phases 0–2 complete.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
 - **`HealthRegistry`** (`modules/core/health.py`): Modular health checks with per-check timeout (`asyncio.wait_for`). Status aggregation: all ok → ok, any degraded → degraded, any error → error.
 
 Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`.
+
+### Domain Services (`modules/*/service.py`)
+
+31 service classes extracted from the former monolithic `db/integration.py` into 15 domain files (Phase 2, issue #492):
+
+| Module | File | Service Classes |
+|--------|------|-----------------|
+| `modules/core/` | `service.py` | `DatabaseService`, `UserService`, `UserSessionService`, `RoleService`, `WorkspaceService`, `ConfigService`, `UserIdentityService` |
+| `modules/chat/` | `service.py` | `ChatService`, `ChatShareService` |
+| `modules/knowledge/` | `service.py` | `FAQService`, `KnowledgeDocService`, `KnowledgeCollectionService`, `GitHubRepoProjectService` |
+| `modules/channels/telegram/` | `service.py` | `BotInstanceService`, `TelegramSessionService` |
+| `modules/channels/whatsapp/` | `service.py` | `WhatsAppInstanceService` |
+| `modules/channels/widget/` | `service.py` | `WidgetInstanceService` |
+| `modules/kanban/` | `service.py` | `KanbanService`, `KanbanProjectService` |
+| `modules/claude_code/` | `service.py` | `ClaudeCodeService`, `ClaudeCodeProjectService` |
+| `modules/llm/` | `service.py` | `CloudProviderService` |
+| `modules/monitoring/` | `service.py` | `AuditService`, `PaymentService` |
+| `modules/admin/` | `service.py` | `ResourceShareService` |
+| `modules/speech/` | `service.py` | `PresetService` |
+| `modules/crm/` | `service.py` | `AmoCRMService` |
+| `modules/ecommerce/` | `service.py` | `WooCommerceService` |
+| `modules/telephony/` | `service.py` | `GSMService` |
+
+**Import pattern**: `from modules.chat.service import ChatService` (direct) or `from db.integration import async_chat_manager` (backward-compatible singleton). Domain `__init__.py` files do NOT re-export services (see Known Issues #9).
 
 ### Key Components
 
@@ -141,11 +165,11 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 **Two service layers**: Core AI services at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `stt_service.py`, etc.). Domain services in `app/services/` (`amocrm_service.py`, `wiki_rag_service.py`, `backup_service.py`, `sales_funnel.py`, etc.).
 
-**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`) used as module-level singletons. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
+**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` is a 93-line facade that re-exports domain services under old names (`AsyncChatManager = ChatService`) and creates module-level singletons (`async_chat_manager = AsyncChatManager()`). Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
 
-**Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: managers call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
+**Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: service methods call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
 
-**SQLITE_BUSY retry**: `db/retry.py` `@retry_on_busy()` — exponential backoff (3 retries, 0.1s base). Applied to all write methods in `integration.py` managers.
+**SQLITE_BUSY retry**: `db/retry.py` `@retry_on_busy()` — exponential backoff (3 retries, 0.1s base). Applied to write methods in domain service classes (16 methods across 5 services).
 
 **Telegram bots**: Subprocesses managed by `multi_bot_manager.py`. Config pre-fetched from DB, written to `/tmp/bot_config_{id}.json`. Two frameworks: `python-telegram-bot` (legacy) + `aiogram` (new). `LLMRouter` in `telegram_bot/services/llm_router.py` routes through orchestrator chat API.
 
@@ -300,3 +324,4 @@ Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`#
 6. **`services/bridge/src/models/` gitignored** — `.gitignore` pattern `models/` catches it. Copy manually after clone
 7. **Docker CPU: whisper excluded** — `openai-whisper` fails to build (missing `pkg_resources`). Server Dockerfile patched to `grep -v whisper`
 8. **Docker + Claude CLI** — CPU image needs Node.js. Server Dockerfile patched to install Node.js 20 + `@anthropic-ai/claude-code`
+9. **Circular import in domain `__init__.py`** — Domain `__init__.py` files MUST stay empty (no service re-exports). Chain: `db/models.py` imports `from modules.X.models import ...` → Python executes `modules/X/__init__.py` → if it imports `service.py` → `service.py` imports `db.repositories` → `db.repositories` imports `db.models` → circular. **Workaround**: import services directly (`from modules.chat.service import ChatService`). **Future fix** (Phase 3+): eliminate eager imports in `db/models.py` by making it a lazy facade or removing it entirely once consumers import models from domain modules.

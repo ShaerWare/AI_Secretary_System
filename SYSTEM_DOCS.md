@@ -96,7 +96,8 @@ container.backup_service      # BackupService
 - **DB File**: `data/secretary.db`
 - **Redis**: Опциональное кэширование (graceful fallback если недоступен)
 - **Паттерн**: `BaseRepository[Model]` — generic CRUD для всех моделей
-- **Интеграция**: `DatabaseManager` в `db/integration.py` — singleton, backward-compat обёртка
+- **Доменные сервисы**: 31 класс в `modules/*/service.py` (например, `ChatService` в `modules/chat/service.py`)
+- **Фасад**: `db/integration.py` (93 строки) — backward-compatible алиасы и синглтоны (например, `AsyncChatManager = ChatService`, `async_chat_manager = AsyncChatManager()`)
 
 ### Таблицы (35 таблиц)
 
@@ -501,4 +502,4 @@ ORCHESTRATOR_PORT=8002
 Полный список переменных в `.env.example`.
 
 ---
-*Обновлено: 2026-02-12*
+*Обновлено: 2026-03-03*

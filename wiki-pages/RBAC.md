@@ -522,7 +522,7 @@ Inline-скрипт Service Worker вынесен из `admin/index.html` в `ad
 
 | Канал | Где вызывается | provider | provider_uid |
 |-------|---------------|----------|-------------|
-| Telegram | `AsyncTelegramSessionManager.set_session()` в `db/integration.py` | `telegram` | chat_id |
+| Telegram | `TelegramSessionService.set_session()` в `modules/channels/telegram/service.py` | `telegram` | chat_id |
 | WhatsApp | `handle_text_message()` в `whatsapp_bot/handlers/messages.py` | `whatsapp` | phone (E.164) |
 | Widget | `widget_create_session()` в `orchestrator.py` | `widget` | session_id |
 
@@ -549,7 +549,7 @@ Inline-скрипт Service Worker вынесен из `admin/index.html` в `ad
 **Код:**
 - Модель: `UserIdentity` в `db/models.py`, связь `User.identities` (one-to-many)
 - Репозиторий: `UserIdentityRepository` в `db/repositories/user_identity.py`
-- Менеджер: `AsyncUserIdentityManager` в `db/integration.py` (синглтон `async_user_identity_manager`)
+- Сервис: `UserIdentityService` в `modules/core/service.py` (синглтон `async_user_identity_manager` в `db/integration.py`)
 - `VALID_ROLES` в `user.py`: `("guest", "web", "user", "admin", "contact")`
 
 ## Статус миграции эндпоинтов
@@ -819,7 +819,7 @@ function isVisible(item: { module?: string; minLevel?: string; localOnly?: boole
 
 - **Модели**: `Role`, `RolePermission`, `Workspace`, `WorkspaceMember`, `WorkspaceInvite` в `db/models.py`
 - **Репозитории**: `RoleRepository` в `db/repositories/role.py`, `WorkspaceRepository` в `db/repositories/workspace.py`
-- **Менеджеры**: `AsyncRoleManager`, `AsyncWorkspaceManager` в `db/integration.py`
+- **Сервисы**: `RoleService`, `WorkspaceService` в `modules/core/service.py` (backward-compatible алиасы `AsyncRoleManager`, `AsyncWorkspaceManager` в `db/integration.py`)
 - **Auth-хелперы**: `level_gte()`, `get_user_permissions()`, `require_permission()`, `user_has_level()`, `invalidate_permissions_cache()` в `auth_manager.py`
 - **Кеши**: `PermissionsCache` (role_name → permissions), `MemberRoleCache` ((user_id, workspace_id) → role_name) в `auth_manager.py`
 - **JWT**: `TokenPayload.workspace_id` (default 1), `User.workspace_id` — передаётся в `create_access_token()` и `create_session()`

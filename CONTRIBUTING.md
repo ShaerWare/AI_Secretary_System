@@ -124,12 +124,24 @@ Then create a Pull Request on GitHub with:
 AI_Secretary_System/
 ├── orchestrator.py          # FastAPI entry point
 ├── app/
-│   ├── routers/             # API endpoints (15 routers)
+│   ├── routers/             # API endpoints (28 routers)
 │   ├── dependencies.py      # Dependency injection
 │   ├── rate_limiter.py      # Rate limiting
 │   └── security_headers.py  # Security middleware
+├── modules/                 # Domain modules
+│   ├── core/                # EventBus, TaskRegistry, HealthRegistry + core services
+│   ├── chat/                # ChatService, ChatShareService
+│   ├── knowledge/           # FAQService, KnowledgeDocService, KnowledgeCollectionService
+│   ├── channels/telegram/   # BotInstanceService, TelegramSessionService
+│   ├── channels/whatsapp/   # WhatsAppInstanceService
+│   ├── channels/widget/     # WidgetInstanceService
+│   ├── kanban/              # KanbanService, KanbanProjectService
+│   ├── llm/                 # CloudProviderService
+│   ├── monitoring/          # AuditService, PaymentService
+│   └── ...                  # admin, speech, crm, ecommerce, telephony, claude_code
 ├── db/
-│   ├── models.py            # SQLAlchemy models
+│   ├── models.py            # SQLAlchemy models (imports from modules/*/models.py)
+│   ├── integration.py       # Backward-compatible facade (aliases + singletons)
 │   └── repositories/        # Data access layer
 ├── admin/                   # Vue 3 admin panel
 │   ├── src/views/           # Page components

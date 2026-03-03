@@ -242,10 +242,12 @@ python scripts/migrate_kanban.py
 
 ```
 app/routers/kanban.py (10 endpoints)
-  -> db/integration.py (async_kanban_manager)
+  -> modules/kanban/service.py (KanbanService)
     -> db/repositories/kanban.py (KanbanRepository)
-      -> db/models.py (KanbanTask, KanbanTaskDependency, KanbanChecklistItem)
+      -> modules/kanban/models.py (KanbanTask, KanbanTaskDependency, KanbanChecklistItem)
 ```
+
+> **Примечание:** Синглтон `async_kanban_manager` в `db/integration.py` — backward-compatible алиас для `KanbanService`.
 
 Frontend:
 ```
