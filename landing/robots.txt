@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Block WordPress stubs from indexing
+Disallow: /wp-json/
+Disallow: /cgi-bin/
+Disallow: /cdn-cgi/
+Disallow: /wp-includes/
+
+# Allow assets
+Allow: /wp-content/themes/
+Allow: /wp-content/uploads/
+
+Sitemap: https://ai-sekretar24.ru/sitemap.xml
+
+# Host directive for Yandex
+Host: https://ai-sekretar24.ru

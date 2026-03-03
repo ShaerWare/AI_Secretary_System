@@ -1,0 +1,11 @@
+{
+  "name": "landing-screenshots",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "screenshots": "node take-screenshots.js"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0"
+  }
+}
