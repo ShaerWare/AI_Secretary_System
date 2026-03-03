@@ -8,36 +8,12 @@ Provides:
 
 from db.database import (
     AsyncSessionLocal,
+    Base,
     close_db,
     get_async_session,
     get_db_status,
     init_db,
     run_vacuum,
-)
-from db.models import (
-    PROVIDER_TYPES,
-    AuditLog,
-    Base,
-    BotAbTest,
-    BotAgentPrompt,
-    BotDiscoveryResponse,
-    BotEvent,
-    BotFollowupQueue,
-    BotFollowupRule,
-    BotGithubConfig,
-    BotHardwareSpec,
-    BotQuizQuestion,
-    BotSegment,
-    BotSubscriber,
-    BotTestimonial,
-    BotUserProfile,
-    ChatMessage,
-    ChatSession,
-    CloudLLMProvider,
-    FAQEntry,
-    SystemConfig,
-    TelegramSession,
-    TTSPreset,
 )
 from db.redis_client import (
     close_redis,
@@ -45,6 +21,16 @@ from db.redis_client import (
     redis_client,
 )
 from db.retry import get_busy_retry_count, retry_on_busy
+
+
+def __getattr__(name: str):
+    """Lazy import models from db.models to avoid circular imports."""
+    import db.models as _models
+
+    try:
+        return getattr(_models, name)
+    except AttributeError:
+        raise AttributeError(f"module 'db' has no attribute {name!r}") from None
 
 
 __all__ = [
@@ -62,7 +48,7 @@ __all__ = [
     "get_redis",
     "close_redis",
     "redis_client",
-    # Models
+    # Models (lazy-loaded via __getattr__)
     "Base",
     "ChatSession",
     "ChatMessage",

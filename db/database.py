@@ -16,7 +16,14 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
+
+
+class Base(DeclarativeBase):
+    """Base class for all models"""
+
+    pass
 
 
 logger = logging.getLogger(__name__)
@@ -62,7 +69,7 @@ async def init_db() -> None:
     Initialize database: create tables if they don't exist.
     Call this on application startup.
     """
-    from db.models import Base
+    import db.models  # noqa: F401 — ensure all models are registered on Base.metadata
 
     # Ensure data directory exists
     DB_DIR.mkdir(parents=True, exist_ok=True)
