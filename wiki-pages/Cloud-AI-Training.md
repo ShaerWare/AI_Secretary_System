@@ -277,7 +277,7 @@ app/services/wiki_rag_service.py     # TF-IDF поисковый движок
 app/routers/wiki_rag.py              # API-роутер (8 эндпоинтов)
 db/models.py → KnowledgeDocument     # SQLAlchemy модель
 db/repositories/knowledge_document.py # Репозиторий
-db/integration.py → AsyncKnowledgeDocManager  # Обёртка
+modules/knowledge/service.py → KnowledgeDocService  # Доменный сервис (ранее AsyncKnowledgeDocManager в db/integration.py)
 ```
 
 ---

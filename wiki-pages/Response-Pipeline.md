@@ -56,7 +56,7 @@ retrieve(query, top_k=3, max_chars=2500)
 
 ## 2. FAQ — быстрая проверка
 
-FAQ загружается при старте из БД (`async_faq_manager.get_all()`), перезагружается при изменениях через `/admin/faq`.
+FAQ загружается при старте из БД (`FAQService.get_all()` / синглтон `async_faq_manager`), перезагружается при изменениях через `/admin/faq`.
 
 ### Алгоритм матчинга
 
@@ -88,7 +88,7 @@ _check_faq(user_message):
   │     llm_override (per-request) > widget_instance config > container.llm_service (глобальный)
   │
   ├─ 2. Сохранение user message в БД
-  │     async_chat_manager.add_message(session_id, "user", content)
+  │     ChatService.add_message(session_id, "user", content)
   │
   ├─ 3. Системный промпт
   │     Кастомный (виджет / оверрайд) > llm.get_system_prompt() > _DEFAULT_RAG_PROMPT
@@ -113,7 +113,7 @@ _check_faq(user_message):
   │     user_message → chunk* → assistant_message → [DONE]
   │
   └─ 9. Сохранение ответа в БД
-        async_chat_manager.add_message(session_id, "assistant", full_text)
+        ChatService.add_message(session_id, "assistant", full_text)
 ```
 
 ### Сборка системного промпта (итог)

@@ -133,6 +133,30 @@ Foundation layer for the ongoing modular decomposition (see issue #489). Purely 
 
 Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`.
 
+### Domain Services (`modules/*/service.py`)
+
+Extracted from the monolithic `db/integration.py` into domain-specific service files (Phase 2 of modular decomposition, issue #492):
+
+| Module | File | Service Classes |
+|--------|------|-----------------|
+| `modules/core/` | `service.py` | `DatabaseService`, `UserService`, `UserSessionService`, `RoleService`, `WorkspaceService`, `ConfigService`, `UserIdentityService` |
+| `modules/chat/` | `service.py` | `ChatService`, `ChatShareService` |
+| `modules/knowledge/` | `service.py` | `FAQService`, `KnowledgeDocService`, `KnowledgeCollectionService`, `GitHubRepoProjectService` |
+| `modules/channels/telegram/` | `service.py` | `BotInstanceService`, `TelegramSessionService` |
+| `modules/channels/whatsapp/` | `service.py` | `WhatsAppInstanceService` |
+| `modules/channels/widget/` | `service.py` | `WidgetInstanceService` |
+| `modules/kanban/` | `service.py` | `KanbanService`, `KanbanProjectService` |
+| `modules/claude_code/` | `service.py` | `ClaudeCodeService`, `ClaudeCodeProjectService` |
+| `modules/llm/` | `service.py` | `CloudProviderService` |
+| `modules/monitoring/` | `service.py` | `AuditService`, `PaymentService` |
+| `modules/admin/` | `service.py` | `ResourceShareService` |
+| `modules/speech/` | `service.py` | `PresetService` |
+| `modules/crm/` | `service.py` | `AmoCRMService` |
+| `modules/ecommerce/` | `service.py` | `WooCommerceService` |
+| `modules/telephony/` | `service.py` | `GSMService` |
+
+**Import pattern**: `from modules.chat.service import ChatService` (direct) or `from db.integration import async_chat_manager` (backward-compatible singleton). Domain `__init__.py` files do NOT re-export services due to circular import with `db/models.py`.
+
 ### Key Components
 
 **`orchestrator.py`** (~4100 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Legacy OpenAI-compatible `/v1/*` endpoints still live here.
@@ -141,11 +165,13 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 **Two service layers**: Core AI services at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `stt_service.py`, etc.). Domain services in `app/services/` (`amocrm_service.py`, `wiki_rag_service.py`, `backup_service.py`, `sales_funnel.py`, etc.).
 
-**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` provides backward-compatible manager classes (e.g., `AsyncChatManager`) used as module-level singletons. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
+**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
 
-**Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: managers call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
+**Domain services** (`modules/*/service.py`): 31 service classes across 15 files. Each service opens its own `AsyncSessionLocal()` session, calls repository methods, and commits. Naming convention: `XService` (e.g., `ChatService`, `UserService`). Import directly: `from modules.chat.service import ChatService`. Backward-compatible aliases live in `db/integration.py` (facade): `AsyncChatManager = ChatService`, singleton `async_chat_manager = AsyncChatManager()`.
 
-**SQLITE_BUSY retry**: `db/retry.py` `@retry_on_busy()` — exponential backoff (3 retries, 0.1s base). Applied to all write methods in `integration.py` managers.
+**Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: service methods call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
+
+**SQLITE_BUSY retry**: `db/retry.py` `@retry_on_busy()` — exponential backoff (3 retries, 0.1s base). Applied to write methods in domain service classes (16 methods across 5 services).
 
 **Telegram bots**: Subprocesses managed by `multi_bot_manager.py`. Config pre-fetched from DB, written to `/tmp/bot_config_{id}.json`. Two frameworks: `python-telegram-bot` (legacy) + `aiogram` (new). `LLMRouter` in `telegram_bot/services/llm_router.py` routes through orchestrator chat API.
 
