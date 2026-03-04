@@ -586,7 +586,7 @@ db/
 ├── database.py           # SQLite engine
 ├── models.py             # ORM models (imports from modules/*/models.py)
 ├── redis_client.py       # Caching
-├── integration.py        # Backward-compat facade (aliases + singletons, 93 lines)
+├── integration.py        # Backward-compat facade (re-imports singletons from modules/)
 └── repositories/         # Data access layer (25 repositories)
 
 modules/                  # Domain services (31 classes in 15 files)
@@ -1905,7 +1905,7 @@ pip install zipfile36  # или стандартный zipfile
   db/database.py           # SQLite connection
   db/models.py             # ORM models
   db/redis_client.py       # Redis helpers
-  db/integration.py        # Backward-compat facade (aliases + singletons)
+  db/integration.py        # Backward-compat facade (re-imports singletons from modules/)
   db/repositories/         # Data access layer
   modules/*/service.py     # Domain services (31 classes)
   scripts/migrate_json_to_db.py

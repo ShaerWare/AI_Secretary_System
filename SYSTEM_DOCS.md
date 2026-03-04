@@ -97,7 +97,7 @@ container.backup_service      # BackupService
 - **Redis**: Опциональное кэширование (graceful fallback если недоступен)
 - **Паттерн**: `BaseRepository[Model]` — generic CRUD для всех моделей
 - **Доменные сервисы**: 31 класс в `modules/*/service.py` (например, `ChatService` в `modules/chat/service.py`)
-- **Фасад**: `db/integration.py` (93 строки) — backward-compatible алиасы и синглтоны (например, `AsyncChatManager = ChatService`, `async_chat_manager = AsyncChatManager()`)
+- **Фасад**: `db/integration.py` (~100 строк) — импортирует синглтоны и классы из `modules/*/service.py` под старыми именами (например, `chat_service as async_chat_manager`)
 
 ### Таблицы (35 таблиц)
 
