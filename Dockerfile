@@ -88,6 +88,8 @@ COPY *.py ./
 COPY app/ ./app/
 COPY db/ ./db/
 COPY telegram_bot/ ./telegram_bot/
+COPY whatsapp_bot/ ./whatsapp_bot/
+COPY modules/ ./modules/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
@@ -179,13 +181,15 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip setuptools wheel \
     && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.txt
+    && grep -v whisper requirements.txt > /tmp/req-cpu.txt && pip install -r /tmp/req-cpu.txt
 
 # Application code
 COPY *.py ./
 COPY app/ ./app/
 COPY db/ ./db/
 COPY telegram_bot/ ./telegram_bot/
+COPY whatsapp_bot/ ./whatsapp_bot/
+COPY modules/ ./modules/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY scripts/ ./scripts/
