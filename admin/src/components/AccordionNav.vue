@@ -236,7 +236,8 @@ function hasActiveItem(group: typeof navGroups.value[0]) {
           ]"
           @click="toggleGroup(group.id)"
         >
-          <component :is="group.icon" class="w-5 h-5" />
+          <div v-if="isGroupExpanded(group.id)" class="h-px w-5 bg-border" />
+          <component :is="group.icon" v-else class="w-5 h-5" />
         </button>
         <div
           :class="[
