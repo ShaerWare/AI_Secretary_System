@@ -394,7 +394,7 @@ npm run build -- --mode demo-web  # Cloud demo (role=web, cloud mode) → /cloud
 # Both deployed by: bash /root/deploy-demo.sh
 ```
 
-## API (21 роутер, ~371 endpoint)
+## API (28 роутеров, ~400 endpoints)
 
 | Роутер | Файл | Endpoints | Описание |
 |--------|------|-----------|----------|
@@ -402,7 +402,7 @@ npm run build -- --mode demo-web  # Cloud demo (role=web, cloud mode) → /cloud
 | audit | `audit.py` | 4 | Audit log, export, cleanup |
 | services | `services.py` → `modules/speech/router_services.py` | 6 | vLLM start/stop/restart, logs |
 | monitor | `monitor.py` | 9 | GPU/CPU/system stats, health, metrics SSE |
-| faq | `faq.py` | 7 | FAQ CRUD, reload, test, export |
+| faq | `faq.py` → `modules/knowledge/router_faq.py` | 7 | FAQ CRUD, reload, test, export |
 | stt | `stt.py` → `modules/speech/router_stt.py` | 4 | STT status, transcribe, test |
 | llm | `llm.py` | 42 | Backend, persona, params, providers, VLESS proxy, models, bridge |
 | tts | `tts.py` → `modules/speech/router_tts.py` | 14 | Presets, params, test, cache, streaming |
@@ -417,8 +417,14 @@ npm run build -- --mode demo-web  # Cloud demo (role=web, cloud mode) → /cloud
 | amocrm | `amocrm.py` → `modules/crm/router.py` | 16 | amoCRM OAuth2, contacts, leads, pipelines |
 | usage | `usage.py` | 10 | Usage tracking, limits, statistics |
 | legal | `legal.py` | 11 | Legal compliance |
-| wiki_rag | `wiki_rag.py` | 9 | Wiki RAG stats/search, Knowledge Base CRUD |
+| wiki_rag | `wiki_rag.py` → `modules/knowledge/router_wiki_rag.py` | 9 | Wiki RAG stats/search, Knowledge Base CRUD |
+| github_repos | `github_repos.py` → `modules/knowledge/router_github_repos.py` | 7 | GitHub repo projects (clone, sync, RAG index) |
+| kanban | `kanban.py` → `modules/kanban/router.py` | 18 | Kanban tasks, projects, checklist, dependencies, dataset |
+| claude_code | `claude_code.py` → `modules/claude_code/router.py` | 10 | Claude Code WS + REST sessions, projects |
 | github | `github_webhook.py` | 1 | GitHub CI/CD webhook |
+| roles | `roles.py` | 6 | RBAC roles CRUD |
+| workspace | `workspace.py` | 8 | Workspaces, members, invites |
+| woocommerce | `woocommerce.py` → `modules/ecommerce/router.py` | 5 | WooCommerce integration |
 
 ### OpenAI-Compatible API
 
@@ -502,4 +508,4 @@ ORCHESTRATOR_PORT=8002
 Полный список переменных в `.env.example`.
 
 ---
-*Обновлено: 2026-03-03*
+*Обновлено: 2026-03-04*

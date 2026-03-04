@@ -340,6 +340,38 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 3.3: Роутеры — kanban, claude_code, knowledge
+
+> **Статус:** реализовано (PR [#520](https://github.com/ShaerWare/AI_Secretary_System/pull/520), issue [#510](https://github.com/ShaerWare/AI_Secretary_System/issues/510))
+
+5 роутеров со сложными зависимостями перенесены в доменные модули. Все импорты из `db.integration` заменены на прямые импорты из доменных сервисов. Оригинальные файлы стали 1-строчными фасадами.
+
+| Старый файл | Новый файл | Ключевые изменения |
+|---|---|---|
+| `app/routers/faq.py` | `modules/knowledge/router_faq.py` | 2 db.integration → domain imports |
+| `app/routers/wiki_rag.py` | `modules/knowledge/router_wiki_rag.py` | 3 db.integration → domain imports |
+| `app/routers/github_repos.py` | `modules/knowledge/router_github_repos.py` | 4 db.integration → domain imports |
+| `app/routers/kanban.py` | `modules/kanban/router.py` | 5 top-level + 1 inline → 4 top-level domain imports |
+| `app/routers/claude_code.py` | `modules/claude_code/router.py` | 8 inline → 2 top-level (claude_code_service, claude_code_project_service) |
+
+Замены импортов:
+- `async_audit_logger` → `audit_service` из `modules.monitoring.service`
+- `async_faq_manager` → `faq_service` из `modules.knowledge.service`
+- `async_knowledge_collection_manager` → `knowledge_collection_service` из `modules.knowledge.service`
+- `async_knowledge_doc_manager` → `knowledge_doc_service` из `modules.knowledge.service`
+- `async_github_repo_project_manager` → `github_repo_project_service` из `modules.knowledge.service`
+- `async_kanban_manager` → `kanban_service` из `modules.kanban.service`
+- `async_kanban_project_manager` → `kanban_project_service` из `modules.kanban.service`
+- `async_claude_code_manager` → `claude_code_service` из `modules.claude_code.service`
+- `async_claude_code_project_manager` → `claude_code_project_service` из `modules.claude_code.service`
+
+Нюансы:
+- **claude_code.py** — все 8 inline `from db.integration import` внутри функций заменены на 2 top-level import из доменного сервиса
+- **kanban.py** — кросс-доменные зависимости: kanban → claude_code (cc-sessions), kanban → knowledge (dataset-sync/status/clear)
+- **Lazy imports** из `app.services.*` и `app.dependencies` оставлены lazy (не часть Phase 3)
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -366,7 +398,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510–#514) |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511–#514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |

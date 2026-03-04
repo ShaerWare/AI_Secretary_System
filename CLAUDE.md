@@ -159,7 +159,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Routers (`modules/*/router.py`)
 
-Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2):
+Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2 + 3.3):
 
 | Domain | Router file | Facade |
 |--------|------------|--------|
@@ -167,6 +167,9 @@ Phase 3 migration: routers move from `app/routers/` to domain modules. Original 
 | `modules/crm/` | `router.py` | `app/routers/amocrm.py` (exports `router` + `webhook_router`) |
 | `modules/telephony/` | `router.py` | `app/routers/gsm.py` |
 | `modules/speech/` | `router_tts.py`, `router_stt.py`, `router_services.py` | `app/routers/tts.py`, `stt.py`, `services.py` |
+| `modules/knowledge/` | `router_faq.py`, `router_wiki_rag.py`, `router_github_repos.py` | `app/routers/faq.py`, `wiki_rag.py`, `github_repos.py` |
+| `modules/kanban/` | `router.py` | `app/routers/kanban.py` |
+| `modules/claude_code/` | `router.py` | `app/routers/claude_code.py` |
 
 New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade.
 
