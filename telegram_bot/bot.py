@@ -17,6 +17,7 @@ from .config import (
 )
 from .handlers import get_main_router
 from .middleware.access import AccessMiddleware
+from .middleware.user_tracker import UserTrackerMiddleware
 from .sales.database import get_sales_db
 from .sales.keyboards import DEFAULT_ACTION_BUTTONS
 from .services.github_news import news_broadcast_scheduler
@@ -76,6 +77,10 @@ async def main() -> None:
     # Register access middleware on all update types
     dp.message.middleware(AccessMiddleware())
     dp.callback_query.middleware(AccessMiddleware())
+
+    # Track users and sync to central DB
+    dp.message.middleware(UserTrackerMiddleware())
+    dp.callback_query.middleware(UserTrackerMiddleware())
 
     # Initialize sales database
     db = await get_sales_db()

@@ -22,12 +22,20 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, BotSubscriber)
 
-    async def subscribe(self, bot_id: str, user_id: int) -> dict:
-        """Subscribe a user to bot updates. If already exists, re-subscribe.
+    async def subscribe(
+        self,
+        bot_id: str,
+        user_id: int,
+        username: Optional[str] = None,
+        first_name: Optional[str] = None,
+    ) -> dict:
+        """Subscribe a user to bot updates. If already exists, re-subscribe and update profile.
 
         Args:
             bot_id: Bot instance ID.
             user_id: Telegram user ID.
+            username: Telegram username (without @).
+            first_name: Telegram first name.
 
         Returns:
             Subscriber dict.
@@ -40,10 +48,14 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
         subscriber = result.scalar_one_or_none()
 
         if subscriber:
-            # Re-subscribe if previously unsubscribed
+            # Re-subscribe if previously unsubscribed, and update profile
             subscriber.subscribed = True
             subscriber.unsubscribed_at = None
             subscriber.subscribed_at = datetime.utcnow()
+            if username is not None:
+                subscriber.username = username
+            if first_name is not None:
+                subscriber.first_name = first_name
             await self.session.flush()
             logger.info(f"Re-subscribed user: bot_id={bot_id}, user_id={user_id}")
             return subscriber.to_dict()
@@ -52,6 +64,8 @@ class BotSubscriberRepository(BaseRepository[BotSubscriber]):
         subscriber = BotSubscriber(
             bot_id=bot_id,
             user_id=user_id,
+            username=username,
+            first_name=first_name,
             subscribed=True,
             subscribed_at=datetime.utcnow(),
         )

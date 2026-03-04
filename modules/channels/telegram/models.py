@@ -862,6 +862,8 @@ class BotSubscriber(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     bot_id: Mapped[str] = mapped_column(String(50), index=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     subscribed: Mapped[bool] = mapped_column(Boolean, default=True)
     subscribed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -876,6 +878,8 @@ class BotSubscriber(Base):
             "id": self.id,
             "bot_id": self.bot_id,
             "user_id": self.user_id,
+            "username": self.username,
+            "first_name": self.first_name,
             "subscribed": self.subscribed,
             "subscribed_at": self.subscribed_at.isoformat() if self.subscribed_at else None,
             "unsubscribed_at": self.unsubscribed_at.isoformat() if self.unsubscribed_at else None,

@@ -70,12 +70,22 @@ class LLMRouter:
             )
         return self._http_client
 
-    async def _ensure_session(self, client: httpx.AsyncClient, session_id: Optional[str]) -> str:
+    async def _ensure_session(
+        self,
+        client: httpx.AsyncClient,
+        session_id: Optional[str],
+        source_id: Optional[str] = None,
+    ) -> str:
         """Ensure a chat session exists in the orchestrator DB.
 
         If *session_id* is given, check whether it already exists.
         Create a new orchestrator session when needed and cache the mapping
         so subsequent calls reuse the same DB session.
+
+        Args:
+            client: HTTP client.
+            session_id: Optional local session ID.
+            source_id: Optional source identifier (e.g. ``bot_id:user_id``).
         """
         # Already resolved earlier in this process?
         if session_id and session_id in self._session_map:
@@ -89,9 +99,12 @@ class LLMRouter:
 
         # Create a new session on the orchestrator
         try:
+            body: dict = {"title": "Telegram Bot", "source": "telegram_bot"}
+            if source_id:
+                body["source_id"] = source_id
             create_resp = await client.post(
                 f"{self.orchestrator_url}/admin/chat/sessions",
-                json={"title": "Telegram Bot", "source": "telegram_bot"},
+                json=body,
             )
             create_resp.raise_for_status()
             new_id = create_resp.json()["session"]["id"]
@@ -114,6 +127,7 @@ class LLMRouter:
         messages: list[dict],
         backend: LLMBackend = LLMBackend.QWEN,
         session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> AsyncIterator[str]:
         """
         Generate response using specified backend with streaming.
@@ -122,6 +136,7 @@ class LLMRouter:
             messages: Chat messages in OpenAI format
             backend: Which LLM to use
             session_id: Optional session ID for context
+            user_id: Optional Telegram user ID for source tracking
 
         Yields:
             Response text chunks
@@ -149,8 +164,17 @@ class LLMRouter:
             },
         }
 
+        # Build source_id from bot instance + user
+        source_id: Optional[str] = None
+        if user_id:
+            from ..config import get_bot_instance_id
+
+            instance_id = get_bot_instance_id()
+            if instance_id:
+                source_id = f"{instance_id}:{user_id}"
+
         # Ensure session exists in orchestrator DB
-        session_id = await self._ensure_session(client, session_id)
+        session_id = await self._ensure_session(client, session_id, source_id=source_id)
         endpoint = f"{self.orchestrator_url}/admin/chat/sessions/{session_id}/stream"
 
         try:
@@ -260,6 +284,7 @@ class LLMRouter:
         self,
         messages: list[dict],
         session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> AsyncIterator[str]:
         """
         General chat using Qwen with streaming.
@@ -267,12 +292,13 @@ class LLMRouter:
         Args:
             messages: Chat history
             session_id: Optional session ID
+            user_id: Optional Telegram user ID for source tracking
 
         Yields:
             Response chunks
         """
         async for chunk in self.generate_stream(
-            messages, backend=LLMBackend.QWEN, session_id=session_id
+            messages, backend=LLMBackend.QWEN, session_id=session_id, user_id=user_id
         ):
             yield chunk
 

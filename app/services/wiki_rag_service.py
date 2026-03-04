@@ -37,7 +37,7 @@ _en_stemmer = snowballstemmer.stemmer("english")
 # BM25 Okapi parameters
 BM25_K1 = 1.5  # term frequency saturation
 BM25_B = 0.75  # document length normalization
-MIN_SCORE = 0.5  # ignore garbage matches
+MIN_SCORE = 0.3  # ignore garbage matches (lowered from 0.5 for better recall)
 
 # Базовые стоп-слова (русские + английские) — фильтруем шум из запросов
 STOP_WORDS = frozenset(

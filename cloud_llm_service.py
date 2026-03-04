@@ -133,7 +133,7 @@ class BaseLLMProvider(ABC):
         if not self.runtime_params:
             self.runtime_params = {
                 "temperature": 0.7,
-                "max_tokens": 512,
+                "max_tokens": 1024,
                 "top_p": 0.9,
             }
 

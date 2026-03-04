@@ -667,23 +667,73 @@ async def delete_ab_test(
 # ============== Subscribers ==============
 
 
+class RegisterUserRequest(BaseModel):
+    user_id: int
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+@router.post("/register-user")
+async def register_user(
+    instance_id: str,
+    request: RegisterUserRequest,
+    user: User = Depends(require_permission("telegram", "edit")),
+):
+    """Register a Telegram user as subscriber and create a session link.
+
+    Called by bot subprocesses via BOT_INTERNAL_TOKEN to sync users to central DB.
+    Idempotent: re-subscribes and updates profile if user already exists.
+    """
+    await _check_instance(instance_id)
+    async with AsyncSessionLocal() as session:
+        # Upsert bot_subscribers
+        sub_repo = BotSubscriberRepository(session)
+        subscriber = await sub_repo.subscribe(
+            bot_id=instance_id,
+            user_id=request.user_id,
+            username=request.username,
+            first_name=request.first_name,
+        )
+        # Upsert telegram_sessions (link user to bot, no chat session yet)
+        from db.repositories.telegram import TelegramRepository
+
+        tg_repo = TelegramRepository(session, bot_id=instance_id)
+        existing_session = await tg_repo.get_session(request.user_id)
+        if not existing_session:
+            # Create a placeholder session — will be updated when user chats
+            import uuid
+
+            placeholder_id = f"tg_{instance_id}_{request.user_id}_{uuid.uuid4().hex[:8]}"
+            await tg_repo.set_session(
+                user_id=request.user_id,
+                chat_session_id=placeholder_id,
+                username=request.username,
+                first_name=request.first_name,
+                last_name=request.last_name,
+            )
+        else:
+            # Update profile info on existing session
+            await tg_repo.set_session(
+                user_id=request.user_id,
+                chat_session_id=existing_session,
+                username=request.username,
+                first_name=request.first_name,
+                last_name=request.last_name,
+            )
+        await session.commit()
+    return {"status": "ok", "subscriber": subscriber}
+
+
 @router.get("/subscribers")
 async def list_subscribers(
     instance_id: str, user: User = Depends(require_permission("sales", "view"))
 ):
-    """List all subscribers for bot, enriched with user profile data."""
+    """List all subscribers for bot."""
     await _check_instance(instance_id)
     async with AsyncSessionLocal() as session:
         repo = BotSubscriberRepository(session)
         subscribers = await repo.list_by_bot(instance_id)
-        # Enrich with username/first_name from user profiles
-        profile_repo = BotUserProfileRepository(session)
-        profiles = await profile_repo.list_by_bot(instance_id)
-        profile_map = {p["user_id"]: p for p in profiles}
-        for sub in subscribers:
-            profile = profile_map.get(sub["user_id"])
-            sub["username"] = profile["username"] if profile else None
-            sub["first_name"] = profile["first_name"] if profile else None
     return {"subscribers": subscribers}
 
 
