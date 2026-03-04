@@ -60,6 +60,7 @@ async def _handle_user_message(
         stream = router.chat_stream(
             messages=session.messages,
             session_id=session.conversation_id,
+            user_id=user_id,
         )
 
         assistant_text = await render_stream(
