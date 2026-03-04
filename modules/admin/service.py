@@ -113,3 +113,7 @@ class ResourceShareService:
                 and u.get("role") != "guest"
                 and u["id"] != exclude_user_id
             ]
+
+
+# Singleton
+resource_share_service = ResourceShareService()

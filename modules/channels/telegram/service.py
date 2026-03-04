@@ -216,3 +216,8 @@ class TelegramSessionService:
         async with AsyncSessionLocal() as session:
             repo = TelegramRepository(session)
             return await repo.get_session_count_by_bot()
+
+
+# Singletons
+bot_instance_service = BotInstanceService()
+telegram_session_service = TelegramSessionService()

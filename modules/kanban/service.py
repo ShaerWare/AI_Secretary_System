@@ -191,3 +191,8 @@ class KanbanProjectService:
             repo = KanbanProjectRepository(session)
             await repo.update_last_synced(project_id)
             await session.commit()
+
+
+# Singletons
+kanban_service = KanbanService()
+kanban_project_service = KanbanProjectService()

@@ -103,3 +103,7 @@ class WidgetInstanceService:
             result = await repo.import_from_legacy_config(config, instance_id)
             await session.commit()
             return result
+
+
+# Singleton
+widget_instance_service = WidgetInstanceService()

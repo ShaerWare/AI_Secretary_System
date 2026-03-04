@@ -86,3 +86,7 @@ class GSMService:
         async with AsyncSessionLocal() as session:
             repo = GSMSMSLogRepository(session)
             return await repo.count_sms()
+
+
+# Singleton
+gsm_service = GSMService()

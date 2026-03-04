@@ -387,3 +387,8 @@ class ChatShareService:
                 and u.get("role") != "guest"
                 and u["id"] != exclude_user_id
             ]
+
+
+# Singletons
+chat_service = ChatService()
+chat_share_service = ChatShareService()
