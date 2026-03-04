@@ -174,13 +174,6 @@ ym(97860132, "init", {
 .ai-section__title { font-family: circe, sans-serif; font-weight: 700; font-size: 36px; color: #fff; margin-bottom: 16px; }
 .ai-section__subtitle { font-family: circe, sans-serif; font-weight: 300; font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 48px; line-height: 1.6; }
 
-.benefits-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 60px; }
-.benefit-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 32px; transition: all 0.3s ease; }
-.benefit-card:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); transform: translateY(-4px); }
-.benefit-card__icon { font-size: 40px; margin-bottom: 16px; display: block; }
-.benefit-card__title { font-family: circe, sans-serif; font-weight: 700; font-size: 20px; color: #fff; margin-bottom: 8px; }
-.benefit-card__text { font-family: circe, sans-serif; font-weight: 300; font-size: 15px; color: rgba(255,255,255,0.6); line-height: 1.5; }
-
 .modes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 60px; }
 .mode-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px; position: relative; }
 .mode-card--featured { border-color: #c2410c; box-shadow: 0 0 40px rgba(194,65,12,0.15); }
@@ -214,12 +207,10 @@ ym(97860132, "init", {
 .scrollable-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 
 @media (max-width: 991px) {
-    .benefits-grid { grid-template-columns: repeat(2, 1fr); }
     .modes-grid { grid-template-columns: 1fr; }
     .ai-section__title { font-size: 28px; }
 }
 @media (max-width: 640px) {
-    .benefits-grid { grid-template-columns: 1fr; }
     .ai-section { padding: 48px 0; }
     .ai-section__inner { padding: 0 20px; }
     .ai-section__title { font-size: 24px; }
@@ -296,46 +287,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </div>
                 </div>
             </a>
-        </div>
-    </div>
-
-    <!-- Benefits Section -->
-    <div class="ai-section">
-        <div class="ai-section__inner">
-            <h2 class="ai-section__title">Почему ИИ-Секретарь</h2>
-            <p class="ai-section__subtitle">Один ассистент вместо целого отдела — с первого дня</p>
-            <div class="benefits-grid">
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#128101;</span>
-                    <div class="benefit-card__title">Заменяет 4-5 сотрудников</div>
-                    <div class="benefit-card__text">Секретарь, менеджер по продажам, оператор техподдержки, SMM-менеджер и аналитик — в одном ИИ-ассистенте.</div>
-                </div>
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#9203;</span>
-                    <div class="benefit-card__title">Работает 24/7/365</div>
-                    <div class="benefit-card__text">Без выходных, отпусков и больничных. Мгновенно отвечает клиентам в любое время суток — даже ночью и в праздники.</div>
-                </div>
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#128274;</span>
-                    <div class="benefit-card__title">Локальный = приватный</div>
-                    <div class="benefit-card__text">Локальная установка на вашем GPU — все данные остаются на вашем сервере. Максимальная конфиденциальность без компромиссов.</div>
-                </div>
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#9729;&#65039;</span>
-                    <div class="benefit-card__title">Облако от 3 000 тг/мес</div>
-                    <div class="benefit-card__text">Не нужен GPU? Облачный режим работает на любом VPS. Подключаем Gemini, GPT-4, Claude, DeepSeek — копеечная стоимость запросов.</div>
-                </div>
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#128279;</span>
-                    <div class="benefit-card__title">Все каналы связи</div>
-                    <div class="benefit-card__text">Telegram, WhatsApp, виджет для сайта, amoCRM, WooCommerce — единая точка управления всеми коммуникациями.</div>
-                </div>
-                <div class="benefit-card">
-                    <span class="benefit-card__icon">&#127891;</span>
-                    <div class="benefit-card__title">Обучается на ваших данных</div>
-                    <div class="benefit-card__text">Загружаете базу знаний — и ассистент консультирует как опытный сотрудник. Wiki RAG, FAQ, LoRA fine-tuning.</div>
-                </div>
-            </div>
         </div>
     </div>
 
