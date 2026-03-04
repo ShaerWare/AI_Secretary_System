@@ -18,6 +18,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     #hide-content {display: block;}
 </style>
 <![endif]-->
+<style>
+/* Subpage: bypass animation chain deadlock — force elements visible */
+[class*="animation--"] { animation: none !important; opacity: 1 !important; transform: none !important; }
+.our-project--loading { opacity: 1 !important; }
+</style>
 <title>Портфолио — демо ИИ-секретаря | AI Secretary System</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Swiper/4.5.1/css/swiper.min.css">
 <link rel="stylesheet" href="../wp-content/themes/main/assets/styles/main.min.css">
@@ -172,7 +177,7 @@ ym(97860132, "init", {
 </style>
 </head>
 
-<body class="not-allowed">
+<body>
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TSBHMBWL"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -187,7 +192,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <div class="hide-content" id="hide-content"></div>
 <div class="custom-cursor"></div>
 <div class="container container--big container--h-100per d-flex container--custom-scroll">
-<div class="wrapper wrapper_fullpage d-flex flex-direction-column justify-content-between animation-wait wrapper_w-100per">
+<div class="wrapper wrapper_fullpage d-flex flex-direction-column justify-content-between wrapper_w-100per">
 <header id="header" class="mix-blend animation animation--fade-down-header">
 <div class="burger">
 <a class="burger__btn magnit text text--custom" href="index.html">
@@ -216,7 +221,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <section class="centered-content">
 <div class="main-content our-project our-project--loading scrollable-content">
 
-    <div class="swiper-container">
+    <div id="projects-slider" class="swiper-container projects-slider">
         <div class="swiper-wrapper">
 
             <!-- 1. Chat с ИИ -->
@@ -561,5 +566,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 <script type='text/javascript' src="../wp-includes/js/sweetalert.min.js"></script>
 <script type='text/javascript' src="../wp-includes/js/form.js"></script>
+<script>
+/* Fallback: ensure page is visible if animation chain fails */
+window.addEventListener("DOMContentLoaded", function() {
+  setTimeout(function() {
+    document.body.classList.remove("not-allowed");
+    var aw = document.querySelector(".animation-wait");
+    if (aw) aw.classList.remove("animation-wait");
+  }, 2000);
+});
+</script>
 </body>
 </html>
