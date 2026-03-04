@@ -182,13 +182,18 @@ function hasActiveItem(group: typeof navGroups.value[0]) {
         ]"
         @click="toggleGroup(group.id)"
       >
-        <component :is="group.icon" class="w-5 h-5 shrink-0" />
-        <span class="flex-1 ml-3 text-left font-medium truncate">
-          {{ t(group.nameKey) }}
-        </span>
+        <template v-if="isGroupExpanded(group.id)">
+          <div class="h-px flex-1 bg-border" />
+        </template>
+        <template v-else>
+          <component :is="group.icon" class="w-5 h-5 shrink-0" />
+          <span class="flex-1 ml-3 text-left font-medium truncate">
+            {{ t(group.nameKey) }}
+          </span>
+        </template>
         <ChevronDown
           :class="[
-            'w-4 h-4 transition-transform duration-200',
+            'w-4 h-4 shrink-0 transition-transform duration-200',
             isGroupExpanded(group.id) ? 'rotate-180' : ''
           ]"
         />
