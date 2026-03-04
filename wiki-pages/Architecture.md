@@ -37,7 +37,7 @@
 |-----------|--------|-------------|
 | `orchestrator.py` | ~4100 строк | FastAPI entry point, инициализация сервисов, legacy endpoints, background tasks, регистрация 28 роутеров |
 | `db/models.py` | ~200 строк (фасад) | Реэкспорт моделей из `modules/*/models.py` (54 модели) |
-| `db/integration.py` | 93 строки (фасад) | Реэкспорт сервисов из `modules/*/service.py` под старыми именами + 30 синглтонов |
+| `db/integration.py` | ~100 строк (фасад) | Импорт синглтонов и классов из `modules/*/service.py` под старыми именами |
 
 ### Что уже хорошо структурировано
 
@@ -270,7 +270,7 @@ modules/
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
 | `modules/telephony/` | `service.py` | `GSMService` |
 
-**Импорт:** `from modules.chat.service import ChatService` (прямой) или `from db.integration import async_chat_manager` (backward-compatible синглтон).
+**Импорт:** `from modules.chat.service import chat_service` (прямой, предпочтительный) или `from db.integration import async_chat_manager` (backward-compatible алиас). Синглтоны создаются в доменных `service.py` и импортируются фасадом.
 
 **Known issue — circular import:** доменные `__init__.py` **нельзя** использовать для реэкспорта сервисов. Цепочка: `db/models.py` → `modules/X/__init__.py` → `service.py` → `db/repositories` → `db/models.py` (цикл). Сервисы импортируются напрямую: `from modules.chat.service import ChatService`. Будет решено в Phase 3+ (устранение eager imports в `db/models.py`).
 
@@ -280,15 +280,36 @@ modules/
 
 > **Статус:** реализовано (PR [#506](https://github.com/ShaerWare/AI_Secretary_System/pull/506), issue [#502](https://github.com/ShaerWare/AI_Secretary_System/issues/502))
 
-Монолитный `db/integration.py` (2688 строк) заменён на 93-строчный фасад. Файл импортирует сервисы из доменных модулей и реэкспортирует под старыми именами:
+Монолитный `db/integration.py` (2688 строк) заменён на ~100-строчный фасад. Файл импортирует классы и синглтоны из доменных модулей и реэкспортирует под старыми именами:
 
 ```python
 from modules.chat.service import ChatService as AsyncChatManager
-async_chat_manager = AsyncChatManager()
-# ... 30 синглтонов, 3 lifecycle-функции
+from modules.chat.service import chat_service as async_chat_manager
+# ... 29 классов, 30 синглтонов, 3 lifecycle-функции
 ```
 
 Ноль изменений в 28 файлах-потребителях.
+
+---
+
+### Phase 3.1: Синглтоны в доменных сервисах
+
+> **Статус:** реализовано (PR [#516](https://github.com/ShaerWare/AI_Secretary_System/pull/516), issue [#508](https://github.com/ShaerWare/AI_Secretary_System/issues/508))
+
+30 синглтонов перенесены из фасада `db/integration.py` в доменные `modules/*/service.py`. Каждый сервисный файл создаёт экземпляр с чистым именем:
+
+```python
+# modules/kanban/service.py
+kanban_service = KanbanService()
+kanban_project_service = KanbanProjectService()
+```
+
+Фасад теперь **импортирует** готовые синглтоны вместо создания:
+```python
+from modules.kanban.service import kanban_service as async_kanban_manager
+```
+
+Оба пути импорта ведут к одному объекту (`async_kanban_manager is kanban_service`).
 
 ---
 
@@ -318,7 +339,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ⏳ |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509–#514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |

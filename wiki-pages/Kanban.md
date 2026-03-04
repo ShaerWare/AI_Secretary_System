@@ -247,7 +247,7 @@ app/routers/kanban.py (10 endpoints)
       -> modules/kanban/models.py (KanbanTask, KanbanTaskDependency, KanbanChecklistItem)
 ```
 
-> **Примечание:** Синглтон `async_kanban_manager` в `db/integration.py` — backward-compatible алиас для `KanbanService`.
+> **Примечание:** Синглтон `kanban_service` определён в `modules/kanban/service.py`. В `db/integration.py` доступен как `async_kanban_manager` (backward-compatible алиас).
 
 Frontend:
 ```

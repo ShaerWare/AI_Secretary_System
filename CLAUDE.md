@@ -155,7 +155,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
 | `modules/telephony/` | `service.py` | `GSMService` |
 
-**Import pattern**: `from modules.chat.service import ChatService` (direct) or `from db.integration import async_chat_manager` (backward-compatible singleton). Domain `__init__.py` files do NOT re-export services (see Known Issues #9).
+**Import pattern**: `from modules.chat.service import chat_service` (direct, preferred) or `from db.integration import async_chat_manager` (backward-compatible alias). Domain `__init__.py` files do NOT re-export services (see Known Issues #9).
 
 ### Key Components
 
@@ -165,7 +165,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 **Two service layers**: Core AI services at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `stt_service.py`, etc.). Domain services in `app/services/` (`amocrm_service.py`, `wiki_rag_service.py`, `backup_service.py`, `sales_funnel.py`, etc.).
 
-**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` is a 93-line facade that re-exports domain services under old names (`AsyncChatManager = ChatService`) and creates module-level singletons (`async_chat_manager = AsyncChatManager()`). Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
+**Database layer** (`db/`): Async SQLAlchemy + aiosqlite. `db/database.py` creates engine. `db/integration.py` is a ~100-line facade that imports singletons and class aliases from domain services (`from modules.chat.service import chat_service as async_chat_manager`). Singletons are created in `modules/*/service.py`; the facade only re-exports them under old names. Repositories in `db/repositories/` inherit from `BaseRepository` with generic CRUD and `_apply_workspace_filter()` for multi-tenant queries.
 
 **Unit of Work**: Repositories only `flush()` — never `commit()`. Callers own transaction boundaries: service methods call `session.commit()`, `get_async_session()` auto-commits on success / rollbacks on exception.
 
