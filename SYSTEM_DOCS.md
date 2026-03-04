@@ -400,21 +400,21 @@ npm run build -- --mode demo-web  # Cloud demo (role=web, cloud mode) → /cloud
 |--------|------|-----------|----------|
 | auth | `auth.py` | 6 | JWT login, profile, password, auth status |
 | audit | `audit.py` | 4 | Audit log, export, cleanup |
-| services | `services.py` | 6 | vLLM start/stop/restart, logs |
+| services | `services.py` → `modules/speech/router_services.py` | 6 | vLLM start/stop/restart, logs |
 | monitor | `monitor.py` | 9 | GPU/CPU/system stats, health, metrics SSE |
 | faq | `faq.py` | 7 | FAQ CRUD, reload, test, export |
-| stt | `stt.py` | 4 | STT status, transcribe, test |
+| stt | `stt.py` → `modules/speech/router_stt.py` | 4 | STT status, transcribe, test |
 | llm | `llm.py` | 42 | Backend, persona, params, providers, VLESS proxy, models, bridge |
-| tts | `tts.py` | 14 | Presets, params, test, cache, streaming |
+| tts | `tts.py` → `modules/speech/router_tts.py` | 14 | Presets, params, test, cache, streaming |
 | chat | `chat.py` | 13 | Sessions, messages, streaming, branching |
 | telegram | `telegram.py` | 28 | Bot instances CRUD, control, sales, payments |
 | widget | `widget.py` | 7 | Widget instances CRUD |
 | whatsapp | `whatsapp.py` | 10 | WhatsApp bot instances CRUD, control |
-| gsm | `gsm.py` | 14 | GSM telephony (SIM7600E-H) |
+| gsm | `gsm.py` → `modules/telephony/router.py` | 14 | GSM telephony (SIM7600E-H) |
 | backup | `backup.py` | 8 | Backup/restore configuration |
 | bot_sales | `bot_sales.py` | 43 | Sales funnel, segments, testimonials, subscribers, broadcast |
 | yoomoney | `yoomoney_webhook.py` | 1 | YooMoney payment callback |
-| amocrm | `amocrm.py` | 16 | amoCRM OAuth2, contacts, leads, pipelines |
+| amocrm | `amocrm.py` → `modules/crm/router.py` | 16 | amoCRM OAuth2, contacts, leads, pipelines |
 | usage | `usage.py` | 10 | Usage tracking, limits, statistics |
 | legal | `legal.py` | 11 | Legal compliance |
 | wiki_rag | `wiki_rag.py` | 9 | Wiki RAG stats/search, Knowledge Base CRUD |

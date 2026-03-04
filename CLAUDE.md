@@ -125,7 +125,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phases 0–2 complete.
+Foundation layer for modular decomposition (issue #489). Phases 0–2 complete, Phase 3 in progress.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
@@ -156,6 +156,19 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 | `modules/telephony/` | `service.py` | `GSMService` |
 
 **Import pattern**: `from modules.chat.service import chat_service` (direct, preferred) or `from db.integration import async_chat_manager` (backward-compatible alias). Domain `__init__.py` files do NOT re-export services (see Known Issues #9).
+
+### Domain Routers (`modules/*/router.py`)
+
+Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2):
+
+| Domain | Router file | Facade |
+|--------|------------|--------|
+| `modules/ecommerce/` | `router.py` | `app/routers/woocommerce.py` |
+| `modules/crm/` | `router.py` | `app/routers/amocrm.py` (exports `router` + `webhook_router`) |
+| `modules/telephony/` | `router.py` | `app/routers/gsm.py` |
+| `modules/speech/` | `router_tts.py`, `router_stt.py`, `router_services.py` | `app/routers/tts.py`, `stt.py`, `services.py` |
+
+New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade.
 
 ### Key Components
 
@@ -196,9 +209,9 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 ## Code Patterns
 
 **Adding a new API endpoint:**
-1. Create/edit router in `app/routers/`
-2. Use `ServiceContainer` from `app/dependencies.py` for DI
-3. Add router to `__all__` in `app/routers/__init__.py`
+1. Create/edit router in `modules/{domain}/router.py` (preferred) or `app/routers/` (legacy)
+2. Use domain service singletons (`from modules.chat.service import chat_service`) for DB access
+3. If using `app/routers/`, add to `__all__` in `app/routers/__init__.py`
 4. Register in `orchestrator.py` with `app.include_router()`
 
 **Adding a new cloud LLM provider type:**
