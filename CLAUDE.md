@@ -184,7 +184,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **SQLITE_BUSY retry**: `db/retry.py` `@retry_on_busy()` — exponential backoff (3 retries, 0.1s base). Applied to write methods in domain service classes (16 methods across 5 services).
 
-**Telegram bots**: Subprocesses managed by `multi_bot_manager.py`. Config pre-fetched from DB, written to `/tmp/bot_config_{id}.json`. Two frameworks: `python-telegram-bot` (legacy) + `aiogram` (new). `LLMRouter` in `telegram_bot/services/llm_router.py` routes through orchestrator chat API.
+**Telegram bots**: Subprocesses managed by `multi_bot_manager.py`. Config pre-fetched from DB, written to `/tmp/bot_config_{id}.json`. Two frameworks: `python-telegram-bot` (legacy) + `aiogram` (new). `LLMRouter` in `telegram_bot/services/llm_router.py` routes through orchestrator chat API. File uploads: `telegram_bot/services/file_extractor.py` extracts text from documents (text files + PDF via `pdfplumber`), injected into chat as plain text.
 
 **WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`).
 

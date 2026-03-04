@@ -55,5 +55,8 @@ redis>=5.0.0
 # Wiki RAG
 snowballstemmer>=2.2.0  # Russian/English stemming for BM25 search
 
+# Document text extraction (Telegram file uploads)
+pdfplumber>=0.10.0
+
 # Docker management (for starting vLLM from container)
 docker>=7.0.0
