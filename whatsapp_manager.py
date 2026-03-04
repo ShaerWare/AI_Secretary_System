@@ -115,11 +115,16 @@ class WhatsAppManager:
             # Must use create_session() to register in user_sessions table (RBAC validation)
             try:
                 from auth_manager import create_session
+                from db.integration import async_user_manager
+
+                # Find first admin user for internal token (user_id=0 violates FK)
+                admin_user = await async_user_manager.get_first_admin()
+                internal_user_id = admin_user["id"] if admin_user else 1
 
                 login_resp = await create_session(
                     username="__internal_wa_bot__",
                     role="admin",
-                    user_id=0,
+                    user_id=internal_user_id,
                     ip=None,
                     user_agent="WhatsAppManager",
                 )

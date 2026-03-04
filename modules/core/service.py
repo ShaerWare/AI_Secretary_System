@@ -174,6 +174,14 @@ class UserService:
             repo = UserRepository(session)
             return await repo.get_user_count()
 
+    async def get_first_admin(self) -> Optional[dict]:
+        """Get the first admin user. Used for internal bot tokens."""
+        users = await self.list_users()
+        for u in users:
+            if u.get("role") == "admin":
+                return u
+        return None
+
 
 class UserSessionService:
     """Async manager for user session tracking and revocation."""
