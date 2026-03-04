@@ -115,3 +115,7 @@ class WhatsAppInstanceService:
         async with AsyncSessionLocal() as session:
             repo = WhatsAppInstanceRepository(session)
             return await repo.get_instance_count()
+
+
+# Singleton
+whatsapp_instance_service = WhatsAppInstanceService()

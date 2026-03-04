@@ -71,3 +71,8 @@ class PaymentService:
         async with AsyncSessionLocal() as session:
             repo = PaymentRepository(session)
             return await repo.get_payment_stats(bot_id)
+
+
+# Singletons
+audit_service = AuditService()
+payment_service = PaymentService()

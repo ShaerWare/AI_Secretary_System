@@ -65,3 +65,7 @@ class AmoCRMService:
         async with AsyncSessionLocal() as session:
             repo = AmoCRMSyncLogRepository(session)
             return await repo.get_recent(limit)
+
+
+# Singleton
+amocrm_service = AmoCRMService()

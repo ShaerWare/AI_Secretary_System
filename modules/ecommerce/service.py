@@ -43,3 +43,7 @@ class WooCommerceService:
             result = await repo.clear_credentials()
             await session.commit()
             return result
+
+
+# Singleton
+woocommerce_service = WooCommerceService()

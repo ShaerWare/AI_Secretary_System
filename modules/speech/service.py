@@ -62,3 +62,7 @@ class PresetService:
             result = await repo.delete_preset(name, workspace_id=workspace_id)
             await session.commit()
             return result
+
+
+# Singleton
+preset_service = PresetService()

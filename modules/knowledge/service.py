@@ -360,3 +360,10 @@ class GitHubRepoProjectService:
             result = await repo.delete_project(project_id, workspace_id)
             await session.commit()
             return result
+
+
+# Singletons
+faq_service = FAQService()
+knowledge_doc_service = KnowledgeDocService()
+knowledge_collection_service = KnowledgeCollectionService()
+github_repo_project_service = GitHubRepoProjectService()

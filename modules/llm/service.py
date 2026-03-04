@@ -113,3 +113,7 @@ class CloudProviderService:
         async with AsyncSessionLocal() as session:
             repo = CloudProviderRepository(session)
             return await repo.get_provider_count()
+
+
+# Singleton
+cloud_provider_service = CloudProviderService()

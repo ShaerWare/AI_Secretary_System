@@ -141,3 +141,8 @@ class ClaudeCodeProjectService:
             result = await repo.delete_project(project_id, owner_id, workspace_id=workspace_id)
             await session.commit()
             return result
+
+
+# Singletons
+claude_code_service = ClaudeCodeService()
+claude_code_project_service = ClaudeCodeProjectService()

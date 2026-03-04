@@ -561,3 +561,13 @@ class UserIdentityService:
             result = await repo.update_last_seen(provider, provider_uid)
             await session.commit()
             return result
+
+
+# Singletons
+database_service = DatabaseService()
+user_service = UserService()
+user_session_service = UserSessionService()
+role_service = RoleService()
+workspace_service = WorkspaceService()
+config_service = ConfigService()
+user_identity_service = UserIdentityService()
