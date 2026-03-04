@@ -313,6 +313,33 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 3.2: Роутеры — ecommerce, crm, telephony, speech
+
+> **Статус:** реализовано (PR [#518](https://github.com/ShaerWare/AI_Secretary_System/pull/518), issue [#509](https://github.com/ShaerWare/AI_Secretary_System/issues/509))
+
+6 «листовых» роутеров (без межроутерных зависимостей) перенесены из `app/routers/` в доменные модули. Все импорты из `db.integration` заменены на прямые импорты из доменных сервисов. Оригинальные файлы стали тонкими фасадами (1-3 строки).
+
+| Старый файл | Новый файл | Ключевые изменения |
+|---|---|---|
+| `app/routers/woocommerce.py` | `modules/ecommerce/router.py` | 4 db.integration → domain imports |
+| `app/routers/amocrm.py` | `modules/crm/router.py` | 4 db.integration → domain imports, dual router (`router` + `webhook_router`) |
+| `app/routers/gsm.py` | `modules/telephony/router.py` | 9 inline db.integration → 2 top-level domain imports |
+| `app/routers/tts.py` | `modules/speech/router_tts.py` | 1 db.integration → domain import |
+| `app/routers/stt.py` | `modules/speech/router_stt.py` | Без изменений (0 db.integration imports) |
+| `app/routers/services.py` | `modules/speech/router_services.py` | Без изменений (0 db.integration imports) |
+
+Замены импортов:
+- `async_audit_logger` → `audit_service` из `modules.monitoring.service`
+- `async_knowledge_collection_manager` → `knowledge_collection_service` из `modules.knowledge.service`
+- `async_knowledge_doc_manager` → `knowledge_doc_service` из `modules.knowledge.service`
+- `async_woocommerce_manager` → `woocommerce_service` из `modules.ecommerce.service`
+- `async_amocrm_manager` → `amocrm_service` из `modules.crm.service`
+- `async_preset_manager` → `preset_service` из `modules.speech.service`
+- `async_config_manager` (inline) → `config_service` из `modules.core.service`
+- `async_gsm_manager` (inline) → `gsm_service` из `modules.telephony.service`
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -339,7 +366,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509–#514) |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510–#514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
