@@ -89,35 +89,28 @@ manager.py    manager.py                   service.py    service.py   service.py
 
 ### Modular API Structure
 
-API endpoints organized into 21 routers with ~371 endpoints total:
+API organized into 28 routers (~400 endpoints). Domain logic lives in `modules/*/router*.py`; files in `app/routers/` are thin facades that re-export routers for backward compatibility:
 
 ```
-app/
-├── __init__.py
-├── dependencies.py          # ServiceContainer for DI
-└── routers/
-    ├── __init__.py
-    ├── auth.py              # 6 endpoints  - JWT login, profile, password, auth status
-    ├── audit.py             # 4 endpoints  - Audit log viewing, export, cleanup
-    ├── services.py          # 6 endpoints  - vLLM start/stop/restart, logs
-    ├── monitor.py           # 9 endpoints  - GPU/CPU/system stats, health, metrics SSE
-    ├── faq.py               # 7 endpoints  - FAQ CRUD, reload, test
-    ├── stt.py               # 4 endpoints  - STT status, transcribe, test
-    ├── llm.py               # 42 endpoints - Backend, persona, params, providers, VLESS proxy, models, bridge
-    ├── tts.py               # 14 endpoints - Presets, params, test, cache, streaming
-    ├── chat.py              # 13 endpoints - Sessions, messages, streaming, branching
-    ├── telegram.py          # 28 endpoints - Bot instances CRUD, control, sales, payments
-    ├── widget.py            # 7 endpoints  - Widget instances CRUD
-    ├── gsm.py               # 14 endpoints - GSM telephony (SIM7600E-H)
-    ├── backup.py            # 8 endpoints  - Backup/restore configuration
-    ├── bot_sales.py         # 43 endpoints - Sales funnel, segments, testimonials, subscribers, broadcast
-    ├── yoomoney_webhook.py  # 1 endpoint   - YooMoney payment callback
-    ├── amocrm.py            # 16 endpoints - amoCRM OAuth2, contacts, leads, pipelines
-    ├── usage.py             # 10 endpoints - Usage tracking, limits, statistics
-    ├── legal.py             # 11 endpoints - Legal compliance
-    ├── wiki_rag.py          # 9 endpoints  - Wiki RAG stats/search, Knowledge Base CRUD
-    ├── whatsapp.py          # 10 endpoints - WhatsApp bot instances CRUD, control
-    └── github_webhook.py    # 1 endpoint   - GitHub CI/CD webhook
+modules/                         # Domain routers (actual logic)
+├── core/                        # router_auth.py, router_roles.py, router_workspace.py
+├── chat/                        # router.py (19 endpoints)
+├── knowledge/                   # router_faq.py, router_wiki_rag.py
+├── channels/telegram/           # router.py, router_bot_sales.py
+├── channels/whatsapp/           # router.py
+├── channels/widget/             # router.py
+├── llm/                         # router.py (37 endpoints)
+├── monitoring/                  # router_audit.py, router_usage.py, router_monitor.py
+├── speech/                      # router_tts.py, router_stt.py
+├── admin/                       # router_services.py, router_backup.py, router_legal.py, router_github_webhook.py
+├── telephony/                   # router.py
+├── crm/                         # router.py
+├── ecommerce/                   # router.py (yoomoney_webhook)
+└── kanban/                      # router.py
+
+app/routers/                     # Facades (1–3 lines each, re-export from modules/)
+├── auth.py, audit.py, chat.py, llm.py, ...  (28 files)
+└── __init__.py                  # Auto-registers all routers
 ```
 
 ### GPU Configuration (RTX 3060 12GB)
@@ -717,7 +710,7 @@ curl -X POST http://localhost:8002/v1/audio/speech \
 curl http://localhost:8002/v1/models
 ```
 
-### Admin API (~371 endpoints via 21 routers)
+### Admin API (~400 endpoints via 28 routers)
 
 ```bash
 # Authentication
