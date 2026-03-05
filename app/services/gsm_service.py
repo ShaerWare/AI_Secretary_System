@@ -59,6 +59,7 @@ class GSMStatus:
     module_info: Optional[str] = None
     last_error: Optional[str] = None
     mock_mode: bool = False
+    network_mode: Optional[str] = None  # GSM, HSDPA, LTE, etc
 
     def to_dict(self) -> dict:
         return {
@@ -72,6 +73,7 @@ class GSMStatus:
             "module_info": self.module_info,
             "last_error": self.last_error,
             "mock_mode": self.mock_mode,
+            "network_mode": self.network_mode,
         }
 
 
@@ -346,6 +348,9 @@ class GSMService:
             info_lines = [ln for ln in lines if ln not in ("OK", "") and not ln.startswith("AT")]
             if info_lines:
                 status.module_info = " / ".join(info_lines)
+
+        # Network mode (GSM/HSDPA/LTE)
+        status.network_mode = await self.get_network_mode()
 
         status.last_error = self.last_error
         return status
@@ -624,6 +629,94 @@ class GSMService:
                 self.on_sms_received(line)
             except Exception as e:
                 logger.error(f"on_sms_received callback error: {e}")
+
+    # ================================================================
+    # SMS Read/Delete from SIM + DTMF + Network Mode
+    # ================================================================
+
+    NETWORK_MODES: Dict[int, str] = {
+        0: "No service",
+        1: "GSM",
+        2: "GPRS",
+        3: "EGPRS (EDGE)",
+        4: "WCDMA",
+        5: "HSDPA",
+        6: "HSUPA",
+        7: "HSDPA+HSUPA",
+        8: "LTE",
+        9: "TDS-CDMA",
+        10: "TDS-HSDPA",
+        11: "TDS-HSUPA",
+        12: "TDS-HSDPA+HSUPA",
+        13: "CDMA",
+        14: "EVDO",
+        15: "CDMA/EVDO",
+        16: "CDMA/LTE",
+        17: "EVDO/LTE",
+        18: "CDMA/EVDO/LTE",
+    }
+
+    async def get_network_mode(self) -> Optional[str]:
+        """Get current network access mode (GSM, HSDPA, LTE, etc)."""
+        ok, lines = await self.execute_at("AT+CNSMOD?")
+        if ok:
+            for ln in lines:
+                if "+CNSMOD:" in ln:
+                    try:
+                        mode_num = int(ln.split(",")[1].strip())
+                        return self.NETWORK_MODES.get(mode_num, f"Unknown({mode_num})")
+                    except (ValueError, IndexError):
+                        pass
+        return None
+
+    async def read_sms(self, index: int) -> Optional[Dict]:
+        """Read single SMS by index from SIM storage."""
+        ok, lines = await self.execute_at(f"AT+CMGR={index}", timeout=5.0)
+        if not ok or not lines:
+            return None
+
+        for i, ln in enumerate(lines):
+            if ln.startswith("+CMGR:"):
+                text = lines[i + 1] if i + 1 < len(lines) and lines[i + 1] != "OK" else ""
+                sender_match = re.search(r'"(\+?[0-9]+)"', ln)
+                sender = sender_match.group(1) if sender_match else "unknown"
+                return {
+                    "index": index,
+                    "sender": sender,
+                    "text": text,
+                    "raw_header": ln,
+                }
+        return None
+
+    async def read_all_sms(self) -> List[Dict]:
+        """Read all SMS from SIM. Uses text mode listing."""
+        await self.execute_at("AT+CMGF=1")
+        messages = await self.list_sms_from_modem("ALL")
+        await self.execute_at("AT+CMGF=0")
+        return messages
+
+    async def delete_sms(self, index: int) -> bool:
+        """Delete a single SMS by index from SIM."""
+        ok, _ = await self.execute_at(f"AT+CMGD={index}")
+        return ok
+
+    async def delete_all_sms(self) -> bool:
+        """Delete all SMS from SIM storage."""
+        ok, _ = await self.execute_at("AT+CMGD=1,4", timeout=10.0)
+        return ok
+
+    async def send_dtmf(self, digits: str) -> bool:
+        """Send DTMF tones during an active call."""
+        if not self.active_call or self.active_call.state != "active":
+            return False
+
+        for digit in digits:
+            if digit in "0123456789*#ABCD":
+                ok, _ = await self.execute_at(f'AT+VTS="{digit}"')
+                if not ok:
+                    return False
+                await asyncio.sleep(0.3)
+        return True
 
     # ================================================================
     # Mock AT Responses
