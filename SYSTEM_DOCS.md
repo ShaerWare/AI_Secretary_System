@@ -18,7 +18,8 @@ AI Secretary System - интеллектуальная система вирту
                                │                                              │
                                │   ┌──────────────────────────────────────┐   │
                                │   │  28 API Routers (~400 endpoints)     │   │
-                               │   │          app/routers/                │   │
+                               │   │  modules/*/router*.py (domain logic) │   │
+                               │   │  app/routers/ (thin facades)         │   │
                                │   └──────────────────────────────────────┘   │
                                │                                              │
                                │   ┌──────────────────────────────────────┐   │

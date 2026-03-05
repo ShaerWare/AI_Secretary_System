@@ -124,7 +124,7 @@ Then create a Pull Request on GitHub with:
 AI_Secretary_System/
 ├── orchestrator.py          # FastAPI entry point
 ├── app/
-│   ├── routers/             # API endpoints (28 routers)
+│   ├── routers/             # Facade re-exports (28 files, 1–3 lines each)
 │   ├── dependencies.py      # Dependency injection
 │   ├── rate_limiter.py      # Rate limiting
 │   └── security_headers.py  # Security middleware
@@ -154,8 +154,8 @@ AI_Secretary_System/
 ## Adding New Features
 
 ### New API Endpoint
-1. Create or edit router in `app/routers/`
-2. Use `ServiceContainer` from `app/dependencies.py`
+1. Create or edit the domain router in `modules/{domain}/router.py`
+2. Add a facade file in `app/routers/` that re-exports the router (one-liner)
 3. Router auto-registers via `app/routers/__init__.py`
 
 ### New Cloud LLM Provider
