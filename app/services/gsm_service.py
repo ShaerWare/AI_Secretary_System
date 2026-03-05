@@ -171,12 +171,22 @@ class GSMService:
                 self.last_error = "Modem not responding"
                 return False
 
+            # Verbose error messages
+            await self.execute_at("AT+CMEE=2")
             # Enable caller ID display
             await self.execute_at("AT+CLIP=1")
-            # SMS text mode
-            await self.execute_at("AT+CMGF=1")
-            # Set charset UTF-8
-            await self.execute_at('AT+CSCS="UTF-8"')
+            # Extended ring format (+CRING instead of RING)
+            await self.execute_at("AT+CRC=1")
+            # Force 2G/3G — SMS and voice do NOT work on LTE
+            await self.execute_at("AT+CNMP=14")
+            # Operator name format: long alphanumeric
+            await self.execute_at("AT+COPS=3,0")
+            # SMS PDU mode (required for Cyrillic UCS2)
+            await self.execute_at("AT+CMGF=0")
+            # New SMS notification to TE
+            await self.execute_at("AT+CNMI=2,1,0,0,0")
+            # Clean old SMS from SIM (only 15 slots!)
+            await self.execute_at("AT+CMGD=1,4")
 
             self.state = "ready"
             logger.info("✅ GSM modem initialized")
@@ -329,18 +339,25 @@ class GSMService:
         if ok:
             for ln in lines:
                 if "+COPS:" in ln:
+                    # Try quoted: +COPS: 0,0,"MegaFon",2
                     match = re.search(r'"([^"]+)"', ln)
                     if match:
                         status.network_name = match.group(1)
+                    else:
+                        # Unquoted: +COPS: 0,0,MegaFon,2
+                        parts = ln.split(",")
+                        if len(parts) >= 3:
+                            status.network_name = parts[2].strip()
 
         # Own phone number
         ok, lines = await self.execute_at("AT+CNUM")
         if ok:
             for ln in lines:
                 if "+CNUM:" in ln:
-                    match = re.search(r'"(\+?[0-9]+)"', ln)
-                    if match:
-                        status.phone_number = match.group(1)
+                    # Find phone number (second quoted field usually)
+                    numbers = re.findall(r'"(\+?[0-9]+)"', ln)
+                    if numbers:
+                        status.phone_number = numbers[0]
 
         # Module info
         ok, lines = await self.execute_at("ATI")
@@ -549,6 +566,11 @@ class GSMService:
         """Read serial port for unsolicited messages (RING, SMS, etc.)."""
         while not self._stop_event.is_set():
             try:
+                # Skip reading while an AT command holds the lock
+                if self._serial_lock.locked():
+                    await asyncio.sleep(0.1)
+                    continue
+
                 if self._serial and self._serial.is_open and self._serial.in_waiting > 0:
                     loop = asyncio.get_event_loop()
                     raw = await loop.run_in_executor(None, self._serial.readline)
@@ -556,14 +578,16 @@ class GSMService:
 
                     if not line:
                         pass
-                    elif "RING" in line:
+                    elif "RING" in line or "+CRING:" in line:
                         await self._handle_ring()
                     elif "+CLIP:" in line:
                         self._handle_clip(line)
                     elif "NO CARRIER" in line:
                         await self._handle_no_carrier()
-                    elif "+CMT:" in line:
+                    elif "+CMT:" in line or "+CMTI:" in line:
                         self._handle_incoming_sms(line)
+                    elif "VOICE CALL: END" in line:
+                        await self._handle_no_carrier()
 
                 await asyncio.sleep(0.2)
 
