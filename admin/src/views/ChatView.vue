@@ -994,6 +994,9 @@ function sendMessage() {
       pendingUserContent.value = null
       streamingContent.value = ''
       console.error('Stream error:', data.content)
+      // Refetch to show user message that was already saved to DB
+      refetchSession()
+      refetchSessions()
       nextTick(() => messageInputRef.value?.focus())
     }
   }, llmOverride)

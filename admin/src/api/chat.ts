@@ -207,6 +207,7 @@ export const chatApi = {
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let receivedDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -220,10 +221,14 @@ export const chatApi = {
           if (line.startsWith('data: ')) {
             const data = line.slice(6)
             if (data === '[DONE]') {
+              receivedDone = true
               onChunk({ type: 'done' })
             } else {
               try {
                 const parsed = JSON.parse(data)
+                if (parsed.type === 'done' || parsed.type === 'assistant_message' || parsed.type === 'error') {
+                  receivedDone = true
+                }
                 onChunk(parsed)
               } catch {
                 // Ignore parse errors
@@ -231,6 +236,11 @@ export const chatApi = {
             }
           }
         }
+      }
+
+      // Stream ended without a terminal event — treat as error
+      if (!receivedDone) {
+        onChunk({ type: 'error', content: 'Stream ended unexpectedly' })
       }
     }).catch((e) => {
       if (e.name !== 'AbortError') {
