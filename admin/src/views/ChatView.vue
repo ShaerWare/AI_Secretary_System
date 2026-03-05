@@ -1181,6 +1181,36 @@ function deleteMessage(messageId: string) {
   }
 }
 
+async function deleteBranchNode(messageId: string) {
+  if (!currentSessionId.value) return
+  const confirmed = await confirmStore.confirm({
+    title: t('chatView.deleteBranch'),
+    message: t('chatView.confirmDeleteBranch'),
+    confirmText: t('common.delete'),
+    type: 'danger',
+  })
+  if (!confirmed) return
+  deleteMessageMutation.mutate({
+    sessionId: currentSessionId.value,
+    messageId,
+  })
+}
+
+async function deleteBranches(messageIds: string[]) {
+  if (!currentSessionId.value || messageIds.length === 0) return
+  const confirmed = await confirmStore.confirm({
+    title: t('chatView.deleteBranches'),
+    message: t('chatView.confirmDeleteBranches', { n: messageIds.length }),
+    confirmText: t('common.delete'),
+    type: 'danger',
+  })
+  if (!confirmed) return
+  const sessionId = currentSessionId.value
+  for (const messageId of messageIds) {
+    deleteMessageMutation.mutate({ sessionId, messageId })
+  }
+}
+
 function triggerFileUpload() {
   fileInputRef.value?.click()
 }
@@ -3165,6 +3195,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           @scroll-to="onBranchScrollTo"
           @new-branch="startNewBranch"
           @close="showBranchTree = false"
+          @delete-node="deleteBranchNode"
+          @delete-branches="deleteBranches"
         />
       </template>
 

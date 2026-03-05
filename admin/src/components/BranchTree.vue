@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GitBranch, Plus, X } from 'lucide-vue-next'
+import { GitBranch, Plus, X, Trash2 } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
 import BranchTreeNode from '@/components/BranchTreeNode.vue'
 
@@ -15,9 +15,43 @@ const emit = defineEmits<{
   'scroll-to': [messageId: string]
   'new-branch': []
   close: []
+  'delete-branches': [messageIds: string[]]
+  'delete-node': [messageId: string]
 }>()
 
 const { t } = useI18n()
+
+const deleteMode = ref(false)
+const selectedForDelete = ref(new Set<string>())
+
+function toggleDeleteMode() {
+  deleteMode.value = !deleteMode.value
+  if (!deleteMode.value) {
+    selectedForDelete.value = new Set()
+  }
+}
+
+function cancelDeleteMode() {
+  deleteMode.value = false
+  selectedForDelete.value = new Set()
+}
+
+function toggleSelect(messageId: string) {
+  const s = new Set(selectedForDelete.value)
+  if (s.has(messageId)) {
+    s.delete(messageId)
+  } else {
+    s.add(messageId)
+  }
+  selectedForDelete.value = s
+}
+
+function confirmDeleteSelected() {
+  const ids = Array.from(selectedForDelete.value)
+  if (ids.length === 0) return
+  emit('delete-branches', ids)
+  cancelDeleteMode()
+}
 
 function handleClick(messageId: string) {
   emit('switch', messageId)
@@ -25,6 +59,10 @@ function handleClick(messageId: string) {
 
 function handleScrollTo(messageId: string) {
   emit('scroll-to', messageId)
+}
+
+function handleDeleteNode(messageId: string) {
+  emit('delete-node', messageId)
 }
 
 // ── Drag-to-scroll ──
@@ -40,7 +78,7 @@ function onPointerDown(e: PointerEvent) {
   const el = scrollContainer.value
   if (!el) return
   // Don't hijack clicks on buttons/interactive elements
-  if ((e.target as HTMLElement).closest('[data-branch-node], button')) return
+  if ((e.target as HTMLElement).closest('[data-branch-node], button, input')) return
   isDragging = true
   hasMoved = false
   startX = e.clientX
@@ -94,6 +132,19 @@ onUnmounted(() => {
       </h3>
       <div class="flex items-center gap-1">
         <button
+          :class="[
+            'p-1 rounded transition-colors',
+            deleteMode
+              ? 'bg-destructive/15 text-destructive hover:bg-destructive/25'
+              : 'hover:bg-secondary text-muted-foreground',
+          ]"
+          :title="t('chatView.deleteBranches')"
+          @click="toggleDeleteMode"
+        >
+          <Trash2 class="w-3.5 h-3.5" />
+        </button>
+        <button
+          v-if="!deleteMode"
           class="p-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
           :title="t('chatView.newBranch')"
           @click="emit('new-branch')"
@@ -124,13 +175,37 @@ onUnmounted(() => {
           :key="root.id"
           :node="root"
           :depth="0"
+          :delete-mode="deleteMode"
+          :selected-for-delete="selectedForDelete"
           @click-node="handleClick"
           @scroll-to="handleScrollTo"
+          @delete-node="handleDeleteNode"
+          @toggle-select="toggleSelect"
         />
       </div>
     </div>
     <div v-else class="p-4 text-center text-xs text-muted-foreground">
       {{ t('chatView.noBranches') }}
+    </div>
+
+    <!-- Delete mode action bar -->
+    <div
+      v-if="deleteMode"
+      class="p-2 border-t border-border flex items-center gap-2 flex-shrink-0"
+    >
+      <button
+        class="flex-1 px-2 py-1.5 text-xs rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        :disabled="selectedForDelete.size === 0"
+        @click="confirmDeleteSelected"
+      >
+        {{ t('chatView.deleteSelectedN', { n: selectedForDelete.size }) }}
+      </button>
+      <button
+        class="px-2 py-1.5 text-xs rounded border border-border hover:bg-secondary transition-colors"
+        @click="cancelDeleteMode"
+      >
+        {{ t('common.cancel') }}
+      </button>
     </div>
   </div>
 </template>
