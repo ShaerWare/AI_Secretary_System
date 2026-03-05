@@ -4,6 +4,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-javascript'
+import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-bash'
+import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-css'
+import 'prismjs/components/prism-markup'
+import 'prismjs/components/prism-yaml'
+import 'prismjs/components/prism-sql'
+import 'prismjs/components/prism-docker'
+import 'prismjs/components/prism-nginx'
+import 'prismjs/components/prism-go'
+import 'prismjs/components/prism-rust'
+import 'prismjs/components/prism-java'
+import 'prismjs/components/prism-diff'
+import 'prismjs/components/prism-markdown'
+import 'prismjs/components/prism-jsx'
+import 'prismjs/components/prism-tsx'
 import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
@@ -222,11 +241,22 @@ marked.use({
     code({ text, lang }) {
       const language = lang || ''
       const artifactId = `artifact-${currentMsgId}-${codeBlockCounter++}`
-      const escapedCode = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
+      // Map common lang aliases to Prism grammar keys
+      const langMap: Record<string, string> = {
+        js: 'javascript', ts: 'typescript', py: 'python',
+        sh: 'bash', shell: 'bash', zsh: 'bash',
+        yml: 'yaml', html: 'markup', xml: 'markup',
+        dockerfile: 'docker', conf: 'nginx',
+      }
+      const prismLang = langMap[language] || language
+      const grammar = prismLang ? Prism.languages[prismLang] : undefined
+      const highlightedCode = grammar
+        ? Prism.highlight(text, grammar, prismLang)
+        : text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
       // SVG icons for buttons
       const copySvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
       const viewSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
@@ -240,7 +270,7 @@ marked.use({
             <button class="code-block-btn" data-artifact-open="${artifactId}" title="${t('chatView.openInViewer')}">${viewSvg}</button>
           </div>
         </div>
-        <pre><code class="language-${language}">${escapedCode}</code></pre>
+        <pre><code class="language-${language}">${highlightedCode}</code></pre>
       </div>`
     }
   }
@@ -2835,12 +2865,14 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       </div>
 
       <!-- Messages + Branch Tree row -->
-      <div class="flex-1 flex overflow-hidden relative min-h-0">
+      <div class="flex-1 flex overflow-hidden min-h-0">
+      <!-- Messages wrapper (relative for scroll buttons) -->
+      <div class="relative flex-1 min-w-0">
       <!-- Messages -->
       <div
         ref="messagesContainer"
         :class="[
-          'flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 claude-messages-container',
+          'h-full overflow-y-auto overflow-x-hidden p-4 space-y-4 claude-messages-container',
           fullscreenStore.isFullscreen ? 'zen-messages' : ''
         ]"
         @click="handleMessagesClick"
@@ -3182,7 +3214,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       <!-- Floating scroll buttons -->
       <div
         v-if="currentSession && !cc.isActive.value"
-        class="fixed right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1"
+        class="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1"
       >
         <button
           class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -3199,6 +3231,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <ArrowDownToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
+      </div> <!-- /messages wrapper -->
 
       <!-- Branch Tree Panel -->
       <template v-if="showBranchTree">

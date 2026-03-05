@@ -223,6 +223,100 @@
   }
 }
 
+/* Prism.js syntax highlighting — theme-adaptive via CSS variables */
+.chat-markdown code .token.comment,
+.chat-markdown code .token.prolog,
+.chat-markdown code .token.doctype,
+.chat-markdown code .token.cdata {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+.chat-markdown code .token.punctuation {
+  color: hsl(var(--muted-foreground));
+}
+.chat-markdown code .token.property,
+.chat-markdown code .token.tag,
+.chat-markdown code .token.boolean,
+.chat-markdown code .token.number,
+.chat-markdown code .token.constant,
+.chat-markdown code .token.symbol {
+  color: hsl(20 90% 60%);
+}
+.chat-markdown code .token.selector,
+.chat-markdown code .token.attr-name,
+.chat-markdown code .token.string,
+.chat-markdown code .token.char,
+.chat-markdown code .token.builtin {
+  color: hsl(100 60% 50%);
+}
+.light .chat-markdown code .token.selector,
+.light .chat-markdown code .token.attr-name,
+.light .chat-markdown code .token.string,
+.light .chat-markdown code .token.char,
+.light .chat-markdown code .token.builtin {
+  color: hsl(100 60% 35%);
+}
+.chat-markdown code .token.operator,
+.chat-markdown code .token.entity,
+.chat-markdown code .token.url,
+.chat-markdown code .token.variable {
+  color: hsl(40 80% 60%);
+}
+.chat-markdown code .token.atrule,
+.chat-markdown code .token.attr-value,
+.chat-markdown code .token.keyword {
+  color: hsl(280 70% 65%);
+}
+.light .chat-markdown code .token.atrule,
+.light .chat-markdown code .token.attr-value,
+.light .chat-markdown code .token.keyword {
+  color: hsl(280 70% 45%);
+}
+.chat-markdown code .token.function,
+.chat-markdown code .token.class-name {
+  color: hsl(200 80% 65%);
+}
+.light .chat-markdown code .token.function,
+.light .chat-markdown code .token.class-name {
+  color: hsl(200 80% 40%);
+}
+.chat-markdown code .token.regex,
+.chat-markdown code .token.important {
+  color: hsl(35 90% 60%);
+}
+.chat-markdown code .token.important,
+.chat-markdown code .token.bold {
+  font-weight: bold;
+}
+.chat-markdown code .token.italic {
+  font-style: italic;
+}
+.chat-markdown code .token.deleted {
+  color: hsl(0 70% 60%);
+}
+.chat-markdown code .token.inserted {
+  color: hsl(120 60% 50%);
+}
+
+/* Night-eyes theme overrides for Prism */
+.night-eyes .chat-markdown code .token.property,
+.night-eyes .chat-markdown code .token.tag,
+.night-eyes .chat-markdown code .token.boolean,
+.night-eyes .chat-markdown code .token.number,
+.night-eyes .chat-markdown code .token.constant,
+.night-eyes .chat-markdown code .token.symbol {
+  color: hsl(30 80% 60%);
+}
+.night-eyes .chat-markdown code .token.atrule,
+.night-eyes .chat-markdown code .token.attr-value,
+.night-eyes .chat-markdown code .token.keyword {
+  color: hsl(35 70% 65%);
+}
+.night-eyes .chat-markdown code .token.function,
+.night-eyes .chat-markdown code .token.class-name {
+  color: hsl(40 60% 70%);
+}
+
 /* Chat markdown rendering */
 .chat-markdown {
   line-height: 1.6;
