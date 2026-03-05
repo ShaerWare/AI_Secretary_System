@@ -11,7 +11,6 @@ Audio port: /dev/ttyUSB4 (future PR)
 import asyncio
 import logging
 import re
-import time as _time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -462,7 +461,7 @@ class GSMService:
     # SMS
     # ================================================================
 
-    # GSM 7-bit default alphabet characters (basic set)
+    # GSM 7-bit default alphabet characters
     _GSM7_CHARS = set(
         "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ"
         " !\"#¤%&'()*+,-./0123456789:;<=>?"
@@ -471,83 +470,13 @@ class GSMService:
         "äöñüà§"
     )
 
-    # GSM 7-bit default alphabet for decoding (128 entries, index = septet value)
-    _GSM7_DECODE_TABLE = (
-        "@£$¥èéùìòÇ\nØø\rÅå"
-        "Δ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ"
-        " !\"#¤%&'()*+,-./0123456789:;<=>?"
-        "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§"
-        "¿abcdefghijklmnopqrstuvwxyzäöñüà"
-    )
-
     @staticmethod
     def _is_gsm7(text: str) -> bool:
-        """Check if text can be encoded in GSM 7-bit alphabet."""
+        """Check if text fits in GSM 7-bit alphabet (ASCII-like)."""
         return all(c in GSMService._GSM7_CHARS for c in text)
 
-    @staticmethod
-    def _encode_phone_pdu(number: str) -> Tuple[str, str]:
-        """
-        Encode phone number for PDU.
-        Returns (type_byte_hex, encoded_number_hex).
-        """
-        if number.startswith("+"):
-            type_byte = "91"  # International
-            digits = number[1:]
-        else:
-            type_byte = "81"  # National/unknown
-            digits = number
-
-        # Swap nibbles: "79826312267" → "97286132267F"
-        if len(digits) % 2 != 0:
-            digits += "F"
-        swapped = ""
-        for i in range(0, len(digits), 2):
-            swapped += digits[i + 1] + digits[i]
-        return type_byte, swapped
-
-    @staticmethod
-    def _build_sms_pdu(number: str, text: str) -> Tuple[str, int]:
-        """
-        Build SMS-SUBMIT PDU with UCS2 encoding.
-        Returns (full_pdu_hex, tpdu_length).
-        """
-        # SCA (Service Center Address) — use default (00)
-        sca = "00"
-
-        # PDU type: SMS-SUBMIT, VPF=00 (no validity period)
-        pdu_type = "01"
-        # Message reference (auto)
-        mr = "00"
-
-        # Destination address
-        raw_number = number.lstrip("+")
-        addr_len = f"{len(raw_number):02X}"
-        type_byte, encoded_number = GSMService._encode_phone_pdu(number)
-
-        # Protocol ID
-        pid = "00"
-        # Data Coding Scheme: UCS2 (16-bit)
-        dcs = "08"
-
-        # User Data: encode text as UCS2 (big-endian UTF-16)
-        ud_bytes = text.encode("utf-16-be")
-        ud_len = f"{len(ud_bytes):02X}"
-        ud_hex = ud_bytes.hex().upper()
-
-        # Build TPDU (everything after SCA)
-        tpdu = pdu_type + mr + addr_len + type_byte + encoded_number + pid + dcs + ud_len + ud_hex
-
-        # Full PDU = SCA + TPDU
-        full_pdu = sca + tpdu
-
-        # TPDU length in octets (bytes) = len(tpdu) / 2
-        tpdu_len = len(tpdu) // 2
-
-        return full_pdu, tpdu_len
-
     async def send_sms(self, number: str, text: str) -> Tuple[bool, Optional[str]]:
-        """Send SMS. Uses text mode + UCS2 charset for Cyrillic, plain text mode for ASCII."""
+        """Send SMS. Uses CSCS=UCS2 for Cyrillic, plain text mode for ASCII."""
         logger.info(f"📱 Отправляем SMS на {number}...")
 
         if self.mock_mode:
@@ -585,19 +514,21 @@ class GSMService:
                 return False, str(e)
 
     def _serial_send_sms_text(self, number: str, text: str) -> bool:
-        """Send SMS in text mode (ASCII only). Runs in executor."""
+        """Send SMS in text mode (ASCII/GSM7 only). Runs in executor."""
+        import time
+
         assert self._serial is not None
         self._serial.reset_input_buffer()
 
-        # Switch to text mode
+        # Ensure text mode + GSM charset
         self._serial.write(b"AT+CMGF=1\r\n")
-        _time.sleep(0.3)
+        time.sleep(0.3)
         self._serial.reset_input_buffer()
 
         self._serial.write(f'AT+CMGS="{number}"\r\n'.encode("utf-8"))
 
-        deadline = _time.time() + 5
-        while _time.time() < deadline:
+        deadline = time.time() + 5
+        while time.time() < deadline:
             raw = self._serial.readline()
             if b">" in raw:
                 break
@@ -606,8 +537,8 @@ class GSMService:
 
         self._serial.write((text + chr(26)).encode("utf-8"))
 
-        deadline = _time.time() + 30
-        while _time.time() < deadline:
+        deadline = time.time() + 30
+        while time.time() < deadline:
             raw = self._serial.readline()
             line = raw.decode("utf-8", errors="ignore").strip()
             if "OK" in line or "+CMGS:" in line:
@@ -618,213 +549,62 @@ class GSMService:
         return False
 
     def _serial_send_sms_ucs2(self, number: str, text: str) -> bool:
-        """Send SMS in text mode with UCS2 charset (for Cyrillic/CJK). Runs in executor."""
+        """Send SMS in text mode + UCS2 charset (for Cyrillic/CJK). Runs in executor."""
+        import time
+
         assert self._serial is not None
         self._serial.reset_input_buffer()
 
-        # Switch to text mode
+        # Text mode
         self._serial.write(b"AT+CMGF=1\r\n")
-        _time.sleep(0.3)
+        time.sleep(0.3)
         self._serial.reset_input_buffer()
 
-        # Set UCS2 character set
+        # Switch to UCS2 charset
         self._serial.write(b'AT+CSCS="UCS2"\r\n')
-        _time.sleep(0.3)
+        time.sleep(0.3)
         self._serial.reset_input_buffer()
 
-        # Encode phone number as UCS2 hex: "+79..." → "002B0037003900..."
-        ucs2_number = number.encode("utf-16-be").hex().upper()
-        logger.info(f"📱 UCS2 number: {ucs2_number}")
+        # Phone number in plain ASCII (NOT UCS2-encoded)
+        self._serial.write(f'AT+CMGS="{number}"\r\n'.encode("utf-8"))
 
-        self._serial.write(f'AT+CMGS="{ucs2_number}"\r\n'.encode("utf-8"))
-
-        deadline = _time.time() + 5
-        while _time.time() < deadline:
+        deadline = time.time() + 5
+        while time.time() < deadline:
             raw = self._serial.readline()
-            line = raw.decode("utf-8", errors="ignore").strip()
-            logger.debug(f"📱 CMGS response: {line!r}")
             if b">" in raw:
                 break
         else:
-            logger.error("UCS2 SMS: no '>' prompt received")
-            # Reset charset back to GSM
+            logger.error("UCS2 SMS: no '>' prompt")
             self._serial.write(b'AT+CSCS="GSM"\r\n')
-            _time.sleep(0.2)
+            time.sleep(0.2)
             return False
 
         # Encode text as UCS2 hex: "Тест" → "0422043504410442"
-        ucs2_text = text.encode("utf-16-be").hex().upper()
-        logger.info(f"📱 UCS2 text ({len(ucs2_text)} hex chars): {ucs2_text[:40]}...")
+        ucs2_hex = text.encode("utf-16-be").hex().upper()
+        logger.info(f"📱 UCS2 hex ({len(ucs2_hex)} chars): {ucs2_hex[:60]}...")
 
-        # Send UCS2-encoded text + Ctrl+Z
-        self._serial.write((ucs2_text + chr(26)).encode("utf-8"))
+        self._serial.write((ucs2_hex + chr(26)).encode("utf-8"))
 
-        deadline = _time.time() + 30
-        while _time.time() < deadline:
+        deadline = time.time() + 30
+        while time.time() < deadline:
             raw = self._serial.readline()
             line = raw.decode("utf-8", errors="ignore").strip()
-            if line:
-                logger.debug(f"📱 Send response: {line!r}")
             if "+CMGS:" in line or "OK" in line:
-                # Reset charset back to GSM
                 self._serial.write(b'AT+CSCS="GSM"\r\n')
-                _time.sleep(0.2)
+                time.sleep(0.2)
                 return True
             if "ERROR" in line or "+CMS ERROR" in line:
                 logger.error(f"UCS2 SMS error: {line}")
                 self._serial.write(b'AT+CSCS="GSM"\r\n')
-                _time.sleep(0.2)
+                time.sleep(0.2)
                 return False
 
-        # Timeout — reset charset
         self._serial.write(b'AT+CSCS="GSM"\r\n')
-        _time.sleep(0.2)
+        time.sleep(0.2)
         return False
-
-    def _serial_send_sms_pdu(self, pdu_hex: str, tpdu_len: int) -> bool:
-        """Send SMS in PDU mode (UCS2 for Cyrillic). Runs in executor."""
-        assert self._serial is not None
-        self._serial.reset_input_buffer()
-
-        # Ensure PDU mode
-        self._serial.write(b"AT+CMGF=0\r\n")
-        _time.sleep(0.3)
-        self._serial.reset_input_buffer()
-
-        # Send AT+CMGS=<tpdu_length>
-        self._serial.write(f"AT+CMGS={tpdu_len}\r\n".encode("utf-8"))
-
-        deadline = _time.time() + 5
-        while _time.time() < deadline:
-            raw = self._serial.readline()
-            if b">" in raw:
-                break
-        else:
-            logger.error("PDU SMS: no '>' prompt received")
-            return False
-
-        # Send PDU hex + Ctrl+Z
-        self._serial.write((pdu_hex + chr(26)).encode("utf-8"))
-
-        deadline = _time.time() + 30
-        while _time.time() < deadline:
-            raw = self._serial.readline()
-            line = raw.decode("utf-8", errors="ignore").strip()
-            if "+CMGS:" in line or "OK" in line:
-                return True
-            if "ERROR" in line or "+CMS ERROR" in line:
-                logger.error(f"PDU SMS error: {line}")
-                return False
-
-        return False
-
-    @staticmethod
-    def _unpack_gsm7(data: bytes, num_chars: int) -> str:
-        """Unpack GSM 7-bit packed data into a string."""
-        result = []
-        bit_pos = 0
-        for _ in range(num_chars):
-            byte_idx = bit_pos // 8
-            bit_shift = bit_pos % 8
-            if byte_idx >= len(data):
-                break
-            if bit_shift <= 1:
-                char_code = (data[byte_idx] >> bit_shift) & 0x7F
-            else:
-                char_code = data[byte_idx] >> bit_shift
-                if byte_idx + 1 < len(data):
-                    char_code |= data[byte_idx + 1] << (8 - bit_shift)
-                char_code &= 0x7F
-            bit_pos += 7
-            if 0 <= char_code < len(GSMService._GSM7_DECODE_TABLE):
-                result.append(GSMService._GSM7_DECODE_TABLE[char_code])
-            else:
-                result.append("?")
-        return "".join(result)
-
-    @staticmethod
-    def _decode_sms_pdu(pdu_hex: str) -> Dict:
-        """
-        Decode an SMS-DELIVER PDU hex string.
-        Returns dict with 'number', 'text', and optionally 'timestamp'.
-        """
-        data = bytes.fromhex(pdu_hex)
-        pos = 0
-
-        # SCA (Service Center Address) — skip
-        sca_len = data[pos]
-        pos += 1 + sca_len
-
-        # PDU type byte
-        pos += 1
-
-        # Originating Address — number of digits
-        oa_digit_count = data[pos]
-        pos += 1
-        oa_type = data[pos]
-        pos += 1
-
-        # Decode phone number (BCD swap-nibble)
-        oa_byte_count = (oa_digit_count + 1) // 2
-        number_digits = ""
-        for b in data[pos : pos + oa_byte_count]:
-            lo = b & 0x0F
-            hi = (b >> 4) & 0x0F
-            number_digits += str(lo)
-            if hi != 0x0F:
-                number_digits += str(hi)
-        number = ("+" if oa_type == 0x91 else "") + number_digits
-        pos += oa_byte_count
-
-        # PID
-        pos += 1
-
-        # DCS (Data Coding Scheme)
-        dcs = data[pos]
-        pos += 1
-
-        # SCTS — 7 bytes BCD timestamp
-        scts = data[pos : pos + 7]
-        pos += 7
-
-        def bcd_byte(b: int) -> int:
-            return (b & 0x0F) * 10 + ((b >> 4) & 0x0F)
-
-        try:
-            timestamp = datetime(
-                2000 + bcd_byte(scts[0]),
-                bcd_byte(scts[1]),
-                bcd_byte(scts[2]),
-                bcd_byte(scts[3]),
-                bcd_byte(scts[4]),
-                bcd_byte(scts[5]),
-            ).isoformat()
-        except Exception:
-            timestamp = None
-
-        # UDL (User Data Length)
-        udl = data[pos]
-        pos += 1
-
-        # UD (User Data)
-        ud_bytes = data[pos:]
-
-        # Decode based on DCS bits 3-2 (encoding)
-        encoding_bits = (dcs >> 2) & 0x03
-        if encoding_bits == 2:  # UCS2
-            text = ud_bytes[:udl].decode("utf-16-be", errors="replace")
-        elif encoding_bits == 0:  # GSM 7-bit
-            text = GSMService._unpack_gsm7(ud_bytes, udl)
-        else:  # 8-bit or other
-            text = ud_bytes[:udl].decode("latin-1", errors="replace")
-
-        result: Dict = {"number": number, "text": text}
-        if timestamp:
-            result["timestamp"] = timestamp
-        return result
 
     async def list_sms_from_modem(self, status: str = "ALL") -> List[Dict]:
-        """List SMS stored on modem (text mode). Returns parsed list."""
+        """List SMS stored on modem. Returns parsed list."""
         ok, lines = await self.execute_at(f'AT+CMGL="{status}"', timeout=10.0)
         if not ok:
             return []
@@ -994,48 +774,29 @@ class GSMService:
         return None
 
     async def read_sms(self, index: int) -> Optional[Dict]:
-        """Read single SMS by index from SIM storage (PDU mode)."""
-        await self.execute_at("AT+CMGF=0")
+        """Read single SMS by index from SIM storage."""
         ok, lines = await self.execute_at(f"AT+CMGR={index}", timeout=5.0)
         if not ok or not lines:
             return None
 
         for i, ln in enumerate(lines):
             if ln.startswith("+CMGR:"):
-                if i + 1 < len(lines) and lines[i + 1] not in ("OK", ""):
-                    pdu_hex = lines[i + 1].strip()
-                    try:
-                        msg = self._decode_sms_pdu(pdu_hex)
-                        msg["index"] = index
-                        return msg
-                    except Exception as e:
-                        logger.warning(f"Failed to decode PDU at index {index}: {e}")
-                break
+                text = lines[i + 1] if i + 1 < len(lines) and lines[i + 1] != "OK" else ""
+                sender_match = re.search(r'"(\+?[0-9]+)"', ln)
+                sender = sender_match.group(1) if sender_match else "unknown"
+                return {
+                    "index": index,
+                    "sender": sender,
+                    "text": text,
+                    "raw_header": ln,
+                }
         return None
 
     async def read_all_sms(self) -> List[Dict]:
-        """Read all SMS from SIM. Uses PDU mode for proper Cyrillic decoding."""
+        """Read all SMS from SIM. Uses text mode listing."""
+        await self.execute_at("AT+CMGF=1")
+        messages = await self.list_sms_from_modem("ALL")
         await self.execute_at("AT+CMGF=0")
-        # 4 = "ALL" in PDU mode
-        ok, lines = await self.execute_at("AT+CMGL=4", timeout=10.0)
-        if not ok:
-            return []
-
-        messages: List[Dict] = []
-        i = 0
-        while i < len(lines):
-            if lines[i].startswith("+CMGL:"):
-                if i + 1 < len(lines) and lines[i + 1] not in ("OK", ""):
-                    pdu_hex = lines[i + 1].strip()
-                    try:
-                        msg = self._decode_sms_pdu(pdu_hex)
-                        messages.append(msg)
-                    except Exception as e:
-                        logger.warning(f"Failed to decode PDU: {e}")
-                i += 2
-            else:
-                i += 1
-
         return messages
 
     async def delete_sms(self, index: int) -> bool:
