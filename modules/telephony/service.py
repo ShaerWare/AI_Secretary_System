@@ -87,6 +87,36 @@ class GSMService:
             repo = GSMSMSLogRepository(session)
             return await repo.count_sms()
 
+    async def get_conversations(self, limit: int = 50, offset: int = 0) -> List[dict]:
+        """Get SMS conversations grouped by phone number."""
+        async with AsyncSessionLocal() as session:
+            repo = GSMSMSLogRepository(session)
+            return await repo.get_conversations(limit, offset)
+
+    async def count_conversations(self) -> int:
+        """Count unique conversation threads."""
+        async with AsyncSessionLocal() as session:
+            repo = GSMSMSLogRepository(session)
+            return await repo.count_conversations()
+
+    async def get_messages_by_number(
+        self, number: str, limit: int = 100, offset: int = 0
+    ) -> List[dict]:
+        """Get SMS messages for a specific phone number."""
+        async with AsyncSessionLocal() as session:
+            repo = GSMSMSLogRepository(session)
+            messages = await repo.get_messages_by_number(number, limit, offset)
+            return [m.to_dict() for m in messages]
+
+    async def get_calls_by_number(
+        self, number: str, limit: int = 50, offset: int = 0
+    ) -> List[dict]:
+        """Get calls for a specific phone number."""
+        async with AsyncSessionLocal() as session:
+            repo = GSMCallLogRepository(session)
+            calls = await repo.get_calls_by_number(number, limit, offset)
+            return [c.to_dict() for c in calls]
+
 
 # Singleton
 gsm_service = GSMService()

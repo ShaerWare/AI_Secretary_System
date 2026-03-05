@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { GitBranch, Plus, X, Trash2 } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
@@ -24,6 +24,29 @@ const { t } = useI18n()
 const deleteMode = ref(false)
 const selectedForDelete = ref(new Set<string>())
 
+// ── nodeMap: quick lookup by id → { node, parentId } ──
+interface NodeEntry {
+  node: BranchNode
+  parentId: string | null
+}
+const nodeMap = ref<Record<string, NodeEntry>>({})
+
+watch(
+  () => props.branches,
+  (roots) => {
+    const map: Record<string, NodeEntry> = {}
+    function walk(nodes: BranchNode[], parentId: string | null) {
+      for (const n of nodes) {
+        map[n.id] = { node: n, parentId }
+        if (n.children?.length) walk(n.children, n.id)
+      }
+    }
+    walk(roots, null)
+    nodeMap.value = map
+  },
+  { immediate: true, deep: true },
+)
+
 function toggleDeleteMode() {
   deleteMode.value = !deleteMode.value
   if (!deleteMode.value) {
@@ -38,16 +61,70 @@ function cancelDeleteMode() {
 
 function toggleSelect(messageId: string) {
   const s = new Set(selectedForDelete.value)
-  if (s.has(messageId)) {
-    s.delete(messageId)
+  const entry = nodeMap.value[messageId]
+  if (!entry) return
+
+  const selecting = !s.has(messageId)
+
+  if (entry.node.role === 'user') {
+    // User message: toggle self + all direct assistant children
+    const targets = [messageId]
+    for (const child of entry.node.children ?? []) {
+      if (child.role === 'assistant') targets.push(child.id)
+    }
+    for (const id of targets) {
+      if (selecting) s.add(id)
+      else s.delete(id)
+    }
+  } else if (entry.node.role === 'assistant' && entry.parentId) {
+    // Assistant message: toggle parent user + all sibling assistants
+    const parent = nodeMap.value[entry.parentId]
+    if (parent && parent.node.role === 'user') {
+      const targets = [entry.parentId]
+      for (const child of parent.node.children ?? []) {
+        if (child.role === 'assistant') targets.push(child.id)
+      }
+      for (const id of targets) {
+        if (selecting) s.add(id)
+        else s.delete(id)
+      }
+    } else {
+      // Parent is not user — toggle only self
+      if (selecting) s.add(messageId)
+      else s.delete(messageId)
+    }
   } else {
-    s.add(messageId)
+    // System or orphan — toggle only self
+    if (selecting) s.add(messageId)
+    else s.delete(messageId)
   }
+
   selectedForDelete.value = s
 }
 
+// Count unique pairs for display (user messages count as the pair unit)
+const selectedPairCount = computed(() => {
+  let count = 0
+  for (const id of selectedForDelete.value) {
+    const entry = nodeMap.value[id]
+    if (!entry) { count++; continue }
+    // Count user messages, and assistant/system only if their parent is not selected
+    if (entry.node.role === 'user') {
+      count++
+    } else if (!entry.parentId || !selectedForDelete.value.has(entry.parentId)) {
+      count++
+    }
+  }
+  return count
+})
+
 function confirmDeleteSelected() {
-  const ids = Array.from(selectedForDelete.value)
+  if (selectedForDelete.value.size === 0) return
+  // Filter to root IDs only — backend cascades descendants
+  const ids = Array.from(selectedForDelete.value).filter((id) => {
+    const entry = nodeMap.value[id]
+    return !entry?.parentId || !selectedForDelete.value.has(entry.parentId)
+  })
   if (ids.length === 0) return
   emit('delete-branches', ids)
   cancelDeleteMode()
@@ -198,7 +275,7 @@ onUnmounted(() => {
         :disabled="selectedForDelete.size === 0"
         @click="confirmDeleteSelected"
       >
-        {{ t('chatView.deleteSelectedN', { n: selectedForDelete.size }) }}
+        {{ t('chatView.deleteSelectedN', { n: selectedPairCount }) }}
       </button>
       <button
         class="px-2 py-1.5 text-xs rounded border border-border hover:bg-secondary transition-colors"

@@ -75,7 +75,8 @@ import {
   Maximize2,
   Minimize2,
   Globe,
-  Server
+  Server,
+  Search
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -111,6 +112,7 @@ const currentSessionId = ref<string | null>(null)
 const inputMessage = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
+const searchingQuery = ref<string | null>(null)
 const pendingUserContent = ref<string | null>(null)
 const summarizingMessageId = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
@@ -987,13 +989,18 @@ function sendMessage() {
   } : undefined
 
   const stream = chatApi.streamMessage(currentSessionId.value, content, (data) => {
-    if (data.type === 'chunk' && data.content) {
+    if (data.type === 'tool_start') {
+      searchingQuery.value = data.query || ''
+    } else if (data.type === 'tool_end') {
+      searchingQuery.value = null
+    } else if (data.type === 'chunk' && data.content) {
       streamingContent.value += data.content
       fullContent += data.content
       if (isNearBottom()) scrollToBottom()
     } else if (data.type === 'done' || data.type === 'assistant_message') {
       isStreaming.value = false
       pendingUserContent.value = null
+      searchingQuery.value = null
       const responseText = fullContent || streamingContent.value
       streamingContent.value = ''
 
@@ -1023,6 +1030,7 @@ function sendMessage() {
     } else if (data.type === 'error') {
       isStreaming.value = false
       pendingUserContent.value = null
+      searchingQuery.value = null
       streamingContent.value = ''
       console.error('Stream error:', data.content)
       // Refetch to show user message that was already saved to DB
@@ -3194,6 +3202,10 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             </div>
             <div class="claude-message-content">
               <div class="chat-markdown break-words" v-html="renderMarkdown(streamingContent)"></div>
+              <div v-if="searchingQuery !== null" class="flex items-center gap-2 text-xs text-muted-foreground mt-2 px-1">
+                <Search class="w-3 h-3 animate-pulse" />
+                <span>{{ t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
+              </div>
             </div>
           </div>
 
@@ -3202,10 +3214,16 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             <div class="claude-avatar claude-avatar-assistant">
               <Bot class="w-3.5 h-3.5" />
             </div>
-            <div class="claude-message-content flex items-center gap-1.5">
-              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:0ms]"></span>
-              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:150ms]"></span>
-              <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
+            <div class="claude-message-content">
+              <div v-if="searchingQuery !== null" class="flex items-center gap-2 text-xs text-muted-foreground px-1">
+                <Search class="w-3 h-3 animate-pulse" />
+                <span>{{ t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
+              </div>
+              <div v-else class="flex items-center gap-1.5">
+                <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:0ms]"></span>
+                <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:150ms]"></span>
+                <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
+              </div>
             </div>
           </div>
         </template>

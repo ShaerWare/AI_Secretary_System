@@ -224,6 +224,8 @@ class VLLMLLMService:
     - Несколько персон секретарей (Анна, Марина)
     """
 
+    supports_tools: bool = True
+
     def __init__(
         self,
         api_url: Optional[str] = None,
@@ -607,17 +609,127 @@ class VLLMLLMService:
             logger.error(f"❌ Ошибка streaming генерации: {e}")
             yield "Извините, возникла техническая проблема."
 
-    def generate_response_from_messages(self, messages: List[Dict[str, str]], stream: bool = False):
+    def generate_response_from_messages(
+        self,
+        messages: List[Dict[str, str]],
+        stream: bool = False,
+        tools: Optional[List[Dict]] = None,
+    ):
         """
         Генерирует ответ на основе списка сообщений OpenAI формата.
         Совместимо с форматом orchestrator.py.
         """
+        # Tool-calling mode
+        if tools:
+            return self.generate_with_tools(messages, tools, stream)
+
         # Для non-streaming используем отдельный метод (избегаем yield в non-stream)
         if not stream:
             return self._generate_response_non_stream(messages)
 
         # Streaming режим - возвращает генератор
         return self._generate_response_stream(messages)
+
+    def generate_with_tools(self, messages: List[Dict], tools: List[Dict], stream: bool = False):
+        """Generate response with tool-calling support (vLLM OpenAI API)."""
+        has_system = any(m.get("role") == "system" for m in messages)
+        if not has_system:
+            final_messages = [{"role": "system", "content": self.system_prompt}]
+            final_messages.extend(messages)
+        else:
+            final_messages = list(messages)
+
+        payload = {
+            "model": self.model_name,
+            "messages": final_messages,
+            "max_tokens": self.runtime_params.get("max_tokens", 512),
+            "temperature": self.runtime_params.get("temperature", 0.7),
+            "top_p": self.runtime_params.get("top_p", 0.9),
+            "tools": tools,
+            "tool_choice": "auto",
+            "stream": stream,
+        }
+
+        if stream:
+            return self._stream_with_tools(payload)
+        return self._non_stream_with_tools(payload)
+
+    def _non_stream_with_tools(self, payload: dict):
+        """Non-stream generation with tools. Returns str or dict with tool_calls."""
+        try:
+            response = self.client.post(f"{self.api_url}/v1/chat/completions", json=payload)
+            response.raise_for_status()
+            result = response.json()
+            message = result["choices"][0]["message"]
+            tool_calls = message.get("tool_calls")
+            if tool_calls:
+                return message  # dict with role, content, tool_calls
+            return (message.get("content") or "").strip()
+        except httpx.ConnectError:
+            logger.error("vLLM недоступен")
+            return "Извините, сервис временно недоступен."
+        except Exception as e:
+            logger.error(f"Ошибка генерации с tools: {e}")
+            return "Извините, возникла техническая проблема."
+
+    def _stream_with_tools(self, payload: dict) -> Generator:
+        """Stream generation with tools. Yields typed dicts."""
+        try:
+            with self.client.stream(
+                "POST", f"{self.api_url}/v1/chat/completions", json=payload
+            ) as response:
+                response.raise_for_status()
+
+                tool_calls_acc: Dict[int, dict] = {}
+                has_tool_calls = False
+
+                for line in response.iter_lines():
+                    if line.startswith("data: "):
+                        data = line[6:]
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                            delta = chunk["choices"][0].get("delta", {})
+
+                            content = delta.get("content")
+                            if content:
+                                yield {"type": "content", "content": content}
+
+                            tc_deltas = delta.get("tool_calls")
+                            if tc_deltas:
+                                has_tool_calls = True
+                                for tc in tc_deltas:
+                                    idx = tc.get("index", 0)
+                                    if idx not in tool_calls_acc:
+                                        tool_calls_acc[idx] = {
+                                            "id": tc.get("id", ""),
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    acc = tool_calls_acc[idx]
+                                    if tc.get("id"):
+                                        acc["id"] = tc["id"]
+                                    fn = tc.get("function", {})
+                                    if fn.get("name"):
+                                        acc["function"]["name"] = fn["name"]
+                                    if fn.get("arguments"):
+                                        acc["function"]["arguments"] += fn["arguments"]
+                        except json.JSONDecodeError:
+                            continue
+
+                if has_tool_calls and tool_calls_acc:
+                    yield {
+                        "type": "tool_calls",
+                        "tool_calls": [tool_calls_acc[i] for i in sorted(tool_calls_acc)],
+                    }
+
+        except httpx.ConnectError:
+            logger.error("vLLM недоступен")
+            yield {"type": "content", "content": "Извините, сервис временно недоступен."}
+        except Exception as e:
+            logger.error(f"Ошибка streaming с tools: {e}")
+            yield {"type": "content", "content": "Извините, возникла техническая проблема."}
 
     def _generate_response_non_stream(self, messages: List[Dict[str, str]]) -> str:
         """Non-streaming генерация ответа"""

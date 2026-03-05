@@ -120,6 +120,8 @@ PROVIDER_TYPES = {
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
+    supports_tools: bool = False
+
     def __init__(self, config: dict):
         self.config = config
         self.api_key = config.get("api_key", "")
@@ -182,6 +184,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
     *Note: Claude has its own API format, but can be used via OpenAI-compatible proxy.
     """
+
+    supports_tools: bool = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -296,8 +300,142 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             return self._generate_stream(messages)
         return self._generate_non_stream(messages)
 
-    def _build_request_json(self, model: str, messages: List[Dict[str, str]], stream: bool) -> dict:
-        return {
+    def generate_with_tools(
+        self, messages: List[Dict], tools: List[Dict], stream: bool = False
+    ) -> Union[dict, str, Generator]:
+        """Generate response with tool-calling support.
+
+        Non-stream: returns str (text) or dict with tool_calls.
+        Stream: yields dicts {"type": "content", "content": "..."} or
+                {"type": "tool_calls", "tool_calls": [...]}.
+        """
+        if stream:
+            return self._generate_stream_with_tools(messages, tools)
+        return self._generate_non_stream_with_tools(messages, tools)
+
+    def _generate_non_stream_with_tools(self, messages: List[Dict], tools: List[Dict]):
+        """Non-stream generation with tools. Returns str or dict with tool_calls."""
+        last_error_msg = "Извините, произошла техническая ошибка."
+
+        for model in self._model_chain:
+            try:
+                response = self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self._get_headers(),
+                    json=self._build_request_json(model, messages, stream=False, tools=tools),
+                )
+                response.raise_for_status()
+                result = response.json()
+                message = result["choices"][0]["message"]
+                tool_calls = message.get("tool_calls")
+                if tool_calls:
+                    return message  # dict with role, content, tool_calls
+                return (message.get("content") or "").strip()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                logger.warning(
+                    f"[{self.provider_id}] Model '{model}' tools failed: "
+                    f"HTTP {status} - {e.response.text[:200]}"
+                )
+                if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
+                    continue
+                last_error_msg = f"Error: HTTP {status}"
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.warning(f"[{self.provider_id}] Model '{model}' timeout/connect: {e}")
+                if model != self._model_chain[-1]:
+                    continue
+                last_error_msg = "Извините, произошла техническая ошибка."
+            except Exception as e:
+                logger.error(f"[{self.provider_id}] Error with model '{model}': {e}")
+                last_error_msg = "Извините, произошла техническая ошибка."
+                break
+
+        return last_error_msg
+
+    def _generate_stream_with_tools(self, messages: List[Dict], tools: List[Dict]) -> Generator:
+        """Stream generation with tools. Yields typed dicts."""
+        for model in self._model_chain:
+            try:
+                with self.client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._get_headers(),
+                    json=self._build_request_json(model, messages, stream=True, tools=tools),
+                ) as response:
+                    response.raise_for_status()
+
+                    # Accumulate tool_calls from delta chunks
+                    tool_calls_acc: Dict[int, dict] = {}
+                    has_tool_calls = False
+
+                    for line in response.iter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                delta = chunk["choices"][0].get("delta", {})
+
+                                # Content chunk
+                                content = delta.get("content")
+                                if content:
+                                    yield {"type": "content", "content": content}
+
+                                # Tool call chunks (streamed incrementally)
+                                tc_deltas = delta.get("tool_calls")
+                                if tc_deltas:
+                                    has_tool_calls = True
+                                    for tc in tc_deltas:
+                                        idx = tc.get("index", 0)
+                                        if idx not in tool_calls_acc:
+                                            tool_calls_acc[idx] = {
+                                                "id": tc.get("id", ""),
+                                                "type": "function",
+                                                "function": {"name": "", "arguments": ""},
+                                            }
+                                        acc = tool_calls_acc[idx]
+                                        if tc.get("id"):
+                                            acc["id"] = tc["id"]
+                                        fn = tc.get("function", {})
+                                        if fn.get("name"):
+                                            acc["function"]["name"] = fn["name"]
+                                        if fn.get("arguments"):
+                                            acc["function"]["arguments"] += fn["arguments"]
+                            except json.JSONDecodeError:
+                                continue
+
+                    # Emit accumulated tool_calls at the end
+                    if has_tool_calls and tool_calls_acc:
+                        yield {
+                            "type": "tool_calls",
+                            "tool_calls": [tool_calls_acc[i] for i in sorted(tool_calls_acc)],
+                        }
+                    return  # Stream completed successfully
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                logger.warning(
+                    f"[{self.provider_id}] Stream tools model '{model}' failed: "
+                    f"HTTP {status} - {e.response.text[:200]}"
+                )
+                if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
+                    continue
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.warning(
+                    f"[{self.provider_id}] Stream tools model '{model}' timeout/connect: {e}"
+                )
+                if model != self._model_chain[-1]:
+                    continue
+            except Exception as e:
+                logger.error(f"[{self.provider_id}] Stream tools error with model '{model}': {e}")
+                break
+
+        yield {"type": "content", "content": "Извините, произошла техническая ошибка."}
+
+    def _build_request_json(
+        self, model: str, messages: List[Dict], stream: bool, tools: Optional[List[Dict]] = None
+    ) -> dict:
+        payload = {
             "model": model,
             "messages": messages,
             "temperature": self.runtime_params.get("temperature", 0.7),
@@ -305,6 +443,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             "top_p": self.runtime_params.get("top_p", 0.9),
             "stream": stream,
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
 
     def _generate_non_stream(self, messages: List[Dict[str, str]]) -> str:
         last_error_msg = "Извините, произошла техническая ошибка."
@@ -777,9 +919,16 @@ class CloudLLMService:
             self.conversation_history.append({"role": "assistant", "content": full_response})
 
     def generate_response_from_messages(
-        self, messages: List[Dict[str, str]], stream: bool = False
+        self,
+        messages: List[Dict[str, str]],
+        stream: bool = False,
+        tools: Optional[List[Dict]] = None,
     ) -> Union[str, Generator[str, None, None]]:
         """Generate response from OpenAI-format messages (compatible with orchestrator)."""
+        # Tool-calling mode: skip FAQ, delegate to provider
+        if tools and getattr(self.provider, "supports_tools", False):
+            return self.provider.generate_with_tools(messages, tools, stream)
+
         # Check FAQ for single-message requests
         user_messages = [m for m in messages if m.get("role") == "user"]
         if len(user_messages) == 1:

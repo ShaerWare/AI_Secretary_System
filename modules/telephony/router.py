@@ -485,6 +485,41 @@ async def clear_modem_sms(
         raise HTTPException(status_code=500, detail="Не удалось очистить SMS")
 
 
+# ============== Conversation Endpoints ==============
+
+
+@router.get("/conversations")
+async def list_conversations(
+    limit: int = 50,
+    offset: int = 0,
+    user: User = Depends(require_permission("gsm", "view")),
+) -> dict:
+    """Список переписок, сгруппированных по номерам."""
+    conversations = await gsm_service.get_conversations(limit=limit, offset=offset)
+    total = await gsm_service.count_conversations()
+    return {
+        "conversations": conversations,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/conversations/{number:path}")
+async def get_conversation(
+    number: str,
+    user: User = Depends(require_permission("gsm", "view")),
+) -> dict:
+    """Полная переписка + звонки для конкретного номера."""
+    messages = await gsm_service.get_messages_by_number(number)
+    calls = await gsm_service.get_calls_by_number(number)
+    return {
+        "number": number,
+        "messages": messages,
+        "calls": calls,
+    }
+
+
 # ============== Debug Endpoints ==============
 
 
