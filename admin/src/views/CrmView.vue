@@ -297,10 +297,6 @@ onMounted(async () => {
     showToast(String(query.error), 'error')
   }
 
-  // Default to kanban tab if connected
-  if (isConnected.value) {
-    activeTab.value = 'kanban'
-  }
 })
 </script>
 
