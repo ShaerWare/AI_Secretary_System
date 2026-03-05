@@ -939,6 +939,7 @@ function sendMessage() {
 
   const content = inputMessage.value.trim()
   inputMessage.value = ''
+  if (messageInputRef.value) messageInputRef.value.style.height = 'auto'
 
   // Show user message immediately (optimistic)
   pendingUserContent.value = content
@@ -1006,6 +1007,7 @@ function ccSendMessage() {
   if (!inputMessage.value.trim() || cc.isProcessing.value) return
   const prompt = inputMessage.value.trim()
   inputMessage.value = ''
+  if (messageInputRef.value) messageInputRef.value.style.height = 'auto'
   cc.sendMessage(prompt)
   nextTick(() => {
     if (messagesContainer.value) {
@@ -1077,6 +1079,19 @@ watch(showCcDirMenu, (open) => {
 function startEditing(message: ChatMessage) {
   editingMessageId.value = message.id
   editingContent.value = message.content
+  nextTick(() => {
+    const ta = document.querySelector('[data-edit-textarea]') as HTMLTextAreaElement | null
+    if (ta) autoResizeTextarea(ta)
+  })
+}
+
+function autoResizeTextarea(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+}
+
+function onInputAutoResize(e: Event) {
+  autoResizeTextarea(e.target as HTMLTextAreaElement)
 }
 
 function cancelEditing() {
@@ -2713,10 +2728,11 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             v-model="inputMessage"
             :placeholder="t('chatView.claudeCode.placeholder')"
             rows="1"
-            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none font-mono text-sm"
+            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none font-mono text-sm max-h-[288px] overflow-y-auto"
             :disabled="cc.isProcessing.value"
             @keydown.enter.exact.prevent="ccSendMessage"
             @keydown.ctrl.enter.prevent="ccSendMessage"
+            @input="onInputAutoResize"
           />
           <!-- Abort button (while processing) -->
           <button
@@ -2769,10 +2785,11 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             v-model="inputMessage"
             :placeholder="isReadOnly ? t('chatView.readOnlyHint') : 'Type a message...'"
             rows="1"
-            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none max-h-[288px] overflow-y-auto"
             :disabled="isStreaming || isRecording || isReadOnly"
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.ctrl.enter.prevent="sendMessage"
+            @input="onInputAutoResize"
           />
           <!-- Microphone button -->
           <button
@@ -2998,9 +3015,12 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
               <div v-if="editingMessageId === message.id" class="space-y-2">
                 <textarea
                   v-model="editingContent"
-                  class="w-full min-h-[80px] p-2 bg-secondary text-foreground rounded resize-none border border-border"
+                  data-edit-textarea
+                  class="w-full min-h-[80px] p-3 bg-secondary text-foreground rounded resize-none border border-border"
+                  style="height: auto; overflow-y: auto;"
                   @keydown.escape="cancelEditing"
                   @keydown.ctrl.enter.prevent="saveEdit"
+                  @input="onInputAutoResize"
                 />
                 <div class="flex gap-2">
                   <button
