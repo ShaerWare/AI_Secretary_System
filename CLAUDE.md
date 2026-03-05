@@ -125,7 +125,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phases 0–2 complete, Phase 3 in progress.
+Foundation layer for modular decomposition (issue #489). Phases 0–2 complete, Phase 3 complete (all 28 routers migrated).
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
@@ -159,7 +159,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Routers (`modules/*/router.py`)
 
-Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2 + 3.3 + 3.4 + 3.5):
+Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain modules. Original files are 1-3 line facade re-exports.
 
 | Domain | Router file | Facade |
 |--------|------------|--------|
@@ -176,6 +176,9 @@ Phase 3 migration: routers move from `app/routers/` to domain modules. Original 
 | `modules/sales/` | `router_bot_sales.py`, `router_yoomoney.py` | `app/routers/bot_sales.py`, `yoomoney_webhook.py` |
 | `modules/core/` | `router_auth.py`, `router_roles.py`, `router_workspace.py` | `app/routers/auth.py`, `roles.py`, `workspace.py` |
 | `modules/admin/` | `router_backup.py`, `router_legal.py`, `router_github_webhook.py` | `app/routers/backup.py`, `legal.py`, `github_webhook.py` |
+| `modules/monitoring/` | `router_audit.py`, `router_usage.py`, `router_monitor.py` | `app/routers/audit.py`, `usage.py`, `monitor.py` |
+| `modules/chat/` | `router.py` | `app/routers/chat.py` |
+| `modules/llm/` | `router.py` | `app/routers/llm.py` |
 
 New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade.
 
