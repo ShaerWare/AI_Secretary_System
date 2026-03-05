@@ -372,6 +372,38 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 3.4: Роутеры — channels + sales
+
+> **Статус:** реализовано (PR [#530](https://github.com/ShaerWare/AI_Secretary_System/pull/530), issue [#511](https://github.com/ShaerWare/AI_Secretary_System/issues/511))
+
+5 роутеров каналов и продаж перенесены в доменные модули. Все импорты из `db.integration` заменены на прямые импорты из доменных сервисов. Оригинальные файлы стали 1-строчными фасадами.
+
+| Старый файл | Новый файл | Ключевые изменения |
+|---|---|---|
+| `app/routers/telegram.py` (1031 строк) | `modules/channels/telegram/router.py` | 6 db.integration → domain imports |
+| `app/routers/whatsapp.py` (488 строк) | `modules/channels/whatsapp/router.py` | 3 db.integration → domain imports |
+| `app/routers/widget.py` (434 строк) | `modules/channels/widget/router.py` | 4 db.integration → domain imports |
+| `app/routers/bot_sales.py` (1003 строк) | `modules/sales/router_bot_sales.py` | 2 db.integration → domain imports |
+| `app/routers/yoomoney_webhook.py` (119 строк) | `modules/sales/router_yoomoney.py` | 1 db.integration → domain import |
+
+Замены импортов:
+- `async_audit_logger` → `audit_service` из `modules.monitoring.service`
+- `async_bot_instance_manager` → `bot_instance_service` из `modules.channels.telegram.service`
+- `async_config_manager` → `config_service` из `modules.core.service`
+- `async_payment_manager` → `payment_service` из `modules.monitoring.service`
+- `async_resource_share_manager` → `resource_share_service` из `modules.admin.service`
+- `async_telegram_manager` → `telegram_session_service` из `modules.channels.telegram.service`
+- `async_whatsapp_instance_manager` → `whatsapp_instance_service` из `modules.channels.whatsapp.service`
+- `async_widget_instance_manager` → `widget_instance_service` из `modules.channels.widget.service`
+
+Нюансы:
+- **bot_sales.py** — 13 прямых импортов из `db.repositories.*` оставлены как есть (не `db.integration`, вне скоупа Phase 3)
+- **yoomoney_webhook.py** — 1 прямой импорт `BotInstanceRepository` оставлен как есть
+- **Lazy imports** (`app.services.yoomoney_service`, `fastapi.responses.HTMLResponse`) оставлены lazy
+- **Non-db imports** (`multi_bot_manager`, `whatsapp_manager`, `app.cors_middleware`) оставлены без изменений
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -398,7 +430,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511–#514) |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512–#514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |

@@ -1908,7 +1908,7 @@ pip install zipfile36  # или стандартный zipfile
   db/integration.py        # Backward-compat facade (re-imports singletons from modules/)
   db/repositories/         # Data access layer
   modules/*/service.py     # Domain services (31 classes)
-  modules/*/router.py      # Domain routers (11 migrated so far)
+  modules/*/router.py      # Domain routers (16 migrated so far)
   scripts/migrate_json_to_db.py
   scripts/test_db.py
   scripts/setup_db.sh
