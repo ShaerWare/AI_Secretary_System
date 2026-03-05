@@ -404,6 +404,36 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 3.5: Роутеры — core + admin
+
+> **Статус:** реализовано (PR [#532](https://github.com/ShaerWare/AI_Secretary_System/pull/532), issue [#512](https://github.com/ShaerWare/AI_Secretary_System/issues/512))
+
+6 роутеров core/admin перенесены в доменные модули. Все импорты из `db.integration` заменены на прямые импорты из доменных сервисов. Оригинальные файлы стали 1-строчными фасадами.
+
+| Старый файл | Новый файл | Ключевые изменения |
+|---|---|---|
+| `app/routers/auth.py` (182 строки) | `modules/core/router_auth.py` | 3 db.integration → domain imports |
+| `app/routers/roles.py` (139 строк) | `modules/core/router_roles.py` | 2 db.integration → domain imports |
+| `app/routers/workspace.py` (273 строки) | `modules/core/router_workspace.py` | 4 db.integration → domain imports |
+| `app/routers/backup.py` (189 строк) | `modules/admin/router_backup.py` | Чистый перенос (0 db.integration imports) |
+| `app/routers/legal.py` (637 строк) | `modules/admin/router_legal.py` | 1 inline db.integration → domain import |
+| `app/routers/github_webhook.py` (317 строк) | `modules/admin/router_github_webhook.py` | 1 inline db.integration → domain import |
+
+Замены импортов:
+- `async_audit_logger` → `audit_service` из `modules.monitoring.service`
+- `async_session_manager` → `user_session_service` из `modules.core.service`
+- `async_user_manager` → `user_service` из `modules.core.service`
+- `async_role_manager` → `role_service` из `modules.core.service`
+- `async_workspace_manager` → `workspace_service` из `modules.core.service`
+- `async_kanban_project_manager` → `kanban_project_service` из `modules.kanban.service`
+
+Нюансы:
+- **backup.py** — 0 импортов из `db.integration`, использует `app.services.backup_service` — чистый перенос без изменений
+- **legal.py** — 1 inline `from db.integration import async_audit_logger` внутри `admin_gdpr_delete_data`, заменён на `from modules.monitoring.service import audit_service`
+- **github_webhook.py** — 1 inline `from db.integration import async_kanban_project_manager` внутри `_handle_issue_event`, заменён на `from modules.kanban.service import kanban_project_service`
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -430,7 +460,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512–#514) |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513–#514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |

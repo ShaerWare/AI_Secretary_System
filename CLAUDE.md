@@ -159,7 +159,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Routers (`modules/*/router.py`)
 
-Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2 + 3.3 + 3.4):
+Phase 3 migration: routers move from `app/routers/` to domain modules. Original files become 1-3 line facades. Completed so far (Phase 3.2 + 3.3 + 3.4 + 3.5):
 
 | Domain | Router file | Facade |
 |--------|------------|--------|
@@ -174,6 +174,8 @@ Phase 3 migration: routers move from `app/routers/` to domain modules. Original 
 | `modules/channels/whatsapp/` | `router.py` | `app/routers/whatsapp.py` |
 | `modules/channels/widget/` | `router.py` | `app/routers/widget.py` |
 | `modules/sales/` | `router_bot_sales.py`, `router_yoomoney.py` | `app/routers/bot_sales.py`, `yoomoney_webhook.py` |
+| `modules/core/` | `router_auth.py`, `router_roles.py`, `router_workspace.py` | `app/routers/auth.py`, `roles.py`, `workspace.py` |
+| `modules/admin/` | `router_backup.py`, `router_legal.py`, `router_github_webhook.py` | `app/routers/backup.py`, `legal.py`, `github_webhook.py` |
 
 New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade.
 
