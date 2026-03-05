@@ -25,6 +25,8 @@ export interface GSMStatus {
   audio_port: string
   module_info?: string | null
   last_error?: string | null
+  mock_mode?: boolean
+  network_mode?: string | null
 }
 
 export interface GSMConfig {
@@ -162,6 +164,18 @@ export const gsmApi = {
 
   sendSMS: (number: string, text: string) =>
     api.post<{ status: string; message: string }>('/admin/gsm/sms', { number, text }),
+
+  readModemSMS: () =>
+    api.post<{ status: string; count: number; messages: SMSMessage[] }>(
+      '/admin/gsm/sms/read-modem',
+    ),
+
+  clearModemSMS: () =>
+    api.post<{ status: string; message: string }>('/admin/gsm/sms/clear-modem'),
+
+  // DTMF
+  sendDTMF: (digits: string) =>
+    api.post<{ status: string; message: string }>('/admin/gsm/dtmf', { digits }),
 
   // Debug
   executeAT: (command: string, timeout = 5.0) =>

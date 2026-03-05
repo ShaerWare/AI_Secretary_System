@@ -63,6 +63,7 @@ class GSMStatus(BaseModel):
     module_info: Optional[str] = None
     last_error: Optional[str] = None
     mock_mode: bool = False
+    network_mode: Optional[str] = None  # GSM, HSDPA, LTE, etc
 
 
 class GSMConfig(BaseModel):
@@ -171,6 +172,12 @@ class DialRequest(BaseModel):
     number: str
 
 
+class DTMFRequest(BaseModel):
+    """Запрос на отправку DTMF тонов."""
+
+    digits: str
+
+
 # ============== Helpers ==============
 
 
@@ -211,6 +218,7 @@ async def gsm_status(
         module_info=status.module_info,
         last_error=status.last_error,
         mock_mode=status.mock_mode,
+        network_mode=status.network_mode,
     )
 
 
@@ -407,6 +415,74 @@ async def send_sms(
         return {"status": "ok", "message": f"SMS отправлено на {request.number}"}
     else:
         raise HTTPException(status_code=500, detail=error or "Не удалось отправить SMS")
+
+
+# ============== DTMF Endpoint ==============
+
+
+@router.post("/dtmf")
+async def send_dtmf(
+    request: DTMFRequest,
+    gsm_svc=Depends(get_gsm_service),
+    user: User = Depends(require_permission("gsm", "manage")),
+):
+    """Отправить DTMF тоны во время звонка."""
+    gsm = _require_gsm(gsm_svc)
+
+    ok = await gsm.send_dtmf(request.digits)
+    if ok:
+        return {"status": "ok", "message": f"DTMF отправлено: {request.digits}"}
+    else:
+        raise HTTPException(status_code=400, detail="Нет активного звонка или ошибка DTMF")
+
+
+# ============== Modem SMS Endpoints ==============
+
+
+@router.post("/sms/read-modem")
+async def read_modem_sms(
+    gsm_svc=Depends(get_gsm_service),
+    user: User = Depends(require_permission("gsm", "manage")),
+):
+    """Прочитать SMS из памяти модема (SIM-карта)."""
+    gsm = _require_gsm(gsm_svc)
+
+    messages = await gsm.read_all_sms()
+    # Save to DB and delete from SIM
+    saved = []
+    for msg in messages:
+        sms = await gsm_service.create_sms(
+            direction="incoming",
+            number=msg.get("number", "unknown"),
+            text=msg.get("text", ""),
+            status="received",
+        )
+        saved.append(sms)
+
+    # Clean SIM storage to prevent overflow (only 15 slots)
+    if messages:
+        await gsm.delete_all_sms()
+
+    return {
+        "status": "ok",
+        "count": len(saved),
+        "messages": saved,
+    }
+
+
+@router.post("/sms/clear-modem")
+async def clear_modem_sms(
+    gsm_svc=Depends(get_gsm_service),
+    user: User = Depends(require_permission("gsm", "manage")),
+):
+    """Очистить все SMS из памяти модема."""
+    gsm = _require_gsm(gsm_svc)
+
+    ok = await gsm.delete_all_sms()
+    if ok:
+        return {"status": "ok", "message": "SMS на SIM-карте удалены"}
+    else:
+        raise HTTPException(status_code=500, detail="Не удалось очистить SMS")
 
 
 # ============== Debug Endpoints ==============

@@ -1039,10 +1039,11 @@ async def startup_event():
             try:
                 from app.services.gsm_service import GSMService
 
-                gsm_service = GSMService(mock_mode=True)
+                gsm_service = GSMService()
                 await gsm_service.initialize()
                 container.gsm_service = gsm_service
-                logger.info("✅ GSM service initialized (mock mode)")
+                mode = "mock" if gsm_service.mock_mode else "hardware"
+                logger.info(f"✅ GSM service initialized ({mode} mode)")
             except Exception as gsm_err:
                 logger.warning(f"⚠️ GSM service not available: {gsm_err}")
 

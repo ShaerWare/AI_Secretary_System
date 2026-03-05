@@ -24,6 +24,7 @@ import {
   User,
   Save,
   Usb,
+  Download,
 } from 'lucide-vue-next'
 import { ref, computed, watch } from 'vue'
 import { useToastStore } from '@/stores/toast'
@@ -210,6 +211,22 @@ const executeATMutation = useMutation({
   },
 })
 
+const readModemSMSMutation = useMutation({
+  mutationFn: () => gsmApi.readModemSMS(),
+  onSuccess: (data) => {
+    toast.success(`Прочитано SMS с SIM: ${data.count}`)
+    refetchSMS()
+  },
+  onError: (error: Error) => {
+    toast.error(`Ошибка чтения SIM: ${error.message}`)
+  },
+})
+
+// ============== Computed: SMS ==============
+
+const hasCyrillic = computed(() => /[а-яёА-ЯЁ]/.test(smsText.value))
+const smsMaxChars = computed(() => hasCyrillic.value ? 70 : 160)
+
 // ============== Methods ==============
 
 function saveConfig() {
@@ -274,6 +291,14 @@ function getCallStateColor(state: string): string {
       </div>
 
       <div class="flex items-center gap-2">
+        <!-- Mock Mode Badge -->
+        <span
+          v-if="status?.mock_mode"
+          class="px-2 py-1 bg-yellow-500/20 text-yellow-500 rounded text-xs font-medium"
+        >
+          MOCK
+        </span>
+
         <!-- Status Badge -->
         <div class="flex items-center gap-2 px-3 py-1.5 bg-card rounded-lg border border-border">
           <span :class="['w-2 h-2 rounded-full', isConnected ? 'bg-green-500' : 'bg-red-500']" />
@@ -356,7 +381,7 @@ function getCallStateColor(state: string): string {
             </button>
           </div>
 
-          <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div v-else class="grid grid-cols-2 md:grid-cols-5 gap-4">
             <!-- Signal -->
             <div class="p-4 bg-secondary/50 rounded-lg">
               <div class="flex items-center gap-2 mb-2 text-muted-foreground">
@@ -389,6 +414,9 @@ v-for="i in 4" :key="i" :class="[
                 <span class="text-sm">Сеть</span>
               </div>
               <div class="font-medium">{{ status?.network_name ?? '—' }}</div>
+              <div v-if="status?.network_mode" class="text-xs text-muted-foreground mt-1">
+                {{ status.network_mode }}
+              </div>
             </div>
 
             <!-- Phone Number -->
@@ -398,6 +426,15 @@ v-for="i in 4" :key="i" :class="[
                 <span class="text-sm">Номер</span>
               </div>
               <div class="font-medium font-mono">{{ status?.phone_number ?? '—' }}</div>
+            </div>
+
+            <!-- AT Port -->
+            <div class="p-4 bg-secondary/50 rounded-lg">
+              <div class="flex items-center gap-2 mb-2 text-muted-foreground">
+                <Usb class="w-4 h-4" />
+                <span class="text-sm">Порт</span>
+              </div>
+              <div class="font-medium font-mono text-sm">{{ status?.at_port ?? '—' }}</div>
             </div>
           </div>
         </div>
@@ -532,8 +569,14 @@ v-for="i in 4" :key="i" :class="[
                 placeholder="Текст сообщения..."
                 class="w-full px-3 py-2 bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               />
-              <div class="text-xs text-muted-foreground mt-1 text-right">
-                {{ smsText.length }} / 160
+              <div class="flex justify-between text-xs text-muted-foreground mt-1">
+                <span v-if="hasCyrillic" class="text-yellow-500">
+                  Кириллица: 70 символов/SMS (UCS2)
+                </span>
+                <span v-else>&nbsp;</span>
+                <span :class="smsText.length > smsMaxChars ? 'text-red-500' : ''">
+                  {{ smsText.length }} / {{ smsMaxChars }}
+                </span>
               </div>
             </div>
 
@@ -553,9 +596,21 @@ v-for="i in 4" :key="i" :class="[
         <div class="bg-card rounded-lg border border-border">
           <div class="p-4 border-b border-border flex items-center justify-between">
             <h2 class="text-lg font-semibold">История SMS</h2>
-            <button class="p-2 hover:bg-secondary rounded" @click="refetchSMS()">
-              <RefreshCw class="w-4 h-4" />
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                class="flex items-center gap-1 px-3 py-1.5 bg-secondary rounded text-sm hover:bg-secondary/80 disabled:opacity-50"
+                :disabled="readModemSMSMutation.isPending.value"
+                title="Прочитать SMS из памяти SIM-карты"
+                @click="readModemSMSMutation.mutate()"
+              >
+                <Loader2 v-if="readModemSMSMutation.isPending.value" class="w-4 h-4 animate-spin" />
+                <Download v-else class="w-4 h-4" />
+                С SIM
+              </button>
+              <button class="p-2 hover:bg-secondary rounded" @click="refetchSMS()">
+                <RefreshCw class="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div v-if="!smsData?.messages?.length" class="p-8 text-center text-muted-foreground">
