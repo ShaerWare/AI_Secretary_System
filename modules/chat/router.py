@@ -41,6 +41,33 @@ _NO_TOOLS_SUFFIX = (
     "Отвечай только обычным текстом. Используй markdown для форматирования."
 )
 
+# Agentic RAG: LLM decides when to search the knowledge base
+KNOWLEDGE_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "knowledge_search",
+        "description": (
+            "Search the knowledge base for relevant information. "
+            "Use when the user asks something that might be answered by documentation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query. Be specific."}
+            },
+            "required": ["query"],
+        },
+    },
+}
+MAX_TOOL_ITERATIONS = 5
+
+_AGENTIC_RAG_SUFFIX = (
+    "\n\nУ тебя есть инструмент knowledge_search для поиска по базе знаний. "
+    "Используй его когда вопрос связан с документацией или требует фактических данных. "
+    "Можешь вызвать несколько раз с разными запросами. "
+    "Не выдумывай — если не нашёл информацию, честно скажи."
+)
+
 
 def _inject_context_files(prompt: str | None, session: dict) -> str | None:
     """Inject context file contents into system prompt if session has any."""
@@ -52,10 +79,31 @@ def _inject_context_files(prompt: str | None, session: dict) -> str | None:
     return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
 
 
-def _finalize_prompt(prompt: str | None) -> str:
-    """Add anti-tool-call suffix to any system prompt before sending to LLM."""
+def _finalize_prompt(prompt: str | None, agentic_rag: bool = False) -> str:
+    """Add suffix to system prompt: agentic RAG instructions or anti-tool-call guard."""
     base = prompt or _DEFAULT_RAG_PROMPT
-    return base + _NO_TOOLS_SUFFIX
+    return base + (_AGENTIC_RAG_SUFFIX if agentic_rag else _NO_TOOLS_SUFFIX)
+
+
+def _should_use_agentic_rag(
+    llm_service, rag_mode: str, collection_ids: list[int], wiki_rag
+) -> bool:
+    """Check if agentic RAG loop should be used instead of one-shot injection."""
+    if rag_mode == "none" or not collection_ids or not wiki_rag:
+        return False
+    # Check provider supports tools (CloudLLMService wraps provider, VLLMLLMService has it directly)
+    if getattr(llm_service, "supports_tools", False):
+        return True
+    return hasattr(llm_service, "provider") and getattr(
+        llm_service.provider, "supports_tools", False
+    )
+
+
+def _execute_knowledge_search(wiki_rag, query: str, collection_ids: list[int]) -> str:
+    """Execute a knowledge base search and return results text."""
+    if len(collection_ids) == 1:
+        return wiki_rag.retrieve(query, top_k=5, max_chars=3000, collection_id=collection_ids[0])
+    return wiki_rag.retrieve_multi(query, collection_ids, top_k=5, max_chars=3000)
 
 
 def _extract_collection_ids(data: dict) -> list[int]:
@@ -562,14 +610,20 @@ async def admin_send_chat_message(
 
     # RAG: inject relevant wiki context based on rag_mode
     rag_mode, collection_ids = await _resolve_rag_config(session, msg_request.llm_override)
-    default_prompt = _inject_rag_context(
-        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_ids
-    )
+    wiki_rag = container.wiki_rag_service
+    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+
+    if not use_agentic:
+        default_prompt = _inject_rag_context(
+            wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
+        )
 
     # Inject context files
     default_prompt = _inject_context_files(default_prompt, session)
 
-    messages = await chat_service.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await chat_service.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+    )
 
     # Trim to fit context window
     model = _get_model_name(llm_service)
@@ -577,9 +631,46 @@ async def admin_send_chat_message(
 
     # Генерируем ответ
     try:
-        response_text = llm_service.generate_response_from_messages(messages, stream=False)
-        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-            response_text = "".join(response_text)
+        if use_agentic:
+            # Agentic RAG loop (non-streaming)
+            tools = [KNOWLEDGE_SEARCH_TOOL]
+            loop_messages = list(messages)
+            response_text = ""
+
+            for _iteration in range(MAX_TOOL_ITERATIONS):
+                result = llm_service.generate_response_from_messages(
+                    loop_messages, stream=False, tools=tools
+                )
+                if isinstance(result, str):
+                    response_text = result
+                    break
+                # dict with tool_calls
+                tool_calls = result.get("tool_calls")
+                if not tool_calls:
+                    response_text = (result.get("content") or "").strip()
+                    break
+
+                loop_messages.append(result)  # assistant message with tool_calls
+                for tc in tool_calls:
+                    if tc["function"]["name"] != "knowledge_search":
+                        continue
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        args = {}
+                    query = args.get("query", "")
+                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": search_result or "Ничего не найдено в базе знаний.",
+                        }
+                    )
+        else:
+            response_text = llm_service.generate_response_from_messages(messages, stream=False)
+            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+                response_text = "".join(response_text)
 
         assistant_msg = await chat_service.add_message(session_id, "assistant", response_text)
         return {"message": user_msg, "response": assistant_msg}
@@ -710,14 +801,21 @@ async def admin_stream_chat_message(
     rag_mode, collection_ids = await _resolve_rag_config(
         session, msg_request.llm_override, msg_request.widget_instance_id
     )
-    default_prompt = _inject_rag_context(
-        container.wiki_rag_service, msg_request.content, default_prompt, rag_mode, collection_ids
-    )
+    wiki_rag = container.wiki_rag_service
+    use_agentic = _should_use_agentic_rag(active_llm, rag_mode, collection_ids, wiki_rag)
+
+    if not use_agentic:
+        # One-shot RAG: inject context into prompt (existing behavior)
+        default_prompt = _inject_rag_context(
+            wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
+        )
 
     # Inject context files
     default_prompt = _inject_context_files(default_prompt, session)
 
-    messages = await chat_service.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await chat_service.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+    )
 
     # Trim to fit context window
     model = _get_model_name(active_llm)
@@ -729,10 +827,70 @@ async def admin_stream_chat_message(
             # Отправляем сообщение пользователя
             yield f"data: {json.dumps({'type': 'user_message', 'message': user_msg}, ensure_ascii=False)}\n\n"
 
-            # Streaming ответ (use active_llm which may be overridden)
-            for chunk in active_llm.generate_response_from_messages(messages, stream=True):
-                full_response.append(chunk)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if use_agentic:
+                # Agentic RAG loop: LLM decides when to search
+                tools = [KNOWLEDGE_SEARCH_TOOL]
+                loop_messages = list(messages)
+
+                for _iteration in range(MAX_TOOL_ITERATIONS):
+                    content_chunks = []
+                    tool_calls_result = None
+
+                    for event in active_llm.generate_response_from_messages(
+                        loop_messages, stream=True, tools=tools
+                    ):
+                        if isinstance(event, dict):
+                            if event["type"] == "content":
+                                content_chunks.append(event["content"])
+                                full_response.append(event["content"])
+                                yield f"data: {json.dumps({'type': 'chunk', 'content': event['content']}, ensure_ascii=False)}\n\n"
+                            elif event["type"] == "tool_calls":
+                                tool_calls_result = event["tool_calls"]
+                        else:
+                            # Safety fallback: plain str from provider
+                            full_response.append(event)
+                            yield f"data: {json.dumps({'type': 'chunk', 'content': event}, ensure_ascii=False)}\n\n"
+
+                    if not tool_calls_result:
+                        break  # LLM answered with text, done
+
+                    # Execute tool calls and feed results back
+                    assistant_content = "".join(content_chunks) or None
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": assistant_content,
+                            "tool_calls": tool_calls_result,
+                        }
+                    )
+
+                    for tc in tool_calls_result:
+                        fn_name = tc["function"]["name"]
+                        if fn_name != "knowledge_search":
+                            continue
+                        try:
+                            args = json.loads(tc["function"]["arguments"])
+                        except json.JSONDecodeError:
+                            args = {}
+                        query = args.get("query", "")
+                        yield f"data: {json.dumps({'type': 'tool_start', 'name': fn_name, 'query': query}, ensure_ascii=False)}\n\n"
+
+                        result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                        found = bool(result and result.strip())
+                        yield f"data: {json.dumps({'type': 'tool_end', 'name': fn_name, 'found': found}, ensure_ascii=False)}\n\n"
+
+                        loop_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result or "Ничего не найдено в базе знаний.",
+                            }
+                        )
+            else:
+                # One-shot: existing streaming path
+                for chunk in active_llm.generate_response_from_messages(messages, stream=True):
+                    full_response.append(chunk)
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             # Сохраняем полный ответ
             response_text = "".join(full_response)
@@ -799,23 +957,63 @@ async def admin_edit_chat_message(
 
     # RAG: inject relevant wiki context based on rag_mode
     rag_mode, collection_ids = await _resolve_rag_config(session)
-    default_prompt = _inject_rag_context(
-        container.wiki_rag_service, request.content, default_prompt, rag_mode, collection_ids
-    )
+    wiki_rag = container.wiki_rag_service
+    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+
+    if not use_agentic:
+        default_prompt = _inject_rag_context(
+            wiki_rag, request.content, default_prompt, rag_mode, collection_ids
+        )
 
     # Inject context files
     default_prompt = _inject_context_files(default_prompt, session)
 
-    messages = await chat_service.get_messages_for_llm(session_id, _finalize_prompt(default_prompt))
+    messages = await chat_service.get_messages_for_llm(
+        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+    )
 
     # Trim to fit context window
     model = _get_model_name(llm_service)
     messages, _ = _trim_and_log(messages, model, session_id)
 
     try:
-        response_text = llm_service.generate_response_from_messages(messages, stream=False)
-        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-            response_text = "".join(response_text)
+        if use_agentic:
+            tools = [KNOWLEDGE_SEARCH_TOOL]
+            loop_messages = list(messages)
+            response_text = ""
+
+            for _iteration in range(MAX_TOOL_ITERATIONS):
+                result = llm_service.generate_response_from_messages(
+                    loop_messages, stream=False, tools=tools
+                )
+                if isinstance(result, str):
+                    response_text = result
+                    break
+                tool_calls = result.get("tool_calls")
+                if not tool_calls:
+                    response_text = (result.get("content") or "").strip()
+                    break
+                loop_messages.append(result)
+                for tc in tool_calls:
+                    if tc["function"]["name"] != "knowledge_search":
+                        continue
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        args = {}
+                    query = args.get("query", "")
+                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": search_result or "Ничего не найдено в базе знаний.",
+                        }
+                    )
+        else:
+            response_text = llm_service.generate_response_from_messages(messages, stream=False)
+            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+                response_text = "".join(response_text)
 
         # Add response as child of the new edited message
         assistant_msg = await chat_service.add_message(
@@ -889,15 +1087,19 @@ async def admin_regenerate_chat_response(
     # RAG: inject relevant wiki context based on rag_mode
     user_content = target_msg["content"] if target_msg["role"] == "user" else ""
     rag_mode, collection_ids = await _resolve_rag_config(session)
-    default_prompt = _inject_rag_context(
-        container.wiki_rag_service, user_content, default_prompt, rag_mode, collection_ids
-    )
+    wiki_rag = container.wiki_rag_service
+    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+
+    if not use_agentic:
+        default_prompt = _inject_rag_context(
+            wiki_rag, user_content, default_prompt, rag_mode, collection_ids
+        )
 
     # Inject context files
     default_prompt = _inject_context_files(default_prompt, session)
 
     llm_messages = await chat_service.get_messages_for_llm(
-        session_id, _finalize_prompt(default_prompt)
+        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
     )
 
     # Trim to fit context window
@@ -905,9 +1107,43 @@ async def admin_regenerate_chat_response(
     llm_messages, _ = _trim_and_log(llm_messages, model, session_id)
 
     try:
-        response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
-        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-            response_text = "".join(response_text)
+        if use_agentic:
+            tools = [KNOWLEDGE_SEARCH_TOOL]
+            loop_messages = list(llm_messages)
+            response_text = ""
+
+            for _iteration in range(MAX_TOOL_ITERATIONS):
+                result = llm_service.generate_response_from_messages(
+                    loop_messages, stream=False, tools=tools
+                )
+                if isinstance(result, str):
+                    response_text = result
+                    break
+                tool_calls = result.get("tool_calls")
+                if not tool_calls:
+                    response_text = (result.get("content") or "").strip()
+                    break
+                loop_messages.append(result)
+                for tc in tool_calls:
+                    if tc["function"]["name"] != "knowledge_search":
+                        continue
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        args = {}
+                    query = args.get("query", "")
+                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": search_result or "Ничего не найдено в базе знаний.",
+                        }
+                    )
+        else:
+            response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
+            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
+                response_text = "".join(response_text)
 
         assistant_msg = await chat_service.add_message(
             session_id, "assistant", response_text, parent_id=parent_id

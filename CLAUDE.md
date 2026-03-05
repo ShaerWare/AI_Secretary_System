@@ -200,9 +200,9 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`).
 
-**Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `db/models.py`. Supports model fallback via `fallback_models` list.
+**Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `db/models.py`. Supports model fallback via `fallback_models` list. `supports_tools` flag + `generate_with_tools()` on `OpenAICompatibleProvider` and `VLLMLLMService` for tool-calling (agentic RAG).
 
-**Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming. Multi-collection support. Per-instance RAG config on bots/widgets.
+**Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming. Multi-collection support. Per-instance RAG config on bots/widgets. **Agentic RAG** (`modules/chat/router.py`): server-side loop where LLM calls `knowledge_search` tool to query the knowledge base on demand (max 5 iterations). Providers without `supports_tools` (Gemini SDK) fall back to one-shot RAG injection. Frontend shows inline search indicator via `tool_start`/`tool_end` SSE events.
 
 ### Frontend Architecture
 

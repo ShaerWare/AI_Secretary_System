@@ -111,6 +111,21 @@ export interface SerialPorts {
   total: number
 }
 
+export interface Conversation {
+  number: string
+  last_message: string
+  last_direction: string
+  last_time: string | null
+  message_count: number
+  call_count: number
+}
+
+export interface ConversationDetail {
+  number: string
+  messages: SMSMessage[]
+  calls: CallInfo[]
+}
+
 // ============== API ==============
 
 export const gsmApi = {
@@ -176,6 +191,23 @@ export const gsmApi = {
   // DTMF
   sendDTMF: (digits: string) =>
     api.post<{ status: string; message: string }>('/admin/gsm/dtmf', { digits }),
+
+  // Conversations
+  listConversations: (params?: { limit?: number; offset?: number }) => {
+    const query = new URLSearchParams()
+    if (params?.limit) query.set('limit', params.limit.toString())
+    if (params?.offset) query.set('offset', params.offset.toString())
+    const qs = query.toString()
+    return api.get<{
+      conversations: Conversation[]
+      total: number
+      limit: number
+      offset: number
+    }>(`/admin/gsm/conversations${qs ? `?${qs}` : ''}`)
+  },
+
+  getConversation: (number: string) =>
+    api.get<ConversationDetail>(`/admin/gsm/conversations/${encodeURIComponent(number)}`),
 
   // Debug
   executeAT: (command: string, timeout = 5.0) =>

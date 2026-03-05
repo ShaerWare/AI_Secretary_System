@@ -177,7 +177,7 @@ export const chatApi = {
   streamMessage: (
     sessionId: string,
     content: string,
-    onChunk: (data: { type: string; content?: string; message?: ChatMessage; token_usage?: TokenUsage }) => void,
+    onChunk: (data: { type: string; content?: string; message?: ChatMessage; token_usage?: TokenUsage; query?: string; name?: string; found?: boolean }) => void,
     llmOverride?: { llm_backend?: string; system_prompt?: string },
     widgetInstanceId?: string
   ) => {
