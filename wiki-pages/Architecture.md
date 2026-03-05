@@ -43,7 +43,7 @@
 
 | Компонент | Описание |
 |-----------|----------|
-| `app/routers/` | 28 отдельных файлов роутеров |
+| `app/routers/` | 28 фасадов-реэкспортов (1–3 строки), логика в `modules/*/router*.py` |
 | `db/repositories/` | 45 файлов, чистая изоляция, `BaseRepository` с generic CRUD |
 | `telegram_bot/`, `whatsapp_bot/` | Отдельные процессы, общаются через HTTP API |
 | `app/services/` | Доменные сервисы (amoCRM, Wiki RAG, backup и др.) |
@@ -434,6 +434,38 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 3.6: Роутеры — monitoring, chat, llm
+
+> **Статус:** реализовано (PR [#534](https://github.com/ShaerWare/AI_Secretary_System/pull/534), issue [#513](https://github.com/ShaerWare/AI_Secretary_System/issues/513))
+
+Последние 5 роутеров перенесены в доменные модули. Все импорты из `db.integration` заменены на прямые импорты из доменных сервисов. **Все 28 роутеров мигрированы — Phase 3 завершена.**
+
+| Старый файл | Новый файл | Ключевые изменения |
+|---|---|---|
+| `app/routers/audit.py` (126 строк) | `modules/monitoring/router_audit.py` | Чистый перенос (0 db.integration imports) |
+| `app/routers/usage.py` (301 строка) | `modules/monitoring/router_usage.py` | Чистый перенос (0 db.integration imports) |
+| `app/routers/monitor.py` (246 строк) | `modules/monitoring/router_monitor.py` | Чистый перенос (0 db.integration imports) |
+| `app/routers/chat.py` (1176 строк) | `modules/chat/router.py` | 7 db.integration → domain imports |
+| `app/routers/llm.py` (1633 строки) | `modules/llm/router.py` | 2 db.integration → domain imports |
+
+Замены импортов (9):
+- `async_chat_manager` → `chat_service` из `modules.chat.service`
+- `async_chat_share_manager` → `chat_share_service` из `modules.chat.service`
+- `async_bot_instance_manager` → `bot_instance_service` из `modules.channels.telegram.service`
+- `async_whatsapp_instance_manager` → `whatsapp_instance_service` из `modules.channels.whatsapp.service`
+- `async_widget_instance_manager` → `widget_instance_service` из `modules.channels.widget.service`
+- `async_cloud_provider_manager` → `cloud_provider_service` из `modules.llm.service`
+- `async_knowledge_collection_manager` → `knowledge_collection_service` из `modules.knowledge.service`
+- `async_audit_logger` → `audit_service` из `modules.monitoring.service`
+
+Нюансы:
+- **audit.py, usage.py, monitor.py** — 0 импортов из `db.integration`, чистый перенос
+- **chat.py** — SSE streaming + RAG логика, 7 кросс-доменных импортов (telegram, whatsapp, widget, knowledge, llm)
+- **llm.py** — крупнейший роутер (1633 строки, 37 routes), inline `db.repositories` / `db.database` импорты оставлены как есть
+- **monitor.py** — условная регистрация в cloud mode, условие остаётся в `orchestrator.py`
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -460,7 +492,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **0** | Инфраструктура core (EventBus, TaskRegistry, HealthRegistry) | [#490](https://github.com/ShaerWare/AI_Secretary_System/issues/490) | ✅ Завершена |
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
-| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | 🔄 В работе (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513–#514) |
+| **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
