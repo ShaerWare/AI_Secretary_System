@@ -94,7 +94,7 @@ services:
       # Security
       - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-}
       # amoCRM proxy (run scripts/amocrm_proxy.py on host)
-      - AMOCRM_PROXY=${AMOCRM_PROXY:-http://host.docker.internal:8899}
+      - AMOCRM_PROXY=${AMOCRM_PROXY:-}
       # TTS
       - COQUI_TOS_AGREED=1
       - TTS_CACHE_PATH=/root/.local/share/tts

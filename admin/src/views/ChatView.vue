@@ -2748,7 +2748,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       <div
         v-if="cc.isActive.value"
         :class="[
-          'p-4 shrink-0',
+          'relative p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -2790,24 +2790,24 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           >
             <Send class="w-5 h-5" />
           </button>
-          <!-- New branch button (yellow) -->
-          <button
-            v-if="currentSessionId"
-            :disabled="newBranchMutation.isPending.value"
-            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranchAndShowTree"
-          >
-            <Plus class="w-5 h-5" />
-          </button>
         </div>
+        <!-- New branch button (yellow, pinned to right edge) -->
+        <button
+          v-if="currentSessionId"
+          :disabled="newBranchMutation.isPending.value"
+          class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+          :title="t('chatView.newBranch')"
+          @click="startNewBranchAndShowTree"
+        >
+          <Plus class="w-5 h-5" />
+        </button>
       </div>
 
       <!-- Input Area: Normal chat mode -->
       <div
         v-else-if="currentSession && !isReadOnly"
         :class="[
-          'p-4 shrink-0',
+          'relative p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -2854,17 +2854,17 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             <Send v-if="!isStreaming" class="w-5 h-5" />
             <Loader2 v-else class="w-5 h-5 animate-spin" />
           </button>
-          <!-- New branch button (yellow) -->
-          <button
-            v-if="currentSessionId"
-            :disabled="newBranchMutation.isPending.value"
-            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranchAndShowTree"
-          >
-            <Plus class="w-5 h-5" />
-          </button>
         </div>
+        <!-- New branch button (yellow, pinned to right edge) -->
+        <button
+          v-if="currentSessionId"
+          :disabled="newBranchMutation.isPending.value"
+          class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+          :title="t('chatView.newBranch')"
+          @click="startNewBranchAndShowTree"
+        >
+          <Plus class="w-5 h-5" />
+        </button>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
           <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
