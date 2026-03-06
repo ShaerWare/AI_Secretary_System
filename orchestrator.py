@@ -984,10 +984,15 @@ async def startup_event():
         logger.info("📦 Инициализация Streaming TTS Manager...")
         streaming_tts_manager = StreamingTTSManager(max_cache_size=50, cache_ttl=300)
 
-        # STT отключён временно - для текстового чата не нужен
-        # Модель faster-whisper зависает при загрузке
-        logger.info("⏭️ STT отключён (для текстового чата не нужен)")
-        stt_service = None
+        # STT (Vosk) для голосовых звонков
+        try:
+            from stt_service import VoskSTTService
+
+            stt_service = VoskSTTService(language="ru", model_size="small")
+            logger.info("✅ STT (Vosk) initialized")
+        except Exception as stt_err:
+            logger.warning(f"⚠️ STT not available: {stt_err}")
+            stt_service = None
 
         # Load FAQ and presets from database into services
         logger.info("📦 Загрузка FAQ и пресетов из БД...")
@@ -1044,6 +1049,25 @@ async def startup_event():
                 container.gsm_service = gsm_service
                 mode = "mock" if gsm_service.mock_mode else "hardware"
                 logger.info(f"✅ GSM service initialized ({mode} mode)")
+
+                # Start voice call service (auto-answer with AI assistant)
+                try:
+                    from app.services.gsm_voice_call import GSMVoiceCallService
+
+                    voice_call = GSMVoiceCallService(
+                        gsm_service=gsm_service,
+                        stt_service=getattr(container, "stt_service", None),
+                        tts_service=getattr(container, "voice_clone_service", None),
+                        piper_service=getattr(container, "piper_service", None),
+                        tts_voice="xtts",  # or "piper" for CPU
+                        piper_voice="irina",  # irina / dmitri
+                        rag_mode="all",  # use all knowledge collections
+                    )
+                    await voice_call.start()
+                    container.gsm_voice_call = voice_call
+                    logger.info("✅ GSM Voice Call service started (auto-answer)")
+                except Exception as vc_err:
+                    logger.warning(f"⚠️ GSM Voice Call not available: {vc_err}")
             except Exception as gsm_err:
                 logger.warning(f"⚠️ GSM service not available: {gsm_err}")
 

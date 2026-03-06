@@ -40,6 +40,7 @@ _CSP_DIRECTIVES = [
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self'",
+    "media-src 'self' blob:",
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

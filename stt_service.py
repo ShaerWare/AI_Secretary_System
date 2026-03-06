@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Callable, Generator, Optional, Union
 
 import numpy as np
-import torch
+
+
+try:
+    import torch
+except ImportError:
+    torch = None  # type: ignore[assignment]
 
 
 logging.basicConfig(level=logging.INFO)

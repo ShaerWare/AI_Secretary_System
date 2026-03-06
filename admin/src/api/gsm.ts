@@ -111,6 +111,38 @@ export interface SerialPorts {
   total: number
 }
 
+export interface VoiceCallConfig {
+  available: boolean
+  auto_answer?: boolean
+  auto_answer_rings?: number
+  greeting?: string
+  system_prompt?: string
+  tts_voice?: string  // "xtts" | "piper"
+  piper_voice?: string  // "irina" | "dmitri"
+  rag_mode?: string  // "none" | "all" | "selected"
+  knowledge_collection_ids?: number[]
+  llm_backend?: string | null  // null = system default, "vllm", "cloud:{id}"
+  sms_auto_reply?: boolean
+  stt_available?: boolean
+  tts_xtts_available?: boolean
+  tts_piper_available?: boolean
+}
+
+export interface VoiceCallStatus {
+  available: boolean
+  active?: boolean
+  auto_answer?: boolean
+  tts_voice?: string
+  piper_voice?: string
+  rag_mode?: string
+  stt_available?: boolean
+  tts_xtts_available?: boolean
+  tts_piper_available?: boolean
+  pcm_connected?: boolean
+  session_id?: string | null
+  reason?: string
+}
+
 export interface Conversation {
   number: string
   last_message: string
@@ -208,6 +240,14 @@ export const gsmApi = {
 
   getConversation: (number: string) =>
     api.get<ConversationDetail>(`/admin/gsm/conversations/${encodeURIComponent(number)}`),
+
+  // Voice Call AI
+  getVoiceCallStatus: () => api.get<VoiceCallStatus>('/admin/gsm/voice-call/status'),
+
+  getVoiceCallConfig: () => api.get<VoiceCallConfig>('/admin/gsm/voice-call/config'),
+
+  updateVoiceCallConfig: (config: Partial<VoiceCallConfig>) =>
+    api.put<VoiceCallConfig>('/admin/gsm/voice-call/config', config),
 
   // Debug
   executeAT: (command: string, timeout = 5.0) =>

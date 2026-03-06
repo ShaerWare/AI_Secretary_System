@@ -744,21 +744,21 @@ class GSMService:
                 await asyncio.sleep(1)
 
     async def _handle_ring(self) -> None:
-        """Handle incoming RING."""
-        if self.active_call and self.active_call.state == "ringing":
-            return  # Already tracking this call
+        """Handle incoming RING — called for each RING event."""
+        if not self.active_call or self.active_call.state != "ringing":
+            # First RING — create call tracking
+            call_id = f"call_{uuid.uuid4().hex[:12]}"
+            self.active_call = CallInfo(
+                id=call_id,
+                direction="incoming",
+                caller_number="Unknown",
+                state="ringing",
+                started_at=datetime.utcnow(),
+            )
+            self.state = "incoming_call"
+            logger.info(f"📞 Входящий звонок: {call_id}")
 
-        call_id = f"call_{uuid.uuid4().hex[:12]}"
-        self.active_call = CallInfo(
-            id=call_id,
-            direction="incoming",
-            caller_number="Unknown",
-            state="ringing",
-            started_at=datetime.utcnow(),
-        )
-        self.state = "incoming_call"
-        logger.info(f"📞 Входящий звонок: {call_id}")
-
+        # Notify on every RING (voice call service counts rings for auto-answer)
         if self.on_incoming_call:
             try:
                 self.on_incoming_call(self.active_call)
