@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { gsmApi, type GSMConfig, type GSMStatus, type CallInfo, type SMSMessage } from '@/api/gsm'
+import { gsmApi, type GSMConfig, type GSMStatus, type CallInfo, type SMSMessage, type VoiceCallConfig, type VoiceCallStatus } from '@/api/gsm'
+import { wikiRagApi, type KnowledgeCollection } from '@/api/wikiRag'
+import { llmApi, type CloudProvider } from '@/api/llm'
 import {
   Phone,
   PhoneCall,
@@ -89,12 +91,47 @@ const { data: conversationDetail, refetch: refetchConversationDetail } = useQuer
   enabled: computed(() => !!selectedNumber.value),
 })
 
+// Voice call queries
+const { data: voiceCallConfig, refetch: refetchVoiceCallConfig } = useQuery({
+  queryKey: ['gsm-voice-call-config'],
+  queryFn: () => gsmApi.getVoiceCallConfig(),
+})
+
+const { data: voiceCallStatus } = useQuery({
+  queryKey: ['gsm-voice-call-status'],
+  queryFn: () => gsmApi.getVoiceCallStatus(),
+  refetchInterval: 5000,
+})
+
+const { data: collectionsData } = useQuery({
+  queryKey: ['knowledge-collections'],
+  queryFn: async () => {
+    const res = await wikiRagApi.getCollections()
+    return res.collections
+  },
+})
+
+const { data: providersData } = useQuery({
+  queryKey: ['cloud-providers-enabled'],
+  queryFn: async () => {
+    const res = await llmApi.getProviders(true)
+    return res.providers
+  },
+})
+
 // Local config state
 const localConfig = ref<Partial<GSMConfig>>({})
+const localVoiceConfig = ref<Partial<VoiceCallConfig>>({})
 
 watch(configData, (data) => {
   if (data) {
     localConfig.value = { ...data }
+  }
+}, { immediate: true })
+
+watch(voiceCallConfig, (data) => {
+  if (data) {
+    localVoiceConfig.value = { ...data }
   }
 }, { immediate: true })
 
@@ -156,6 +193,17 @@ const updateConfigMutation = useMutation({
   onSuccess: () => {
     toast.success('Конфигурация сохранена')
     queryClient.invalidateQueries({ queryKey: ['gsm-config'] })
+  },
+  onError: (error: Error) => {
+    toast.error(`Ошибка сохранения: ${error.message}`)
+  },
+})
+
+const updateVoiceConfigMutation = useMutation({
+  mutationFn: (config: Partial<VoiceCallConfig>) => gsmApi.updateVoiceCallConfig(config),
+  onSuccess: () => {
+    toast.success('Настройки голосового ассистента сохранены')
+    refetchVoiceCallConfig()
   },
   onError: (error: Error) => {
     toast.error(`Ошибка сохранения: ${error.message}`)
@@ -268,6 +316,21 @@ function selectConversation(number: string) {
 
 function saveConfig() {
   updateConfigMutation.mutate(localConfig.value as GSMConfig)
+}
+
+function saveVoiceConfig() {
+  updateVoiceConfigMutation.mutate(localVoiceConfig.value)
+}
+
+function toggleCollection(id: number) {
+  const ids = localVoiceConfig.value.knowledge_collection_ids || []
+  const idx = ids.indexOf(id)
+  if (idx >= 0) {
+    ids.splice(idx, 1)
+  } else {
+    ids.push(id)
+  }
+  localVoiceConfig.value.knowledge_collection_ids = [...ids]
 }
 
 function executeAT() {
@@ -785,37 +848,89 @@ v-for="i in 4" :key="i" :class="[
       <template v-if="activeTab === 'config'">
         <div class="bg-card rounded-lg border border-border p-6 space-y-6">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Настройки GSM</h2>
+            <h2 class="text-lg font-semibold">Голосовой ассистент</h2>
             <button
               class="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 flex items-center gap-2"
-              :disabled="updateConfigMutation.isPending.value"
-              @click="saveConfig"
+              :disabled="updateVoiceConfigMutation.isPending.value"
+              @click="saveVoiceConfig"
             >
-              <Loader2 v-if="updateConfigMutation.isPending.value" class="w-4 h-4 animate-spin" />
+              <Loader2 v-if="updateVoiceConfigMutation.isPending.value" class="w-4 h-4 animate-spin" />
               <Save v-else class="w-4 h-4" />
               Сохранить
             </button>
           </div>
 
-          <!-- Ports -->
+          <!-- Service status -->
+          <div v-if="voiceCallStatus" class="flex items-center gap-2 text-sm">
+            <div
+              class="w-2 h-2 rounded-full"
+              :class="voiceCallStatus.available ? 'bg-green-500' : 'bg-red-500'"
+            />
+            <span v-if="voiceCallStatus.available" class="text-green-600">
+              Сервис активен
+              <span v-if="voiceCallStatus.active" class="text-blue-500 ml-2">| В разговоре</span>
+            </span>
+            <span v-else class="text-muted-foreground">
+              Сервис недоступен{{ voiceCallStatus.reason ? `: ${voiceCallStatus.reason}` : '' }}
+            </span>
+          </div>
+
+          <!-- Capabilities -->
+          <div v-if="voiceCallStatus?.available" class="flex gap-3 text-xs">
+            <span class="px-2 py-1 rounded" :class="voiceCallStatus.stt_available ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'">
+              STT {{ voiceCallStatus.stt_available ? 'OK' : 'N/A' }}
+            </span>
+            <span class="px-2 py-1 rounded" :class="voiceCallStatus.tts_xtts_available ? 'bg-green-500/10 text-green-600' : 'bg-yellow-500/10 text-yellow-600'">
+              XTTS {{ voiceCallStatus.tts_xtts_available ? 'OK' : 'N/A' }}
+            </span>
+            <span class="px-2 py-1 rounded" :class="voiceCallStatus.tts_piper_available ? 'bg-green-500/10 text-green-600' : 'bg-yellow-500/10 text-yellow-600'">
+              Piper {{ voiceCallStatus.tts_piper_available ? 'OK' : 'N/A' }}
+            </span>
+            <span class="px-2 py-1 rounded" :class="voiceCallStatus.pcm_connected ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'">
+              PCM {{ voiceCallStatus.pcm_connected ? 'OK' : 'N/A' }}
+            </span>
+          </div>
+
+          <!-- LLM Provider -->
           <div>
-            <h3 class="font-medium mb-3">Порты</h3>
-            <div class="grid grid-cols-2 gap-4">
+            <h3 class="font-medium mb-3">LLM провайдер</h3>
+            <select
+              v-model="localVoiceConfig.llm_backend"
+              class="w-full px-3 py-2 bg-background border border-border rounded"
+            >
+              <option :value="null">По умолчанию (системный)</option>
+              <option value="">По умолчанию (системный)</option>
+              <option value="vllm">vLLM (локальный)</option>
+              <option v-for="p in providersData" :key="p.id" :value="`cloud:${p.id}`">
+                {{ p.name }} ({{ p.provider_type }}: {{ p.model_name }})
+              </option>
+            </select>
+            <p class="text-xs text-muted-foreground mt-1">Какой LLM использовать для генерации ответов при звонках</p>
+          </div>
+
+          <!-- TTS Voice -->
+          <div>
+            <h3 class="font-medium mb-3">Голос</h3>
+            <div class="space-y-3">
               <div>
-                <label class="text-sm text-muted-foreground mb-1 block">AT порт</label>
-                <input
-                  v-model="localConfig.at_port"
-                  type="text"
-                  class="w-full px-3 py-2 bg-background border border-border rounded font-mono"
-                />
+                <label class="text-sm text-muted-foreground mb-1 block">Движок TTS</label>
+                <select
+                  v-model="localVoiceConfig.tts_voice"
+                  class="w-full px-3 py-2 bg-background border border-border rounded"
+                >
+                  <option value="xtts">XTTS v2 (клонирование голоса, GPU)</option>
+                  <option value="piper">Piper (готовые голоса, CPU)</option>
+                </select>
               </div>
-              <div>
-                <label class="text-sm text-muted-foreground mb-1 block">Audio порт</label>
-                <input
-                  v-model="localConfig.audio_port"
-                  type="text"
-                  class="w-full px-3 py-2 bg-background border border-border rounded font-mono"
-                />
+              <div v-if="localVoiceConfig.tts_voice === 'piper'">
+                <label class="text-sm text-muted-foreground mb-1 block">Голос Piper</label>
+                <select
+                  v-model="localVoiceConfig.piper_voice"
+                  class="w-full px-3 py-2 bg-background border border-border rounded"
+                >
+                  <option value="irina">Ирина (женский)</option>
+                  <option value="dmitri">Дмитрий (мужской)</option>
+                </select>
               </div>
             </div>
           </div>
@@ -826,17 +941,16 @@ v-for="i in 4" :key="i" :class="[
             <div class="space-y-3">
               <label class="flex items-center gap-3">
                 <input
-                  v-model="localConfig.auto_answer"
+                  v-model="localVoiceConfig.auto_answer"
                   type="checkbox"
                   class="w-4 h-4"
                 />
                 <span>Автоматически отвечать на звонки</span>
               </label>
-
-              <div v-if="localConfig.auto_answer" class="ml-7">
+              <div v-if="localVoiceConfig.auto_answer" class="ml-7">
                 <label class="text-sm text-muted-foreground mb-1 block">Гудков до ответа</label>
                 <input
-                  v-model.number="localConfig.auto_answer_rings"
+                  v-model.number="localVoiceConfig.auto_answer_rings"
                   type="number"
                   min="1"
                   max="10"
@@ -846,78 +960,79 @@ v-for="i in 4" :key="i" :class="[
             </div>
           </div>
 
-          <!-- Messages -->
+          <!-- SMS auto-reply -->
           <div>
-            <h3 class="font-medium mb-3">Сообщения</h3>
-            <div class="space-y-4">
-              <div>
-                <label class="text-sm text-muted-foreground mb-1 block">Приветствие</label>
-                <textarea
-                  v-model="localConfig.greeting_message"
-                  rows="2"
-                  class="w-full px-3 py-2 bg-background border border-border rounded resize-none"
-                />
-              </div>
-              <div>
-                <label class="text-sm text-muted-foreground mb-1 block">Прощание</label>
-                <textarea
-                  v-model="localConfig.goodbye_message"
-                  rows="2"
-                  class="w-full px-3 py-2 bg-background border border-border rounded resize-none"
-                />
-              </div>
-            </div>
+            <h3 class="font-medium mb-3">SMS</h3>
+            <label class="flex items-center gap-3">
+              <input
+                v-model="localVoiceConfig.sms_auto_reply"
+                type="checkbox"
+                class="w-4 h-4"
+              />
+              <span>Автоответ на входящие SMS</span>
+            </label>
+            <p class="text-xs text-muted-foreground mt-1 ml-7">Ассистент получает SMS, генерирует ответ через LLM и отправляет SMS обратно</p>
           </div>
 
-          <!-- SMS -->
+          <!-- Greeting -->
           <div>
-            <h3 class="font-medium mb-3">SMS уведомления</h3>
+            <h3 class="font-medium mb-3">Приветствие</h3>
+            <textarea
+              v-model="localVoiceConfig.greeting"
+              rows="2"
+              placeholder="Здравствуйте! Чем могу помочь?"
+              class="w-full px-3 py-2 bg-background border border-border rounded resize-none"
+            />
+            <p class="text-xs text-muted-foreground mt-1">Первая фраза ассистента при ответе на звонок</p>
+          </div>
+
+          <!-- System Prompt -->
+          <div>
+            <h3 class="font-medium mb-3">Системный промпт</h3>
+            <textarea
+              v-model="localVoiceConfig.system_prompt"
+              rows="4"
+              placeholder="Ты — виртуальный секретарь компании..."
+              class="w-full px-3 py-2 bg-background border border-border rounded resize-y font-mono text-sm"
+            />
+            <p class="text-xs text-muted-foreground mt-1">Инструкция для LLM: роль, стиль ответов, ограничения</p>
+          </div>
+
+          <!-- RAG -->
+          <div>
+            <h3 class="font-medium mb-3">База знаний (RAG)</h3>
             <div class="space-y-3">
-              <label class="flex items-center gap-3">
-                <input
-                  v-model="localConfig.sms_enabled"
-                  type="checkbox"
-                  class="w-4 h-4"
-                />
-                <span>Отправлять SMS о пропущенных звонках</span>
-              </label>
-
-              <div v-if="localConfig.sms_enabled">
-                <label class="text-sm text-muted-foreground mb-1 block">Номер для уведомлений</label>
-                <input
-                  v-model="localConfig.sms_notify_number"
-                  type="tel"
-                  placeholder="+79001234567"
-                  class="w-full px-3 py-2 bg-background border border-border rounded"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Timeouts -->
-          <div>
-            <h3 class="font-medium mb-3">Таймауты</h3>
-            <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="text-sm text-muted-foreground mb-1 block">Тишина (сек)</label>
-                <input
-                  v-model.number="localConfig.silence_timeout"
-                  type="number"
-                  min="1"
-                  max="30"
+                <label class="text-sm text-muted-foreground mb-1 block">Режим RAG</label>
+                <select
+                  v-model="localVoiceConfig.rag_mode"
                   class="w-full px-3 py-2 bg-background border border-border rounded"
-                />
+                >
+                  <option value="none">Отключён</option>
+                  <option value="all">Все коллекции</option>
+                  <option value="selected">Выбранные коллекции</option>
+                </select>
               </div>
-              <div>
-                <label class="text-sm text-muted-foreground mb-1 block">Макс. длительность (сек)</label>
-                <input
-                  v-model.number="localConfig.max_call_duration"
-                  type="number"
-                  min="60"
-                  max="3600"
-                  class="w-full px-3 py-2 bg-background border border-border rounded"
-                />
+              <div v-if="localVoiceConfig.rag_mode === 'selected' && collectionsData?.length" class="space-y-1">
+                <label class="text-sm text-muted-foreground mb-1 block">Коллекции</label>
+                <label
+                  v-for="col in collectionsData"
+                  :key="col.id"
+                  class="flex items-center gap-2 px-3 py-2 rounded hover:bg-muted/50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="localVoiceConfig.knowledge_collection_ids?.includes(col.id)"
+                    class="w-4 h-4"
+                    @change="toggleCollection(col.id)"
+                  />
+                  <span class="text-sm">{{ col.name }}</span>
+                  <span class="text-xs text-muted-foreground ml-auto">{{ col.document_count }} док.</span>
+                </label>
               </div>
+              <p v-if="localVoiceConfig.rag_mode === 'selected' && !collectionsData?.length" class="text-sm text-muted-foreground">
+                Нет доступных коллекций. Создайте их в разделе "База знаний".
+              </p>
             </div>
           </div>
         </div>

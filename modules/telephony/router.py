@@ -553,3 +553,82 @@ async def list_serial_ports(user: User = Depends(require_permission("gsm", "view
         "acm_ports": sorted(acm_ports),
         "total": len(usb_ports) + len(acm_ports),
     }
+
+
+# ============== Voice Call AI Endpoints ==============
+
+
+@router.get("/voice-call/status")
+async def voice_call_status(user: User = Depends(require_permission("gsm", "view"))) -> dict:
+    """Get voice call AI service status."""
+    from app.dependencies import get_container
+
+    container = get_container()
+    vc = getattr(container, "gsm_voice_call", None)
+    if not vc:
+        return {"available": False, "reason": "Voice call service not initialized"}
+    return {"available": True, **vc.get_status()}
+
+
+class VoiceCallConfigRequest(BaseModel):
+    auto_answer: Optional[bool] = None
+    auto_answer_rings: Optional[int] = None
+    greeting: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tts_voice: Optional[str] = None  # "xtts" or "piper"
+    piper_voice: Optional[str] = None  # "irina", "dmitri"
+    rag_mode: Optional[str] = None  # "none", "all", "selected"
+    knowledge_collection_ids: Optional[List[int]] = None
+    llm_backend: Optional[str] = None  # None = system default, "vllm", "cloud:{id}"
+    sms_auto_reply: Optional[bool] = None
+
+
+@router.get("/voice-call/config")
+async def get_voice_call_config(
+    user: User = Depends(require_permission("gsm", "view")),
+) -> dict:
+    """Get voice call AI configuration."""
+    from app.dependencies import get_container
+
+    container = get_container()
+    vc = getattr(container, "gsm_voice_call", None)
+    if not vc:
+        return {"available": False}
+    return {"available": True, **vc.get_config()}
+
+
+@router.put("/voice-call/config")
+async def voice_call_config(
+    request: VoiceCallConfigRequest,
+    user: User = Depends(require_permission("gsm", "manage")),
+) -> dict:
+    """Update voice call AI configuration."""
+    from app.dependencies import get_container
+
+    container = get_container()
+    vc = getattr(container, "gsm_voice_call", None)
+    if not vc:
+        raise HTTPException(status_code=404, detail="Voice call service not available")
+
+    if request.auto_answer is not None:
+        vc.auto_answer = request.auto_answer
+    if request.auto_answer_rings is not None:
+        vc.auto_answer_rings = request.auto_answer_rings
+    if request.greeting is not None:
+        vc.greeting = request.greeting
+    if request.system_prompt is not None:
+        vc.system_prompt = request.system_prompt
+    if request.tts_voice is not None:
+        vc.tts_voice = request.tts_voice
+    if request.piper_voice is not None:
+        vc.piper_voice = request.piper_voice
+    if request.rag_mode is not None:
+        vc.rag_mode = request.rag_mode
+    if request.knowledge_collection_ids is not None:
+        vc.knowledge_collection_ids = request.knowledge_collection_ids
+    if request.llm_backend is not None:
+        vc.llm_backend = request.llm_backend or None  # empty string → None (system default)
+    if request.sms_auto_reply is not None:
+        vc.sms_auto_reply = request.sms_auto_reply
+
+    return {"status": "updated", **vc.get_config()}

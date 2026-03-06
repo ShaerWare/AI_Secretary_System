@@ -46,15 +46,20 @@ export const ttsApi = {
   setVoice: (voice: string) =>
     api.post<{ status: string; engine: string; voice: string }>('/admin/voice', { voice }),
 
-  testVoice: (voice: string) =>
-    fetch(`/admin/voice/test`, {
+  testVoice: (voice: string) => {
+    const token = localStorage.getItem('admin_token')
+    return fetch(`/admin/voice/test`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ voice }),
     }).then(res => {
       if (!res.ok) throw new Error('Test failed')
       return res.blob()
-    }),
+    })
+  },
 
   // XTTS Params
   getXttsParams: () =>
@@ -97,13 +102,18 @@ export const ttsApi = {
     api.delete<{ status: string; cleared_items: number }>('/admin/tts/cache'),
 
   // Test synthesis - returns audio blob for playback
-  testSynthesize: (text: string, preset = 'natural') =>
-    fetch(`/admin/tts/test`, {
+  testSynthesize: (text: string, preset = 'natural') => {
+    const token = localStorage.getItem('admin_token')
+    return fetch(`/admin/tts/test`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ text, preset }),
     }).then(res => {
       if (!res.ok) throw new Error('Synthesis failed')
       return res.blob()
-    }),
+    })
+  },
 }

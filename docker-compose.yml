@@ -142,14 +142,18 @@ services:
   # ---------------------------------------------------------------------------
   # vLLM - Local LLM Inference Server (started on demand from Admin Panel)
   # ---------------------------------------------------------------------------
+  # vLLM — local dev workstation only (GPU required).
+  # On server (cloud mode) vLLM is not used — LLM goes through cloud providers.
   vllm:
     image: vllm/vllm-openai:latest
     container_name: ai-secretary-vllm
     profiles: ["vllm"]  # Not started by default, use: docker compose --profile vllm up -d
+    ports:
+      - "11434:8000"  # Expose to host so local orchestrator (non-Docker) can reach it
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
       --gpu-memory-utilization 0.5
-      --max-model-len 4096
+      --max-model-len 2048
       --dtype float16
       --max-num-seqs 32
       --enforce-eager
@@ -167,7 +171,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['0']  # Use first available GPU for vLLM
+              device_ids: ['1']  # RTX 3060 (GPU 1); GPU 0 is P104-100 (no AWQ support)
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
