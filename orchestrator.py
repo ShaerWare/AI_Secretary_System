@@ -1071,6 +1071,84 @@ async def startup_event():
             except Exception as gsm_err:
                 logger.warning(f"⚠️ GSM service not available: {gsm_err}")
 
+        # Initialize Internet Monitor + LLM auto-switching (skip in cloud mode)
+        if DEPLOYMENT_MODE != "cloud":
+            try:
+                from modules.core.internet_monitor import ConnectivityStatus, InternetMonitor
+
+                async def _switch_llm(status: ConnectivityStatus) -> str:
+                    """Switch LLM backend based on internet connectivity."""
+                    global llm_service, LLM_BACKEND
+                    if status in (ConnectivityStatus.ONLINE, ConnectivityStatus.DEGRADED):
+                        # Try cloud provider: claude_bridge first, then default, then any enabled
+                        try:
+                            providers = await async_cloud_provider_manager.list_providers(
+                                enabled_only=True
+                            )
+                            provider = None
+                            # Priority: claude_bridge > is_default > first enabled
+                            for p in providers or []:
+                                if p.get("provider_type") == "claude_bridge" and p.get("enabled"):
+                                    provider = p
+                                    break
+                            if not provider:
+                                for p in providers or []:
+                                    if p.get("is_default") and p.get("enabled"):
+                                        provider = p
+                                        break
+                            if not provider:
+                                for p in providers or []:
+                                    if p.get("enabled"):
+                                        provider = p
+                                        break
+                            if provider:
+                                provider = await async_cloud_provider_manager.get_provider_with_key(
+                                    provider["id"]
+                                )
+                            if provider:
+                                new_svc = CloudLLMService(provider)
+                                llm_service = new_svc
+                                container.llm_service = new_svc
+                                ptype = provider.get("provider_type", "cloud")
+                                backend = f"cloud ({ptype}: {provider.get('name', '?')})"
+                                LLM_BACKEND = f"cloud:{provider['id']}"
+                                return backend
+                        except Exception as e:
+                            logger.warning(f"Cloud LLM switch failed: {e}")
+                        # Fallback to vLLM even when online
+                        if VLLM_AVAILABLE:
+                            try:
+                                new_svc = VLLMLLMService()
+                                if new_svc.is_available():
+                                    llm_service = new_svc
+                                    container.llm_service = new_svc
+                                    LLM_BACKEND = "vllm"
+                                    return "vllm (cloud unavailable)"
+                            except Exception:
+                                pass
+                        return LLM_BACKEND  # keep current
+                    else:
+                        # Offline — switch to local vLLM
+                        if VLLM_AVAILABLE:
+                            try:
+                                new_svc = VLLMLLMService()
+                                if new_svc.is_available():
+                                    llm_service = new_svc
+                                    container.llm_service = new_svc
+                                    LLM_BACKEND = "vllm"
+                                    return "vllm (offline)"
+                            except Exception as e:
+                                logger.error(f"vLLM fallback failed: {e}")
+                        return LLM_BACKEND  # keep current
+
+                internet_monitor = InternetMonitor(check_interval=30)
+                internet_monitor.set_switch_callback(_switch_llm)
+                await internet_monitor.start()
+                container.internet_monitor = internet_monitor
+                logger.info("✅ InternetMonitor started (auto-switching LLM)")
+            except Exception as im_err:
+                logger.warning(f"⚠️ InternetMonitor not available: {im_err}")
+
         # Initialize Wiki RAG service
         try:
             from app.services.wiki_rag_service import WikiRAGService
@@ -1317,6 +1395,18 @@ async def health_check():
     # Добавляем статистику streaming TTS если доступен
     if streaming_tts_manager is not None:
         result["streaming_tts_stats"] = streaming_tts_manager.get_stats()
+
+    # Internet monitor status
+    im = getattr(container, "internet_monitor", None)
+    if im is not None:
+        st = im.state
+        result["internet"] = {
+            "status": st.status.value,
+            "ping_ms": round(st.ping_ms, 1) if st.ping_ms else None,
+            "current_llm_backend": st.current_llm_backend,
+            "switch_count": st.switch_count,
+            "last_check": st.last_check,
+        }
 
     return result
 
