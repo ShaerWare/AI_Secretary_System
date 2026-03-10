@@ -131,6 +131,8 @@ Foundation layer for modular decomposition (issue #489). Phases 0–2 complete, 
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
 - **`HealthRegistry`** (`modules/core/health.py`): Modular health checks with per-check timeout (`asyncio.wait_for`). Status aggregation: all ok → ok, any degraded → degraded, any error → error.
 
+- **`InternetMonitor`** (`modules/core/internet_monitor.py`): Periodic connectivity checker (ping DNS/Cloudflare). Auto-switches LLM backend: online → cloud provider (claude_bridge priority), offline → local vLLM. Publishes `InternetStatusChanged` events via EventBus. Configurable thresholds, 30s default interval. Status endpoint: `GET /admin/gsm/internet-status`. Health check includes `internet` section.
+
 Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`.
 
 ### Domain Services (`modules/*/service.py`)
@@ -217,6 +219,22 @@ New routers import domain services directly (`from modules.monitoring.service im
 **Demo mode**: `VITE_DEMO_MODE=true` monkey-patches `window.fetch` to intercept API calls with mock data from 23 domain files in `admin/src/api/demo/`.
 
 **Vite base path**: Production `/admin/` (served by FastAPI). Demo/standalone: `/` (via `VITE_BASE_PATH` or `.env.production.local`).
+
+### Mobile App (`mobile/`)
+
+**Stack**: Vue 3 + TypeScript, Vite, Pinia, Vue Router, Capacitor (Android), TailwindCSS 4. Path alias `@` → `mobile/src/`.
+
+**Purpose**: Standalone Android chat app connecting to a remote AI Secretary server. Users enter server URL on first launch, then login with credentials. Each user gets their own workspace/chat history.
+
+**Screens**: LoginView (server URL + auth), ChatListView (session list + FAB), ChatView (streaming chat + TTS), SettingsView.
+
+**Key differences from admin panel**:
+- Configurable remote server URL (stored via `@capacitor/preferences`)
+- JWT stored in native Preferences (not localStorage)
+- No demo mode, no RBAC UI, no admin views — chat only
+- ~77KB gzipped (vs ~2MB admin)
+
+**Build**: `cd mobile && npm run build && npx cap sync android`. APK via Android Studio: `npx cap open android` → Build → Build APK.
 
 ## Code Patterns
 

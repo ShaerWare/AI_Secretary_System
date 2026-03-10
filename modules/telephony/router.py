@@ -222,6 +222,29 @@ async def gsm_status(
     )
 
 
+@router.get("/internet-status")
+async def internet_status(user: User = Depends(require_permission("gsm", "view"))):
+    """Получить статус интернет-подключения и текущий LLM-бэкенд."""
+    from app.dependencies import get_container
+
+    container = get_container()
+    monitor = getattr(container, "internet_monitor", None)
+    if monitor is None:
+        return {"status": "unavailable", "message": "InternetMonitor не запущен"}
+
+    st = monitor.state
+    return {
+        "status": st.status.value,
+        "ping_ms": round(st.ping_ms, 1) if st.ping_ms else None,
+        "current_llm_backend": st.current_llm_backend,
+        "switch_count": st.switch_count,
+        "check_count": st.check_count,
+        "last_check": st.last_check,
+        "last_online": st.last_online,
+        "last_offline": st.last_offline,
+    }
+
+
 @router.post("/initialize")
 async def initialize_module(
     gsm_svc=Depends(get_gsm_service),
