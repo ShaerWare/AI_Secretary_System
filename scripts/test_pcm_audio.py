@@ -139,7 +139,7 @@ def main():
 
         # Calculate RMS
         if len(data) >= 2:
-            samples = struct.unpack(f"<{len(data)//2}h", data)
+            samples = struct.unpack(f"<{len(data) // 2}h", data)
             rms = math.sqrt(sum(s * s for s in samples) / len(samples))
             rms_values.append(rms)
 
