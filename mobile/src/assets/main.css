@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
+  --color-primary: #d4940a;
+  --color-primary-dark: #b37a08;
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -20,8 +20,8 @@ body,
   overflow: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #1a1308;
+  color: #d9c9a8;
 }
 
 /* Prevent pull-to-refresh on Android */
@@ -45,7 +45,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #3d3222;
   border-radius: 2px;
 }
 
@@ -63,7 +63,7 @@ body {
   margin-bottom: 0;
 }
 .markdown-body pre {
-  background: #1e293b;
+  background: #2a2012;
   border-radius: 8px;
   padding: 12px;
   overflow-x: auto;
@@ -71,7 +71,7 @@ body {
   font-size: 0.85em;
 }
 .markdown-body code {
-  background: #1e293b;
+  background: #2a2012;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.9em;
@@ -86,8 +86,8 @@ body {
   margin: 0.4em 0;
 }
 .markdown-body blockquote {
-  border-left: 3px solid #4f46e5;
+  border-left: 3px solid #d4940a;
   padding-left: 12px;
   margin: 0.5em 0;
-  color: #94a3b8;
+  color: #9e8a6a;
 }

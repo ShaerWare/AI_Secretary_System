@@ -39,8 +39,8 @@ function handleSpeak() {
       class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
       :class="
         isUser
-          ? 'bg-indigo-600 text-white rounded-br-md'
-          : 'bg-slate-800 text-slate-200 rounded-bl-md'
+          ? 'bg-amber-600 text-white rounded-br-md'
+          : 'bg-stone-800 text-stone-300 rounded-bl-md'
       "
     >
       <div
@@ -61,7 +61,7 @@ function handleSpeak() {
         class="flex justify-end mt-1 -mb-1"
       >
         <button
-          class="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+          class="p-1 text-stone-500 hover:text-stone-300 transition-colors"
           @click="handleSpeak"
         >
           <svg

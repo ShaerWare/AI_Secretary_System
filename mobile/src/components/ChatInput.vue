@@ -40,7 +40,7 @@ function autoResize(e: Event) {
 
 <template>
   <div
-    class="border-t border-slate-800 bg-slate-900/95 backdrop-blur px-4 py-3 safe-bottom"
+    class="border-t border-stone-800 bg-stone-950/95 backdrop-blur px-4 py-3 safe-bottom"
   >
     <div class="flex items-end gap-2">
       <textarea
@@ -48,7 +48,7 @@ function autoResize(e: Event) {
         v-model="input"
         :disabled="disabled"
         rows="1"
-        class="flex-1 resize-none rounded-xl bg-slate-800 border border-slate-700 px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+        class="flex-1 resize-none rounded-xl bg-stone-800 border border-stone-700 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-500 focus:outline-none focus:border-amber-500 transition-colors"
         placeholder="Message..."
         @keydown="handleKeydown"
         @input="autoResize"
@@ -57,7 +57,7 @@ function autoResize(e: Event) {
       <!-- Stop button (during streaming) -->
       <button
         v-if="isStreaming"
-        class="shrink-0 w-10 h-10 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors"
+        class="shrink-0 w-10 h-10 rounded-xl bg-red-800 hover:bg-red-900 flex items-center justify-center transition-colors"
         @click="$emit('stop')"
       >
         <svg
@@ -76,7 +76,7 @@ function autoResize(e: Event) {
       <button
         v-else
         :disabled="disabled || !input.trim()"
-        class="shrink-0 w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500 flex items-center justify-center transition-colors"
+        class="shrink-0 w-10 h-10 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-stone-500 flex items-center justify-center transition-colors"
         @click="handleSend"
       >
         <svg

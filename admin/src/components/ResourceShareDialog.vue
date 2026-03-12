@@ -25,7 +25,7 @@ export interface ShareableUser {
 }
 
 const props = defineProps<{
-  resourceType: 'bot_instance' | 'widget_instance' | 'whatsapp_instance'
+  resourceType: 'bot_instance' | 'widget_instance' | 'whatsapp_instance' | 'mobile_app_instance'
   resourceId: string
   open: boolean
   getShares: (id: string) => Promise<{ shares: ResourceShare[] }>

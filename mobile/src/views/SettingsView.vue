@@ -29,10 +29,10 @@ async function handleLogout() {
   <div class="h-full flex flex-col">
     <!-- Header -->
     <div
-      class="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-800"
+      class="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-stone-800"
     >
       <button
-        class="text-slate-400 hover:text-white transition-colors"
+        class="text-stone-400 hover:text-white transition-colors"
         @click="router.back()"
       >
         <svg
@@ -55,21 +55,21 @@ async function handleLogout() {
     <div class="flex-1 overflow-y-auto p-4 space-y-6">
       <!-- Account -->
       <div>
-        <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">
+        <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
           Account
         </h2>
-        <div class="bg-slate-800/50 rounded-xl p-4">
+        <div class="bg-stone-800/50 rounded-xl p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-white font-medium">
                 {{ auth.user?.username }}
               </p>
-              <p class="text-slate-500 text-sm">
+              <p class="text-stone-500 text-sm">
                 {{ auth.user?.role }}
               </p>
             </div>
             <button
-              class="px-4 py-2 rounded-lg bg-red-600/20 text-red-400 text-sm hover:bg-red-600/30 transition-colors"
+              class="px-4 py-2 rounded-lg bg-red-800/20 text-red-400 text-sm hover:bg-red-800/30 transition-colors"
               @click="handleLogout"
             >
               Logout
@@ -80,20 +80,20 @@ async function handleLogout() {
 
       <!-- Server -->
       <div>
-        <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">
+        <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
           Server
         </h2>
-        <div class="bg-slate-800/50 rounded-xl p-4 space-y-3">
+        <div class="bg-stone-800/50 rounded-xl p-4 space-y-3">
           <div>
-            <label class="block text-sm text-slate-400 mb-1">URL</label>
+            <label class="block text-sm text-stone-400 mb-1">URL</label>
             <input
               v-model="serverUrl"
               type="url"
-              class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              class="w-full rounded-lg bg-stone-950 border border-stone-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
             />
           </div>
           <button
-            class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
+            class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition-colors"
             @click="save"
           >
             Save
@@ -103,11 +103,11 @@ async function handleLogout() {
 
       <!-- App info -->
       <div>
-        <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">
+        <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
           About
         </h2>
-        <div class="bg-slate-800/50 rounded-xl p-4">
-          <p class="text-slate-400 text-sm">AI Secretary Mobile v1.0.0</p>
+        <div class="bg-stone-800/50 rounded-xl p-4">
+          <p class="text-stone-400 text-sm">AI Secretary Mobile v1.0.0</p>
         </div>
       </div>
     </div>
