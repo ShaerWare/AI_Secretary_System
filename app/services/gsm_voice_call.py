@@ -38,8 +38,11 @@ PCM_FRAME_MS = 20
 PCM_FRAME_BYTES = PCM_SAMPLE_RATE * PCM_SAMPLE_WIDTH * PCM_FRAME_MS // 1000  # 320
 
 # Silence detection
-SILENCE_THRESHOLD = 500  # RMS below this = silence
-SILENCE_DURATION_S = 1.5  # Seconds of silence = end of utterance
+# SIM7600E-H PCM over UART sends data in bursts: 1-2 frames with audio, then
+# 8-10 empty (zero) frames. Only non-empty frames should be used for silence detection.
+SILENCE_THRESHOLD = 300  # RMS below this = silence (non-zero frames only)
+ZERO_FRAME_THRESHOLD = 1.0  # RMS below this = empty UART frame (skip entirely)
+SILENCE_DURATION_S = 2.0  # Seconds of silence (by wall clock) = end of utterance
 MIN_SPEECH_DURATION_S = 0.3  # Minimum speech to consider valid
 
 # Defaults
@@ -340,7 +343,10 @@ class GSMVoiceCallService:
 
     async def _disable_pcm_audio(self) -> None:
         try:
-            await self.gsm.execute_at("AT+CPCMREG=0")
+            ok, _ = await self.gsm.execute_at("AT+CPCMREG=0")
+            if not ok:
+                # May fail if call already ended — that's fine
+                logger.debug("AT+CPCMREG=0 returned error (call may have ended)")
         except Exception:
             pass
 
@@ -364,12 +370,17 @@ class GSMVoiceCallService:
 
     def _write_audio_frame(self, data: bytes) -> bool:
         """Write PCM audio data to modem. Blocking."""
-        if not self._audio_serial or not self._audio_serial.is_open:
+        if not self._audio_serial:
+            logger.debug("PCM write: _audio_serial is None")
+            return False
+        if not self._audio_serial.is_open:
+            logger.debug("PCM write: port not open")
             return False
         try:
             self._audio_serial.write(data)
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"PCM write exception: {e}")
             return False
 
     # ================================================================
@@ -393,7 +404,12 @@ class GSMVoiceCallService:
             await self._speak(assistant_text)
 
     async def _listen(self) -> Optional[str]:
-        """Capture audio from modem PCM, run STT, return text."""
+        """Capture audio from modem PCM, run STT, return text.
+
+        SIM7600E-H sends PCM over UART in bursts: a few frames with real audio
+        followed by many empty (all-zero) frames. We skip empty frames entirely
+        and only use non-empty frames for silence vs speech detection.
+        """
         if not self.stt:
             logger.error("STT service not available")
             return None
@@ -414,6 +430,15 @@ class GSMVoiceCallService:
             rms = np.sqrt(np.mean(samples.astype(np.float32) ** 2))
             now = time.time()
 
+            # Skip empty UART frames (SIM7600 burst pattern)
+            if rms < ZERO_FRAME_THRESHOLD:
+                # Still accumulate zeros in buffer if speech was detected
+                # (preserves timing for STT)
+                if speech_detected:
+                    audio_buffer.extend(frame)
+                continue
+
+            # Non-empty frame — evaluate for speech/silence
             if rms > SILENCE_THRESHOLD:
                 if not speech_detected:
                     speech_detected = True
@@ -471,42 +496,58 @@ class GSMVoiceCallService:
 
         try:
             if self.tts_voice == "xtts" and self.tts_xtts:
-                # XTTS streaming — low latency, cloned voice
+                logger.info(f"TTS: using XTTS for '{text[:50]}...'")
                 await self._speak_xtts(text, loop)
             elif self.tts_piper:
-                # Piper — CPU, pre-trained voices (irina, dmitri)
+                logger.info(f"TTS: using Piper ({self.piper_voice}) for '{text[:50]}...'")
                 await self._speak_piper(text, loop)
             else:
-                logger.warning("No TTS service available")
+                logger.warning(
+                    "No TTS service available (xtts=%s, piper=%s)", self.tts_xtts, self.tts_piper
+                )
         except Exception as e:
-            logger.error(f"TTS playback error: {e}")
+            logger.error(f"TTS playback error: {e}", exc_info=True)
 
     async def _speak_xtts(self, text: str, loop: asyncio.AbstractEventLoop) -> None:
         """Stream XTTS audio to modem."""
+        chunk_idx = 0
         for chunk, sr in self.tts_xtts.synthesize_streaming(
             text, target_sample_rate=PCM_SAMPLE_RATE
         ):
             if not self._is_active:
                 break
+            if chunk_idx == 0:
+                logger.info(
+                    f"XTTS: first chunk {len(chunk)} samples, sr={sr}, "
+                    f"audio_port={'open' if self._audio_serial and self._audio_serial.is_open else 'CLOSED'}"
+                )
+            chunk_idx += 1
             await self._play_pcm_chunk(chunk, loop)
+        logger.info(f"XTTS: sent {chunk_idx} chunks")
 
     async def _speak_piper(self, text: str, loop: asyncio.AbstractEventLoop) -> None:
         """Synthesize with Piper and play to modem."""
         audio_data, sr = await loop.run_in_executor(
             None, self.tts_piper.synthesize, text, self.piper_voice
         )
+        logger.info(f"Piper: synthesized {len(audio_data)} samples at {sr}Hz")
         # Resample to 8kHz if needed
         if sr != PCM_SAMPLE_RATE:
-            from scipy.signal import resample
-
             num_samples = int(len(audio_data) * PCM_SAMPLE_RATE / sr)
-            audio_data = resample(audio_data, num_samples).astype(np.float32)
+            # Use linear interpolation (no scipy dependency)
+            indices = np.linspace(0, len(audio_data) - 1, num_samples)
+            audio_data = np.interp(indices, np.arange(len(audio_data)), audio_data).astype(
+                np.float32
+            )
+            logger.info(f"Piper: resampled to {num_samples} samples at {PCM_SAMPLE_RATE}Hz")
 
         await self._play_pcm_chunk(audio_data, loop)
 
     async def _play_pcm_chunk(self, audio: np.ndarray, loop: asyncio.AbstractEventLoop) -> None:
         """Convert float32 audio to int16 PCM and write to modem."""
         pcm_data = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
+        total_frames = len(pcm_data) // PCM_FRAME_BYTES + 1
+        frames_written = 0
 
         offset = 0
         while offset < len(pcm_data) and self._is_active:
@@ -517,10 +558,15 @@ class GSMVoiceCallService:
 
             ok = await loop.run_in_executor(None, self._write_audio_frame, frame)
             if not ok:
+                logger.warning(f"PCM write failed at frame {frames_written}/{total_frames}")
                 return
+            frames_written += 1
             # Pace to real-time
             await asyncio.sleep(PCM_FRAME_MS / 1000.0 * 0.9)
             offset = end
+
+        duration = frames_written * PCM_FRAME_MS / 1000.0
+        logger.info(f"PCM: played {frames_written} frames ({duration:.1f}s)")
 
     # ================================================================
     # SMS auto-reply

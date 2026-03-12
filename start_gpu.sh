@@ -1,5 +1,5 @@
 #!/bin/bash
-# Запуск AI Secretary System на RTX 3060 (GPU 1)
+# Запуск AI Secretary System на RTX 3060 (GPU 0, единственная)
 # XTTS (Марина) + vLLM работают вместе на одном GPU
 #
 # Доступные модели:
@@ -83,10 +83,9 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# Устанавливаем GPU 1 (RTX 3060) для всех процессов
-# ВАЖНО: CUDA_DEVICE_ORDER=PCI_BUS_ID чтобы GPU нумеровались правильно
+# Устанавливаем GPU 0 (RTX 3060, единственная)
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # 1. Запуск vLLM (фоновый процесс)
 echo "[1/2] Запуск vLLM..."
@@ -108,7 +107,7 @@ case "$MODEL" in
 
         (
             export CUDA_DEVICE_ORDER=PCI_BUS_ID
-            export CUDA_VISIBLE_DEVICES=1
+            export CUDA_VISIBLE_DEVICES=0
             source ~/vllm_env/venv/bin/activate
             vllm serve "Qwen/Qwen2.5-7B-Instruct-AWQ" \
                 --gpu-memory-utilization 0.50 \
@@ -128,7 +127,7 @@ case "$MODEL" in
 
         (
             export CUDA_DEVICE_ORDER=PCI_BUS_ID
-            export CUDA_VISIBLE_DEVICES=1
+            export CUDA_VISIBLE_DEVICES=0
             source ~/vllm_env/venv/bin/activate
             vllm serve "fbaldassarri/meta-llama_Llama-3.1-8B-Instruct-auto_gptq-int4-gs128-sym" \
                 --gpu-memory-utilization 0.50 \
@@ -148,7 +147,7 @@ case "$MODEL" in
 
         (
             export CUDA_DEVICE_ORDER=PCI_BUS_ID
-            export CUDA_VISIBLE_DEVICES=1
+            export CUDA_VISIBLE_DEVICES=0
             source ~/vllm_env/venv/bin/activate
             vllm serve "deepseek-ai/deepseek-llm-7b-chat" \
                 --gpu-memory-utilization 0.50 \

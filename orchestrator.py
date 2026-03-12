@@ -1057,8 +1057,8 @@ async def startup_event():
                     voice_call = GSMVoiceCallService(
                         gsm_service=gsm_service,
                         stt_service=getattr(container, "stt_service", None),
-                        tts_service=getattr(container, "voice_clone_service", None),
-                        piper_service=getattr(container, "piper_service", None),
+                        tts_service=container.anna_voice_service or container.voice_service,
+                        piper_service=container.piper_service,
                         tts_voice="xtts",  # or "piper" for CPU
                         piper_voice="irina",  # irina / dmitri
                         rag_mode="all",  # use all knowledge collections
