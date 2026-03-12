@@ -11,6 +11,7 @@ ENV/
 dist/
 build/
 .venv/
+.venv.disabled/
 
 # Environment (НЕ КОММИТИМ API КЛЮЧИ!)
 .env
