@@ -72,12 +72,12 @@ onMounted(loadSessions);
   <div class="h-full flex flex-col">
     <!-- Header -->
     <div
-      class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-800"
+      class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-800"
     >
       <h1 class="text-lg font-semibold text-white">Chats</h1>
       <div class="flex items-center gap-3">
         <button
-          class="text-slate-400 hover:text-white transition-colors"
+          class="text-stone-400 hover:text-white transition-colors"
           @click="$router.push('/settings')"
         >
           <svg
@@ -98,7 +98,7 @@ onMounted(loadSessions);
           </svg>
         </button>
         <button
-          class="text-slate-400 hover:text-white transition-colors"
+          class="text-stone-400 hover:text-white transition-colors"
           @click="auth.logout(); $router.replace('/login')"
         >
           <svg
@@ -128,7 +128,7 @@ onMounted(loadSessions);
         class="flex items-center justify-center h-32"
       >
         <div
-          class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"
+          class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"
         />
       </div>
 
@@ -139,7 +139,7 @@ onMounted(loadSessions);
       >
         <p class="text-red-400 text-sm">{{ error }}</p>
         <button
-          class="mt-2 text-indigo-400 text-sm"
+          class="mt-2 text-amber-400 text-sm"
           @click="loadSessions"
         >
           Retry
@@ -149,7 +149,7 @@ onMounted(loadSessions);
       <!-- Empty state -->
       <div
         v-else-if="!sessions.length"
-        class="flex flex-col items-center justify-center h-64 text-slate-500"
+        class="flex flex-col items-center justify-center h-64 text-stone-500"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -175,21 +175,21 @@ onMounted(loadSessions);
         <button
           v-for="session in sessions"
           :key="session.id"
-          class="w-full text-left px-4 py-3 border-b border-slate-800/50 hover:bg-slate-800/50 active:bg-slate-800 transition-colors"
+          class="w-full text-left px-4 py-3 border-b border-stone-800/50 hover:bg-stone-800/50 active:bg-stone-800 transition-colors"
           @click="openChat(session.id)"
         >
           <div class="flex items-center justify-between mb-0.5">
             <span class="font-medium text-sm text-white truncate mr-2">
               {{ session.title || "New Chat" }}
             </span>
-            <span class="text-xs text-slate-500 shrink-0">
+            <span class="text-xs text-stone-500 shrink-0">
               {{ formatDate(session.updated) }}
             </span>
           </div>
-          <p class="text-xs text-slate-400 truncate">
+          <p class="text-xs text-stone-400 truncate">
             {{ truncate(session.last_message || "", 80) }}
           </p>
-          <span class="text-xs text-slate-600">
+          <span class="text-xs text-stone-600">
             {{ session.message_count }} messages
           </span>
         </button>
@@ -198,7 +198,7 @@ onMounted(loadSessions);
 
     <!-- FAB -->
     <button
-      class="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-900/50 flex items-center justify-center transition-colors active:scale-95"
+      class="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-900/50 flex items-center justify-center transition-colors active:scale-95"
       @click="createChat"
     >
       <svg

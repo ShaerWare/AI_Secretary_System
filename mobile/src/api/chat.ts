@@ -1,6 +1,7 @@
 import { api } from "./client";
 import { useSettingsStore } from "@/stores/settings";
 import { useAuthStore } from "@/stores/auth";
+import { useMobileConfigStore } from "@/stores/mobileConfig";
 
 export interface ChatMessage {
   id: string;
@@ -52,7 +53,7 @@ export interface StreamChunk {
 export const chatApi = {
   listSessions: () =>
     api.get<{ sessions: ChatSessionSummary[] }>(
-      "/admin/chat/sessions?source=admin",
+      "/admin/chat/sessions?source=mobile",
     ),
 
   getSession: (id: string) =>
@@ -60,11 +61,16 @@ export const chatApi = {
       `/admin/chat/sessions/${id}`,
     ),
 
-  createSession: (title?: string) =>
-    api.post<{ session: ChatSession }>("/admin/chat/sessions", {
+  createSession: (title?: string) => {
+    const config = useMobileConfigStore();
+    const instanceId = config.instance?.id;
+    return api.post<{ session: ChatSession }>("/admin/chat/sessions", {
       title,
-      source: "admin",
-    }),
+      source: "mobile",
+      source_id: instanceId || undefined,
+      system_prompt: config.instance?.system_prompt || undefined,
+    });
+  },
 
   deleteSession: (id: string) =>
     api.delete<{ status: string }>(`/admin/chat/sessions/${id}`),
@@ -76,7 +82,13 @@ export const chatApi = {
   ) => {
     const settings = useSettingsStore();
     const auth = useAuthStore();
+    const config = useMobileConfigStore();
     const controller = new AbortController();
+
+    const body: Record<string, unknown> = { content };
+    if (config.instance?.id) {
+      body.mobile_instance_id = config.instance.id;
+    }
 
     fetch(
       `${settings.serverUrl}/admin/chat/sessions/${sessionId}/stream`,
@@ -86,7 +98,7 @@ export const chatApi = {
           "Content-Type": "application/json",
           ...auth.getAuthHeaders(),
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       },
     )

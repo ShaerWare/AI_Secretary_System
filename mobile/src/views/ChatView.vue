@@ -136,10 +136,10 @@ onMounted(loadSession);
   <div class="h-full flex flex-col">
     <!-- Header -->
     <div
-      class="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/95 backdrop-blur"
+      class="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-stone-800 bg-stone-950/95 backdrop-blur"
     >
       <button
-        class="text-slate-400 hover:text-white transition-colors"
+        class="text-stone-400 hover:text-white transition-colors"
         @click="router.back()"
       >
         <svg
@@ -172,7 +172,7 @@ onMounted(loadSession);
         class="flex items-center justify-center h-32"
       >
         <div
-          class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"
+          class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"
         />
       </div>
 
@@ -213,7 +213,7 @@ onMounted(loadSession);
           class="flex justify-start px-4 mb-3"
         >
           <div
-            class="bg-slate-800 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1"
+            class="bg-stone-800 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1"
           >
             <div
               class="w-2 h-2 rounded-full bg-slate-500 animate-bounce"

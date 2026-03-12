@@ -9,6 +9,7 @@ from db.database import Base
 
 # Domain models
 from modules.admin.models import CONSENT_TYPES, UserConsent
+from modules.channels.mobile.models import MobileAppInstance
 from modules.channels.telegram.models import (
     DEFAULT_ACTION_BUTTONS,
     DEFAULT_AGENT_PROMPTS,
@@ -97,6 +98,7 @@ __all__ = [
     # channels
     "BotInstance",
     "TelegramSession",
+    "MobileAppInstance",
     "WidgetInstance",
     "WhatsAppInstance",
     # telegram sales

@@ -51,6 +51,7 @@ from app.routers import (
     kanban,
     legal,
     llm,
+    mobile,
     monitor,
     roles,
     services,
@@ -435,6 +436,7 @@ app.include_router(telegram.router)
 app.include_router(whatsapp.router)
 app.include_router(usage.router)
 app.include_router(widget.router)
+app.include_router(mobile.router)
 app.include_router(bot_sales.router)
 app.include_router(github_webhook.router)
 app.include_router(yoomoney_webhook.router)

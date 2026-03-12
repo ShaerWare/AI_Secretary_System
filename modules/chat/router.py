@@ -15,6 +15,7 @@ from app.rate_limiter import RATE_LIMIT_CHAT, limiter
 from app.utils.tokens import count_message_tokens, get_context_window, trim_messages
 from auth_manager import User, require_permission, user_has_level, workspace_context
 from cloud_llm_service import CloudLLMService
+from modules.channels.mobile.service import mobile_app_instance_service
 from modules.channels.telegram.service import bot_instance_service
 from modules.channels.whatsapp.service import whatsapp_instance_service
 from modules.channels.widget.service import widget_instance_service
@@ -352,6 +353,7 @@ class SendMessageRequest(BaseModel):
     content: str
     llm_override: Optional[LLMOverrideConfig] = None
     widget_instance_id: Optional[str] = None
+    mobile_instance_id: Optional[str] = None
 
 
 class EditMessageRequest(BaseModel):
@@ -470,12 +472,16 @@ async def admin_create_chat_session(
     """Создать новую чат-сессию"""
     owner_id, ws_id = workspace_context(user, "chat")
 
-    # Auto-apply widget system_prompt if not explicitly provided
+    # Auto-apply instance system_prompt if not explicitly provided
     system_prompt = request.system_prompt
     if request.source == "widget" and request.source_id and not system_prompt:
         widget = await widget_instance_service.get_instance(request.source_id)
         if widget and widget.get("system_prompt"):
             system_prompt = widget["system_prompt"]
+    elif request.source == "mobile" and request.source_id and not system_prompt:
+        mobile_inst = await mobile_app_instance_service.get_instance(request.source_id)
+        if mobile_inst and mobile_inst.get("system_prompt"):
+            system_prompt = mobile_inst["system_prompt"]
 
     session = await chat_service.create_session(
         request.title,
@@ -784,6 +790,26 @@ async def admin_stream_chat_message(
                         logger.warning(f"Widget Gemini cloud override failed: {e}")
             # else use default vllm/llm_service
             custom_prompt = widget.get("system_prompt")
+
+    elif msg_request.mobile_instance_id:
+        mobile_inst = await mobile_app_instance_service.get_instance(msg_request.mobile_instance_id)
+        if mobile_inst:
+            backend = mobile_inst.get("llm_backend")
+            if backend and backend.startswith("cloud:"):
+                provider_id = backend.split(":", 1)[1]
+                try:
+                    provider_config = await cloud_provider_service.get_provider_with_key(
+                        provider_id
+                    )
+                    if provider_config:
+                        active_llm = CloudLLMService(provider_config)
+                        logger.info(
+                            f"Mobile {msg_request.mobile_instance_id}: "
+                            f"using cloud provider {provider_id}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Mobile LLM override failed: {e}")
+            custom_prompt = mobile_inst.get("system_prompt")
 
     if not active_llm:
         raise HTTPException(status_code=503, detail="LLM service not available")

@@ -17,6 +17,7 @@ import {
   Send,
   Code2,
   Phone,
+  Smartphone,
   BookOpen,
   ShoppingCart,
   ShoppingBag,
@@ -78,6 +79,7 @@ const allNavGroups = computed(() => [
       { path: '/telegram', nameKey: 'nav.telegram', icon: Send, module: 'channels' },
       { path: '/whatsapp', nameKey: 'nav.whatsapp', icon: WhatsApp, module: 'channels' },
       { path: '/widget', nameKey: 'nav.widget', icon: Code2, module: 'channels' },
+      { path: '/mobile-app', nameKey: 'nav.mobileApp', icon: Smartphone, module: 'channels' },
       { path: '/gsm', nameKey: 'nav.gsm', icon: Phone, module: 'gsm', localOnly: true },
     ]
   },

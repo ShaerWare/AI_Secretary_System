@@ -35,6 +35,7 @@ from db.repositories.kanban import KanbanRepository
 from db.repositories.kanban_project import KanbanProjectRepository
 from db.repositories.knowledge_collection import KnowledgeCollectionRepository
 from db.repositories.knowledge_document import KnowledgeDocumentRepository
+from db.repositories.mobile_app_instance import MobileAppInstanceRepository
 from db.repositories.payment import PaymentRepository
 from db.repositories.preset import PresetRepository
 from db.repositories.resource_share import ResourceShareRepository
@@ -83,6 +84,7 @@ __all__ = [
     "KanbanProjectRepository",
     "KanbanRepository",
     "KnowledgeCollectionRepository",
+    "MobileAppInstanceRepository",
     "KnowledgeDocumentRepository",
     "PaymentRepository",
     "PresetRepository",

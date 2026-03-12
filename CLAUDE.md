@@ -107,7 +107,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 │                  Orchestrator (port 8002)                     │
 │  orchestrator.py + app/routers/ (28 routers, ~400 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │        Vue 3 Admin Panel (23 views, PWA)                │  │
+│  │        Vue 3 Admin Panel (24 views, PWA)                │  │
 │  │                admin/dist/                              │  │
 │  └────────────────────────────────────────────────────────┘  │
 └────────────┬──────────────┬──────────────┬───────────────────┘
@@ -137,7 +137,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Services (`modules/*/service.py`)
 
-31 service classes extracted from the former monolithic `db/integration.py` into 15 domain files (Phase 2, issue #492):
+32 service classes extracted from the former monolithic `db/integration.py` into 16 domain files (Phase 2, issue #492):
 
 | Module | File | Service Classes |
 |--------|------|-----------------|
@@ -147,6 +147,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 | `modules/channels/telegram/` | `service.py` | `BotInstanceService`, `TelegramSessionService` |
 | `modules/channels/whatsapp/` | `service.py` | `WhatsAppInstanceService` |
 | `modules/channels/widget/` | `service.py` | `WidgetInstanceService` |
+| `modules/channels/mobile/` | `service.py` | `MobileAppInstanceService` |
 | `modules/kanban/` | `service.py` | `KanbanService`, `KanbanProjectService` |
 | `modules/claude_code/` | `service.py` | `ClaudeCodeService`, `ClaudeCodeProjectService` |
 | `modules/llm/` | `service.py` | `CloudProviderService` |
@@ -175,6 +176,7 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 | `modules/channels/telegram/` | `router.py` | `app/routers/telegram.py` |
 | `modules/channels/whatsapp/` | `router.py` | `app/routers/whatsapp.py` |
 | `modules/channels/widget/` | `router.py` | `app/routers/widget.py` |
+| `modules/channels/mobile/` | `router.py` | `app/routers/mobile.py` |
 | `modules/sales/` | `router_bot_sales.py`, `router_yoomoney.py` | `app/routers/bot_sales.py`, `yoomoney_webhook.py` |
 | `modules/core/` | `router_auth.py`, `router_roles.py`, `router_workspace.py` | `app/routers/auth.py`, `roles.py`, `workspace.py` |
 | `modules/admin/` | `router_backup.py`, `router_legal.py`, `router_github_webhook.py` | `app/routers/backup.py`, `legal.py`, `github_webhook.py` |
@@ -227,6 +229,10 @@ New routers import domain services directly (`from modules.monitoring.service im
 **Purpose**: Standalone Android chat app connecting to a remote AI Secretary server. Users enter server URL on first launch, then login with credentials. Each user gets their own workspace/chat history.
 
 **Screens**: LoginView (server URL + auth), ChatListView (session list + FAB), ChatView (streaming chat + TTS), SettingsView.
+
+**Theme**: Night-eyes (warm brown/amber/gold), hardcoded — no theme switching. Background `#1a1308`, text `#d9c9a8`, primary amber-600, cards stone-800.
+
+**Mobile Instances**: Admin creates `MobileAppInstance` (LLM backend, persona, system prompt, TTS, RAG) in admin panel (`/mobile-app` view). Users are assigned to instances via `ResourceShare`. On login, mobile app fetches `GET /admin/mobile/my-config` to get assigned instance config. Chat sessions use `source="mobile"` + `mobile_instance_id` for per-instance LLM/prompt routing.
 
 **Key differences from admin panel**:
 - Configurable remote server URL (stored via `@capacitor/preferences`)

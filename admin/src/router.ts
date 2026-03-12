@@ -12,6 +12,7 @@ import ModelsView from "./views/ModelsView.vue";
 import WidgetView from "./views/WidgetView.vue";
 import TelegramView from "./views/TelegramView.vue";
 import WhatsAppView from "./views/WhatsAppView.vue";
+import MobileAppView from "./views/MobileAppView.vue";
 import GSMView from "./views/GSMView.vue";
 import AuditView from "./views/AuditView.vue";
 import UsageView from "./views/UsageView.vue";
@@ -117,6 +118,12 @@ const router = createRouter({
       name: "whatsapp",
       component: WhatsAppView,
       meta: { title: "WhatsApp", icon: "MessageCircle", module: "channels" },
+    },
+    {
+      path: "/mobile-app",
+      name: "mobile-app",
+      component: MobileAppView,
+      meta: { title: "Mobile App", icon: "Smartphone", module: "channels" },
     },
     {
       path: "/gsm",

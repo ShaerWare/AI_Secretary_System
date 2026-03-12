@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 
 onMounted(async () => {
   if (Capacitor.isNativePlatform()) {
-    await StatusBar.setBackgroundColor({ color: "#0f172a" });
+    await StatusBar.setBackgroundColor({ color: "#1a1308" });
   }
 });
 </script>
