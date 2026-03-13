@@ -534,6 +534,31 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 4.4: Finetune endpoints → modules/llm/ + modules/speech/
+
+> **Статус:** реализовано (PR [#570](https://github.com/ShaerWare/AI_Secretary_System/pull/570), issue [#549](https://github.com/ShaerWare/AI_Secretary_System/issues/549))
+
+Извлечены все LLM и TTS finetune endpoints из `orchestrator.py`.
+
+**modules/llm/router_finetune.py** (~260 строк):
+- 4 Pydantic-модели (`DatasetProcessRequest`, `GenerateProjectDatasetRequest`, `FinetuneConfigRequest`, `AdapterRequest`)
+- 17 эндпоинтов: dataset (upload, process, config, stats, list, augment, generate-project), training (config, start, stop, status, log), adapters (list, activate, delete)
+- Prefix: `/admin/finetune`
+
+**modules/speech/router_finetune.py** (~150 строк):
+- 13 эндпоинтов: config, samples (list, upload, delete, transcript), transcribe, prepare, processing-status, train (start, stop, status, log), models
+- Prefix: `/admin/tts-finetune`
+- `tts_finetune_manager` — optional import (try/except)
+
+**Ключевые решения:**
+- Оба роутера регистрируются только при `DEPLOYMENT_MODE != "cloud"` (GPU-only), внутри существующего `if`-блока
+- Эндпоинты не зависят от глобальных сервисов (`voice_service`, `llm_service`) — работают через свои менеджеры
+- Удалены из orchestrator: `get_finetune_manager`, `get_tts_finetune_manager`, `TTS_FINETUNE_AVAILABLE`, `File`, `UploadFile`
+
+**Результат:** orchestrator.py: 2875 → 2471 строк (−404)
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -561,7 +586,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
