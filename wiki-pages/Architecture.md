@@ -477,7 +477,7 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 **Ключевые решения:**
 - `numpy` — lazy import внутри `_cache_full_audio()` (избегает ошибок импорта в cloud mode без GPU)
 - Глобальная переменная `streaming_tts_manager` и все 17 точек использования остаются в `orchestrator.py` (будут перенесены в Phase 4.5)
-- `synthesize_with_current_voice()` оставлена в orchestrator (зависит от 4 глобалов, будет перенесена в Phase 4.5)
+- `synthesize_with_current_voice()` перенесена в `modules/compat/router.py` в Phase 4.3 (переписана на `get_container()`)
 - 5 неиспользуемых импортов удалены из orchestrator (`hashlib`, `re`, `OrderedDict`, `ThreadPoolExecutor`, `numpy`)
 
 **Результат:** orchestrator.py: 4287 → 4062 строк (−225)
@@ -508,6 +508,32 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 4.3: Legacy/compat + core health → modules/compat/ + modules/core/
+
+> **Статус:** реализовано (PR [#568](https://github.com/ShaerWare/AI_Secretary_System/pull/568), issue [#548](https://github.com/ShaerWare/AI_Secretary_System/issues/548))
+
+Извлечены legacy telephony, OpenAI-compatible и core health endpoints из `orchestrator.py`.
+
+**modules/compat/router.py** (~510 строк):
+- 5 Pydantic-моделей (`ConversationRequest`, `TTSRequest`, `OpenAISpeechRequest`, `ChatMessage`, `ChatCompletionRequest`)
+- `synthesize_with_current_voice()` — хелпер выбора TTS-движка (переписан на `get_container()`)
+- 5 legacy telephony endpoints: `POST /tts`, `POST /stt`, `POST /chat`, `POST /process_call`, `POST /reset_conversation`
+- 4 OpenAI-compatible endpoints: `GET /v1/models`, `GET /v1/voices`, `POST /v1/audio/speech`, `POST /v1/chat/completions`
+
+**modules/core/router_health.py** (~110 строк):
+- `GET /` — root status
+- `GET /health` — полная диагностика (services, database, internet monitor, streaming TTS stats)
+- `GET /admin/deployment-mode` — текущий профиль
+
+**Ключевые решения:**
+- Все обращения к глобальным переменным (`voice_service`, `llm_service`, `stt_service` и т.д.) заменены на `get_container()` → `container.*`
+- Удалены 4 мёртвых дубликата (3 auth endpoints + `/admin/status`), которые были перекрыты роутерами, зарегистрированными раньше
+- `DEPLOYMENT_MODE` читается из `os.getenv()` в каждом модуле (без зависимости от глобала в orchestrator)
+
+**Результат:** orchestrator.py: 3544 → 2875 строк (−669)
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -535,7 +561,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
