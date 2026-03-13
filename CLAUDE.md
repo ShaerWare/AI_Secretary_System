@@ -190,12 +190,14 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 |--------|------------|-----------|
 | `modules/compat/` | `router.py` | Legacy telephony (`/tts`, `/stt`, `/chat`, `/process_call`, `/reset_conversation`) + OpenAI-compat (`/v1/*`) |
 | `modules/core/` | `router_health.py` | `/`, `/health`, `/admin/deployment-mode` |
+| `modules/llm/` | `router_finetune.py` | LLM finetune: dataset, training, LoRA adapters (`/admin/finetune/*`) |
+| `modules/speech/` | `router_finetune.py` | TTS finetune: samples, training, models (`/admin/tts-finetune/*`) |
 
 New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade.
 
 ### Key Components
 
-**`orchestrator.py`** (~2875 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Extracted: `StreamingTTSManager` → `modules/speech/streaming.py` (Phase 4.1), widget public endpoints → `modules/channels/widget/router_public.py` (Phase 4.2), legacy telephony + OpenAI-compat + core health endpoints → `modules/compat/router.py` + `modules/core/router_health.py` (Phase 4.3).
+**`orchestrator.py`** (~2471 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Extracted: `StreamingTTSManager` → `modules/speech/streaming.py` (Phase 4.1), widget public endpoints → `modules/channels/widget/router_public.py` (Phase 4.2), legacy telephony + OpenAI-compat + core health endpoints → `modules/compat/router.py` + `modules/core/router_health.py` (Phase 4.3), finetune endpoints → `modules/llm/router_finetune.py` + `modules/speech/router_finetune.py` (Phase 4.4).
 
 **`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services. Routers get services via FastAPI `Depends`. Populated during app startup.
 
