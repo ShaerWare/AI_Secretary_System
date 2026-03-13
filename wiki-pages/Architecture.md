@@ -484,6 +484,30 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+### Phase 4.2: Widget public endpoints → modules/channels/widget/router_public.py
+
+> **Статус:** реализовано (PR [#566](https://github.com/ShaerWare/AI_Secretary_System/pull/566), issue [#547](https://github.com/ShaerWare/AI_Secretary_System/issues/547))
+
+6 публичных (без auth) widget endpoints + 4 helper-функции извлечены из `orchestrator.py` в `modules/channels/widget/router_public.py`.
+
+**Endpoints:**
+- `GET /widget.js` — динамическая генерация JS-скрипта
+- `GET /widget/status` — проверка enabled
+- `POST /widget/chat/session` — создание сессии
+- `GET /widget/chat/session/{id}` — получение с историей
+- `POST /widget/chat/session/{id}/stream` — SSE стриминг ответа
+- `POST /widget/chat/session/{id}/contacts` — контакты → amoCRM
+
+**Ключевые решения:**
+- Импорты модернизированы: `async_*_manager` → domain singletons (`widget_instance_service`, `chat_service`, `config_service`, `cloud_provider_service`, `user_identity_service`)
+- amoCRM helpers оставлены lazy (try/except) для graceful degradation
+- Widget path: `Path(__file__).parents[3]` (учитывает глубину модуля)
+- 4 неиспользуемых импорта удалены из orchestrator
+
+**Результат:** orchestrator.py: 4062 → 3544 строк (−518)
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -511,7 +535,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 Phase 4.1 ✅ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 

@@ -175,7 +175,7 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 | `modules/claude_code/` | `router.py` | `app/routers/claude_code.py` |
 | `modules/channels/telegram/` | `router.py` | `app/routers/telegram.py` |
 | `modules/channels/whatsapp/` | `router.py` | `app/routers/whatsapp.py` |
-| `modules/channels/widget/` | `router.py` | `app/routers/widget.py` |
+| `modules/channels/widget/` | `router.py`, `router_public.py` | `app/routers/widget.py` (admin); public endpoints direct |
 | `modules/channels/mobile/` | `router.py` | `app/routers/mobile.py` |
 | `modules/sales/` | `router_bot_sales.py`, `router_yoomoney.py` | `app/routers/bot_sales.py`, `yoomoney_webhook.py` |
 | `modules/core/` | `router_auth.py`, `router_roles.py`, `router_workspace.py` | `app/routers/auth.py`, `roles.py`, `workspace.py` |
@@ -188,7 +188,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 ### Key Components
 
-**`orchestrator.py`** (~4060 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Legacy OpenAI-compatible `/v1/*` endpoints still live here. `StreamingTTSManager` extracted to `modules/speech/streaming.py` (Phase 4.1).
+**`orchestrator.py`** (~3540 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Legacy OpenAI-compatible `/v1/*` endpoints still live here. Extracted: `StreamingTTSManager` → `modules/speech/streaming.py` (Phase 4.1), widget public endpoints → `modules/channels/widget/router_public.py` (Phase 4.2).
 
 **`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services. Routers get services via FastAPI `Depends`. Populated during app startup.
 
