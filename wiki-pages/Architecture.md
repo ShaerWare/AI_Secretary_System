@@ -265,7 +265,7 @@ modules/
 | `modules/llm/` | `service.py` | `CloudProviderService` |
 | `modules/monitoring/` | `service.py` | `AuditService`, `PaymentService` |
 | `modules/admin/` | `service.py` | `ResourceShareService` |
-| `modules/speech/` | `service.py` | `PresetService` |
+| `modules/speech/` | `service.py`, `streaming.py` | `PresetService`, `StreamingTTSManager` |
 | `modules/crm/` | `service.py` | `AmoCRMService` |
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
 | `modules/telephony/` | `service.py` | `GSMService` |
@@ -466,6 +466,24 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 ---
 
+## Phase 4: Декомпозиция orchestrator.py
+
+### Phase 4.1: StreamingTTSManager → modules/speech/streaming.py
+
+> **Статус:** реализовано (PR [#564](https://github.com/ShaerWare/AI_Secretary_System/pull/564), issue [#546](https://github.com/ShaerWare/AI_Secretary_System/issues/546))
+
+Класс `StreamingTTSManager` (220 строк) извлечён из `orchestrator.py` в `modules/speech/streaming.py`. Менеджер обеспечивает параллельный синтез TTS во время streaming LLM: накапливает текст, разбивает на предложения, синтезирует в `ThreadPoolExecutor`, кэширует склеенное аудио.
+
+**Ключевые решения:**
+- `numpy` — lazy import внутри `_cache_full_audio()` (избегает ошибок импорта в cloud mode без GPU)
+- Глобальная переменная `streaming_tts_manager` и все 17 точек использования остаются в `orchestrator.py` (будут перенесены в Phase 4.5)
+- `synthesize_with_current_voice()` оставлена в orchestrator (зависит от 4 глобалов, будет перенесена в Phase 4.5)
+- 5 неиспользуемых импортов удалены из orchestrator (`hashlib`, `re`, `OrderedDict`, `ThreadPoolExecutor`, `numpy`)
+
+**Результат:** orchestrator.py: 4287 → 4062 строк (−225)
+
+---
+
 ## Тесты
 
 24 unit-теста для core-инфраструктуры:
@@ -493,7 +511,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ⏳ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 Phase 4.1 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 

@@ -105,7 +105,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (28 routers, ~400 endpoints) │
+│  orchestrator.py + app/routers/ (21 routers, ~371 endpoints) │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (24 views, PWA)                │  │
 │  │                admin/dist/                              │  │
@@ -125,7 +125,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phases 0–2 complete, Phase 3 complete (all 28 routers migrated).
+Foundation layer for modular decomposition (issue #489). Phases 0–3 complete (all 28 routers migrated). Phase 4 (orchestrator decomposition) in progress.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error.
@@ -153,7 +153,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 | `modules/llm/` | `service.py` | `CloudProviderService` |
 | `modules/monitoring/` | `service.py` | `AuditService`, `PaymentService` |
 | `modules/admin/` | `service.py` | `ResourceShareService` |
-| `modules/speech/` | `service.py` | `PresetService` |
+| `modules/speech/` | `service.py`, `streaming.py` | `PresetService`, `StreamingTTSManager` |
 | `modules/crm/` | `service.py` | `AmoCRMService` |
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
 | `modules/telephony/` | `service.py` | `GSMService` |
@@ -188,7 +188,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 ### Key Components
 
-**`orchestrator.py`** (~4100 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Legacy OpenAI-compatible `/v1/*` endpoints still live here.
+**`orchestrator.py`** (~4060 lines): FastAPI entry point. Initializes all services as module-level globals, populates `ServiceContainer`, includes all routers. Legacy OpenAI-compatible `/v1/*` endpoints still live here. `StreamingTTSManager` extracted to `modules/speech/streaming.py` (Phase 4.1).
 
 **`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services. Routers get services via FastAPI `Depends`. Populated during app startup.
 
@@ -322,6 +322,13 @@ docker compose restart ai-secretary          # REQUIRED: re-bind new dist/ inode
 5. Build — `npm run build` (verify `VITE_DEMO_MODE` is NOT set)
 6. Restart — `docker compose restart ai-secretary`
 7. Verify — `curl http://localhost:8002/health` + test `/admin/auth/login`
+
+### Automated Deployment
+
+```bash
+./deploy.sh                # git pull, re-apply patches, build admin, restart orchestrator
+./test_system.sh           # Quick health checks and API smoke tests
+```
 
 ### Demo Sites
 
