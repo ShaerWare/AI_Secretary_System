@@ -557,6 +557,40 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 **Результат:** orchestrator.py: 2875 → 2471 строк (−404)
 
+### Phase 4.5: Remaining admin endpoints → modules/speech/ + modules/llm/ + modules/monitoring/
+
+> **Статус:** реализовано (PR [#572](https://github.com/ShaerWare/AI_Secretary_System/pull/572), issue [#550](https://github.com/ShaerWare/AI_Secretary_System/issues/550))
+
+Извлечены ВСЕ оставшиеся inline-эндпоинты из `orchestrator.py`. После этой фазы в файле **ноль** `@app.get/post/put/delete` — остались только `@app.on_event("startup")` и `@app.on_event("shutdown")`.
+
+**modules/speech/router_voices.py** (~205 строк):
+- `VoiceRequest` Pydantic-модель
+- 4 эндпоинта: `GET /admin/voices`, `GET /admin/voice`, `POST /admin/voice`, `POST /admin/voice/test`
+- Все используют `get_container()` вместо глобальных переменных
+
+**modules/llm/router_models.py** (~113 строк):
+- 10 эндпоинтов: list, scan (start/cancel/status), download (start/cancel/status), delete, search, details
+- Prefix: `/admin/models`
+- Использует `get_model_manager()`
+
+**modules/monitoring/router_logs.py** (~53 строки):
+- 3 эндпоинта: list, read, stream (SSE)
+- Prefix: `/admin/logs`
+- SSE streaming использует `require_permission("system", "view")`
+
+**Что удалено из orchestrator.py:**
+- 52 inline-эндпоинта (35 мёртвых дубликатов + 17 уникальных)
+- 18 Pydantic-моделей (все продублированы в модульных роутерах)
+- `get_current_tts_service()` helper
+- 16 неиспользуемых импортов
+
+**Ключевые решения:**
+- `router_voices.py` и `router_models.py` регистрируются внутри `if DEPLOYMENT_MODE != "cloud"` (GPU-only)
+- `router_logs.py` регистрируется безусловно (доступен во всех режимах)
+- 35 из 52 эндпоинтов были мёртвыми дубликатами (shadowed модульными роутерами, зарегистрированными ранее)
+
+**Результат:** orchestrator.py: 2471 → 1121 строк (−1350). Содержит: импорты, middleware, регистрацию роутеров, глобальные сервисные переменные, startup/shutdown lifecycle, раздачу статических файлов.
+
 ---
 
 ## Тесты
@@ -586,7 +620,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ 4.5 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
