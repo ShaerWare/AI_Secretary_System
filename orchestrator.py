@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
     RedirectResponse,
@@ -83,7 +83,6 @@ from db.integration import (
 )
 
 # Database integration
-from finetune_manager import get_finetune_manager
 from model_manager import get_model_manager
 
 
@@ -109,14 +108,6 @@ except ImportError:
 
 from system_monitor import get_system_monitor
 
-
-try:
-    from tts_finetune_manager import get_tts_finetune_manager
-
-    TTS_FINETUNE_AVAILABLE = True
-except ImportError:
-    TTS_FINETUNE_AVAILABLE = False
-    get_tts_finetune_manager = None
 
 # Импорты наших сервисов
 try:
@@ -231,6 +222,12 @@ if DEPLOYMENT_MODE != "cloud":
         app.include_router(stt.router)
     if tts is not None:
         app.include_router(tts.router)
+    # Finetune routers (Phase 4.4) — GPU-only
+    from modules.llm.router_finetune import router as llm_finetune_router
+    from modules.speech.router_finetune import router as tts_finetune_router
+
+    app.include_router(llm_finetune_router)
+    app.include_router(tts_finetune_router)
 
 # Глобальные сервисы
 voice_service: Optional["VoiceCloneService"] = None  # XTTS (Марина) - GPU CC >= 7.0
@@ -1464,21 +1461,6 @@ class AdminTelegramConfigRequest(BaseModel):
     typing_enabled: bool = True
 
 
-class AdminFinetuneConfigRequest(BaseModel):
-    lora_rank: Optional[int] = None
-    lora_alpha: Optional[int] = None
-    batch_size: Optional[int] = None
-    gradient_accumulation_steps: Optional[int] = None
-    learning_rate: Optional[float] = None
-    num_epochs: Optional[int] = None
-    max_seq_length: Optional[int] = None
-    output_dir: Optional[str] = None
-
-
-class AdminAdapterRequest(BaseModel):
-    adapter: str
-
-
 class AdminAuditQueryRequest(BaseModel):
     action: Optional[str] = None
     resource: Optional[str] = None
@@ -2158,392 +2140,6 @@ async def admin_reset_persona_prompt(persona: str):
     """Сбросить системный промпт персоны на значение по умолчанию"""
     # TODO: Реализовать хранение оригинальных промптов
     raise HTTPException(status_code=501, detail="Not implemented yet")
-
-
-# ============== Fine-tuning Endpoints ==============
-
-
-@app.post("/admin/finetune/dataset/upload")
-async def admin_upload_dataset(file: UploadFile = File(...)):
-    """Загрузить датасет (Telegram export JSON)"""
-    manager = get_finetune_manager()
-    content = await file.read()
-    return await manager.upload_dataset(content, file.filename)
-
-
-class DatasetProcessRequest(BaseModel):
-    owner_name: Optional[str] = None
-    transcribe_voice: Optional[bool] = None
-    min_dialog_messages: Optional[int] = None
-    max_message_length: Optional[int] = None
-    max_dialog_length: Optional[int] = None
-    include_groups: Optional[bool] = None
-    output_name: Optional[str] = None
-
-
-@app.post("/admin/finetune/dataset/process")
-async def admin_process_dataset(request: Optional[DatasetProcessRequest] = None):
-    """Обработать загруженный датасет"""
-    manager = get_finetune_manager()
-    config = request.model_dump(exclude_none=True) if request else None
-    return await manager.process_dataset(config)
-
-
-@app.get("/admin/finetune/dataset/config")
-async def admin_get_dataset_config():
-    """Получить конфигурацию обработки датасета"""
-    manager = get_finetune_manager()
-    return {"config": manager.get_dataset_config()}
-
-
-@app.post("/admin/finetune/dataset/config")
-async def admin_set_dataset_config(request: DatasetProcessRequest):
-    """Установить конфигурацию обработки датасета"""
-    manager = get_finetune_manager()
-    return manager.set_dataset_config(**request.model_dump(exclude_none=True))
-
-
-@app.get("/admin/finetune/dataset/processing-status")
-async def admin_get_processing_status():
-    """Получить статус обработки датасета"""
-    manager = get_finetune_manager()
-    return {"status": manager.get_processing_status()}
-
-
-@app.get("/admin/finetune/dataset/stats")
-async def admin_get_dataset_stats():
-    """Получить статистику датасета"""
-    manager = get_finetune_manager()
-    stats = manager.get_dataset_stats()
-    return {
-        "stats": {
-            "total_sessions": stats.total_sessions,
-            "total_messages": stats.total_messages,
-            "total_tokens": stats.total_tokens,
-            "avg_tokens_per_message": stats.avg_tokens_per_message,
-            "file_path": stats.file_path,
-            "file_size_mb": stats.file_size_mb,
-            "modified": stats.modified,
-        }
-    }
-
-
-@app.get("/admin/finetune/dataset/list")
-async def admin_list_datasets():
-    """Список доступных датасетов"""
-    manager = get_finetune_manager()
-    return {"datasets": manager.list_datasets()}
-
-
-@app.post("/admin/finetune/dataset/augment")
-async def admin_augment_dataset():
-    """Аугментировать датасет"""
-    manager = get_finetune_manager()
-    return await manager.augment_dataset()
-
-
-class GenerateProjectDatasetRequest(BaseModel):
-    include_tz: bool = True
-    include_faq: bool = True
-    include_docs: bool = True
-    include_escalation: bool = True
-    include_code: bool = True  # Python код и Markdown документация
-    github_repo_url: Optional[str] = None  # URL публичного GitHub/GitLab репозитория
-    github_branch: str = "main"  # Ветка для клонирования
-    output_name: str = "project_dataset"
-
-
-@app.post("/admin/finetune/dataset/generate-project")
-async def admin_generate_project_dataset(request: GenerateProjectDatasetRequest):
-    """Генерировать датасет из проектных источников (ТЗ, FAQ, документация, эскалации, код, GitHub)"""
-    manager = get_finetune_manager()
-    return await manager.generate_project_dataset(
-        include_tz=request.include_tz,
-        include_faq=request.include_faq,
-        include_docs=request.include_docs,
-        include_escalation=request.include_escalation,
-        include_code=request.include_code,
-        github_repo_url=request.github_repo_url,
-        github_branch=request.github_branch,
-        output_name=request.output_name,
-    )
-
-
-@app.get("/admin/finetune/config")
-async def admin_get_finetune_config():
-    """Получить конфигурацию обучения"""
-    manager = get_finetune_manager()
-    config = manager.get_config()
-    return {
-        "config": {
-            "base_model": config.base_model,
-            "lora_rank": config.lora_rank,
-            "lora_alpha": config.lora_alpha,
-            "lora_dropout": config.lora_dropout,
-            "batch_size": config.batch_size,
-            "gradient_accumulation_steps": config.gradient_accumulation_steps,
-            "learning_rate": config.learning_rate,
-            "num_epochs": config.num_epochs,
-            "warmup_ratio": config.warmup_ratio,
-            "max_seq_length": config.max_seq_length,
-            "output_dir": config.output_dir,
-        },
-        "presets": {
-            name: {
-                "lora_rank": p.lora_rank,
-                "batch_size": p.batch_size,
-                "num_epochs": p.num_epochs,
-            }
-            for name, p in manager.get_config_presets().items()
-        },
-    }
-
-
-@app.post("/admin/finetune/config")
-async def admin_set_finetune_config(request: AdminFinetuneConfigRequest):
-    """Установить конфигурацию обучения"""
-    manager = get_finetune_manager()
-    config = manager.get_config()
-
-    # Обновляем только переданные параметры
-    if request.lora_rank is not None:
-        config.lora_rank = request.lora_rank
-    if request.lora_alpha is not None:
-        config.lora_alpha = request.lora_alpha
-    if request.batch_size is not None:
-        config.batch_size = request.batch_size
-    if request.gradient_accumulation_steps is not None:
-        config.gradient_accumulation_steps = request.gradient_accumulation_steps
-    if request.learning_rate is not None:
-        config.learning_rate = request.learning_rate
-    if request.num_epochs is not None:
-        config.num_epochs = request.num_epochs
-    if request.max_seq_length is not None:
-        config.max_seq_length = request.max_seq_length
-    if request.output_dir is not None:
-        config.output_dir = request.output_dir
-
-    return manager.set_config(config)
-
-
-@app.post("/admin/finetune/train/start")
-async def admin_start_training():
-    """Запустить обучение"""
-    manager = get_finetune_manager()
-    return await manager.start_training()
-
-
-@app.post("/admin/finetune/train/stop")
-async def admin_stop_training():
-    """Остановить обучение"""
-    manager = get_finetune_manager()
-    return await manager.stop_training()
-
-
-@app.get("/admin/finetune/train/status")
-async def admin_get_training_status():
-    """Получить статус обучения"""
-    manager = get_finetune_manager()
-    status = manager.get_training_status()
-    return {
-        "status": {
-            "is_running": status.is_running,
-            "current_step": status.current_step,
-            "total_steps": status.total_steps,
-            "current_epoch": status.current_epoch,
-            "total_epochs": status.total_epochs,
-            "loss": status.loss,
-            "learning_rate": status.learning_rate,
-            "elapsed_seconds": status.elapsed_seconds,
-            "eta_seconds": status.eta_seconds,
-            "error": status.error,
-        }
-    }
-
-
-@app.get("/admin/finetune/train/log")
-async def admin_stream_training_log(
-    user: User = Depends(require_permission("system", "view")),
-):
-    """SSE streaming лога обучения"""
-    manager = get_finetune_manager()
-
-    async def generate():
-        async for data in manager.stream_training_log():
-            yield f"data: {data}\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
-
-
-@app.get("/admin/finetune/adapters")
-async def admin_list_adapters():
-    """Получить список LoRA адаптеров"""
-    manager = get_finetune_manager()
-    adapters = manager.list_adapters()
-    return {
-        "adapters": [
-            {
-                "name": a.name,
-                "path": a.path,
-                "size_mb": a.size_mb,
-                "modified": a.modified,
-                "active": a.active,
-                "config": a.config,
-            }
-            for a in adapters
-        ],
-        "active": manager.active_adapter,
-    }
-
-
-@app.post("/admin/finetune/adapters/activate")
-async def admin_activate_adapter(request: AdminAdapterRequest):
-    """Активировать LoRA адаптер"""
-    manager = get_finetune_manager()
-    return await manager.activate_adapter(request.adapter)
-
-
-@app.delete("/admin/finetune/adapters/{name}")
-async def admin_delete_adapter(name: str):
-    """Удалить LoRA адаптер"""
-    manager = get_finetune_manager()
-    return await manager.delete_adapter(name)
-
-
-# ============== TTS Finetune Endpoints ==============
-
-
-@app.get("/admin/tts-finetune/config")
-async def admin_get_tts_finetune_config():
-    """Получить конфигурацию TTS fine-tuning"""
-    manager = get_tts_finetune_manager()
-    return {"config": manager.get_config()}
-
-
-@app.post("/admin/tts-finetune/config")
-async def admin_set_tts_finetune_config(config: dict):
-    """Обновить конфигурацию TTS fine-tuning"""
-    manager = get_tts_finetune_manager()
-    return {"status": "ok", "config": manager.set_config(config)}
-
-
-@app.get("/admin/tts-finetune/samples")
-async def admin_get_tts_samples():
-    """Получить список образцов голоса"""
-    manager = get_tts_finetune_manager()
-    return {"samples": manager.get_samples()}
-
-
-@app.post("/admin/tts-finetune/samples/upload")
-async def admin_upload_tts_sample(file: UploadFile = File(...)):
-    """Загрузить образец голоса"""
-    manager = get_tts_finetune_manager()
-    content = await file.read()
-    sample = manager.add_sample(file.filename, content)
-    return {
-        "status": "ok",
-        "sample": {
-            "filename": sample.filename,
-            "path": sample.path,
-            "duration_sec": sample.duration_sec,
-            "size_kb": sample.size_kb,
-        },
-    }
-
-
-@app.delete("/admin/tts-finetune/samples/{filename}")
-async def admin_delete_tts_sample(filename: str):
-    """Удалить образец голоса"""
-    manager = get_tts_finetune_manager()
-    if manager.delete_sample(filename):
-        return {"status": "ok", "message": f"Sample {filename} deleted"}
-    raise HTTPException(status_code=404, detail="Sample not found")
-
-
-@app.put("/admin/tts-finetune/samples/{filename}/transcript")
-async def admin_update_tts_transcript(filename: str, request: dict):
-    """Обновить транскрипцию образца"""
-    manager = get_tts_finetune_manager()
-    transcript = request.get("transcript", "")
-    sample = manager.update_transcript(filename, transcript)
-    if not sample:
-        raise HTTPException(status_code=404, detail="Sample not found")
-    return {
-        "status": "ok",
-        "sample": {
-            "filename": sample.filename,
-            "transcript": sample.transcript,
-            "transcript_edited": sample.transcript_edited,
-        },
-    }
-
-
-@app.post("/admin/tts-finetune/transcribe")
-async def admin_transcribe_tts_samples():
-    """Запустить транскрибацию образцов через Whisper"""
-    manager = get_tts_finetune_manager()
-    if manager.transcribe_samples():
-        return {"status": "ok", "message": "Transcription started"}
-    return {"status": "error", "message": "Already running or no samples to transcribe"}
-
-
-@app.post("/admin/tts-finetune/prepare")
-async def admin_prepare_tts_dataset():
-    """Подготовить датасет (извлечь audio_codes)"""
-    manager = get_tts_finetune_manager()
-    if manager.prepare_dataset():
-        return {"status": "ok", "message": "Dataset preparation started"}
-    return {"status": "error", "message": "Already running or no samples with transcripts"}
-
-
-@app.get("/admin/tts-finetune/processing-status")
-async def admin_get_tts_processing_status():
-    """Получить статус обработки"""
-    manager = get_tts_finetune_manager()
-    return {"status": manager.get_processing_status()}
-
-
-@app.post("/admin/tts-finetune/train/start")
-async def admin_start_tts_training():
-    """Запустить обучение TTS"""
-    manager = get_tts_finetune_manager()
-    if manager.start_training():
-        return {"status": "ok", "message": "Training started"}
-    return {"status": "error", "message": "Already running or dataset not prepared"}
-
-
-@app.post("/admin/tts-finetune/train/stop")
-async def admin_stop_tts_training():
-    """Остановить обучение TTS"""
-    manager = get_tts_finetune_manager()
-    if manager.stop_training():
-        return {"status": "ok", "message": "Training stopped"}
-    return {"status": "error", "message": "Training not running"}
-
-
-@app.get("/admin/tts-finetune/train/status")
-async def admin_get_tts_training_status():
-    """Получить статус обучения TTS"""
-    manager = get_tts_finetune_manager()
-    return {"status": manager.get_training_status()}
-
-
-@app.get("/admin/tts-finetune/train/log")
-async def admin_get_tts_training_log():
-    """Получить лог обучения TTS"""
-    manager = get_tts_finetune_manager()
-    return {"log": manager.get_training_log()}
-
-
-@app.get("/admin/tts-finetune/models")
-async def admin_get_tts_trained_models():
-    """Получить список обученных TTS моделей"""
-    manager = get_tts_finetune_manager()
-    return {"models": manager.get_trained_models()}
 
 
 # ============== Monitoring Endpoints ==============
