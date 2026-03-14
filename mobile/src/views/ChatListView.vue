@@ -27,15 +27,6 @@ async function loadSessions() {
   }
 }
 
-async function createChat() {
-  try {
-    const data = await chatApi.createSession();
-    router.push(`/chat/${data.session.id}`);
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to create";
-  }
-}
-
 function openChat(id: string) {
   router.push(`/chat/${id}`);
 }
@@ -196,25 +187,5 @@ onMounted(loadSessions);
       </div>
     </div>
 
-    <!-- FAB -->
-    <button
-      class="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-900/50 flex items-center justify-center transition-colors active:scale-95"
-      @click="createChat"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="white"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-    </button>
   </div>
 </template>
