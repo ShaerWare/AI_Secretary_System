@@ -53,7 +53,7 @@ export interface StreamChunk {
 export const chatApi = {
   listSessions: () =>
     api.get<{ sessions: ChatSessionSummary[] }>(
-      "/admin/chat/sessions?source=mobile",
+      "/admin/chat/sessions",
     ),
 
   getSession: (id: string) =>
