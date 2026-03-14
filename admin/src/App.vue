@@ -94,9 +94,12 @@ const widgetPoll = setInterval(() => {
 onUnmounted(() => clearInterval(widgetPoll))
 
 // Page title from route meta
+const routeToNavKey: Record<string, string> = { 'mobile-app': 'mobileApp' }
 const currentTitle = computed(() => {
-  const meta = route.meta as { title?: string }
-  return meta?.title || 'Admin'
+  const name = route.name as string
+  const navKey = routeToNavKey[name] || name
+  const translated = navKey ? t(`nav.${navKey}`) : null
+  return translated && !translated.startsWith('nav.') ? translated : (route.meta as { title?: string })?.title || 'Admin'
 })
 
 const isLoginPage = computed(() => route.name === 'login')

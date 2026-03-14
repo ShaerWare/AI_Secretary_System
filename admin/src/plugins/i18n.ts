@@ -5,7 +5,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Панель управления",
-      chat: "Чаты с Ассистентами",
+      chat: "Ассистенты",
       services: "Сервисы",
       llm: "LLM",
       tts: "Голос",
@@ -270,7 +270,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Чаты с Ассистентами",
+      title: "Ассистенты",
       newChat: "Новый чат",
       deleteChat: "Удалить чат",
       deleteSelected: "Удалить выбранные",
@@ -1338,7 +1338,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Dashboard",
-      chat: "Chats with Assistants",
+      chat: "Assistants",
       services: "Services",
       llm: "LLM",
       tts: "TTS",
@@ -1602,7 +1602,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Chats with Assistants",
+      title: "Assistants",
       newChat: "New Chat",
       deleteChat: "Delete chat",
       deleteSelected: "Delete selected",
@@ -2669,7 +2669,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Басқару тақтасы",
-      chat: "Көмекшілермен чаттар",
+      chat: "Көмекшілер",
       services: "Сервистер",
       llm: "LLM",
       tts: "Дауыс",
@@ -2933,7 +2933,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Көмекшілермен чаттар",
+      title: "Көмекшілер",
       newChat: "Жаңа чат",
       deleteChat: "Чатты жою",
       deleteSelected: "Таңдалғандарды жою",
