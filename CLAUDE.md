@@ -47,6 +47,16 @@ python scripts/manage_users.py set-role <user> <role>        # Change role
 python scripts/manage_users.py disable <user>                # Deactivate
 ```
 
+### Mobile Internet (SIM7600E-H QMI)
+
+```bash
+sudo bash scripts/setup_mobile_internet.sh start   # Connect wwan0 via QMI
+sudo bash scripts/setup_mobile_internet.sh stop    # Disconnect
+sudo bash scripts/setup_mobile_internet.sh status  # Check connection
+sudo bash scripts/mobile-internet-monitor.sh       # Daemon: auto-reconnect + VPN route failover
+# systemd: scripts/mobile-internet.service          # Install as persistent service
+```
+
 ### Database Migrations
 
 Three migration systems:

@@ -1,0 +1,17 @@
+[Unit]
+Description=SIM7600E-H Mobile Internet Monitor
+Documentation=https://github.com/ShaerWare/AI_Secretary_System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/shaerware/Documents/AI_Secretary_System/scripts/mobile-internet-monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mobile-inet
+
+[Install]
+WantedBy=multi-user.target
