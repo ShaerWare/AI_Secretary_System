@@ -133,6 +133,7 @@ async def _resolve_rag_config(
     session_data: dict,
     llm_override: Optional["LLMOverrideConfig"] = None,
     widget_instance_id: Optional[str] = None,
+    mobile_instance_id: Optional[str] = None,
 ) -> tuple[str, list[int]]:
     """Resolve RAG mode and collection_ids from context.
 
@@ -141,7 +142,7 @@ async def _resolve_rag_config(
     - "selected"/"collection" + [selected collection IDs]
     - "none" + []
 
-    Priority chain: override → widget → telegram → whatsapp → session → default.
+    Priority chain: override → widget → mobile → telegram → whatsapp → session → default.
     """
 
     def _resolve_from_config(cfg: dict) -> tuple[str, list[int]] | None:
@@ -174,7 +175,18 @@ async def _resolve_rag_config(
                     ids = await _get_all_enabled_collection_ids()
                 return mode, ids
 
-    # 3. Telegram bot instance
+    # 3. Mobile app instance
+    if mobile_instance_id:
+        mobile_inst = await mobile_app_instance_service.get_instance(mobile_instance_id)
+        if mobile_inst:
+            result = _resolve_from_config(mobile_inst)
+            if result:
+                mode, ids = result
+                if mode == "all":
+                    ids = await _get_all_enabled_collection_ids()
+                return mode, ids
+
+    # 4. Telegram bot instance
     source = session_data.get("source")
     source_id = session_data.get("source_id")
     if source == "telegram_bot" and source_id:
@@ -825,7 +837,10 @@ async def admin_stream_chat_message(
 
     # RAG: inject relevant wiki context based on rag_mode
     rag_mode, collection_ids = await _resolve_rag_config(
-        session, msg_request.llm_override, msg_request.widget_instance_id
+        session,
+        msg_request.llm_override,
+        msg_request.widget_instance_id,
+        msg_request.mobile_instance_id,
     )
     wiki_rag = container.wiki_rag_service
     use_agentic = _should_use_agentic_rag(active_llm, rag_mode, collection_ids, wiki_rag)

@@ -5,7 +5,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Панель управления",
-      chat: "Ассистенты",
+      chat: "Чаты с Ассистентами",
       services: "Сервисы",
       llm: "LLM",
       tts: "Голос",
@@ -270,7 +270,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Ассистенты",
+      title: "Чаты с Ассистентами",
       newChat: "Новый чат",
       deleteChat: "Удалить чат",
       deleteSelected: "Удалить выбранные",
@@ -301,7 +301,7 @@ const messages = {
       ragCollection: "Коллекция знаний",
       ragCollections: "Коллекции знаний",
       ragCollectionSelect: "Выберите коллекцию",
-      branchTree: "Дерево веток",
+      branchTree: "Дерево веток чата",
       newBranch: "Новая ветка",
       version: "Версия {current} из {total}",
       switchBranch: "Переключить ветку",
@@ -1338,7 +1338,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Dashboard",
-      chat: "Assistants",
+      chat: "Chats with Assistants",
       services: "Services",
       llm: "LLM",
       tts: "TTS",
@@ -1602,7 +1602,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Assistants",
+      title: "Chats with Assistants",
       newChat: "New Chat",
       deleteChat: "Delete chat",
       deleteSelected: "Delete selected",
@@ -2669,7 +2669,7 @@ const messages = {
     // Navigation
     nav: {
       dashboard: "Басқару тақтасы",
-      chat: "Көмекшілер",
+      chat: "Көмекшілермен чаттар",
       services: "Сервистер",
       llm: "LLM",
       tts: "Дауыс",
@@ -2933,7 +2933,7 @@ const messages = {
     },
     // Chat View
     chatView: {
-      title: "Көмекшілер",
+      title: "Көмекшілермен чаттар",
       newChat: "Жаңа чат",
       deleteChat: "Чатты жою",
       deleteSelected: "Таңдалғандарды жою",
