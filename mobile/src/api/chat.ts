@@ -19,12 +19,26 @@ export interface TokenUsage {
   trimmed?: boolean;
 }
 
+export interface ContextFile {
+  name: string;
+  content: string;
+}
+
+export interface BranchNode {
+  id: string;
+  role: string;
+  content_preview: string;
+  is_active: boolean;
+  children: BranchNode[];
+}
+
 export interface ChatSession {
   id: string;
   title: string;
   messages: ChatMessage[];
   system_prompt?: string;
   source?: string | null;
+  context_files?: ContextFile[];
   created: string;
   updated: string;
   token_usage?: TokenUsage;
@@ -74,6 +88,41 @@ export const chatApi = {
 
   deleteSession: (id: string) =>
     api.delete<{ status: string }>(`/admin/chat/sessions/${id}`),
+
+  updateSession: (
+    id: string,
+    data: {
+      title?: string;
+      system_prompt?: string;
+      context_files?: ContextFile[];
+    },
+  ) =>
+    api.put<{ session: ChatSession }>(
+      `/admin/chat/sessions/${id}`,
+      data,
+    ),
+
+  deleteMessage: (sessionId: string, messageId: string) =>
+    api.delete<{ status: string }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}`,
+    ),
+
+  // Branches
+  getBranches: (sessionId: string) =>
+    api.get<{ branches: BranchNode[] }>(
+      `/admin/chat/sessions/${sessionId}/branches`,
+    ),
+
+  switchBranch: (sessionId: string, messageId: string) =>
+    api.post<{ status: string; session: ChatSession }>(
+      `/admin/chat/sessions/${sessionId}/branches/switch`,
+      { message_id: messageId },
+    ),
+
+  newBranch: (sessionId: string) =>
+    api.post<{ status: string; session: ChatSession }>(
+      `/admin/chat/sessions/${sessionId}/branches/new`,
+    ),
 
   streamMessage: (
     sessionId: string,
