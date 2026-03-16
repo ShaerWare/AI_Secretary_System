@@ -370,6 +370,8 @@ const messages = {
       zenSettings: "Настройки чата",
       pastedLines: "{count} строк",
       removePasted: "Удалить вложение",
+      uploadImage: "Загрузить изображение",
+      removeImage: "Удалить изображение",
       claudeCode: {
         enable: "Включить Claude Code",
         disable: "Выключить Claude Code",
@@ -1703,6 +1705,8 @@ const messages = {
       zenSettings: "Chat settings",
       pastedLines: "{count} lines",
       removePasted: "Remove attachment",
+      uploadImage: "Upload image",
+      removeImage: "Remove image",
       claudeCode: {
         enable: "Enable Claude Code",
         disable: "Disable Claude Code",
@@ -3036,6 +3040,8 @@ const messages = {
       zenSettings: "Чат параметрлері",
       pastedLines: "{count} жол",
       removePasted: "Тіркемені жою",
+      uploadImage: "Сурет жүктеу",
+      removeImage: "Суретті жою",
       claudeCode: {
         enable: "Claude Code қосу",
         disable: "Claude Code өшіру",

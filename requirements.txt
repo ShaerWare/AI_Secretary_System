@@ -58,5 +58,8 @@ snowballstemmer>=2.2.0  # Russian/English stemming for BM25 search
 # Document text extraction (Telegram file uploads)
 pdfplumber>=0.10.0
 
+# OCR for chat image uploads (optional — requires tesseract-ocr system package)
+pytesseract>=0.3.10
+
 # Docker management (for starting vLLM from container)
 docker>=7.0.0
