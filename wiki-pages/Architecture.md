@@ -591,6 +591,29 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 **Результат:** orchestrator.py: 2471 → 1121 строк (−1350). Содержит: импорты, middleware, регистрацию роутеров, глобальные сервисные переменные, startup/shutdown lifecycle, раздачу статических файлов.
 
+### Phase 4.6: Background tasks → TaskRegistry
+
+> **Статус:** реализовано (PR [#578](https://github.com/ShaerWare/AI_Secretary_System/pull/578), issue [#551](https://github.com/ShaerWare/AI_Secretary_System/issues/551))
+
+Перенос 6 фоновых задач из `asyncio.create_task()` в `TaskRegistry` (инфраструктура Phase 0).
+
+**Новые файлы:**
+
+| Файл | Задачи | Тип |
+|------|--------|-----|
+| `modules/core/maintenance.py` | `cleanup_expired_sessions` (1ч), `periodic_vacuum` (7д, initial_delay=24ч) | periodic |
+| `modules/knowledge/tasks.py` | `build_wiki_embeddings`, `load_collection_indexes` | one-shot |
+| `modules/kanban/tasks.py` | `sync_kanban_issues` (15мин, initial_delay=60с) | periodic |
+| `modules/ecommerce/tasks.py` | `woocommerce_daily_sync` (ежедневно 23:00 UTC) | one-shot с внутренним cron |
+
+**Ключевые решения:**
+- WooCommerce sync зарегистрирован как one-shot (управляет своим расписанием внутри), т.к. TaskRegistry не поддерживает cron
+- Wiki RAG задачи используют `functools.partial(fn, wiki_rag)` для передачи сервиса
+- Core maintenance в отдельном `maintenance.py` (не `tasks.py`), чтобы не путать с инфраструктурой TaskRegistry
+- `task_registry.cancel_all()` добавлен в `shutdown_event()` для graceful shutdown
+
+**Результат:** orchestrator.py: 1121 → 1030 строк (−91). Удалены `asyncio`, `datetime`, `timedelta` из импортов.
+
 ---
 
 ## Тесты
@@ -620,7 +643,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ 4.5 ✅ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ 4.5 ✅ 4.6 ✅ |
 | **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
