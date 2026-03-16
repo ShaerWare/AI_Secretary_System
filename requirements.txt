@@ -55,8 +55,10 @@ redis>=5.0.0
 # Wiki RAG
 snowballstemmer>=2.2.0  # Russian/English stemming for BM25 search
 
-# Document text extraction (Telegram file uploads)
+# Document text extraction (Telegram file uploads + chat attachments)
 pdfplumber>=0.10.0
+openpyxl>=3.1.0
+python-docx>=1.0.0
 
 # OCR for chat image uploads (optional — requires tesseract-ocr system package)
 pytesseract>=0.3.10

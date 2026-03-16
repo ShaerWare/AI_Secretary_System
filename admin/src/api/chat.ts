@@ -3,13 +3,14 @@ import { api, createSSE, getAuthHeaders } from './client'
 export interface ChatImage {
   id: string
   url: string
-  thumb_url: string
+  thumb_url?: string | null
   ocr_text?: string | null
   width: number
   height: number
   original_name: string
   size?: number
   mime_type?: string
+  is_image?: boolean
 }
 
 export interface ChatMessage {

@@ -1504,46 +1504,54 @@ async def admin_get_shareable_users(user: User = Depends(require_permission("cha
 
 
 @router.post("/sessions/{session_id}/upload-image")
-async def admin_upload_chat_image(
+async def admin_upload_chat_file(
     session_id: str,
     file: UploadFile = File(...),
     user: User = Depends(require_permission("chat", "edit")),
 ):
-    """Upload an image for a chat session, run OCR, return metadata."""
-    from modules.chat.image_service import ALLOWED_MIME_TYPES, MAX_FILE_SIZE, upload_image
+    """Upload a file (image or document) for a chat session, extract text, return metadata."""
+    from modules.chat.image_service import ALLOWED_MIME_TYPES, MAX_FILE_SIZE, upload_file
 
     await _check_write_access(session_id, user)
 
     content_type = file.content_type or "application/octet-stream"
-    if content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported image type: {content_type}")
-
     file_data = await file.read()
+    original_name = file.filename or "file"
+
     if len(file_data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
 
+    # Allow by MIME type or by known extension
+    from pathlib import Path as _Path
+
+    ext = _Path(original_name).suffix.lower()
+    text_exts = {".txt", ".csv", ".md", ".json", ".xml", ".html", ".log", ".yaml", ".yml"}
+    if content_type not in ALLOWED_MIME_TYPES and ext not in text_exts:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
+
     try:
-        image_meta = await upload_image(
-            session_id, file_data, content_type, file.filename or "image.jpg"
-        )
+        file_meta = await upload_file(session_id, file_data, content_type, original_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Cache OCR text for when the message is sent
-    if image_meta.get("ocr_text"):
-        _pending_image_ocr[image_meta["id"]] = image_meta["ocr_text"]
+    # Cache extracted text for when the message is sent
+    if file_meta.get("ocr_text"):
+        _pending_image_ocr[file_meta["id"]] = file_meta["ocr_text"]
 
     return {
         "image": {
-            "id": image_meta["id"],
-            "url": f"/admin/chat/images/{session_id}/{image_meta['filename']}",
-            "thumb_url": f"/admin/chat/images/{session_id}/{image_meta['id']}_thumb.jpg",
-            "ocr_text": image_meta.get("ocr_text"),
-            "width": image_meta["width"],
-            "height": image_meta["height"],
-            "original_name": image_meta["original_name"],
-            "size": image_meta["size"],
-            "mime_type": image_meta["mime_type"],
+            "id": file_meta["id"],
+            "url": f"/admin/chat/images/{session_id}/{file_meta['filename']}",
+            "thumb_url": f"/admin/chat/images/{session_id}/{file_meta['id']}_thumb.jpg"
+            if file_meta.get("is_image")
+            else None,
+            "ocr_text": file_meta.get("ocr_text"),
+            "width": file_meta.get("width", 0),
+            "height": file_meta.get("height", 0),
+            "original_name": file_meta["original_name"],
+            "size": file_meta["size"],
+            "mime_type": file_meta["mime_type"],
+            "is_image": file_meta.get("is_image", False),
         }
     }
 
@@ -1562,14 +1570,8 @@ async def serve_chat_image(
         raise HTTPException(status_code=404, detail="Image not found")
 
     # Determine media type
-    suffix = path.suffix.lower()
-    media_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-    }
-    media_type = media_types.get(suffix, "application/octet-stream")
+    import mimetypes
+
+    media_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
 
     return FileResponse(path, media_type=media_type)
