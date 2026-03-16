@@ -1,6 +1,7 @@
-"""Core domain startup: seed system roles and default workspace."""
+"""Core domain startup: seed roles/workspace, legacy checks, monitor, shutdown."""
 
 import logging
+from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
@@ -131,3 +132,76 @@ async def seed_default_workspace() -> None:
             logger.info(f"🏢 Workspace: ensured {added} users in default workspace")
     except Exception as e:
         logger.error(f"🏢 Workspace seed failed: {e}")
+
+
+def check_legacy_files() -> None:
+    """Warn about deprecated legacy JSON files."""
+    legacy_files = [
+        ("typical_responses.json", "FAQ"),
+        ("custom_presets.json", "TTS presets"),
+        ("chat_sessions.json", "chat sessions"),
+        ("widget_config.json", "widget config"),
+        ("telegram_config.json", "telegram config"),
+    ]
+    found_legacy = []
+    for filename, description in legacy_files:
+        if Path(filename).exists():
+            found_legacy.append(f"{filename} ({description})")
+
+    if found_legacy:
+        logger.warning("=" * 60)
+        logger.warning("⚠️  DEPRECATED: Найдены legacy JSON файлы:")
+        for f in found_legacy:
+            logger.warning(f"    • {f}")
+        logger.warning("    Данные теперь хранятся в SQLite (data/secretary.db).")
+        logger.warning("    Legacy файлы можно удалить после проверки миграции:")
+        logger.warning("    python scripts/migrate_json_to_db.py")
+        logger.warning("=" * 60)
+
+
+async def init_internet_monitor(container, deployment_mode: str) -> None:
+    """Initialize Internet Monitor + LLM auto-switching (GPU/full mode only)."""
+    if deployment_mode == "cloud":
+        return
+
+    try:
+        from modules.core.internet_monitor import InternetMonitor
+        from modules.llm.startup import create_llm_switch_callback
+
+        internet_monitor = InternetMonitor(check_interval=30)
+        internet_monitor.set_switch_callback(create_llm_switch_callback(container))
+        await internet_monitor.start()
+        container.internet_monitor = internet_monitor
+        logger.info("✅ InternetMonitor started (auto-switching LLM)")
+    except Exception as e:
+        logger.warning(f"⚠️ InternetMonitor not available: {e}")
+
+
+async def graceful_shutdown() -> None:
+    """Stop all running bots and bridge."""
+    # Stop Telegram bots
+    try:
+        from multi_bot_manager import multi_bot_manager
+
+        await multi_bot_manager.stop_all()
+        logger.info("✅ Telegram bots stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping Telegram bots: {e}")
+
+    # Stop WhatsApp bots
+    try:
+        from whatsapp_manager import whatsapp_manager
+
+        await whatsapp_manager.stop_all()
+        logger.info("✅ WhatsApp bots stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping WhatsApp bots: {e}")
+
+    # Stop Claude bridge
+    try:
+        from bridge_manager import bridge_manager
+
+        await bridge_manager.stop()
+        logger.info("✅ Claude bridge stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping Claude bridge: {e}")
