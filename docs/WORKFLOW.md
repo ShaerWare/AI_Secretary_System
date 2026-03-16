@@ -196,15 +196,22 @@ AI Secretary System - виртуальный секретарь с клонир�
 ### Service Container (Dependency Injection)
 
 ```
-app/dependencies.py → ServiceContainer (Singleton)
+app/dependencies.py → ServiceContainer (Singleton, single source of truth)
 │
-├─ .voice_service        → VoiceCloneService (XTTS Marina)
-├─ .anna_voice_service  → VoiceCloneService (XTTS Anna)
-├─ .piper_service        → PiperTTSService (CPU)
-├─ .llm_service          → LLMService (vLLM или Cloud)
-├─ .stt_service          → UnifiedSTTService (Vosk + Whisper)
-├─ .streaming_tts_manager → StreamingTTSManager
-└─ .faq_manager          → AsyncFAQManager
+├─ .voice_service          → VoiceCloneService (XTTS Marina)
+├─ .anna_voice_service     → VoiceCloneService (XTTS Anna)
+├─ .piper_service          → PiperTTSService (CPU)
+├─ .openvoice_service      → OpenVoiceService (GPU CC 6.1+)
+├─ .llm_service            → CloudLLMService or VLLMLLMService
+├─ .stt_service            → VoskSTTService
+├─ .streaming_tts_manager  → StreamingTTSManager
+├─ .wiki_rag_service       → WikiRAGService
+├─ .gsm_service            → GSMService
+├─ .internet_monitor       → InternetMonitor
+└─ .current_voice_config   → dict (engine + voice)
+
+Populated by domain init functions in modules/*/startup.py
+No global service variables — container is the only state holder
 ```
 
 ### Cloud LLM Factory

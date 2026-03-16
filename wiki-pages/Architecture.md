@@ -31,11 +31,11 @@
 
 ## Текущее состояние
 
-### Монолит (исторический)
+### Текущее состояние после Phase 4
 
 | Компонент | Размер | Что содержит |
 |-----------|--------|-------------|
-| `orchestrator.py` | ~4100 строк | FastAPI entry point, инициализация сервисов, legacy endpoints, background tasks, регистрация 28 роутеров |
+| `orchestrator.py` | ~320 строк | Чистый wiring: imports, middleware, регистрация 28 роутеров, вызовы доменных init-функций, static files |
 | `db/models.py` | ~200 строк (фасад) | Реэкспорт моделей из `modules/*/models.py` (54 модели) |
 | `db/integration.py` | ~100 строк (фасад) | Импорт синглтонов и классов из `modules/*/service.py` под старыми именами |
 
@@ -476,7 +476,7 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 **Ключевые решения:**
 - `numpy` — lazy import внутри `_cache_full_audio()` (избегает ошибок импорта в cloud mode без GPU)
-- Глобальная переменная `streaming_tts_manager` и все 17 точек использования остаются в `orchestrator.py` (будут перенесены в Phase 4.5)
+- Глобальная переменная `streaming_tts_manager` перенесена в `ServiceContainer` (Phase 4.7b)
 - `synthesize_with_current_voice()` перенесена в `modules/compat/router.py` в Phase 4.3 (переписана на `get_container()`)
 - 5 неиспользуемых импортов удалены из orchestrator (`hashlib`, `re`, `OrderedDict`, `ThreadPoolExecutor`, `numpy`)
 
@@ -589,7 +589,7 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 - `router_logs.py` регистрируется безусловно (доступен во всех режимах)
 - 35 из 52 эндпоинтов были мёртвыми дубликатами (shadowed модульными роутерами, зарегистрированными ранее)
 
-**Результат:** orchestrator.py: 2471 → 1121 строк (−1350). Содержит: импорты, middleware, регистрацию роутеров, глобальные сервисные переменные, startup/shutdown lifecycle, раздачу статических файлов.
+**Результат:** orchestrator.py: 2471 → 1121 строк (−1350). Содержит: импорты, middleware, регистрацию роутеров, startup/shutdown lifecycle, раздачу статических файлов.
 
 ### Phase 4.6: Background tasks → TaskRegistry
 

@@ -193,7 +193,7 @@ Quiz: тип проекта → описание → бизнес-цель → �
 
 ### Публичный виджет (без авторизации)
 
-Эндпоинт: `POST /widget/chat/session/{id}/stream` (`orchestrator.py`)
+Эндпоинт: `POST /widget/chat/session/{id}/stream` (`modules/channels/widget/router_public.py`)
 
 ```
 Сообщение в виджете
