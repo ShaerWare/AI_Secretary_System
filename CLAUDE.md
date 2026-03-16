@@ -135,7 +135,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phases 0–4.6 complete: all 28 routers migrated (Phase 3), all inline endpoints extracted from `orchestrator.py` (Phase 4.1–4.5), all background tasks migrated to `TaskRegistry` (Phase 4.6). Phase 5 (EventBus events) and Phase 6 (protocol interfaces) pending.
+Foundation layer for modular decomposition (issue #489). Phases 0–4.7a complete: all 28 routers migrated (Phase 3), all inline endpoints extracted from `orchestrator.py` (Phase 4.1–4.5), all background tasks migrated to `TaskRegistry` (Phase 4.6), 8 startup helpers extracted to domain `startup.py` modules + graceful shutdown (Phase 4.7a). Phase 4.7b (service init + globals removal), Phase 5 (EventBus events) and Phase 6 (protocol interfaces) pending.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error. 6 tasks registered in `startup_event()`: `session-cleanup` (1h), `periodic-vacuum` (7d), `kanban-sync` (15min), `woocommerce-sync` (daily 23:00 UTC), `wiki-embeddings` (one-shot), `wiki-collection-indexes` (one-shot). Task functions in `modules/core/maintenance.py`, `modules/knowledge/tasks.py`, `modules/kanban/tasks.py`, `modules/ecommerce/tasks.py`.
@@ -210,7 +210,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 ### Key Components
 
-**`orchestrator.py`** (~1030 lines): FastAPI entry point. **Zero inline endpoints** — all business logic extracted to `modules/*/router*.py` (Phase 4.1–4.5). **Zero raw `asyncio.create_task()`** — all background tasks via `TaskRegistry` (Phase 4.6). Contains only: imports, CORS/middleware, router registration (~28 `include_router` calls), global service variables, `startup_event()` (~260 lines, initializes services + registers tasks), `shutdown_event()` (cancel tasks + close DB), static file serving, Vite dev proxy.
+**`orchestrator.py`** (~805 lines): FastAPI entry point. **Zero inline endpoints** — all business logic extracted to `modules/*/router*.py` (Phase 4.1–4.5). **Zero raw `asyncio.create_task()`** — all background tasks via `TaskRegistry` (Phase 4.6). **Zero helper functions** — startup helpers (seeding, auto-start, reload) extracted to `modules/*/startup.py` (Phase 4.7a). Contains only: imports, CORS/middleware, router registration (~28 `include_router` calls), global service variables, `startup_event()` (service init + task registration), `shutdown_event()` (cancel tasks + stop bots/bridge + close DB), static file serving, Vite dev proxy. Startup helpers in `modules/core/startup.py`, `modules/llm/startup.py`, `modules/channels/{telegram,whatsapp}/startup.py`, `modules/knowledge/startup.py`, `modules/speech/startup.py`.
 
 **`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services. Routers get services via FastAPI `Depends`. Populated during app startup.
 
