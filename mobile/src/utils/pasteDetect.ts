@@ -61,11 +61,11 @@ export function buildMessageContent(text: string, blocks: PastedBlock[]): string
   if (blocks.length === 0) return text
 
   const parts: string[] = []
-  for (const block of blocks) {
-    parts.push(`\`\`\`${block.language}\n${block.content}\n\`\`\``)
-  }
   if (text) {
     parts.push(text)
+  }
+  for (const block of blocks) {
+    parts.push(`\`\`\`${block.language}\n${block.content}\n\`\`\``)
   }
   return parts.join('\n\n')
 }
