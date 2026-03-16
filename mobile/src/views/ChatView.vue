@@ -316,6 +316,66 @@ async function saveContextFiles() {
   }
 }
 
+// === Message actions ===
+
+async function handleEditMessage(messageId: string, content: string) {
+  try {
+    await chatApi.editMessage(sessionId.value, messageId, content);
+    await loadSession();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to edit";
+  }
+}
+
+function handleSaveToContext(_messageId: string, content: string) {
+  const name = `message-${Date.now()}.md`;
+  contextFiles.value.push({ name, content });
+  saveContextFiles();
+  showContextFiles.value = true;
+  showBranches.value = false;
+}
+
+async function handleSummarizeBranch(messageId: string) {
+  try {
+    const data = await chatApi.summarizeBranch(sessionId.value, messageId);
+    const name = `summary-${Date.now()}.md`;
+    contextFiles.value.push({ name, content: data.summary });
+    saveContextFiles();
+    showContextFiles.value = true;
+    showBranches.value = false;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to summarize";
+  }
+}
+
+async function handleRegenerateResponse(messageId: string) {
+  try {
+    await chatApi.regenerateResponse(sessionId.value, messageId);
+    await loadSession();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to regenerate";
+  }
+}
+
+async function handleDeleteFromMessage(messageId: string) {
+  if (!confirm("Delete this message and everything after it?")) return;
+  const idx = messages.value.findIndex((m) => m.id === messageId);
+  if (idx < 0) return;
+  try {
+    const toDelete = messages.value.slice(idx).reverse();
+    for (const m of toDelete) {
+      if (!m.id.startsWith("temp-") && !m.id.startsWith("partial-")) {
+        await chatApi.deleteMessage(sessionId.value, m.id);
+      }
+    }
+    messages.value = messages.value.slice(0, idx);
+    if (showBranches.value) await loadBranches();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to delete";
+    await loadSession();
+  }
+}
+
 const anyPanelOpen = computed(() => showBranches.value || showContextFiles.value);
 
 function closePanel() {
@@ -520,6 +580,11 @@ onUnmounted(() => {
               :is-speaking="tts.speakingMessageId.value === msg.id"
               @speak="tts.speak($event, msg.id)"
               @stop-speak="tts.stop()"
+              @edit="handleEditMessage"
+              @save-to-context="handleSaveToContext"
+              @summarize-branch="handleSummarizeBranch"
+              @delete-branch="handleDeleteFromMessage"
+              @regenerate="handleRegenerateResponse"
             />
 
             <MessageBubble

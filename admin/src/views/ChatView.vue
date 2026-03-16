@@ -84,6 +84,7 @@ import { claudeCodeApi, type CcProject, type CcProjectInput } from '@/api/claude
 import { kanbanApi, type KanbanTask } from '@/api/kanban'
 import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
+import { shouldTreatAsPaste, createPastedBlock, buildMessageContent, type PastedBlock } from '@/utils/pasteDetect'
 import { useChatFullscreenStore } from '@/stores/chatFullscreen'
 
 const { t } = useI18n()
@@ -154,6 +155,20 @@ const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize
 const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
 const { width: artifactWidth, startResize: startArtifactResize, startTouchResize: startArtifactTouchResize } = useResizablePanel('chat-artifact-width', 500, 300, 800, 'left')
 
+// Pasted content blocks
+const pastedBlocks = ref<PastedBlock[]>([])
+
+function onPaste(e: ClipboardEvent) {
+  const text = e.clipboardData?.getData('text/plain')
+  if (!text || !shouldTreatAsPaste(text)) return
+  e.preventDefault()
+  pastedBlocks.value.push(createPastedBlock(text))
+}
+
+function removePastedBlock(id: string) {
+  pastedBlocks.value = pastedBlocks.value.filter(b => b.id !== id)
+}
+
 // Artifact viewer state
 const showArtifact = ref(false)
 const activeArtifact = ref<Artifact | null>(null)
@@ -202,6 +217,13 @@ function handleMessagesClick(e: MouseEvent) {
       navigator.clipboard.writeText(code)
       toastStore.success(t('common.copied'))
     }
+    return
+  }
+
+  // Handle code-block expand/collapse toggle
+  const codeContainer = target.closest('.code-block-container') as HTMLElement | null
+  if (codeContainer && !target.closest('button') && !target.closest('a')) {
+    codeContainer.classList.toggle('expanded')
     return
   }
 
@@ -967,10 +989,13 @@ async function deleteCcSession(ccSessionId: string, title: string, event: Event)
 }
 
 function sendMessage() {
-  if (!inputMessage.value.trim() || !currentSessionId.value || isStreaming.value) return
+  const hasText = inputMessage.value.trim().length > 0
+  const hasPaste = pastedBlocks.value.length > 0
+  if ((!hasText && !hasPaste) || !currentSessionId.value || isStreaming.value) return
 
-  const content = inputMessage.value.trim()
+  const content = buildMessageContent(inputMessage.value.trim(), pastedBlocks.value)
   inputMessage.value = ''
+  pastedBlocks.value = []
   if (messageInputRef.value) messageInputRef.value.style.height = 'auto'
 
   // Show user message immediately (optimistic)
@@ -1042,9 +1067,12 @@ function sendMessage() {
 }
 
 function ccSendMessage() {
-  if (!inputMessage.value.trim() || cc.isProcessing.value) return
-  const prompt = inputMessage.value.trim()
+  const hasText = inputMessage.value.trim().length > 0
+  const hasPaste = pastedBlocks.value.length > 0
+  if ((!hasText && !hasPaste) || cc.isProcessing.value) return
+  const prompt = buildMessageContent(inputMessage.value.trim(), pastedBlocks.value)
   inputMessage.value = ''
+  pastedBlocks.value = []
   if (messageInputRef.value) messageInputRef.value.style.height = 'auto'
   cc.sendMessage(prompt)
   nextTick(() => {
@@ -2760,6 +2788,25 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <span v-if="cc.currentModel.value" class="text-muted-foreground ml-1">· {{ cc.currentModel.value }}</span>
         </div>
         <div v-if="cc.error.value" class="mb-2 text-xs text-red-500">{{ cc.error.value }}</div>
+        <!-- Pasted blocks chips -->
+        <div v-if="pastedBlocks.length" class="flex flex-wrap gap-2 mb-2">
+          <div
+            v-for="block in pastedBlocks"
+            :key="block.id"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary rounded-lg border border-border text-xs"
+          >
+            <FileText class="w-3.5 h-3.5 text-green-500 shrink-0" />
+            <span class="font-medium text-green-400">{{ block.languageLabel }}</span>
+            <span class="text-muted-foreground">{{ t('chatView.pastedLines', { count: block.lineCount }) }}</span>
+            <button
+              class="ml-1 p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+              :title="t('chatView.removePasted')"
+              @click="removePastedBlock(block.id)"
+            >
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
         <div class="flex gap-3 items-end">
           <textarea
             ref="messageInputRef"
@@ -2771,6 +2818,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @keydown.enter.exact.prevent="ccSendMessage"
             @keydown.ctrl.enter.prevent="ccSendMessage"
             @input="onInputAutoResize"
+            @paste="onPaste"
           />
           <!-- Abort button (while processing) -->
           <button
@@ -2784,7 +2832,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <!-- Send button -->
           <button
             v-else
-            :disabled="!inputMessage.trim() || !cc.isConnected.value"
+            :disabled="(!inputMessage.trim() && !pastedBlocks.length) || !cc.isConnected.value"
             class="p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
             @click="ccSendMessage"
           >
@@ -2812,6 +2860,25 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
       >
+        <!-- Pasted blocks chips -->
+        <div v-if="pastedBlocks.length" class="flex flex-wrap gap-2 mb-2 max-w-3xl mx-auto">
+          <div
+            v-for="block in pastedBlocks"
+            :key="block.id"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary rounded-lg border border-border text-xs"
+          >
+            <FileText class="w-3.5 h-3.5 text-primary shrink-0" />
+            <span class="font-medium">{{ block.languageLabel }}</span>
+            <span class="text-muted-foreground">{{ t('chatView.pastedLines', { count: block.lineCount }) }}</span>
+            <button
+              class="ml-1 p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+              :title="t('chatView.removePasted')"
+              @click="removePastedBlock(block.id)"
+            >
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
         <div
           :class="[
             'flex gap-3 max-w-3xl mx-auto',
@@ -2828,6 +2895,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.ctrl.enter.prevent="sendMessage"
             @input="onInputAutoResize"
+            @paste="onPaste"
           />
           <!-- Microphone button -->
           <button
@@ -2847,7 +2915,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </button>
           <!-- Send button -->
           <button
-            :disabled="!inputMessage.trim() || isStreaming || isRecording"
+            :disabled="(!inputMessage.trim() && !pastedBlocks.length) || isStreaming || isRecording"
             class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             @click="sendMessage"
           >
@@ -3539,5 +3607,25 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 .zen-messages {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+/* Collapsible code blocks in user messages */
+.claude-message-user :deep(.code-block-container) {
+  position: relative;
+  cursor: pointer;
+}
+.claude-message-user :deep(.code-block-container:not(.expanded)) pre {
+  max-height: 200px;
+  overflow: hidden;
+}
+.claude-message-user :deep(.code-block-container:not(.expanded)) pre::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(transparent, hsl(var(--secondary)));
+  pointer-events: none;
 }
 </style>

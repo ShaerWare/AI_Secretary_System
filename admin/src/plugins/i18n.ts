@@ -368,6 +368,8 @@ const messages = {
       zenMode: "Фокус-режим",
       exitZenMode: "Выйти из фокус-режима",
       zenSettings: "Настройки чата",
+      pastedLines: "{count} строк",
+      removePasted: "Удалить вложение",
       claudeCode: {
         enable: "Включить Claude Code",
         disable: "Выключить Claude Code",
@@ -1699,6 +1701,8 @@ const messages = {
       zenMode: "Focus mode",
       exitZenMode: "Exit focus mode",
       zenSettings: "Chat settings",
+      pastedLines: "{count} lines",
+      removePasted: "Remove attachment",
       claudeCode: {
         enable: "Enable Claude Code",
         disable: "Disable Claude Code",
@@ -3030,6 +3034,8 @@ const messages = {
       zenMode: "Фокус режимі",
       exitZenMode: "Фокус режимінен шығу",
       zenSettings: "Чат параметрлері",
+      pastedLines: "{count} жол",
+      removePasted: "Тіркемені жою",
       claudeCode: {
         enable: "Claude Code қосу",
         disable: "Claude Code өшіру",

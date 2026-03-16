@@ -107,6 +107,17 @@ export const chatApi = {
       `/admin/chat/sessions/${sessionId}/messages/${messageId}`,
     ),
 
+  editMessage: (sessionId: string, messageId: string, content: string) =>
+    api.put<{ message: ChatMessage }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}`,
+      { content },
+    ),
+
+  summarizeBranch: (sessionId: string, messageId: string) =>
+    api.post<{ summary: string }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}/summarize`,
+    ),
+
   // Branches
   getBranches: (sessionId: string) =>
     api.get<{ branches: BranchNode[] }>(
@@ -122,6 +133,11 @@ export const chatApi = {
   newBranch: (sessionId: string) =>
     api.post<{ status: string; session: ChatSession }>(
       `/admin/chat/sessions/${sessionId}/branches/new`,
+    ),
+
+  regenerateResponse: (sessionId: string, messageId: string) =>
+    api.post<{ status: string }>(
+      `/admin/chat/sessions/${sessionId}/messages/${messageId}/regenerate`,
     ),
 
   streamMessage: (
