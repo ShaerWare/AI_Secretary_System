@@ -76,8 +76,7 @@ import {
   Minimize2,
   Globe,
   Server,
-  Search,
-  ImagePlus
+  Search
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -202,7 +201,6 @@ async function handleImageUpload(e: Event) {
   isUploadingImage.value = true
   try {
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue
       const { image } = await chatApi.uploadImage(currentSessionId.value, file)
       pendingImages.value.push(image)
     }
@@ -2915,29 +2913,41 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
       >
-        <!-- Pending image previews -->
+        <!-- Pending file previews -->
         <div v-if="pendingImages.length" class="flex flex-wrap gap-2 mb-2 max-w-3xl mx-auto">
-          <div
-            v-for="img in pendingImages"
-            :key="img.id"
-            class="relative group/img"
-          >
-            <img
-              :src="img.thumb_url"
-              :alt="img.original_name"
-              class="h-20 rounded-lg border border-border object-cover"
-            />
-            <button
-              class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-              :title="t('chatView.removeImage')"
-              @click="removePendingImage(img.id)"
-            >
-              <X class="w-3 h-3" />
-            </button>
-            <div v-if="img.ocr_text" class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded">
-              OCR
+          <template v-for="img in pendingImages" :key="img.id">
+            <!-- Image thumbnail -->
+            <div v-if="img.is_image !== false && img.thumb_url" class="relative group/img">
+              <img
+                :src="img.thumb_url"
+                :alt="img.original_name"
+                class="h-20 rounded-lg border border-border object-cover"
+              />
+              <button
+                class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                :title="t('chatView.removeImage')"
+                @click="removePendingImage(img.id)"
+              >
+                <X class="w-3 h-3" />
+              </button>
+              <div v-if="img.ocr_text" class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded">
+                OCR
+              </div>
             </div>
-          </div>
+            <!-- Document chip -->
+            <div v-else class="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary rounded-lg border border-border text-xs">
+              <FileText class="w-3.5 h-3.5 text-primary shrink-0" />
+              <span class="font-medium max-w-[150px] truncate">{{ img.original_name }}</span>
+              <span v-if="img.ocr_text" class="text-green-500">✓</span>
+              <button
+                class="ml-1 p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                :title="t('chatView.removeImage')"
+                @click="removePendingImage(img.id)"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+          </template>
         </div>
         <!-- Pasted blocks chips -->
         <div v-if="pastedBlocks.length" class="flex flex-wrap gap-2 mb-2 max-w-3xl mx-auto">
@@ -2976,20 +2986,20 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @input="onInputAutoResize"
             @paste="onPaste"
           />
-          <!-- Image upload button -->
+          <!-- File upload button (images + documents) -->
           <button
             :disabled="isStreaming || isUploadingImage || !currentSessionId"
             class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            :title="t('chatView.uploadImage')"
+            :title="t('chatView.attachFile')"
             @click="imageInputRef?.click()"
           >
             <Loader2 v-if="isUploadingImage" class="w-5 h-5 animate-spin" />
-            <ImagePlus v-else class="w-5 h-5" />
+            <Paperclip v-else class="w-5 h-5" />
           </button>
           <input
             ref="imageInputRef"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
             multiple
             class="hidden"
             @change="handleImageUpload"
@@ -3248,19 +3258,33 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
               <!-- Normal mode -->
               <template v-else>
-                <!-- Image attachments -->
+                <!-- File attachments (images + documents) -->
                 <div v-if="message.metadata?.images?.length" class="flex flex-wrap gap-2 mb-2">
-                  <div v-for="img in message.metadata.images" :key="img.id" class="relative group/img">
-                    <img
-                      :src="img.thumb_url || img.url"
-                      :alt="img.original_name || 'image'"
-                      class="rounded-lg max-h-48 cursor-pointer hover:opacity-90 transition-opacity"
-                      @click="fullscreenImage = img.url"
-                    />
-                    <div v-if="img.ocr_text" class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      OCR
+                  <template v-for="img in message.metadata.images" :key="img.id">
+                    <!-- Image -->
+                    <div v-if="img.is_image !== false && img.thumb_url" class="relative group/img">
+                      <img
+                        :src="img.thumb_url || img.url"
+                        :alt="img.original_name || 'image'"
+                        class="rounded-lg max-h-48 cursor-pointer hover:opacity-90 transition-opacity"
+                        @click="fullscreenImage = img.url"
+                      />
+                      <div v-if="img.ocr_text" class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                        OCR
+                      </div>
                     </div>
-                  </div>
+                    <!-- Document -->
+                    <a
+                      v-else
+                      :href="img.url"
+                      target="_blank"
+                      class="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary/50 rounded-lg border border-border text-xs hover:bg-secondary transition-colors"
+                    >
+                      <FileText class="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span class="font-medium max-w-[200px] truncate">{{ img.original_name }}</span>
+                      <Download class="w-3 h-3 text-muted-foreground" />
+                    </a>
+                  </template>
                 </div>
                 <div class="chat-markdown break-words" v-html="renderMarkdown(message.content, message.id)"></div>
                 <div class="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
@@ -3657,7 +3681,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
                 @click="triggerContextFileUpload"
               >
                 <Paperclip class="w-3.5 h-3.5" />
-                {{ t('chatView.uploadFile') }}
+                {{ t('chatView.attachFile') }}
               </button>
               <button
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
