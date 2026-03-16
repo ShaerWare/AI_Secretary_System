@@ -93,8 +93,9 @@ jobs:
 - [ ] Configure branch protection (require CI pass)
 - [ ] Add Dependabot for Python and npm
 
-### 0.2 Code Restructuring [P0]
-**Why:** orchestrator.py is too large (~60 endpoints), hard to maintain
+### 0.2 Code Restructuring [P0] ✅
+**Why:** orchestrator.py was too large — hard to maintain.
+**Status:** Complete. Phase 0.2 extracted 11 routers. Phase 4 (issue #494) completed full decomposition: orchestrator.py 4100 → 321 lines. All endpoints in `modules/*/router*.py`, all service init in `modules/*/startup.py`, all background tasks via `TaskRegistry`. See [Architecture wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki/Architecture) for details.
 
 ```
 AI_Secretary_System/
@@ -136,7 +137,7 @@ AI_Secretary_System/
 │   ├── test_tts.py
 │   └── test_api.py
 │
-├── orchestrator.py             # DEPRECATED → app/main.py
+├── orchestrator.py             # FastAPI entry point (~320 lines, pure wiring)
 └── ...
 ```
 

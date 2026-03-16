@@ -71,7 +71,8 @@ Roadmap и план работ для AI Secretary System. Этот файл и�
 **Завершено:** 2026-01-28
 
 **Описание:**
-Разбить orchestrator.py (~170 endpoints) на модульную структуру `app/routers/`.
+Разбить orchestrator.py на модульную структуру `app/routers/`.
+> **Примечание:** Полная декомпозиция завершена в Phase 4 (issue #494): orchestrator.py 4100 → 321 строк. Все endpoints в `modules/*/router*.py`, сервисы в `modules/*/startup.py`, задачи в `modules/*/tasks.py`.
 
 **Задачи:**
 - [x] Создать `app/` структуру с routers, services, models
