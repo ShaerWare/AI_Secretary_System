@@ -62,11 +62,6 @@ from app.security_headers import (
 from cloud_llm_service import CloudLLMService
 from db.integration import (
     async_cloud_provider_manager,
-    async_faq_manager,
-    async_preset_manager,
-    async_role_manager,
-    async_user_manager,
-    async_workspace_manager,
     init_database,
     shutdown_database,
 )
@@ -263,264 +258,6 @@ CALLS_LOG_DIR = Path("./calls_log")
 CALLS_LOG_DIR.mkdir(exist_ok=True)
 
 
-async def _get_or_create_default_gemini_provider() -> Optional[dict]:
-    """Find existing default Gemini provider or auto-create from GEMINI_API_KEY env.
-
-    Returns provider config dict or None if no API key available.
-    """
-    # Try to find existing Gemini provider
-    providers = await async_cloud_provider_manager.list_providers(enabled_only=False)
-    for p in providers:
-        if p.get("provider_type") == "gemini":
-            return await async_cloud_provider_manager.get_provider_with_key(p["id"])
-
-    # No Gemini provider exists — create one from env
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-
-    if not api_key:
-        logger.warning("GEMINI_API_KEY not set, cannot auto-create Gemini cloud provider")
-        return None
-
-    logger.info("Auto-creating default Gemini cloud provider from GEMINI_API_KEY...")
-    provider = await async_cloud_provider_manager.create_provider(
-        name="Gemini (Auto-created)",
-        provider_type="gemini",
-        api_key=api_key,
-        model_name=model_name,
-        enabled=True,
-        is_default=True,
-        description="Auto-created from GEMINI_API_KEY environment variable",
-    )
-    logger.info(f"Created Gemini provider: {provider['id']}")
-    return await async_cloud_provider_manager.get_provider_with_key(provider["id"])
-
-
-# Helper functions for loading data from database at startup
-async def _reload_llm_faq():
-    """Загружает FAQ из БД и обновляет LLM сервис."""
-    if llm_service and hasattr(llm_service, "reload_faq"):
-        faq_dict = await async_faq_manager.get_all()
-        llm_service.reload_faq(faq_dict)
-
-
-async def _reload_voice_presets():
-    """Загружает пресеты из БД и обновляет voice сервисы."""
-    presets_dict = await async_preset_manager.get_custom()
-    for svc in [voice_service, anna_voice_service]:
-        if svc and hasattr(svc, "reload_presets"):
-            svc.reload_presets(presets_dict)
-
-
-async def _auto_start_bridge_if_needed():
-    """Auto-start CLI-OpenAI Bridge if any enabled claude_bridge provider exists."""
-    from bridge_manager import bridge_manager
-    from db.integration import async_cloud_provider_manager
-
-    try:
-        bridge_providers = await async_cloud_provider_manager.get_by_type(
-            "claude_bridge", enabled_only=True
-        )
-        if not bridge_providers:
-            return
-
-        if bridge_manager.is_running:
-            logger.info("🌉 Bridge already running, skipping auto-start")
-            return
-
-        logger.info("🌉 Auto-starting CLI-OpenAI Bridge (enabled claude_bridge provider found)...")
-        result = await bridge_manager.start()
-        if result.get("status") == "ok":
-            logger.info(f"🌉 Bridge auto-started on port {result.get('port', 8787)}")
-        else:
-            logger.warning(f"🌉 Bridge auto-start failed: {result.get('error', 'unknown')}")
-    except Exception as e:
-        logger.error(f"🌉 Error during bridge auto-start: {e}")
-
-
-async def _auto_start_telegram_bots():
-    """Auto-start Telegram bots that have auto_start=True."""
-    from db.integration import async_bot_instance_manager
-    from multi_bot_manager import multi_bot_manager
-
-    try:
-        instances = await async_bot_instance_manager.get_auto_start_instances()
-        if not instances:
-            logger.info("📱 No Telegram bots configured for auto-start")
-            return
-
-        started = 0
-        for instance in instances:
-            instance_id = instance["id"]
-            try:
-                result = await multi_bot_manager.start_bot(instance_id)
-                if result.get("status") in ["started", "already_running"]:
-                    started += 1
-                    logger.info(f"📱 Auto-started Telegram bot: {instance['name']}")
-                else:
-                    logger.warning(f"📱 Failed to auto-start bot {instance_id}: {result}")
-            except Exception as e:
-                logger.error(f"📱 Error auto-starting bot {instance_id}: {e}")
-
-        if started > 0:
-            logger.info(f"📱 Auto-started {started}/{len(instances)} Telegram bots")
-    except Exception as e:
-        logger.error(f"📱 Error during Telegram bot auto-start: {e}")
-
-
-async def _auto_start_whatsapp_bots():
-    """Auto-start WhatsApp bots that have auto_start=True."""
-    from db.integration import async_whatsapp_instance_manager
-    from whatsapp_manager import whatsapp_manager
-
-    try:
-        instances = await async_whatsapp_instance_manager.get_auto_start_instances()
-        if not instances:
-            logger.info("📱 No WhatsApp bots configured for auto-start")
-            return
-
-        started = 0
-        for instance in instances:
-            instance_id = instance["id"]
-            try:
-                result = await whatsapp_manager.start_bot(instance_id)
-                if result.get("status") in ["started", "already_running"]:
-                    started += 1
-                    logger.info(f"📱 Auto-started WhatsApp bot: {instance['name']}")
-                else:
-                    logger.warning(f"📱 Failed to auto-start WhatsApp bot {instance_id}: {result}")
-            except Exception as e:
-                logger.error(f"📱 Error auto-starting WhatsApp bot {instance_id}: {e}")
-
-        if started > 0:
-            logger.info(f"📱 Auto-started {started}/{len(instances)} WhatsApp bots")
-    except Exception as e:
-        logger.error(f"📱 Error during WhatsApp bot auto-start: {e}")
-
-
-async def _seed_system_roles():
-    """Seed default RBAC roles if none exist (idempotent)."""
-    try:
-        count = await async_role_manager.count()
-        if count > 0:
-            logger.info(f"🔐 RBAC: {count} roles already exist, skipping seed")
-            return
-
-        ALL_MODULES = [
-            "dashboard",
-            "chat",
-            "llm",
-            "speech",
-            "faq",
-            "wiki",
-            "channels",
-            "sales",
-            "kanban",
-            "gsm",
-            "system",
-            "audit",
-            "usage",
-            "settings",
-            "users",
-            "claude_code",
-        ]
-
-        SYSTEM_ROLES = [
-            {
-                "name": "owner",
-                "display_name": "Owner",
-                "description": "Full system owner with all permissions",
-                "permissions": dict.fromkeys(ALL_MODULES, "manage"),
-            },
-            {
-                "name": "admin",
-                "display_name": "Administrator",
-                "description": "Full administrative access",
-                "permissions": dict.fromkeys(ALL_MODULES, "manage"),
-            },
-            {
-                "name": "operator",
-                "display_name": "Operator",
-                "description": "Day-to-day operations: chat, content, channels",
-                "permissions": {
-                    **dict.fromkeys(
-                        [
-                            "chat",
-                            "llm",
-                            "speech",
-                            "faq",
-                            "wiki",
-                            "channels",
-                            "sales",
-                            "kanban",
-                        ],
-                        "edit",
-                    ),
-                    **dict.fromkeys(["audit", "usage", "dashboard"], "view"),
-                },
-            },
-            {
-                "name": "viewer",
-                "display_name": "Viewer",
-                "description": "Read-only access to key modules",
-                "permissions": dict.fromkeys(
-                    [
-                        "dashboard",
-                        "chat",
-                        "llm",
-                        "faq",
-                        "wiki",
-                        "kanban",
-                        "audit",
-                    ],
-                    "view",
-                ),
-            },
-        ]
-
-        for role_def in SYSTEM_ROLES:
-            await async_role_manager.create_role(
-                name=role_def["name"],
-                display_name=role_def["display_name"],
-                description=role_def["description"],
-                is_system=True,
-                permissions=role_def["permissions"],
-            )
-
-        logger.info(f"🔐 RBAC: seeded {len(SYSTEM_ROLES)} system roles")
-    except Exception as e:
-        logger.error(f"🔐 RBAC seed failed: {e}")
-
-
-async def _seed_default_workspace():
-    """Seed default workspace and populate workspace_members for all users."""
-    try:
-        ws = await async_workspace_manager.get_default_workspace()
-        if ws:
-            logger.info("🏢 Workspace: default already exists, checking membership")
-        else:
-            await async_workspace_manager.create_default(name="Default", slug="default")
-            logger.info("🏢 Workspace: created default workspace (id=1)")
-
-        # Populate workspace_members for all users not yet in workspace 1
-        _LEGACY_ROLE_MAP = {
-            "admin": "admin",
-            "user": "operator",
-            "web": "operator",
-            "guest": "viewer",
-        }
-        users = await async_user_manager.list_users(include_inactive=True)
-        added = 0
-        for u in users:
-            role_name = _LEGACY_ROLE_MAP.get(u["role"], "viewer")
-            await async_workspace_manager.ensure_membership(1, u["id"], role_name)
-            added += 1
-        if added:
-            logger.info(f"🏢 Workspace: ensured {added} users in default workspace")
-    except Exception as e:
-        logger.error(f"🏢 Workspace seed failed: {e}")
-
-
 @app.on_event("startup")
 async def startup_event():
     """Инициализация всех сервисов при старте"""
@@ -538,8 +275,12 @@ async def startup_event():
 
     # Initialize database first
     await init_database()
-    await _seed_system_roles()
-    await _seed_default_workspace()
+
+    # Seed system roles and default workspace
+    from modules.core.startup import seed_default_workspace, seed_system_roles
+
+    await seed_system_roles()
+    await seed_default_workspace()
 
     try:
         # TTS/STT services — skip entirely in cloud mode
@@ -615,10 +356,12 @@ async def startup_event():
                 logger.info("🎤 Голос по умолчанию: Дмитрий (Piper)")
 
         # Инициализация LLM Service (vLLM или Cloud)
+        from modules.llm.startup import get_or_create_default_gemini_provider
+
         # Auto-migrate legacy "gemini" backend to cloud provider system
         if LLM_BACKEND == "gemini":
             logger.info("🔄 Auto-migrating LLM_BACKEND=gemini to cloud provider...")
-            gemini_provider = await _get_or_create_default_gemini_provider()
+            gemini_provider = await get_or_create_default_gemini_provider()
             if gemini_provider:
                 LLM_BACKEND = f"cloud:{gemini_provider['id']}"
                 os.environ["LLM_BACKEND"] = LLM_BACKEND
@@ -635,7 +378,7 @@ async def startup_event():
                     logger.info("✅ vLLM подключен")
                 else:
                     logger.warning("⚠️ vLLM не отвечает, пробуем облачного провайдера...")
-                    gemini_provider = await _get_or_create_default_gemini_provider()
+                    gemini_provider = await get_or_create_default_gemini_provider()
                     if gemini_provider:
                         llm_service = CloudLLMService(gemini_provider)
                         LLM_BACKEND = f"cloud:{gemini_provider['id']}"
@@ -645,7 +388,7 @@ async def startup_event():
                         logger.warning("⚠️ Нет облачного провайдера для fallback")
             except Exception as e:
                 logger.warning(f"⚠️ vLLM недоступен ({e}), пробуем облачного провайдера...")
-                gemini_provider = await _get_or_create_default_gemini_provider()
+                gemini_provider = await get_or_create_default_gemini_provider()
                 if gemini_provider:
                     llm_service = CloudLLMService(gemini_provider)
                     LLM_BACKEND = f"cloud:{gemini_provider['id']}"
@@ -702,15 +445,6 @@ async def startup_event():
             logger.warning(f"⚠️ STT not available: {stt_err}")
             stt_service = None
 
-        # Load FAQ and presets from database into services
-        logger.info("📦 Загрузка FAQ и пресетов из БД...")
-        try:
-            await _reload_llm_faq()
-            await _reload_voice_presets()
-            logger.info("✅ FAQ и пресеты загружены из БД")
-        except Exception as e:
-            logger.warning(f"⚠️ Ошибка загрузки данных из БД: {e}")
-
         # Check for deprecated legacy JSON files
         legacy_files = [
             ("typical_responses.json", "FAQ"),
@@ -746,6 +480,13 @@ async def startup_event():
         container.llm_service = llm_service
         container.streaming_tts_manager = streaming_tts_manager
         container.current_voice_config = current_voice_config
+
+        # Reload FAQ and voice presets from DB
+        from modules.knowledge.startup import reload_llm_faq
+        from modules.speech.startup import reload_voice_presets
+
+        await reload_llm_faq(container)
+        await reload_voice_presets(container)
 
         # Initialize GSM telephony service (skip in cloud mode)
         if DEPLOYMENT_MODE != "cloud":
@@ -926,13 +667,19 @@ async def startup_event():
         logger.info("✅ Service container populated for modular routers")
 
         # Auto-start Telegram bots that were running before restart
-        await _auto_start_telegram_bots()
+        from modules.channels.telegram.startup import auto_start_bots as auto_start_telegram
+
+        await auto_start_telegram()
 
         # Auto-start WhatsApp bots that were running before restart
-        await _auto_start_whatsapp_bots()
+        from modules.channels.whatsapp.startup import auto_start_bots as auto_start_whatsapp
+
+        await auto_start_whatsapp()
 
         # Auto-start bridge if enabled claude_bridge provider exists
-        await _auto_start_bridge_if_needed()
+        from modules.llm.startup import auto_start_bridge
+
+        await auto_start_bridge()
 
         # Register background tasks via TaskRegistry
         from modules.core.maintenance import cleanup_expired_sessions, periodic_vacuum
@@ -963,6 +710,34 @@ async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("🛑 Shutting down AI Secretary Orchestrator")
     await task_registry.cancel_all()
+
+    # Stop Telegram bots
+    try:
+        from multi_bot_manager import multi_bot_manager
+
+        await multi_bot_manager.stop_all()
+        logger.info("✅ Telegram bots stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping Telegram bots: {e}")
+
+    # Stop WhatsApp bots
+    try:
+        from whatsapp_manager import whatsapp_manager
+
+        await whatsapp_manager.stop_all()
+        logger.info("✅ WhatsApp bots stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping WhatsApp bots: {e}")
+
+    # Stop Claude bridge
+    try:
+        from bridge_manager import bridge_manager
+
+        await bridge_manager.stop()
+        logger.info("✅ Claude bridge stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping Claude bridge: {e}")
+
     await shutdown_database()
     logger.info("✅ Shutdown complete")
 
