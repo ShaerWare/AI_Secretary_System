@@ -137,6 +137,9 @@ class ChatMessage(Base):
     edited: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # JSON metadata (images, etc.)
+    extra_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Branching fields
     parent_id: Mapped[Optional[str]] = mapped_column(
         String(50),
@@ -163,7 +166,7 @@ class ChatMessage(Base):
     __table_args__ = (Index("ix_chat_messages_session_created", "session_id", "created"),)
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "id": self.id,
             "role": self.role,
             "content": self.content,
@@ -172,6 +175,12 @@ class ChatMessage(Base):
             "parent_id": self.parent_id,
             "is_active": self.is_active,
         }
+        if self.extra_data:
+            try:
+                result["metadata"] = json.loads(self.extra_data)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return result
 
 
 class ChatSessionShare(Base):

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from db.database import AsyncSessionLocal
 from db.repositories import ChatRepository, ChatShareRepository, UserRepository
 from db.retry import retry_on_busy
+from modules.chat.image_service import delete_session_images
 
 
 logger = logging.getLogger(__name__)
@@ -117,13 +118,15 @@ class ChatService:
         owner_id: Optional[int] = None,
         workspace_id: Optional[int] = None,
     ) -> bool:
-        """Delete session."""
+        """Delete session and its images."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             result = await repo.delete_session(
                 session_id, owner_id=owner_id, workspace_id=workspace_id
             )
             await session.commit()
+            if result:
+                delete_session_images(session_id)
             return result
 
     @retry_on_busy()
@@ -133,13 +136,16 @@ class ChatService:
         owner_id: Optional[int] = None,
         workspace_id: Optional[int] = None,
     ) -> int:
-        """Delete multiple sessions by ID list."""
+        """Delete multiple sessions and their images."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
             result = await repo.delete_sessions_bulk(
                 session_ids, owner_id=owner_id, workspace_id=workspace_id
             )
             await session.commit()
+            if result:
+                for sid in session_ids:
+                    delete_session_images(sid)
             return result
 
     async def list_sessions_grouped(
@@ -169,11 +175,14 @@ class ChatService:
         role: str,
         content: str,
         parent_id: Optional[str] = None,
+        extra_data: Optional[str] = None,
     ) -> Optional[dict]:
         """Add message to session."""
         async with AsyncSessionLocal() as session:
             repo = ChatRepository(session)
-            result = await repo.add_message(session_id, role, content, parent_id=parent_id)
+            result = await repo.add_message(
+                session_id, role, content, parent_id=parent_id, extra_data=extra_data
+            )
             await session.commit()
             return result
 

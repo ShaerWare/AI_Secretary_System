@@ -6,8 +6,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.dependencies import get_container
@@ -61,6 +61,9 @@ KNOWLEDGE_SEARCH_TOOL = {
     },
 }
 MAX_TOOL_ITERATIONS = 5
+
+# Temporary cache for OCR text from uploaded images (upload → send are two separate requests)
+_pending_image_ocr: dict[str, str] = {}
 
 _AGENTIC_RAG_SUFFIX = (
     "\n\nУ тебя есть инструмент knowledge_search для поиска по базе знаний. "
@@ -363,6 +366,7 @@ class LLMOverrideConfig(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str
+    image_ids: Optional[list[str]] = None
     llm_override: Optional[LLMOverrideConfig] = None
     widget_instance_id: Optional[str] = None
     mobile_instance_id: Optional[str] = None
@@ -617,8 +621,44 @@ async def admin_send_chat_message(
     if not llm_service:
         raise HTTPException(status_code=503, detail="LLM service not available")
 
-    # Добавляем сообщение пользователя
-    user_msg = await chat_service.add_message(session_id, "user", msg_request.content)
+    # Добавляем сообщение пользователя (with image metadata if any)
+    extra_data_json_ns = None
+    image_ocr_parts_ns: list[str] = []
+    if msg_request.image_ids:
+        from modules.chat.image_service import IMAGES_DIR
+
+        images_meta_ns = []
+        for img_id in msg_request.image_ids:
+            session_dir = IMAGES_DIR / session_id
+            if not session_dir.exists():
+                continue
+            for f in session_dir.iterdir():
+                if f.name.startswith(img_id) and not f.name.endswith("_thumb.jpg"):
+                    images_meta_ns.append(
+                        {
+                            "id": img_id,
+                            "filename": f.name,
+                            "url": f"/admin/chat/images/{session_id}/{f.name}",
+                            "thumb_url": f"/admin/chat/images/{session_id}/{img_id}_thumb.jpg",
+                        }
+                    )
+                    break
+            ocr = _pending_image_ocr.pop(img_id, None)
+            if ocr:
+                image_ocr_parts_ns.append(ocr)
+        if images_meta_ns:
+            extra_data_json_ns = json.dumps({"images": images_meta_ns}, ensure_ascii=False)
+
+    llm_content_ns = msg_request.content
+    if image_ocr_parts_ns:
+        ocr_block = "\n\n".join(f"[Текст с изображения]:\n{ocr}" for ocr in image_ocr_parts_ns)
+        llm_content_ns = (
+            f"{msg_request.content}\n\n{ocr_block}" if msg_request.content else ocr_block
+        )
+
+    user_msg = await chat_service.add_message(
+        session_id, "user", llm_content_ns, extra_data=extra_data_json_ns
+    )
 
     # Получаем историю для LLM
     # Session prompt takes priority; fallback to LLM service default
@@ -826,8 +866,44 @@ async def admin_stream_chat_message(
     if not active_llm:
         raise HTTPException(status_code=503, detail="LLM service not available")
 
-    # Добавляем сообщение пользователя
-    user_msg = await chat_service.add_message(session_id, "user", msg_request.content)
+    # Добавляем сообщение пользователя (with image metadata if any)
+    extra_data_json = None
+    image_ocr_parts: list[str] = []
+
+    if msg_request.image_ids:
+        from modules.chat.image_service import IMAGES_DIR
+
+        images_meta = []
+        for img_id in msg_request.image_ids:
+            session_dir = IMAGES_DIR / session_id
+            if not session_dir.exists():
+                continue
+            for f in session_dir.iterdir():
+                if f.name.startswith(img_id) and not f.name.endswith("_thumb.jpg"):
+                    images_meta.append(
+                        {
+                            "id": img_id,
+                            "filename": f.name,
+                            "url": f"/admin/chat/images/{session_id}/{f.name}",
+                            "thumb_url": f"/admin/chat/images/{session_id}/{img_id}_thumb.jpg",
+                        }
+                    )
+                    break
+            ocr = _pending_image_ocr.pop(img_id, None)
+            if ocr:
+                image_ocr_parts.append(ocr)
+        if images_meta:
+            extra_data_json = json.dumps({"images": images_meta}, ensure_ascii=False)
+
+    # Build content: user text + OCR from images
+    llm_content = msg_request.content
+    if image_ocr_parts:
+        ocr_block = "\n\n".join(f"[Текст с изображения]:\n{ocr}" for ocr in image_ocr_parts)
+        llm_content = f"{msg_request.content}\n\n{ocr_block}" if msg_request.content else ocr_block
+
+    user_msg = await chat_service.add_message(
+        session_id, "user", llm_content, extra_data=extra_data_json
+    )
 
     # Получаем историю для LLM
     # Priority: widget prompt > session prompt > LLM service default
@@ -1422,3 +1498,78 @@ async def admin_get_shareable_users(user: User = Depends(require_permission("cha
     """Список пользователей для шаринга"""
     users = await chat_share_service.list_shareable_users(exclude_user_id=user.id)
     return {"users": users}
+
+
+# ============== Image Endpoints ==============
+
+
+@router.post("/sessions/{session_id}/upload-image")
+async def admin_upload_chat_image(
+    session_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Upload an image for a chat session, run OCR, return metadata."""
+    from modules.chat.image_service import ALLOWED_MIME_TYPES, MAX_FILE_SIZE, upload_image
+
+    await _check_write_access(session_id, user)
+
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported image type: {content_type}")
+
+    file_data = await file.read()
+    if len(file_data) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    try:
+        image_meta = await upload_image(
+            session_id, file_data, content_type, file.filename or "image.jpg"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Cache OCR text for when the message is sent
+    if image_meta.get("ocr_text"):
+        _pending_image_ocr[image_meta["id"]] = image_meta["ocr_text"]
+
+    return {
+        "image": {
+            "id": image_meta["id"],
+            "url": f"/admin/chat/images/{session_id}/{image_meta['filename']}",
+            "thumb_url": f"/admin/chat/images/{session_id}/{image_meta['id']}_thumb.jpg",
+            "ocr_text": image_meta.get("ocr_text"),
+            "width": image_meta["width"],
+            "height": image_meta["height"],
+            "original_name": image_meta["original_name"],
+            "size": image_meta["size"],
+            "mime_type": image_meta["mime_type"],
+        }
+    }
+
+
+@router.get("/images/{session_id}/{filename}")
+async def serve_chat_image(
+    session_id: str,
+    filename: str,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Serve an uploaded chat image (auth-gated)."""
+    from modules.chat.image_service import get_image_path
+
+    path = get_image_path(session_id, filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    # Determine media type
+    suffix = path.suffix.lower()
+    media_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }
+    media_type = media_types.get(suffix, "application/octet-stream")
+
+    return FileResponse(path, media_type=media_type)

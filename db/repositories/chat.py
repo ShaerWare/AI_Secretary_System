@@ -314,6 +314,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         role: str,
         content: str,
         parent_id: Optional[str] = None,
+        extra_data: Optional[str] = None,
     ) -> Optional[dict]:
         """Add message to session. Auto-detects parent if not provided."""
         result = await self.session.execute(
@@ -341,6 +342,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             created=datetime.utcnow(),
             parent_id=parent_id,
             is_active=True,
+            extra_data=extra_data,
         )
 
         self.session.add(message)

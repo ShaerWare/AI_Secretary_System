@@ -23,7 +23,7 @@ import 'prismjs/components/prism-diff'
 import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-jsx'
 import 'prismjs/components/prism-tsx'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
@@ -76,7 +76,8 @@ import {
   Minimize2,
   Globe,
   Server,
-  Search
+  Search,
+  ImagePlus
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -159,6 +160,25 @@ const { width: artifactWidth, startResize: startArtifactResize, startTouchResize
 const pastedBlocks = ref<PastedBlock[]>([])
 
 function onPaste(e: ClipboardEvent) {
+  // Handle pasted images
+  const items = e.clipboardData?.items
+  if (items && currentSessionId.value) {
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          isUploadingImage.value = true
+          chatApi.uploadImage(currentSessionId.value, file)
+            .then(({ image }) => pendingImages.value.push(image))
+            .catch(err => toastStore.error(String(err)))
+            .finally(() => { isUploadingImage.value = false })
+        }
+        return
+      }
+    }
+  }
+  // Handle pasted text
   const text = e.clipboardData?.getData('text/plain')
   if (!text || !shouldTreatAsPaste(text)) return
   e.preventDefault()
@@ -168,6 +188,38 @@ function onPaste(e: ClipboardEvent) {
 function removePastedBlock(id: string) {
   pastedBlocks.value = pastedBlocks.value.filter(b => b.id !== id)
 }
+
+// Pending image uploads
+const pendingImages = ref<ChatImage[]>([])
+const isUploadingImage = ref(false)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+
+async function handleImageUpload(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files
+  if (!files?.length || !currentSessionId.value) return
+
+  isUploadingImage.value = true
+  try {
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue
+      const { image } = await chatApi.uploadImage(currentSessionId.value, file)
+      pendingImages.value.push(image)
+    }
+  } catch (err) {
+    toastStore.error(String(err))
+  } finally {
+    isUploadingImage.value = false
+    input.value = ''
+  }
+}
+
+function removePendingImage(id: string) {
+  pendingImages.value = pendingImages.value.filter(i => i.id !== id)
+}
+
+// Fullscreen image viewer
+const fullscreenImage = ref<string | null>(null)
 
 // Artifact viewer state
 const showArtifact = ref(false)
@@ -991,11 +1043,14 @@ async function deleteCcSession(ccSessionId: string, title: string, event: Event)
 function sendMessage() {
   const hasText = inputMessage.value.trim().length > 0
   const hasPaste = pastedBlocks.value.length > 0
-  if ((!hasText && !hasPaste) || !currentSessionId.value || isStreaming.value) return
+  const hasImages = pendingImages.value.length > 0
+  if ((!hasText && !hasPaste && !hasImages) || !currentSessionId.value || isStreaming.value) return
 
   const content = buildMessageContent(inputMessage.value.trim(), pastedBlocks.value)
+  const imageIds = pendingImages.value.map(i => i.id)
   inputMessage.value = ''
   pastedBlocks.value = []
+  pendingImages.value = []
   if (messageInputRef.value) messageInputRef.value.style.height = 'auto'
 
   // Show user message immediately (optimistic)
@@ -1063,7 +1118,7 @@ function sendMessage() {
       refetchSessions()
       nextTick(() => messageInputRef.value?.focus())
     }
-  }, llmOverride)
+  }, llmOverride, undefined, imageIds.length ? imageIds : undefined)
 }
 
 function ccSendMessage() {
@@ -2860,6 +2915,30 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
       >
+        <!-- Pending image previews -->
+        <div v-if="pendingImages.length" class="flex flex-wrap gap-2 mb-2 max-w-3xl mx-auto">
+          <div
+            v-for="img in pendingImages"
+            :key="img.id"
+            class="relative group/img"
+          >
+            <img
+              :src="img.thumb_url"
+              :alt="img.original_name"
+              class="h-20 rounded-lg border border-border object-cover"
+            />
+            <button
+              class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+              :title="t('chatView.removeImage')"
+              @click="removePendingImage(img.id)"
+            >
+              <X class="w-3 h-3" />
+            </button>
+            <div v-if="img.ocr_text" class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded">
+              OCR
+            </div>
+          </div>
+        </div>
         <!-- Pasted blocks chips -->
         <div v-if="pastedBlocks.length" class="flex flex-wrap gap-2 mb-2 max-w-3xl mx-auto">
           <div
@@ -2897,6 +2976,24 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @input="onInputAutoResize"
             @paste="onPaste"
           />
+          <!-- Image upload button -->
+          <button
+            :disabled="isStreaming || isUploadingImage || !currentSessionId"
+            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50"
+            :title="t('chatView.uploadImage')"
+            @click="imageInputRef?.click()"
+          >
+            <Loader2 v-if="isUploadingImage" class="w-5 h-5 animate-spin" />
+            <ImagePlus v-else class="w-5 h-5" />
+          </button>
+          <input
+            ref="imageInputRef"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            class="hidden"
+            @change="handleImageUpload"
+          />
           <!-- Microphone button -->
           <button
             :disabled="isStreaming || isTranscribing"
@@ -2915,7 +3012,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </button>
           <!-- Send button -->
           <button
-            :disabled="(!inputMessage.trim() && !pastedBlocks.length) || isStreaming || isRecording"
+            :disabled="(!inputMessage.trim() && !pastedBlocks.length && !pendingImages.length) || isStreaming || isRecording"
             class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             @click="sendMessage"
           >
@@ -3151,6 +3248,20 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
               <!-- Normal mode -->
               <template v-else>
+                <!-- Image attachments -->
+                <div v-if="message.metadata?.images?.length" class="flex flex-wrap gap-2 mb-2">
+                  <div v-for="img in message.metadata.images" :key="img.id" class="relative group/img">
+                    <img
+                      :src="img.thumb_url || img.url"
+                      :alt="img.original_name || 'image'"
+                      class="rounded-lg max-h-48 cursor-pointer hover:opacity-90 transition-opacity"
+                      @click="fullscreenImage = img.url"
+                    />
+                    <div v-if="img.ocr_text" class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                      OCR
+                    </div>
+                  </div>
+                </div>
                 <div class="chat-markdown break-words" v-html="renderMarkdown(message.content, message.id)"></div>
                 <div class="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                   <span>{{ formatTime(message.timestamp) }}</span>
@@ -3588,6 +3699,18 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
     :open="showShareDialog"
     @close="showShareDialog = false"
   />
+
+  <!-- Fullscreen image viewer -->
+  <div
+    v-if="fullscreenImage"
+    class="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center cursor-pointer"
+    @click="fullscreenImage = null"
+  >
+    <img :src="fullscreenImage" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
+    <button class="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white">
+      <X class="w-6 h-6" />
+    </button>
+  </div>
 </template>
 
 <style scoped>

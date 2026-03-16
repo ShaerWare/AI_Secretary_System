@@ -1,5 +1,17 @@
 import { api, createSSE, getAuthHeaders } from './client'
 
+export interface ChatImage {
+  id: string
+  url: string
+  thumb_url: string
+  ocr_text?: string | null
+  width: number
+  height: number
+  original_name: string
+  size?: number
+  mime_type?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -8,6 +20,9 @@ export interface ChatMessage {
   edited?: boolean
   parent_id?: string | null
   is_active?: boolean
+  metadata?: {
+    images?: ChatImage[]
+  } | null
 }
 
 export interface SiblingInfo {
@@ -179,7 +194,8 @@ export const chatApi = {
     content: string,
     onChunk: (data: { type: string; content?: string; message?: ChatMessage; token_usage?: TokenUsage; query?: string; name?: string; found?: boolean }) => void,
     llmOverride?: { llm_backend?: string; system_prompt?: string },
-    widgetInstanceId?: string
+    widgetInstanceId?: string,
+    imageIds?: string[]
   ) => {
     const controller = new AbortController()
 
@@ -189,6 +205,9 @@ export const chatApi = {
     }
     if (widgetInstanceId) {
       body.widget_instance_id = widgetInstanceId
+    }
+    if (imageIds?.length) {
+      body.image_ids = imageIds
     }
 
     fetch(`/admin/chat/sessions/${sessionId}/stream`, {
@@ -278,4 +297,8 @@ export const chatApi = {
 
   getShareableUsers: () =>
     api.get<{ users: ShareableUser[] }>('/admin/chat/shareable-users'),
+
+  // Image upload
+  uploadImage: (sessionId: string, file: File) =>
+    api.upload<{ image: ChatImage }>(`/admin/chat/sessions/${sessionId}/upload-image`, file),
 }
