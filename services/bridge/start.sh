@@ -3,6 +3,9 @@
 
 cd "$(dirname "$0")"
 
+# Ensure ~/.local/bin is in PATH (claude CLI location)
+export PATH="$HOME/.local/bin:$PATH"
+
 # Check if virtual environment exists
 if [ -f ".venv/bin/activate" ]; then
     source .venv/bin/activate

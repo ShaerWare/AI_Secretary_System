@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
@@ -76,7 +77,8 @@ import {
   Minimize2,
   Globe,
   Server,
-  Search
+  Search,
+  LogOut
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -92,6 +94,14 @@ const confirmStore = useConfirmStore()
 const toastStore = useToastStore()
 const authStore = useAuthStore()
 const fullscreenStore = useChatFullscreenStore()
+const chatRouter = useRouter()
+const isChatOnly = computed(() => authStore.isChatOnlyUser)
+
+function handleChatLogout() {
+  authStore.logout()
+  queryClient.clear()
+  chatRouter.push('/login')
+}
 
 const queryClient = useQueryClient()
 
@@ -2049,139 +2059,133 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       v-if="fullscreenStore.isFullscreen && currentSession"
       class="zen-activity-bar zen-glass zen-toolbar-enter flex flex-col items-center py-3 px-1.5 gap-1 border-r border-border/30 z-10"
     >
-      <!-- Session title: first letter avatar -->
-      <div
-        class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-bold cursor-pointer shrink-0"
-        :title="currentSession.title"
-        @click="startHeaderRename"
-      >
-        {{ currentSession.title.charAt(0).toUpperCase() }}
-      </div>
-
-      <!-- Exit fullscreen (top) -->
-      <button
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
-        :title="t('chatView.exitZenMode')"
-        @click="fullscreenStore.exit()"
-      >
-        <Minimize2 class="w-4 h-4" />
-      </button>
-
-      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
-
-      <!-- Claude Code toggle (restricted users) -->
-      <button
-        v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
-        :class="[
-          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
-          cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
-        ]"
-        :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-        @click="toggleCcMode()"
-      >
-        <Terminal class="w-4 h-4" />
-      </button>
-
-      <!-- LLM dropdown (non-CC) -->
-      <div v-if="!cc.isActive.value" class="zen-llm-anchor relative shrink-0">
+      <!-- Admin-only: session avatar, exit zen, CC, LLM, RAG, share, fork -->
+      <template v-if="!isChatOnly">
+        <!-- Exit fullscreen (top) -->
         <button
-          :class="[
-            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-            showZenLlmMenu ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-          ]"
-          :title="t('chat.selectLlm')"
-          @click.stop="showZenLlmMenu = !showZenLlmMenu"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+          :title="t('chatView.exitZenMode')"
+          @click="fullscreenStore.exit()"
         >
-          <Brain class="w-4 h-4" />
+          <Minimize2 class="w-4 h-4" />
         </button>
-        <div
-          v-if="showZenLlmMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[180px] animate-scale-in"
-          @click.stop
+
+        <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+
+        <!-- Claude Code toggle (restricted users) -->
+        <button
+          v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
+            cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+          ]"
+          :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
+          @click="toggleCcMode()"
         >
+          <Terminal class="w-4 h-4" />
+        </button>
+
+        <!-- LLM dropdown (non-CC) -->
+        <div v-if="!cc.isActive.value" class="zen-llm-anchor relative shrink-0">
           <button
             :class="[
-              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
-              selectedLlmBackend === '' ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              showZenLlmMenu ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
             ]"
-            @click="selectedLlmBackend = ''; showZenLlmMenu = false"
+            :title="t('chat.selectLlm')"
+            @click.stop="showZenLlmMenu = !showZenLlmMenu"
           >
-            <span>{{ t('chat.defaultLlm') }}</span>
-            <Check v-if="selectedLlmBackend === ''" class="w-3.5 h-3.5 ml-auto text-primary" />
+            <Brain class="w-4 h-4" />
           </button>
+          <div
+            v-if="showZenLlmMenu"
+            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[180px] animate-scale-in"
+            @click.stop
+          >
+            <button
+              :class="[
+                'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+                selectedLlmBackend === '' ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
+              ]"
+              @click="selectedLlmBackend = ''; showZenLlmMenu = false"
+            >
+              <span>{{ t('chat.defaultLlm') }}</span>
+              <Check v-if="selectedLlmBackend === ''" class="w-3.5 h-3.5 ml-auto text-primary" />
+            </button>
+            <button
+              v-for="option in availableLlmOptions"
+              :key="option.value"
+              :class="[
+                'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
+                selectedLlmBackend === option.value ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
+              ]"
+              @click="selectedLlmBackend = option.value; showZenLlmMenu = false"
+            >
+              <span>{{ option.label }}</span>
+              <Check v-if="selectedLlmBackend === option.value" class="w-3.5 h-3.5 ml-auto text-primary" />
+            </button>
+          </div>
+        </div>
+
+        <!-- RAG collections dropdown (non-CC) -->
+        <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
           <button
-            v-for="option in availableLlmOptions"
-            :key="option.value"
             :class="[
-              'flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left',
-              selectedLlmBackend === option.value ? 'bg-primary/20 text-primary' : 'hover:bg-secondary/30'
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
             ]"
-            @click="selectedLlmBackend = option.value; showZenLlmMenu = false"
+            :title="t('chatView.knowledgeBase')"
+            @click="showRagMenu = !showRagMenu"
           >
-            <span>{{ option.label }}</span>
-            <Check v-if="selectedLlmBackend === option.value" class="w-3.5 h-3.5 ml-auto text-primary" />
+            <BookOpen class="w-4 h-4" />
+            <span
+              v-if="selectedCollectionIds.length"
+              class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
+            >{{ selectedCollectionIds.length }}</span>
+          </button>
+          <div
+            v-if="showRagMenu"
+            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px] animate-scale-in"
+            @click.stop
+          >
+            <label
+              v-for="col in knowledgeCollections"
+              :key="col.id"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
+            >
+              <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
+              <span>{{ col.name }}</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Share button (non-CC, owner only) -->
+        <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
+          <button
+            class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors"
+            :title="t('chatView.shareChat')"
+            @click="showShareDialog = true"
+          >
+            <Share2 class="w-4 h-4" />
+            <span
+              v-if="(currentSession?.share_count ?? 0) > 0"
+              class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
+            >{{ currentSession!.share_count }}</span>
           </button>
         </div>
-      </div>
 
-      <!-- RAG collections dropdown (non-CC) -->
-      <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
+        <!-- Fork button (non-CC, read-only) -->
         <button
-          :class="[
-            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-            selectedCollectionIds.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-          ]"
-          :title="t('chatView.knowledgeBase')"
-          @click="showRagMenu = !showRagMenu"
+          v-if="!cc.isActive.value && isReadOnly"
+          :disabled="forkSessionMutation.isPending.value"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 hover:bg-secondary/50 transition-colors shrink-0"
+          :title="t('chatView.forkChat')"
+          @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
         >
-          <BookOpen class="w-4 h-4" />
-          <span
-            v-if="selectedCollectionIds.length"
-            class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-primary text-primary-foreground flex items-center justify-center border border-background"
-          >{{ selectedCollectionIds.length }}</span>
+          <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
+          <GitFork v-else class="w-4 h-4" />
         </button>
-        <div
-          v-if="showRagMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px] animate-scale-in"
-          @click.stop
-        >
-          <label
-            v-for="col in knowledgeCollections"
-            :key="col.id"
-            class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/30 transition-colors cursor-pointer"
-          >
-            <input v-model="selectedCollectionIds" type="checkbox" :value="col.id" class="rounded border-border w-3.5 h-3.5" />
-            <span>{{ col.name }}</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Share button (non-CC, owner only) -->
-      <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
-        <button
-          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors"
-          :title="t('chatView.shareChat')"
-          @click="showShareDialog = true"
-        >
-          <Share2 class="w-4 h-4" />
-          <span
-            v-if="(currentSession?.share_count ?? 0) > 0"
-            class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-green-500 text-white flex items-center justify-center border border-background"
-          >{{ currentSession!.share_count }}</span>
-        </button>
-      </div>
-
-      <!-- Fork button (non-CC, read-only) -->
-      <button
-        v-if="!cc.isActive.value && isReadOnly"
-        :disabled="forkSessionMutation.isPending.value"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 hover:bg-secondary/50 transition-colors shrink-0"
-        :title="t('chatView.forkChat')"
-        @click="currentSessionId && forkSessionMutation.mutate(currentSessionId)"
-      >
-        <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
-        <GitFork v-else class="w-4 h-4" />
-      </button>
+      </template>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
@@ -2233,9 +2237,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         <ArrowUpToLine v-else class="w-4 h-4" />
       </button>
 
-      <!-- Voice mode toggle (non-CC) -->
+      <!-- Voice mode toggle (non-CC, admin only) -->
       <button
-        v-if="!cc.isActive.value"
+        v-if="!cc.isActive.value && !isChatOnly"
         :class="[
           'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
           voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
@@ -2260,8 +2264,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         <GitBranch class="w-4 h-4" />
       </button>
 
-      <!-- CC: Working directory dropdown -->
-      <div v-if="cc.isActive.value" class="relative shrink-0">
+      <!-- CC: Working directory dropdown (admin only) -->
+      <div v-if="cc.isActive.value && !isChatOnly" class="relative shrink-0">
         <button
           :class="[
             'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
@@ -2339,8 +2343,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         </div>
       </div>
 
-      <!-- CC: Context files dropdown -->
-      <div v-if="cc.isActive.value && contextFiles.length > 0" class="relative shrink-0">
+      <!-- CC: Context files dropdown (admin only) -->
+      <div v-if="cc.isActive.value && !isChatOnly && contextFiles.length > 0" class="relative shrink-0">
         <button
           :class="[
             'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
@@ -2386,7 +2390,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           showSettings ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
         ]"
         :title="t('chatView.zenSettings')"
-        @click="showSettings = !showSettings"
+        @click="if (isChatOnly) settingsTab = 'files'; showSettings = !showSettings"
       >
         <Settings2 class="w-4 h-4" />
       </button>
@@ -2394,35 +2398,48 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       <!-- Spacer pushes bottom items down -->
       <div class="flex-1"></div>
 
-      <!-- New CC session -->
-      <button
-        v-if="!isReadOnly && cc.isActive.value"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
-        :title="t('chatView.claudeCode.newSession')"
-        @click="cc.newSession()"
-      >
-        <Plus class="w-4 h-4" />
-      </button>
+      <!-- Admin-only: new CC session, delete chat, exit zen -->
+      <template v-if="!isChatOnly">
+        <!-- New CC session -->
+        <button
+          v-if="!isReadOnly && cc.isActive.value"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+          :title="t('chatView.claudeCode.newSession')"
+          @click="cc.newSession()"
+        >
+          <Plus class="w-4 h-4" />
+        </button>
 
-      <!-- Delete chat / Stop CC -->
-      <button
-        v-if="cc.isActive.value || isSessionOwner"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
-        :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
-        @click="cc.isActive.value ? toggleCcMode() : deleteCurrentSession()"
-      >
-        <Trash2 class="w-4 h-4" />
-      </button>
+        <!-- Delete chat / Stop CC -->
+        <button
+          v-if="cc.isActive.value || isSessionOwner"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors shrink-0"
+          :title="cc.isActive.value ? t('chatView.claudeCode.disable') : 'Delete chat'"
+          @click="cc.isActive.value ? toggleCcMode() : deleteCurrentSession()"
+        >
+          <Trash2 class="w-4 h-4" />
+        </button>
 
-      <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+        <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
-      <!-- Exit fullscreen -->
+        <!-- Exit fullscreen -->
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+          :title="t('chatView.exitZenMode')"
+          @click="fullscreenStore.exit()"
+        >
+          <Minimize2 class="w-4 h-4" />
+        </button>
+      </template>
+
+      <!-- Chat-only user: logout button -->
       <button
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
-        :title="t('chatView.exitZenMode')"
-        @click="fullscreenStore.exit()"
+        v-if="isChatOnly"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors shrink-0"
+        :title="t('nav.logout')"
+        @click="handleChatLogout"
       >
-        <Minimize2 class="w-4 h-4" />
+        <LogOut class="w-4 h-4" />
       </button>
     </div>
 
@@ -3060,26 +3077,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         ]"
         @click="handleMessagesClick"
       >
-        <!-- Zen mode: inline session title + new chat button -->
-        <div v-if="fullscreenStore.isFullscreen && currentSession" class="text-center mb-4">
-          <template v-if="editingHeaderTitle">
-            <input
-              v-model="headerTitleValue"
-              class="header-rename-input text-sm font-medium bg-transparent border-b border-border focus:outline-none focus:border-primary text-center max-w-xs mx-auto"
-              @keydown.enter="saveHeaderRename"
-              @keydown.escape="cancelHeaderRename"
-              @blur="saveHeaderRename"
-              @click.stop
-            />
-          </template>
-          <h2
-            v-else
-            class="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors inline-block"
-            @click="startHeaderRename"
-          >
-            {{ currentSession.title }}
-          </h2>
-        </div>
+        <!-- Zen mode: spacing only (title removed) -->
+        <div v-if="fullscreenStore.isFullscreen && currentSession" class="mb-2"></div>
 
         <!-- Claude Code mode messages -->
         <template v-if="cc.isActive.value">
