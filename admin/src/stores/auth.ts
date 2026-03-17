@@ -29,6 +29,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => canManage('users'))
   const isCloudMode = computed(() => deploymentMode.value === 'cloud')
+  const isChatOnlyUser = computed(() => {
+    if (Object.keys(permissions.value).length === 0) return false
+    return !isAdmin.value
+  })
 
   function hasModule(module: string): boolean {
     return module in permissions.value
@@ -193,6 +197,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isCloudMode,
+    isChatOnlyUser,
     hasModule,
     canView,
     canEdit,

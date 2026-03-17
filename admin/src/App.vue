@@ -39,6 +39,16 @@ const chatFullscreenStore = useChatFullscreenStore()
 
 const isFullscreenChat = computed(() => chatFullscreenStore.isFullscreen && route.name === 'chat')
 
+// Force fullscreen chat mode for non-admin users
+watch(
+  () => authStore.isChatOnlyUser,
+  (chatOnly) => {
+    if (chatOnly) chatFullscreenStore.lock()
+    else chatFullscreenStore.unlock()
+  },
+  { immediate: true }
+)
+
 const sidebarOpen = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(false)
