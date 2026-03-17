@@ -1760,9 +1760,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
   <audio ref="audioRef" :src="audioUrl || undefined" class="hidden" @ended="onAudioEnded" />
 
   <div :class="['flex h-full', fullscreenStore.isFullscreen ? 'zen-enter' : '']">
-    <!-- Sidebar: Chat List (hidden in zen mode, but visible for chat-only users) -->
+    <!-- Sidebar: Chat List (hidden in zen mode) -->
     <div
-      v-if="!fullscreenStore.isFullscreen || isChatOnly"
+      v-if="!fullscreenStore.isFullscreen"
       :class="[
         'border-r border-border bg-card flex flex-col transition-all',
         showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
@@ -1771,8 +1771,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       ]"
       :style="!sidebarCollapsed ? { width: sidebarWidth + 'px' } : undefined"
     >
-      <!-- Collapsed mode (desktop only, not for chat-only users) -->
-      <template v-if="sidebarCollapsed && !isChatOnly">
+      <!-- Collapsed mode (desktop only) -->
+      <template v-if="sidebarCollapsed">
         <!-- Collapsed header: expand + new chat -->
         <div class="hidden md:flex flex-col items-center gap-1 p-2 border-b border-border">
           <button class="p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors" :title="t('chatView.expandSidebar')" @click="toggleSidebarCollapse">
@@ -1828,32 +1828,30 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           {{ t('chatView.title') }}
         </h2>
         <div class="flex items-center gap-1">
-          <template v-if="!isChatOnly">
-            <button
-              class="hidden md:inline-flex p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
-              :title="t('chatView.collapseSidebar')"
-              @click="toggleSidebarCollapse"
-            >
-              <PanelLeftClose class="w-4 h-4" />
-            </button>
-            <button
-              class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
-              :title="t('chatView.zenMode')"
-              @click="fullscreenStore.enter()"
-            >
-              <Maximize2 class="w-4 h-4" />
-            </button>
-            <button
-              :class="[
-                'p-2 rounded-lg transition-colors',
-                selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
-              ]"
-              :title="selectionMode ? t('chatView.deselectAll') : t('chatView.selectAll')"
-              @click="selectionMode = !selectionMode"
-            >
-              <ListChecks class="w-4 h-4" />
-            </button>
-          </template>
+          <button
+            class="hidden md:inline-flex p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
+            :title="t('chatView.collapseSidebar')"
+            @click="toggleSidebarCollapse"
+          >
+            <PanelLeftClose class="w-4 h-4" />
+          </button>
+          <button
+            class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
+            :title="t('chatView.zenMode')"
+            @click="fullscreenStore.enter()"
+          >
+            <Maximize2 class="w-4 h-4" />
+          </button>
+          <button
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
+            :title="selectionMode ? t('chatView.deselectAll') : t('chatView.selectAll')"
+            @click="selectionMode = !selectionMode"
+          >
+            <ListChecks class="w-4 h-4" />
+          </button>
           <button
             :disabled="createSessionMutation.isPending.value"
             class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -1878,8 +1876,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
       <!-- Sessions List -->
       <div class="flex-1 overflow-y-auto">
-        <!-- Standalone CC sessions (no parent chat, admin only) -->
-        <template v-if="!isChatOnly && standaloneCcSessions.length">
+        <!-- Standalone CC sessions (no parent chat) -->
+        <template v-if="standaloneCcSessions.length">
           <div class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-green-500/70 bg-green-500/5 border-b border-border/50">
             Claude Code
           </div>
@@ -2040,21 +2038,11 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       </div>
       </template>
 
-      <!-- Chat-only: logout button at bottom of sidebar -->
-      <div v-if="isChatOnly" class="p-2 border-t border-border">
-        <button
-          class="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
-          @click="handleChatLogout"
-        >
-          <LogOut class="w-4 h-4" />
-          <span>{{ t('nav.logout') }}</span>
-        </button>
-      </div>
     </div>
 
     <!-- Sidebar resize handle (desktop only) -->
     <div
-      v-if="!sidebarCollapsed && (!fullscreenStore.isFullscreen || isChatOnly)"
+      v-if="!sidebarCollapsed && !fullscreenStore.isFullscreen"
       class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
       @mousedown="startSidebarResize"
       @touchstart="startSidebarTouchResize"
@@ -2062,14 +2050,14 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
     <!-- Mobile sidebar backdrop -->
     <div
-      v-if="showSidebar && (!fullscreenStore.isFullscreen || isChatOnly)"
+      v-if="showSidebar && !fullscreenStore.isFullscreen"
       class="md:hidden fixed inset-0 bg-black/50 z-30"
       @click="showSidebar = false"
     />
 
     <!-- Mobile sidebar toggle -->
     <button
-      v-if="!fullscreenStore.isFullscreen || isChatOnly"
+      v-if="!fullscreenStore.isFullscreen"
       class="md:hidden fixed left-4 bottom-24 z-50 p-3 bg-primary text-primary-foreground rounded-full shadow-lg"
       @click="showSidebar = !showSidebar"
     >
