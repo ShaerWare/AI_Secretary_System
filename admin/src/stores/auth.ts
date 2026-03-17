@@ -144,6 +144,9 @@ export const useAuthStore = defineStore('auth', () => {
       await fetchDeploymentMode()
       await fetchPermissions()
 
+      // Clear stale zen mode from localStorage to prevent stuck fullscreen
+      localStorage.removeItem('chat-fullscreen')
+
       return true
     } catch (e) {
       // In dev mode, allow login without backend
