@@ -30,8 +30,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => canManage('users'))
   const isCloudMode = computed(() => deploymentMode.value === 'cloud')
   const isChatOnlyUser = computed(() => {
-    if (Object.keys(permissions.value).length === 0) return false
-    return !isAdmin.value
+    // Once permissions loaded, use RBAC check
+    if (Object.keys(permissions.value).length > 0) return !isAdmin.value
+    // Before permissions load, use JWT role as early hint
+    return isAuthenticated.value && user.value?.role !== 'admin'
   })
 
   function hasModule(module: string): boolean {

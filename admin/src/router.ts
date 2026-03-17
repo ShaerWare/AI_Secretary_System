@@ -215,18 +215,22 @@ router.beforeEach((to, from, next) => {
     }
   } else if (to.name === "login" && authStore.isAuthenticated) {
     // Already logged in, redirect to landing page
-    const landing =
-      authStore.isChatOnlyUser
-        ? "chat"
-        : authStore.hasModule("dashboard") && !authStore.isCloudMode
-          ? "dashboard"
-          : "chat";
+    const isChatUser = authStore.isChatOnlyUser
+      || (authStore.user?.role !== "admin" && Object.keys(authStore.permissions).length === 0);
+    const landing = isChatUser
+      ? "chat"
+      : authStore.hasModule("dashboard") && !authStore.isCloudMode
+        ? "dashboard"
+        : "chat";
     next({ name: landing });
     return;
   }
 
   // Chat-only users can only access /chat
-  if (!isPublicRoute && authStore.isChatOnlyUser && to.name !== "chat") {
+  // Use isChatOnlyUser (permission-based) when loaded, fall back to JWT role
+  const chatOnly = authStore.isChatOnlyUser
+    || (authStore.isAuthenticated && authStore.user?.role !== "admin" && Object.keys(authStore.permissions).length === 0);
+  if (!isPublicRoute && chatOnly && to.name !== "chat") {
     next({ name: "chat" });
     return;
   }
