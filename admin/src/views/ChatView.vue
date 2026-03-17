@@ -2039,6 +2039,17 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         </div>
       </div>
       </template>
+
+      <!-- Chat-only: logout button at bottom of sidebar -->
+      <div v-if="isChatOnly" class="p-2 border-t border-border">
+        <button
+          class="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          @click="handleChatLogout"
+        >
+          <LogOut class="w-4 h-4" />
+          <span>{{ t('nav.logout') }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Sidebar resize handle (desktop only) -->
