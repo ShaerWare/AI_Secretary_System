@@ -2248,16 +2248,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
       <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
-      <!-- Input position toggle -->
-      <button
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
-        :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
-        @click="toggleInputPosition"
-      >
-        <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
-        <ArrowUpToLine v-else class="w-4 h-4" />
-      </button>
-
       <!-- Voice mode toggle (non-CC, admin only) -->
       <button
         v-if="!cc.isActive.value && !isChatOnly"
@@ -2431,6 +2421,16 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <Plus class="w-4 h-4" />
         </button>
 
+        <!-- Input position toggle (admin) -->
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+          :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
+          @click="toggleInputPosition"
+        >
+          <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
+          <ArrowUpToLine v-else class="w-4 h-4" />
+        </button>
+
         <!-- Delete chat / Stop CC -->
         <button
           v-if="cc.isActive.value || isSessionOwner"
@@ -2453,15 +2453,25 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         </button>
       </template>
 
-      <!-- Chat-only user: logout button -->
-      <button
-        v-if="isChatOnly"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors shrink-0"
-        :title="t('nav.logout')"
-        @click="handleChatLogout"
-      >
-        <LogOut class="w-4 h-4" />
-      </button>
+      <!-- Chat-only user: input position + logout -->
+      <template v-if="isChatOnly">
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
+          :title="inputPosition === 'top' ? 'Move input to bottom' : 'Move input to top'"
+          @click="toggleInputPosition"
+        >
+          <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
+          <ArrowUpToLine v-else class="w-4 h-4" />
+        </button>
+
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors shrink-0"
+          :title="t('nav.logout')"
+          @click="handleChatLogout"
+        >
+          <LogOut class="w-4 h-4" />
+        </button>
+      </template>
     </div>
 
     <!-- Main Chat Area -->
@@ -2523,8 +2533,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           >
             <Terminal class="w-4 h-4" />
           </button>
-          <!-- LLM provider selector (hidden in Claude Code mode) -->
-          <div v-if="!cc.isActive.value" class="flex items-center gap-1">
+          <!-- LLM provider selector (admin only, hidden in Claude Code mode) -->
+          <div v-if="!cc.isActive.value && !isChatOnly" class="flex items-center gap-1">
             <Brain class="w-4 h-4 text-muted-foreground" />
             <select
               v-model="selectedLlmBackend"
