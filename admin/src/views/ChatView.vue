@@ -1728,6 +1728,8 @@ onMounted(() => {
   document.addEventListener('keydown', handleEscapeKey)
   if (sessions.value.length > 0) {
     currentSessionId.value = sessions.value[0].id
+  } else if (isChatOnly.value) {
+    createNewChat()
   }
   fetchAllCcSessions()
 })
@@ -1735,6 +1737,10 @@ onMounted(() => {
 watch(sessions, (newSessions) => {
   if (!currentSessionId.value && newSessions.length > 0) {
     currentSessionId.value = newSessions[0].id
+  }
+  // Auto-create chat for chat-only users if all sessions were deleted
+  if (isChatOnly.value && newSessions.length === 0) {
+    createNewChat()
   }
 })
 
@@ -2186,6 +2192,17 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <GitFork v-else class="w-4 h-4" />
         </button>
       </template>
+
+      <!-- Chat-only: new chat button -->
+      <button
+        v-if="isChatOnly"
+        :disabled="createSessionMutation.isPending.value"
+        class="w-8 h-8 rounded-lg flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
+        :title="t('chatView.newChat')"
+        @click="createNewChat"
+      >
+        <Plus class="w-4 h-4" />
+      </button>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
