@@ -1779,13 +1779,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             <PanelLeftOpen class="w-4 h-4" />
           </button>
           <button
-            class="p-2 rounded-lg text-muted-foreground hover:bg-secondary/50 transition-colors"
-            :title="t('chatView.zenMode')"
-            @click="fullscreenStore.enter()"
-          >
-            <Maximize2 class="w-4 h-4" />
-          </button>
-          <button
             :disabled="createSessionMutation.isPending.value"
             class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             :title="t('chatView.newChat')"
@@ -1834,13 +1827,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
             @click="toggleSidebarCollapse"
           >
             <PanelLeftClose class="w-4 h-4" />
-          </button>
-          <button
-            class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
-            :title="t('chatView.zenMode')"
-            @click="fullscreenStore.enter()"
-          >
-            <Maximize2 class="w-4 h-4" />
           </button>
           <button
             :class="[
@@ -2196,17 +2182,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <GitFork v-else class="w-4 h-4" />
         </button>
       </template>
-
-      <!-- Chat-only: new chat button -->
-      <button
-        v-if="isChatOnly"
-        :disabled="createSessionMutation.isPending.value"
-        class="w-8 h-8 rounded-lg flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-        :title="t('chatView.newChat')"
-        @click="createNewChat"
-      >
-        <Plus class="w-4 h-4" />
-      </button>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
