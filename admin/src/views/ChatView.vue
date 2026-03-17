@@ -1707,12 +1707,15 @@ function handleGlobalClick(e: MouseEvent) {
   }
 }
 
-// Zen mode: restore from localStorage
-if (localStorage.getItem('chat-fullscreen') === 'true') {
+// Zen mode: restore from localStorage (only for admin users, not locked mode)
+if (localStorage.getItem('chat-fullscreen') === 'true' && !fullscreenStore.locked) {
   fullscreenStore.enter()
 }
 watch(() => fullscreenStore.isFullscreen, (val) => {
-  localStorage.setItem('chat-fullscreen', val ? 'true' : 'false')
+  // Don't persist locked zen mode (chat-only users) to localStorage
+  if (!fullscreenStore.locked) {
+    localStorage.setItem('chat-fullscreen', val ? 'true' : 'false')
+  }
   if (!val) { showZenSettings.value = false; showZenLlmMenu.value = false }
 })
 
@@ -1757,9 +1760,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
   <audio ref="audioRef" :src="audioUrl || undefined" class="hidden" @ended="onAudioEnded" />
 
   <div :class="['flex h-full', fullscreenStore.isFullscreen ? 'zen-enter' : '']">
-    <!-- Sidebar: Chat List (hidden in zen mode) -->
+    <!-- Sidebar: Chat List (hidden in zen mode, but visible for chat-only users) -->
     <div
-      v-if="!fullscreenStore.isFullscreen"
+      v-if="!fullscreenStore.isFullscreen || isChatOnly"
       :class="[
         'border-r border-border bg-card flex flex-col transition-all',
         showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
@@ -1768,8 +1771,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       ]"
       :style="!sidebarCollapsed ? { width: sidebarWidth + 'px' } : undefined"
     >
-      <!-- Collapsed mode (desktop only) -->
-      <template v-if="sidebarCollapsed">
+      <!-- Collapsed mode (desktop only, not for chat-only users) -->
+      <template v-if="sidebarCollapsed && !isChatOnly">
         <!-- Collapsed header: expand + new chat -->
         <div class="hidden md:flex flex-col items-center gap-1 p-2 border-b border-border">
           <button class="p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors" :title="t('chatView.expandSidebar')" @click="toggleSidebarCollapse">
@@ -1825,30 +1828,32 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           {{ t('chatView.title') }}
         </h2>
         <div class="flex items-center gap-1">
-          <button
-            class="hidden md:inline-flex p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
-            :title="t('chatView.collapseSidebar')"
-            @click="toggleSidebarCollapse"
-          >
-            <PanelLeftClose class="w-4 h-4" />
-          </button>
-          <button
-            class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
-            :title="t('chatView.zenMode')"
-            @click="fullscreenStore.enter()"
-          >
-            <Maximize2 class="w-4 h-4" />
-          </button>
-          <button
-            :class="[
-              'p-2 rounded-lg transition-colors',
-              selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
-            ]"
-            :title="selectionMode ? t('chatView.deselectAll') : t('chatView.selectAll')"
-            @click="selectionMode = !selectionMode"
-          >
-            <ListChecks class="w-4 h-4" />
-          </button>
+          <template v-if="!isChatOnly">
+            <button
+              class="hidden md:inline-flex p-2 rounded-lg border border-border text-muted-foreground hover:bg-secondary/50 transition-colors"
+              :title="t('chatView.collapseSidebar')"
+              @click="toggleSidebarCollapse"
+            >
+              <PanelLeftClose class="w-4 h-4" />
+            </button>
+            <button
+              class="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
+              :title="t('chatView.zenMode')"
+              @click="fullscreenStore.enter()"
+            >
+              <Maximize2 class="w-4 h-4" />
+            </button>
+            <button
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                selectionMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+              ]"
+              :title="selectionMode ? t('chatView.deselectAll') : t('chatView.selectAll')"
+              @click="selectionMode = !selectionMode"
+            >
+              <ListChecks class="w-4 h-4" />
+            </button>
+          </template>
           <button
             :disabled="createSessionMutation.isPending.value"
             class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -1873,8 +1878,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
       <!-- Sessions List -->
       <div class="flex-1 overflow-y-auto">
-        <!-- Standalone CC sessions (no parent chat) -->
-        <template v-if="standaloneCcSessions.length">
+        <!-- Standalone CC sessions (no parent chat, admin only) -->
+        <template v-if="!isChatOnly && standaloneCcSessions.length">
           <div class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-green-500/70 bg-green-500/5 border-b border-border/50">
             Claude Code
           </div>
@@ -2038,7 +2043,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
     <!-- Sidebar resize handle (desktop only) -->
     <div
-      v-if="!sidebarCollapsed && !fullscreenStore.isFullscreen"
+      v-if="!sidebarCollapsed && (!fullscreenStore.isFullscreen || isChatOnly)"
       class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
       @mousedown="startSidebarResize"
       @touchstart="startSidebarTouchResize"
@@ -2046,14 +2051,14 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
     <!-- Mobile sidebar backdrop -->
     <div
-      v-if="showSidebar && !fullscreenStore.isFullscreen"
+      v-if="showSidebar && (!fullscreenStore.isFullscreen || isChatOnly)"
       class="md:hidden fixed inset-0 bg-black/50 z-30"
       @click="showSidebar = false"
     />
 
     <!-- Mobile sidebar toggle -->
     <button
-      v-if="!fullscreenStore.isFullscreen"
+      v-if="!fullscreenStore.isFullscreen || isChatOnly"
       class="md:hidden fixed left-4 bottom-24 z-50 p-3 bg-primary text-primary-foreground rounded-full shadow-lg"
       @click="showSidebar = !showSidebar"
     >
@@ -2192,17 +2197,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <GitFork v-else class="w-4 h-4" />
         </button>
       </template>
-
-      <!-- Chat-only: new chat button -->
-      <button
-        v-if="isChatOnly"
-        :disabled="createSessionMutation.isPending.value"
-        class="w-8 h-8 rounded-lg flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-        :title="t('chatView.newChat')"
-        @click="createNewChat"
-      >
-        <Plus class="w-4 h-4" />
-      </button>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
