@@ -1,23 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { useSettingsStore } from "@/stores/settings";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
-const settings = useSettingsStore();
 const auth = useAuthStore();
-
-const serverUrl = ref("");
-
-onMounted(() => {
-  serverUrl.value = settings.serverUrl;
-});
-
-async function save() {
-  await settings.setServerUrl(serverUrl.value);
-  router.back();
-}
 
 async function handleLogout() {
   await auth.logout();
@@ -75,29 +61,6 @@ async function handleLogout() {
               Logout
             </button>
           </div>
-        </div>
-      </div>
-
-      <!-- Server -->
-      <div>
-        <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
-          Server
-        </h2>
-        <div class="bg-stone-800/50 rounded-xl p-4 space-y-3">
-          <div>
-            <label class="block text-sm text-stone-400 mb-1">URL</label>
-            <input
-              v-model="serverUrl"
-              type="url"
-              class="w-full rounded-lg bg-stone-950 border border-stone-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <button
-            class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition-colors"
-            @click="save"
-          >
-            Save
-          </button>
         </div>
       </div>
 

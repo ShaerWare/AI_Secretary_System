@@ -19,6 +19,7 @@ export const useAuthStore = defineStore("auth", () => {
   const error = ref<string | null>(null);
 
   const isAuthenticated = computed(() => !!token.value);
+  const isAdmin = computed(() => user.value?.role === "admin");
 
   async function loadToken() {
     const { value } = await Preferences.get({ key: TOKEN_KEY });
@@ -121,6 +122,7 @@ export const useAuthStore = defineStore("auth", () => {
     isLoading,
     error,
     isAuthenticated,
+    isAdmin,
     loadToken,
     login,
     logout,

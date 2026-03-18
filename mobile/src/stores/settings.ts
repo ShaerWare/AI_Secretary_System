@@ -1,24 +1,20 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { Preferences } from "@capacitor/preferences";
 
-const STORAGE_KEY = "server_url";
+const DEFAULT_SERVER_URL = "https://ai-sekretar24.ru";
 
 export const useSettingsStore = defineStore("settings", () => {
-  const serverUrl = ref("");
+  const serverUrl = ref(DEFAULT_SERVER_URL);
   const isLoaded = ref(false);
 
   async function load() {
-    const { value } = await Preferences.get({ key: STORAGE_KEY });
-    serverUrl.value = value || "";
+    serverUrl.value = DEFAULT_SERVER_URL;
     isLoaded.value = true;
   }
 
-  async function setServerUrl(url: string) {
-    // Normalize: strip trailing slash
-    const normalized = url.replace(/\/+$/, "");
-    serverUrl.value = normalized;
-    await Preferences.set({ key: STORAGE_KEY, value: normalized });
+  async function setServerUrl(_url: string) {
+    // Server URL is hardcoded, ignore user input
+    serverUrl.value = DEFAULT_SERVER_URL;
   }
 
   return { serverUrl, isLoaded, load, setServerUrl };
