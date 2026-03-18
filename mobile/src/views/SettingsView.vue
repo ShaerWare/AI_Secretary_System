@@ -35,14 +35,14 @@ async function handleLogout() {
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
-      <h1 class="text-lg font-semibold text-white">Settings</h1>
+      <h1 class="text-lg font-semibold text-white">Настройки</h1>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 space-y-6">
       <!-- Account -->
       <div>
         <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
-          Account
+          Аккаунт
         </h2>
         <div class="bg-stone-800/50 rounded-xl p-4">
           <div class="flex items-center justify-between">
@@ -58,7 +58,7 @@ async function handleLogout() {
               class="px-4 py-2 rounded-lg bg-red-800/20 text-red-400 text-sm hover:bg-red-800/30 transition-colors"
               @click="handleLogout"
             >
-              Logout
+              Выйти
             </button>
           </div>
         </div>
@@ -67,10 +67,10 @@ async function handleLogout() {
       <!-- App info -->
       <div>
         <h2 class="text-sm font-medium text-stone-400 mb-3 uppercase tracking-wider">
-          About
+          О приложении
         </h2>
         <div class="bg-stone-800/50 rounded-xl p-4">
-          <p class="text-stone-400 text-sm">AI Secretary Mobile v1.0.0</p>
+          <p class="text-stone-400 text-sm">AI Секретарь v1.0.0</p>
         </div>
       </div>
     </div>
