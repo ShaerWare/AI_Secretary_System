@@ -2081,7 +2081,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       v-if="fullscreenStore.isFullscreen"
       class="zen-activity-bar zen-glass zen-toolbar-enter flex flex-col items-center py-3 px-1.5 gap-1 border-r border-border/30 z-10"
     >
-      <!-- Exit fullscreen (top) -->
+      <!-- Exit fullscreen (top, admin only — chat-only users are always in zen) -->
+        <template v-if="!isChatOnly">
         <button
           class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
           :title="t('chatView.exitZenMode')"
@@ -2091,6 +2092,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         </button>
 
         <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
+        </template>
 
         <!-- Claude Code toggle (restricted users, admin only) -->
         <button
