@@ -144,6 +144,7 @@ export const chatApi = {
     sessionId: string,
     content: string,
     onChunk: (data: StreamChunk) => void,
+    overrides?: Record<string, unknown>,
   ) => {
     const settings = useSettingsStore();
     const auth = useAuthStore();
@@ -153,6 +154,9 @@ export const chatApi = {
     const body: Record<string, unknown> = { content };
     if (config.instance?.id) {
       body.mobile_instance_id = config.instance.id;
+    }
+    if (overrides) {
+      Object.assign(body, overrides);
     }
 
     fetch(

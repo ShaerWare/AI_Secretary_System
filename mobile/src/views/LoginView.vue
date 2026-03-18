@@ -10,17 +10,11 @@ const auth = useAuthStore();
 const settings = useSettingsStore();
 const mobileConfig = useMobileConfigStore();
 
-const serverUrl = ref("");
 const username = ref("");
 const password = ref("");
-const step = ref<"server" | "login">("server");
 
 onMounted(async () => {
   await settings.load();
-  if (settings.serverUrl) {
-    serverUrl.value = settings.serverUrl;
-    step.value = "login";
-  }
   await auth.loadToken();
   if (auth.isAuthenticated && !auth.isTokenExpired()) {
     await mobileConfig.load();
@@ -28,23 +22,12 @@ onMounted(async () => {
   }
 });
 
-async function setServer() {
-  const url = serverUrl.value.trim();
-  if (!url) return;
-  await settings.setServerUrl(url);
-  step.value = "login";
-}
-
 async function handleLogin() {
   const ok = await auth.login(username.value, password.value);
   if (ok) {
     await mobileConfig.load();
     router.replace("/chats");
   }
-}
-
-function changeServer() {
-  step.value = "server";
 }
 </script>
 
@@ -77,36 +60,8 @@ function changeServer() {
       <p class="text-stone-400 text-sm mt-1">Your personal assistant</p>
     </div>
 
-    <!-- Server URL step -->
-    <div v-if="step === 'server'" class="w-full max-w-sm space-y-4">
-      <div>
-        <label class="block text-sm text-stone-400 mb-1.5">Server URL</label>
-        <input
-          v-model="serverUrl"
-          type="url"
-          placeholder="https://your-server.com"
-          class="w-full rounded-xl bg-stone-800 border border-stone-700 px-4 py-3 text-white placeholder-stone-500 focus:outline-none focus:border-amber-500"
-          @keyup.enter="setServer"
-        />
-      </div>
-      <button
-        :disabled="!serverUrl.trim()"
-        class="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-stone-500 text-white font-medium transition-colors"
-        @click="setServer"
-      >
-        Continue
-      </button>
-    </div>
-
-    <!-- Login step -->
-    <div v-else class="w-full max-w-sm space-y-4">
-      <button
-        class="text-sm text-stone-400 hover:text-stone-300 mb-2"
-        @click="changeServer"
-      >
-        {{ settings.serverUrl }}
-      </button>
-
+    <!-- Login form -->
+    <div class="w-full max-w-sm space-y-4">
       <div>
         <label class="block text-sm text-stone-400 mb-1.5">Username</label>
         <input

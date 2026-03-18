@@ -10,6 +10,7 @@ const auth = useAuthStore();
 const sessions = ref<ChatSessionSummary[]>([]);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
+const isCreating = ref(false);
 
 async function loadSessions() {
   isLoading.value = true;
@@ -29,6 +30,30 @@ async function loadSessions() {
 
 function openChat(id: string) {
   router.push(`/chat/${id}`);
+}
+
+async function createNewChat() {
+  if (isCreating.value) return;
+  isCreating.value = true;
+  try {
+    const data = await chatApi.createSession();
+    router.push(`/chat/${data.session.id}`);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to create";
+  } finally {
+    isCreating.value = false;
+  }
+}
+
+async function deleteSession(id: string, event: Event) {
+  event.stopPropagation();
+  if (!confirm("Delete this chat?")) return;
+  try {
+    await chatApi.deleteSession(id);
+    sessions.value = sessions.value.filter((s) => s.id !== id);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to delete";
+  }
 }
 
 function formatDate(dateStr: string): string {
@@ -158,34 +183,64 @@ onMounted(loadSessions);
             d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
           />
         </svg>
-        <p class="text-sm">No chats yet</p>
+        <p class="text-sm mb-3">No chats yet</p>
+        <button
+          class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm transition-colors"
+          @click="createNewChat"
+        >
+          Start a chat
+        </button>
       </div>
 
       <!-- Session list -->
       <div v-else>
-        <button
+        <div
           v-for="session in sessions"
           :key="session.id"
-          class="w-full text-left px-4 py-3 border-b border-stone-800/50 hover:bg-stone-800/50 active:bg-stone-800 transition-colors"
+          class="w-full text-left px-4 py-3 border-b border-stone-800/50 hover:bg-stone-800/50 active:bg-stone-800 transition-colors flex items-center gap-2 cursor-pointer"
           @click="openChat(session.id)"
         >
-          <div class="flex items-center justify-between mb-0.5">
-            <span class="font-medium text-sm text-white truncate mr-2">
-              {{ session.title || "New Chat" }}
-            </span>
-            <span class="text-xs text-stone-500 shrink-0">
-              {{ formatDate(session.updated) }}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="font-medium text-sm text-white truncate mr-2">
+                {{ session.title || "New Chat" }}
+              </span>
+              <span class="text-xs text-stone-500 shrink-0">
+                {{ formatDate(session.updated) }}
+              </span>
+            </div>
+            <p class="text-xs text-stone-400 truncate">
+              {{ truncate(session.last_message || "", 80) }}
+            </p>
+            <span class="text-xs text-stone-600">
+              {{ session.message_count }} messages
             </span>
           </div>
-          <p class="text-xs text-stone-400 truncate">
-            {{ truncate(session.last_message || "", 80) }}
-          </p>
-          <span class="text-xs text-stone-600">
-            {{ session.message_count }} messages
-          </span>
-        </button>
+          <!-- Delete button -->
+          <button
+            class="shrink-0 p-2 rounded-lg text-stone-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+            title="Delete chat"
+            @click="deleteSession(session.id, $event)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
+    <!-- FAB: New Chat -->
+    <button
+      class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-lg shadow-amber-900/30 flex items-center justify-center transition-all safe-bottom"
+      :class="isCreating ? 'opacity-50' : ''"
+      :disabled="isCreating"
+      @click="createNewChat"
+    >
+      <div v-if="isCreating" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+      <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white">
+        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    </button>
   </div>
 </template>
