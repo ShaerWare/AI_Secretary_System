@@ -3542,7 +3542,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       <!-- Branch Tree Panel -->
       <template v-if="showBranchTree">
         <div
-          v-if="!fullscreenStore.isFullscreen"
           class="w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
           @mousedown="startBranchResize"
           @touchstart="startBranchTouchResize"
@@ -3550,8 +3549,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         <BranchTree
           :branches="branchTree"
           :session-id="currentSessionId || ''"
-          :class="fullscreenStore.isFullscreen ? 'fixed inset-0 z-50' : ''"
-          :style="fullscreenStore.isFullscreen ? {} : { width: branchTreeWidth + 'px' }"
+          :style="{ width: branchTreeWidth + 'px' }"
           @switch="onBranchSwitch"
           @scroll-to="onBranchScrollTo"
           @new-branch="startNewBranch"
@@ -3581,9 +3579,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
         />
       </template>
 
-      <!-- Settings Panel (slide-out right / fullscreen on mobile and zen) -->
+      <!-- Settings Panel (slide-out right / fullscreen on mobile) -->
       <div
-        v-if="showSettings && !fullscreenStore.isFullscreen"
+        v-if="showSettings"
         class="hidden md:block w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
         @mousedown="startSettingsResize"
         @touchstart="startSettingsTouchResize"
@@ -3596,12 +3594,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       />
       <div
         v-if="showSettings"
-        :class="[
-          'border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel',
-          fullscreenStore.isFullscreen
-            ? 'fixed inset-0 z-50'
-            : 'fixed inset-0 z-50 md:relative md:inset-auto md:z-0'
-        ]"
+        class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
         :style="{ '--settings-w': settingsWidth + 'px' }"
       >
         <!-- Panel header -->
