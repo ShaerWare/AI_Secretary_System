@@ -2078,7 +2078,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
     <!-- Zen Mode: Vertical Activity Bar (left) -->
     <div
-      v-if="fullscreenStore.isFullscreen && currentSession"
+      v-if="fullscreenStore.isFullscreen"
       class="zen-activity-bar zen-glass zen-toolbar-enter flex flex-col items-center py-3 px-1.5 gap-1 border-r border-border/30 z-10"
     >
       <!-- Exit fullscreen (top) -->
