@@ -153,8 +153,7 @@ function cancelEdit() {
             </svg>
           </button>
 
-          <!-- Admin-only actions -->
-          <template v-if="isAdmin">
+          <!-- Additional actions -->
             <!-- Edit -->
             <button
               class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
@@ -198,7 +197,6 @@ function cancelEdit() {
                 <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </button>
-          </template>
         </div>
 
         <!-- Action buttons for user messages -->
@@ -235,8 +233,7 @@ function cancelEdit() {
             </svg>
           </button>
 
-          <!-- Admin-only actions -->
-          <template v-if="isAdmin">
+          <!-- Additional actions -->
             <!-- Edit -->
             <button
               class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
@@ -280,7 +277,6 @@ function cancelEdit() {
                 <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </button>
-          </template>
         </div>
       </template>
     </div>

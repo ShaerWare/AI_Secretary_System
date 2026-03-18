@@ -2081,9 +2081,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
       v-if="fullscreenStore.isFullscreen && currentSession"
       class="zen-activity-bar zen-glass zen-toolbar-enter flex flex-col items-center py-3 px-1.5 gap-1 border-r border-border/30 z-10"
     >
-      <!-- Admin-only: session avatar, exit zen, CC, LLM, RAG, share, fork -->
-      <template v-if="!isChatOnly">
-        <!-- Exit fullscreen (top) -->
+      <!-- Exit fullscreen (top) -->
         <button
           class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
           :title="t('chatView.exitZenMode')"
@@ -2094,9 +2092,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
         <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
-        <!-- Claude Code toggle (restricted users) -->
+        <!-- Claude Code toggle (restricted users, admin only) -->
         <button
-          v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
+          v-if="!isChatOnly && ['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
           :class="[
             'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
             cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
@@ -2107,8 +2105,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <Terminal class="w-4 h-4" />
         </button>
 
-        <!-- LLM dropdown (non-CC) -->
-        <div v-if="!cc.isActive.value" class="zen-llm-anchor relative shrink-0">
+        <!-- LLM dropdown (non-CC, admin only) -->
+        <div v-if="!cc.isActive.value && !isChatOnly" class="zen-llm-anchor relative shrink-0">
           <button
             :class="[
               'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
@@ -2149,8 +2147,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </div>
         </div>
 
-        <!-- RAG collections dropdown (non-CC) -->
-        <div v-if="!cc.isActive.value && knowledgeCollections.length" class="relative shrink-0">
+        <!-- RAG collections dropdown (non-CC, admin only) -->
+        <div v-if="!cc.isActive.value && !isChatOnly && knowledgeCollections.length" class="relative shrink-0">
           <button
             :class="[
               'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
@@ -2181,8 +2179,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </div>
         </div>
 
-        <!-- Share button (non-CC, owner only) -->
-        <div v-if="!cc.isActive.value && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
+        <!-- Share button (non-CC, owner only, admin only) -->
+        <div v-if="!cc.isActive.value && !isChatOnly && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
           <button
             class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors"
             :title="t('chatView.shareChat')"
@@ -2207,7 +2205,6 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
           <GitFork v-else class="w-4 h-4" />
         </button>
-      </template>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
@@ -2249,9 +2246,9 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
       <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
-      <!-- Voice mode toggle (non-CC, admin only) -->
+      <!-- Voice mode toggle (non-CC) -->
       <button
-        v-if="!cc.isActive.value && !isChatOnly"
+        v-if="!cc.isActive.value"
         :class="[
           'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
           voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
