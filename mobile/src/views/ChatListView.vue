@@ -12,6 +12,8 @@ const sessions = ref<ChatSessionSummary[]>([]);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
 const isCreating = ref(false);
+const welcomeInput = ref("");
+const isSending = ref(false);
 
 // For non-admins: only shared chats
 const visibleSessions = computed(() => {
@@ -86,6 +88,28 @@ function formatDate(dateStr: string): string {
 function truncate(text: string, len: number): string {
   if (!text) return "";
   return text.length > len ? text.slice(0, len) + "..." : text;
+}
+
+async function sendFromWelcome() {
+  const text = welcomeInput.value.trim();
+  if (!text || isSending.value) return;
+  isSending.value = true;
+  try {
+    // If there are shared chats, open the most recent one
+    if (visibleSessions.value.length > 0) {
+      const sessionId = visibleSessions.value[0]!.id;
+      // Navigate to chat — the message will be typed by user there
+      router.push(`/chat/${sessionId}?msg=${encodeURIComponent(text)}`);
+    } else {
+      // Create a new session and navigate
+      const data = await chatApi.createSession(text);
+      router.push(`/chat/${data.session.id}?msg=${encodeURIComponent(text)}`);
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to start chat";
+  } finally {
+    isSending.value = false;
+  }
 }
 
 onMounted(loadSessions);
@@ -177,9 +201,10 @@ onMounted(loadSessions);
         <!-- Minimal header -->
         <div class="shrink-0 flex items-center justify-between px-4 py-3">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-xl bg-amber-600 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <div class="w-8 h-8">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-full h-full">
+                <defs><linearGradient id="gl" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F0A830"/><stop offset="100%" stop-color="#C27010"/></linearGradient></defs>
+                <path fill="url(#gl)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"/>
               </svg>
             </div>
             <span class="text-white font-semibold">AI Secretary</span>
@@ -198,76 +223,90 @@ onMounted(loadSessions);
         </div>
 
         <!-- Main welcome area -->
-        <div class="flex-1 flex flex-col items-center justify-center px-6">
+        <div class="flex-1 flex flex-col px-6">
           <!-- Loading -->
-          <div v-if="isLoading" class="flex items-center justify-center">
+          <div v-if="isLoading" class="flex-1 flex items-center justify-center">
             <div class="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
 
           <!-- Error -->
-          <div v-else-if="error" class="text-center">
-            <p class="text-red-400 text-sm mb-2">{{ error }}</p>
-            <button class="text-amber-400 text-sm" @click="loadSessions">Retry</button>
+          <div v-else-if="error" class="flex-1 flex items-center justify-center text-center">
+            <div>
+              <p class="text-red-400 text-sm mb-2">{{ error }}</p>
+              <button class="text-amber-400 text-sm" @click="loadSessions">Retry</button>
+            </div>
           </div>
 
           <template v-else>
+            <!-- Spacer to push content to center -->
+            <div class="flex-1" />
+
             <!-- Greeting -->
-            <div class="text-center mb-8">
+            <div class="text-center mb-6">
               <h1 class="text-2xl font-bold text-white mb-2">
                 Hello, {{ auth.user?.username }}
               </h1>
               <p class="text-stone-400 text-sm">
-                Your conversations are ready
+                How can I help you today?
               </p>
             </div>
 
+            <!-- Center input (Claude-like) -->
+            <div class="w-full max-w-sm mx-auto mb-6">
+              <div class="flex items-end gap-2">
+                <textarea
+                  v-model="welcomeInput"
+                  rows="1"
+                  class="flex-1 resize-none rounded-2xl bg-stone-800 border border-stone-700 px-4 py-3 text-sm text-stone-300 placeholder-stone-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  placeholder="Ask anything..."
+                  @keydown.enter.exact.prevent="sendFromWelcome"
+                  @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
+                />
+                <button
+                  :disabled="!welcomeInput.trim() || isSending"
+                  class="shrink-0 w-11 h-11 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-stone-500 flex items-center justify-center transition-colors"
+                  @click="sendFromWelcome"
+                >
+                  <div v-if="isSending" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white">
+                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
             <!-- Shared chats as cards -->
-            <div v-if="visibleSessions.length" class="w-full max-w-sm space-y-3 mb-6">
+            <div v-if="visibleSessions.length" class="w-full max-w-sm mx-auto space-y-2 mb-6">
+              <p class="text-xs text-stone-500 uppercase tracking-wide mb-2">Your chats</p>
               <button
                 v-for="session in visibleSessions"
                 :key="session.id"
-                class="w-full text-left p-4 rounded-2xl bg-stone-800/60 border border-stone-700/50 hover:border-amber-600/40 hover:bg-stone-800 active:bg-stone-700/80 transition-all group"
+                class="w-full text-left p-3 rounded-xl bg-stone-800/60 border border-stone-700/50 hover:border-amber-600/40 hover:bg-stone-800 active:bg-stone-700/80 transition-all group"
                 @click="openChat(session.id)"
               >
-                <div class="flex items-start gap-3">
-                  <!-- Chat icon -->
-                  <div class="shrink-0 w-10 h-10 rounded-xl bg-amber-600/15 flex items-center justify-center mt-0.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
+                <div class="flex items-center gap-3">
+                  <div class="shrink-0 w-9 h-9 rounded-lg bg-amber-600/15 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="font-medium text-sm text-white truncate group-hover:text-amber-200 transition-colors">
-                        {{ session.title || "Chat" }}
-                      </span>
-                      <span class="text-[10px] text-stone-500 shrink-0">
-                        {{ formatDate(session.updated) }}
-                      </span>
-                    </div>
-                    <p v-if="session.last_message" class="text-xs text-stone-400 truncate">
-                      {{ truncate(session.last_message, 60) }}
-                    </p>
-                    <p v-else class="text-xs text-stone-500 italic">Start chatting</p>
+                    <span class="font-medium text-sm text-white truncate block group-hover:text-amber-200 transition-colors">
+                      {{ session.title || "Chat" }}
+                    </span>
+                    <span v-if="session.last_message" class="text-xs text-stone-500 truncate block">
+                      {{ truncate(session.last_message, 50) }}
+                    </span>
                   </div>
-                  <!-- Arrow -->
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-600 group-hover:text-amber-500 shrink-0 mt-1 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-600 group-hover:text-amber-500 shrink-0 transition-colors">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </div>
               </button>
             </div>
 
-            <!-- No shared chats -->
-            <div v-else class="text-center">
-              <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-stone-800/60 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-stone-600">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <p class="text-stone-400 text-sm mb-1">No conversations yet</p>
-              <p class="text-stone-600 text-xs">Ask your admin to share a chat with you</p>
-            </div>
+            <!-- Bottom spacer -->
+            <div class="flex-1" />
           </template>
         </div>
       </div>

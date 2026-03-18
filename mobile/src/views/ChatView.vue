@@ -547,9 +547,15 @@ watch(streamingContent, () => {
   scrollToBottom();
 });
 
-onMounted(() => {
-  loadSession();
+onMounted(async () => {
+  await loadSession();
   loadAdminData();
+  // Auto-send message from welcome screen
+  const msg = route.query.msg as string | undefined;
+  if (msg) {
+    router.replace({ path: route.path, query: {} });
+    sendMessage(msg);
+  }
   updateOrientation();
   window.addEventListener("resize", updateOrientation);
   window.addEventListener("mousemove", onResizeMove);

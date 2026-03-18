@@ -96,6 +96,30 @@ const authStore = useAuthStore()
 const fullscreenStore = useChatFullscreenStore()
 const chatRouter = useRouter()
 const isChatOnly = computed(() => authStore.isChatOnlyUser)
+const welcomeInput = ref('')
+const welcomeSending = ref(false)
+
+async function sendFromWelcome() {
+  const text = welcomeInput.value.trim()
+  if (!text || welcomeSending.value) return
+  welcomeSending.value = true
+  try {
+    if (sessions.value.length > 0) {
+      // Open most recent shared chat and let user type there
+      currentSessionId.value = sessions.value[0].id
+    } else {
+      // Create new session
+      const data = await chatApi.createSession(text, undefined, 'admin')
+      refetchSessions()
+      currentSessionId.value = data.session.id
+    }
+    welcomeInput.value = ''
+  } catch {
+    // fallback
+  } finally {
+    welcomeSending.value = false
+  }
+}
 
 function handleChatLogout() {
   authStore.logout()
@@ -2455,28 +2479,50 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
     <div class="flex-1 flex flex-col min-w-0">
 
       <!-- Welcome screen for chat-only users with no session selected -->
-      <div v-if="isChatOnly && !currentSessionId" class="flex-1 flex flex-col items-center justify-center px-6">
-        <div class="text-center max-w-md">
+      <div v-if="isChatOnly && !currentSessionId" class="flex-1 flex flex-col items-center px-6">
+        <div class="flex-1" />
+        <div class="text-center max-w-lg w-full">
           <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-primary/15 flex items-center justify-center">
             <MessageSquare class="w-8 h-8 text-primary" />
           </div>
           <h1 class="text-2xl font-bold mb-2">
             {{ t('chatView.welcome', { name: authStore.user?.username }) }}
           </h1>
-          <p class="text-muted-foreground text-sm mb-8">
+          <p class="text-muted-foreground text-sm mb-6">
             {{ t('chatView.welcomeSubtitle') }}
           </p>
 
+          <!-- Input field (Claude-like) -->
+          <div class="flex items-end gap-2 mb-8 max-w-md mx-auto">
+            <textarea
+              v-model="welcomeInput"
+              rows="1"
+              class="flex-1 resize-none rounded-xl bg-card border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              :placeholder="t('chatView.welcomeInputPlaceholder', 'Ask anything...')"
+              @keydown.enter.exact.prevent="sendFromWelcome"
+              @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
+            />
+            <button
+              :disabled="!welcomeInput.trim() || welcomeSending"
+              class="shrink-0 w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:bg-secondary disabled:text-muted-foreground flex items-center justify-center transition-colors"
+              @click="sendFromWelcome"
+            >
+              <Loader2 v-if="welcomeSending" class="w-4 h-4 animate-spin" />
+              <Send v-else class="w-4 h-4" />
+            </button>
+          </div>
+
           <!-- Shared chats as cards -->
-          <div v-if="sessions.length" class="space-y-3 text-left">
+          <div v-if="sessions.length" class="space-y-2 text-left max-w-md mx-auto">
+            <p class="text-xs text-muted-foreground uppercase tracking-wide mb-2">{{ t('chatView.yourChats', 'Your chats') }}</p>
             <button
               v-for="session in sessions"
               :key="session.id"
-              class="w-full p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-accent transition-all group text-left flex items-center gap-3"
+              class="w-full p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-accent transition-all group text-left flex items-center gap-3"
               @click="currentSessionId = session.id"
             >
-              <div class="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MessageSquare class="w-5 h-5 text-primary" />
+              <div class="shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MessageSquare class="w-4 h-4 text-primary" />
               </div>
               <div class="flex-1 min-w-0">
                 <span class="font-medium text-sm truncate block group-hover:text-primary transition-colors">
@@ -2489,11 +2535,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
               <ChevronRight class="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
             </button>
           </div>
-
-          <div v-else class="text-muted-foreground text-sm">
-            {{ t('chatView.noSharedChats') }}
-          </div>
         </div>
+        <div class="flex-1" />
       </div>
 
       <!-- Chat Header (hidden in zen mode) -->
