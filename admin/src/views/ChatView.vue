@@ -488,7 +488,14 @@ const { data: branchData, refetch: refetchBranches } = useQuery({
 })
 
 // Computed
-const sessions = computed(() => sessionsData.value?.sessions || [])
+const allSessions = computed(() => sessionsData.value?.sessions || [])
+// Chat-only users see only shared chats; admins see all
+const sessions = computed(() => {
+  if (isChatOnly.value) {
+    return allSessions.value.filter(s => s.is_shared_with_me)
+  }
+  return allSessions.value
+})
 const currentSession = computed(() => sessionData.value?.session)
 const messages = computed(() => currentSession.value?.messages || [])
 const branchTree = computed(() => branchData.value?.branches || [])
@@ -1731,8 +1738,6 @@ onMounted(() => {
   document.addEventListener('keydown', handleEscapeKey)
   if (sessions.value.length > 0) {
     currentSessionId.value = sessions.value[0].id
-  } else if (isChatOnly.value) {
-    createNewChat()
   }
   fetchAllCcSessions()
 })
@@ -1741,10 +1746,7 @@ watch(sessions, (newSessions) => {
   if (!currentSessionId.value && newSessions.length > 0) {
     currentSessionId.value = newSessions[0].id
   }
-  // Auto-create chat for chat-only users if all sessions were deleted
-  if (isChatOnly.value && newSessions.length === 0) {
-    createNewChat()
-  }
+  // Chat-only users don't auto-create — they only see shared chats
 })
 
 // Refresh CC sidebar sessions when CC processing finishes
@@ -2451,6 +2453,48 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Welcome screen for chat-only users with no session selected -->
+      <div v-if="isChatOnly && !currentSessionId" class="flex-1 flex flex-col items-center justify-center px-6">
+        <div class="text-center max-w-md">
+          <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-primary/15 flex items-center justify-center">
+            <MessageSquare class="w-8 h-8 text-primary" />
+          </div>
+          <h1 class="text-2xl font-bold mb-2">
+            {{ t('chatView.welcome', { name: authStore.user?.username }) }}
+          </h1>
+          <p class="text-muted-foreground text-sm mb-8">
+            {{ t('chatView.welcomeSubtitle') }}
+          </p>
+
+          <!-- Shared chats as cards -->
+          <div v-if="sessions.length" class="space-y-3 text-left">
+            <button
+              v-for="session in sessions"
+              :key="session.id"
+              class="w-full p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-accent transition-all group text-left flex items-center gap-3"
+              @click="currentSessionId = session.id"
+            >
+              <div class="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MessageSquare class="w-5 h-5 text-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="font-medium text-sm truncate block group-hover:text-primary transition-colors">
+                  {{ session.title || 'Chat' }}
+                </span>
+                <span v-if="session.last_message" class="text-xs text-muted-foreground truncate block">
+                  {{ session.last_message?.slice(0, 60) }}
+                </span>
+              </div>
+              <ChevronRight class="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+            </button>
+          </div>
+
+          <div v-else class="text-muted-foreground text-sm">
+            {{ t('chatView.noSharedChats') }}
+          </div>
+        </div>
+      </div>
 
       <!-- Chat Header (hidden in zen mode) -->
       <div v-if="currentSession && !fullscreenStore.isFullscreen" class="p-2 sm:p-4 border-b border-border flex items-center justify-between gap-2 bg-card">

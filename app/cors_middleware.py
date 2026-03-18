@@ -38,13 +38,20 @@ class DynamicCORSMiddleware:
 
     CACHE_TTL = 60.0  # seconds
 
+    # Origins used by Capacitor mobile apps (Android/iOS WebView)
+    MOBILE_ORIGINS = {
+        "capacitor://localhost",
+        "https://localhost",
+        "http://localhost",
+    }
+
     def __init__(self, app: ASGIApp, static_origins: list[str] | None = None) -> None:
         global _instance
         self.app = app
         self.allow_all = static_origins is not None and "*" in static_origins
-        self.static_origins: Set[str] = set()
+        self.static_origins: Set[str] = set(self.MOBILE_ORIGINS)
         if static_origins and not self.allow_all:
-            self.static_origins = {o.lower().rstrip("/") for o in static_origins}
+            self.static_origins |= {o.lower().rstrip("/") for o in static_origins}
         self._widget_origins: Set[str] = set()
         self._cache_ts: float = 0.0
         _instance = self

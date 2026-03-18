@@ -5,6 +5,7 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 from .subprocess import create_subprocess
 
@@ -40,8 +41,11 @@ async def check_cli_available(
     Returns:
         CLIStatus with availability info
     """
-    # First check if command exists in PATH
-    resolved_path = shutil.which(cli_path)
+    # First check if an absolute path was provided
+    if cli_path and Path(cli_path).is_absolute() and Path(cli_path).is_file():
+        resolved_path = cli_path
+    else:
+        resolved_path = shutil.which(cli_path) if cli_path else None
 
     if not resolved_path:
         return CLIStatus(
