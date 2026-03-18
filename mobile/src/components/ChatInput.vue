@@ -95,7 +95,7 @@ function removePastedBlock(id: string) {
         :disabled="disabled"
         rows="1"
         class="flex-1 resize-none rounded-xl bg-stone-800 border border-stone-700 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-500 focus:outline-none focus:border-amber-500 transition-colors"
-        placeholder="Message..."
+        placeholder="Сообщение..."
         @keydown="handleKeydown"
         @input="autoResize"
         @paste="onPaste"

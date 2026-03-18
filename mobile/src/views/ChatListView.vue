@@ -30,10 +30,29 @@ async function loadSessions() {
       (a, b) =>
         new Date(b.updated).getTime() - new Date(a.updated).getTime(),
     );
+    // Non-admin: auto-create chat and go straight to it
+    if (!isAdmin.value) {
+      await autoOpenChat();
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load";
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function autoOpenChat() {
+  // If there are visible sessions, open the most recent one
+  if (visibleSessions.value.length > 0) {
+    router.replace(`/chat/${visibleSessions.value[0]!.id}`);
+    return;
+  }
+  // Otherwise create a new session and open it
+  try {
+    const data = await chatApi.createSession();
+    router.replace(`/chat/${data.session.id}`);
+  } catch {
+    // fallback — stay on the list
   }
 }
 
@@ -121,7 +140,7 @@ onMounted(loadSessions);
     <template v-if="isAdmin">
       <!-- Header -->
       <div class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-800">
-        <h1 class="text-lg font-semibold text-white">Chats</h1>
+        <h1 class="text-lg font-semibold text-white">Чаты</h1>
         <div class="flex items-center gap-3">
           <button class="text-stone-400 hover:text-white transition-colors" @click="$router.push('/settings')">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -150,8 +169,8 @@ onMounted(loadSessions);
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-3 opacity-50">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          <p class="text-sm mb-3">No chats yet</p>
-          <button class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm transition-colors" @click="createNewChat">Start a chat</button>
+          <p class="text-sm mb-3">Пока нет чатов</p>
+          <button class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm transition-colors" @click="createNewChat">Начать чат</button>
         </div>
         <div v-else>
           <div
@@ -162,7 +181,7 @@ onMounted(loadSessions);
           >
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between mb-0.5">
-                <span class="font-medium text-sm text-white truncate mr-2">{{ session.title || "New Chat" }}</span>
+                <span class="font-medium text-sm text-white truncate mr-2">{{ session.title || "Новый чат" }}</span>
                 <span class="text-xs text-stone-500 shrink-0">{{ formatDate(session.updated) }}</span>
               </div>
               <p class="text-xs text-stone-400 truncate">{{ truncate(session.last_message || "", 80) }}</p>
@@ -244,10 +263,10 @@ onMounted(loadSessions);
             <!-- Greeting -->
             <div class="text-center mb-6">
               <h1 class="text-2xl font-bold text-white mb-2">
-                Hello, {{ auth.user?.username }}
+                Привет, {{ auth.user?.username }}
               </h1>
               <p class="text-stone-400 text-sm">
-                How can I help you today?
+                Чем могу помочь?
               </p>
             </div>
 
@@ -258,7 +277,7 @@ onMounted(loadSessions);
                   v-model="welcomeInput"
                   rows="1"
                   class="flex-1 resize-none rounded-2xl bg-stone-800 border border-stone-700 px-4 py-3 text-sm text-stone-300 placeholder-stone-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  placeholder="Ask anything..."
+                  placeholder="Напишите сообщение..."
                   @keydown.enter.exact.prevent="sendFromWelcome"
                   @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
                 />
@@ -275,9 +294,31 @@ onMounted(loadSessions);
               </div>
             </div>
 
+            <!-- Action buttons -->
+            <div class="w-full max-w-sm mx-auto flex gap-2 mb-6">
+              <button
+                class="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                :disabled="isCreating"
+                @click="createNewChat"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Новый чат
+              </button>
+              <button
+                class="py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 active:bg-stone-600 text-stone-300 text-sm transition-colors flex items-center justify-center gap-2"
+                @click="$router.push('/settings')"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            </div>
+
             <!-- Shared chats as cards -->
             <div v-if="visibleSessions.length" class="w-full max-w-sm mx-auto space-y-2 mb-6">
-              <p class="text-xs text-stone-500 uppercase tracking-wide mb-2">Your chats</p>
+              <p class="text-xs text-stone-500 uppercase tracking-wide mb-2">Ваши чаты</p>
               <button
                 v-for="session in visibleSessions"
                 :key="session.id"
@@ -292,7 +333,7 @@ onMounted(loadSessions);
                   </div>
                   <div class="flex-1 min-w-0">
                     <span class="font-medium text-sm text-white truncate block group-hover:text-amber-200 transition-colors">
-                      {{ session.title || "Chat" }}
+                      {{ session.title || "Чат" }}
                     </span>
                     <span v-if="session.last_message" class="text-xs text-stone-500 truncate block">
                       {{ truncate(session.last_message, 50) }}

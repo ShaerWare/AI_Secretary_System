@@ -48,14 +48,14 @@ async function handleLogin() {
           <path fill="url(#g)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"/>
         </svg>
       </div>
-      <h1 class="text-2xl font-bold text-white">AI Secretary</h1>
-      <p class="text-stone-400 text-sm mt-1">Your personal assistant</p>
+      <h1 class="text-2xl font-bold text-white">AI Секретарь</h1>
+      <p class="text-stone-400 text-sm mt-1">Ваш персональный ассистент</p>
     </div>
 
     <!-- Login form -->
     <div class="w-full max-w-sm space-y-4">
       <div>
-        <label class="block text-sm text-stone-400 mb-1.5">Username</label>
+        <label class="block text-sm text-stone-400 mb-1.5">Логин</label>
         <input
           v-model="username"
           type="text"
@@ -65,7 +65,7 @@ async function handleLogin() {
         />
       </div>
       <div>
-        <label class="block text-sm text-stone-400 mb-1.5">Password</label>
+        <label class="block text-sm text-stone-400 mb-1.5">Пароль</label>
         <input
           v-model="password"
           type="password"
@@ -87,8 +87,8 @@ async function handleLogin() {
         class="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-stone-500 text-white font-medium transition-colors"
         @click="handleLogin"
       >
-        <span v-if="auth.isLoading">Connecting...</span>
-        <span v-else>Login</span>
+        <span v-if="auth.isLoading">Подключение...</span>
+        <span v-else>Войти</span>
       </button>
     </div>
   </div>
