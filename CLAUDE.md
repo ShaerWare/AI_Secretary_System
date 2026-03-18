@@ -325,19 +325,24 @@ DEV_MODE=1                          # Backend proxies to Vite dev server (:5173)
 
 ## Deployment
 
-### Docker Deployment (Production)
+### Server Deployment (Production)
+
+Server: `root@155.212.231.7`, systemd service (not Docker Compose).
 
 ```bash
+ssh root@155.212.231.7
 cd /opt/ai-secretary
-docker compose ps                            # status
-docker compose logs -f ai-secretary          # logs
-docker compose up -d --build                 # rebuild + restart
-docker compose restart ai-secretary          # restart only
-
-# Admin panel rebuild (ALWAYS build from /opt/ai-secretary/admin, not git clone!)
-cd /opt/ai-secretary/admin && npm run build
-docker compose restart ai-secretary          # REQUIRED: re-bind new dist/ inode
+git pull origin main
+cd admin && npm ci && npm run build
+rsync -av --delete admin/dist/ /var/www/admin-ai-sekretar24/  # REQUIRED: nginx serves from /var/www/
+sed -i "s/ai-admin-v[0-9a-z]*/ai-admin-v$(date +%s)/" /var/www/admin-ai-sekretar24/sw.js  # bust SW cache
+systemctl restart ai-secretary               # restart orchestrator
+curl -s http://localhost:8002/health         # health check
 ```
+
+**IMPORTANT**: Nginx serves frontend from `/var/www/admin-ai-sekretar24/`, NOT from `/opt/ai-secretary/admin/dist/`. Always rsync after build.
+
+Webhook auto-deploy: `ai-secretary-webhook.service` triggers on GitHub push.
 
 **Local-only files** (not in git): `.env`, `docker-compose.override.yml`, modified `Dockerfile`, `services/bridge/src/models/`
 
@@ -379,7 +384,7 @@ Check in this order — **infrastructure first**, application logic last:
 
 This project is developed from two machines:
 - **local** — dev workstation with GPU (RTX 3060), full stack
-- **server** — Beget VPS, Docker, cloud LLM only
+- **server** — Beget VPS (`root@155.212.231.7`), systemd service, cloud LLM only
 
 Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`## Machine Role` section). **Check your machine role before git operations.**
 

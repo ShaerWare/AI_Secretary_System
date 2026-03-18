@@ -3289,14 +3289,8 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </div>
         </template>
 
-        <!-- Normal chat: no session selected -->
+        <!-- Normal chat: no session selected — show nothing (sidebar has chat list) -->
         <template v-else-if="!currentSession">
-          <div class="h-full flex items-center justify-center text-muted-foreground">
-            <div class="text-center">
-              <MessageSquare class="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>{{ t('chatView.selectOrCreate') }}</p>
-            </div>
-          </div>
         </template>
 
         <template v-else>
