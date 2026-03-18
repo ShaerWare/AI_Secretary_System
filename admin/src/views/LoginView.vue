@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 const router = useRouter()
 const route = useRoute()
+const queryClient = useQueryClient()
 const authStore = useAuthStore()
 const toastStore = useToastStore()
 
@@ -92,6 +94,8 @@ async function handleSubmit() {
     const success = await authStore.login(username.value, password.value)
 
     if (success) {
+      // Clear stale query cache so ChatView fetches fresh data with new token
+      queryClient.clear()
       toastStore.success('Добро пожаловать!', `Вы вошли как ${username.value}`)
       const redirect = (route.query.redirect as string) || '/'
       router.push(redirect)
