@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {
     androidScheme: "https",
+    allowNavigation: ["ai-sekretar24.ru"],
   },
   plugins: {
     Keyboard: {

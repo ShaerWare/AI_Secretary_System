@@ -52,6 +52,9 @@ export interface ChatSessionSummary {
   source?: string | null;
   created: string;
   updated: string;
+  is_shared_with_me?: boolean;
+  share_permission?: string;
+  share_count?: number;
 }
 
 export interface StreamChunk {

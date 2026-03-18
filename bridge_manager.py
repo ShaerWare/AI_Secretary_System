@@ -161,8 +161,28 @@ class BridgeProcessManager:
                 "error": f"Bridge directory not found: {self._bridge_dir}",
             }
 
-        # Write .env with current settings
-        self._write_env(port, permission_level)
+        # Resolve claude CLI path before writing .env — startup scripts
+        # (systemd, start_gpu.sh) may not include ~/.local/bin in PATH
+        claude_cli_path = os.environ.get("CLAUDE_CLI_PATH", "")
+        if not claude_cli_path:
+            import shutil
+
+            claude_cli_path = shutil.which("claude") or ""
+            if not claude_cli_path:
+                home = Path.home()
+                for candidate in [
+                    home / ".local" / "bin" / "claude",
+                    home / ".npm-global" / "bin" / "claude",
+                    Path("/usr/local/bin/claude"),
+                ]:
+                    if candidate.exists():
+                        claude_cli_path = str(candidate)
+                        break
+            if claude_cli_path:
+                logger.info(f"🔍 Found claude CLI: {claude_cli_path}")
+
+        # Write .env with current settings (including resolved claude path)
+        self._write_env(port, permission_level, claude_cli_path)
 
         # Ensure log directory exists
         self._log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +214,8 @@ class BridgeProcessManager:
             env["BRIDGE_PORT"] = str(port)
             env["CLAUDE_PERMISSION_LEVEL"] = permission_level
             env["PYTHONUNBUFFERED"] = "1"
+            if claude_cli_path:
+                env["CLAUDE_CLI_PATH"] = claude_cli_path
             # Disable Gemini and GPT providers
             env["GEMINI_CLI_PATH"] = ""
             env["GPT_CLI_PATH"] = ""
@@ -308,7 +330,7 @@ class BridgeProcessManager:
         """Return the bridge base URL (OpenAI-compatible /v1 prefix)."""
         return f"http://{self._bridge_host}:{self._port}/v1"
 
-    def _write_env(self, port: int, permission_level: str) -> None:
+    def _write_env(self, port: int, permission_level: str, claude_cli_path: str = "") -> None:
         """Write/update .env file for the bridge."""
         env_path = self._bridge_dir / ".env"
         env_content = (
@@ -322,6 +344,8 @@ class BridgeProcessManager:
             f"GEMINI_CLI_PATH=\n"
             f"GPT_CLI_PATH=\n"
         )
+        if claude_cli_path:
+            env_content += f"CLAUDE_CLI_PATH={claude_cli_path}\n"
         try:
             env_path.write_text(env_content)
         except OSError:

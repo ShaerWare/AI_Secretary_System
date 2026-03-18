@@ -248,18 +248,24 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **Stack**: Vue 3 + TypeScript, Vite, Pinia, Vue Router, Capacitor (Android), TailwindCSS 4. Path alias `@` → `mobile/src/`.
 
-**Purpose**: Standalone Android chat app connecting to a remote AI Secretary server. Users enter server URL on first launch, then login with credentials. Each user gets their own workspace/chat history.
+**Purpose**: Standalone Android chat app connecting to `https://ai-sekretar24.ru` (hardcoded). Role-based experience: admins get full chat controls, non-admins see only shared chats.
 
-**Screens**: LoginView (server URL + auth), ChatListView (session list + FAB), ChatView (streaming chat + TTS), SettingsView.
+**Screens**: LoginView (auth only, no server URL), ChatListView (admin: session list + FAB + delete; non-admin: Claude-like welcome + shared chat cards), ChatView (streaming chat + TTS + role-based controls), SettingsView (account + logout).
 
 **Theme**: Night-eyes (warm brown/amber/gold), hardcoded — no theme switching. Background `#1a1308`, text `#d9c9a8`, primary amber-600, cards stone-800.
 
+**Role-based access**:
+- **Admin** (`role=admin`): full chat controls — LLM provider selector, RAG collection multi-select, system prompt editing, export (copy/md/json), branching, context files, all message actions (edit, regenerate, summarize, delete branch), session creation/deletion
+- **Non-admin**: only shared chats visible (`is_shared_with_me` filter), Claude-like welcome screen, basic message actions (TTS + copy only), no branching/context/export/LLM/RAG
+
 **Mobile Instances**: Admin creates `MobileAppInstance` (LLM backend, persona, system prompt, TTS, RAG) in admin panel (`/mobile-app` view). Users are assigned to instances via `ResourceShare`. On login, mobile app fetches `GET /admin/mobile/my-config` to get assigned instance config. Chat sessions use `source="mobile"` + `mobile_instance_id` for per-instance LLM/prompt routing.
 
+**API layer** (`mobile/src/api/`): `client.ts` (base fetch), `chat.ts` (sessions/streaming/branches), `admin.ts` (LLM providers + RAG collections for admin controls).
+
 **Key differences from admin panel**:
-- Configurable remote server URL (stored via `@capacitor/preferences`)
+- Hardcoded server URL (`https://ai-sekretar24.ru`), no user configuration
 - JWT stored in native Preferences (not localStorage)
-- No demo mode, no RBAC UI, no admin views — chat only
+- No demo mode, no full RBAC UI — role-based chat experience
 - ~77KB gzipped (vs ~2MB admin)
 
 **Build**: `cd mobile && npm run build && npx cap sync android`. APK via Android Studio: `npx cap open android` → Build → Build APK.
