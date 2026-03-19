@@ -6,6 +6,9 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from sqlalchemy import select as sa_select
+from sqlalchemy import update as sa_update
+
 from db.database import AsyncSessionLocal
 from db.repositories import ChatRepository, ChatShareRepository, UserRepository
 from db.retry import retry_on_busy
@@ -396,6 +399,109 @@ class ChatShareService:
                 and u.get("role") != "guest"
                 and u["id"] != exclude_user_id
             ]
+
+    async def set_default_mobile(
+        self,
+        session_id: str,
+        user_id: int,
+        shared_by: Optional[int] = None,
+    ) -> dict:
+        """Set session as default mobile chat for user.
+
+        Clears any previous default for this user, ensures share exists,
+        and marks the new share as default.
+        """
+        async with AsyncSessionLocal() as session:
+            from modules.chat.models import ChatSessionShare
+
+            # Clear previous defaults for this user
+            stmt = (
+                sa_update(ChatSessionShare)
+                .where(
+                    ChatSessionShare.user_id == user_id,
+                    ChatSessionShare.is_default_mobile.is_(True),
+                )
+                .values(is_default_mobile=False)
+            )
+            await session.execute(stmt)
+
+            # Ensure share exists
+            repo = ChatShareRepository(session)
+            existing = await repo.get_share(session_id, user_id)
+            if existing:
+                existing.is_default_mobile = True
+                await session.flush()
+                result = existing.to_dict()
+            else:
+                share_dict = await repo.add_share(session_id, user_id, "write", shared_by)
+                # Set default on the newly created share
+                new_share = await repo.get_share(session_id, user_id)
+                if new_share:
+                    new_share.is_default_mobile = True
+                    await session.flush()
+                    result = new_share.to_dict()
+                else:
+                    result = share_dict
+            await session.commit()
+            return result
+
+    async def unset_default_mobile(self, session_id: str, user_id: int) -> bool:
+        """Remove default mobile flag from a share."""
+        async with AsyncSessionLocal() as session:
+            from modules.chat.models import ChatSessionShare
+
+            stmt = (
+                sa_update(ChatSessionShare)
+                .where(
+                    ChatSessionShare.session_id == session_id,
+                    ChatSessionShare.user_id == user_id,
+                )
+                .values(is_default_mobile=False)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0  # type: ignore[union-attr]
+
+    async def get_default_mobile_users(self, session_id: str) -> List[dict]:
+        """Get users who have this session as their default mobile chat."""
+        async with AsyncSessionLocal() as session:
+            from db.models import User
+            from modules.chat.models import ChatSessionShare
+
+            stmt = (
+                sa_select(ChatSessionShare, User)
+                .join(User, ChatSessionShare.user_id == User.id)
+                .where(
+                    ChatSessionShare.session_id == session_id,
+                    ChatSessionShare.is_default_mobile.is_(True),
+                )
+            )
+            result = await session.execute(stmt)
+            return [
+                {
+                    "user_id": share.user_id,
+                    "username": user.username,
+                    "display_name": user.display_name,
+                }
+                for share, user in result.all()
+            ]
+
+    async def get_user_default_mobile_session(self, user_id: int) -> Optional[str]:
+        """Get the default mobile session_id for a user."""
+        async with AsyncSessionLocal() as session:
+            from modules.chat.models import ChatSessionShare
+
+            stmt = (
+                sa_select(ChatSessionShare.session_id)
+                .where(
+                    ChatSessionShare.user_id == user_id,
+                    ChatSessionShare.is_default_mobile.is_(True),
+                )
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return row
 
 
 # Singletons

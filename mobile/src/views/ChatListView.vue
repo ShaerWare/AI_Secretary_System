@@ -42,12 +42,22 @@ async function loadSessions() {
 }
 
 async function autoOpenChat() {
-  // If there are visible sessions, open the most recent one
+  // Priority 1: default mobile session
+  try {
+    const resp = await chatApi.getMyDefaultMobileSession();
+    if (resp.session_id) {
+      router.replace(`/chat/${resp.session_id}`);
+      return;
+    }
+  } catch {
+    // fallback to other logic
+  }
+  // Priority 2: first visible (shared) session
   if (visibleSessions.value.length > 0) {
     router.replace(`/chat/${visibleSessions.value[0]!.id}`);
     return;
   }
-  // Otherwise create a new session and open it
+  // Priority 3: create a new session
   try {
     const data = await chatApi.createSession();
     router.replace(`/chat/${data.session.id}`);

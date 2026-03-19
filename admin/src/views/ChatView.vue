@@ -24,7 +24,7 @@ import 'prismjs/components/prism-diff'
 import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-jsx'
 import 'prismjs/components/prism-tsx'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage, type ShareableUser } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
@@ -70,6 +70,7 @@ import {
   GitFork,
   Users,
   Terminal,
+  Smartphone,
   StopCircle,
   ChevronDown,
   FolderOpen,
@@ -174,6 +175,8 @@ const showCcFilesMenu = ref(false)
 const showCcKanbanMenu = ref(false)
 const ccKanbanTasks = ref<KanbanTask[]>([])
 const showShareDialog = ref(false)
+const showDefaultMobileMenu = ref(false)
+const defaultMobileUsers = ref<{ user_id: number; username: string; display_name: string }[]>([])
 const showZenSettings = ref(false)
 const showZenLlmMenu = ref(false)
 const inputPosition = ref<'top' | 'bottom'>(
@@ -575,6 +578,33 @@ function toggleCcMode() {
   } else {
     cc.toggle()
   }
+}
+
+const shareableUsersData = ref<{ users: ShareableUser[] } | null>(null)
+
+async function loadDefaultMobileUsers() {
+  if (!currentSessionId.value) return
+  try {
+    const [mobileResp, usersResp] = await Promise.all([
+      chatApi.getDefaultMobileUsers(currentSessionId.value),
+      shareableUsersData.value ? Promise.resolve(shareableUsersData.value) : chatApi.getShareableUsers(),
+    ])
+    defaultMobileUsers.value = mobileResp.users || []
+    shareableUsersData.value = usersResp
+  } catch {
+    defaultMobileUsers.value = []
+  }
+}
+
+async function toggleDefaultMobile(userId: number) {
+  if (!currentSessionId.value) return
+  const existing = defaultMobileUsers.value.find(u => u.user_id === userId)
+  if (existing) {
+    await chatApi.unsetDefaultMobile(currentSessionId.value, userId)
+  } else {
+    await chatApi.setDefaultMobile(currentSessionId.value, [userId])
+  }
+  await loadDefaultMobileUsers()
 }
 
 async function openCcKanbanMenu() {
@@ -1736,6 +1766,9 @@ function handleGlobalClick(e: MouseEvent) {
   if (showZenLlmMenu.value && !target.closest('.zen-llm-anchor')) {
     showZenLlmMenu.value = false
   }
+  if (showDefaultMobileMenu.value) {
+    showDefaultMobileMenu.value = false
+  }
 }
 
 // Zen mode: restore from localStorage (only for admin users, not locked mode)
@@ -2093,6 +2126,54 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
 
         <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
         </template>
+
+        <!-- Default Mobile Chat (admin only) -->
+        <div v-if="!isChatOnly && !cc.isActive.value && currentSessionId" class="relative shrink-0">
+          <button
+            :class="[
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              showDefaultMobileMenu ? 'bg-primary/20 text-primary' : (defaultMobileUsers.length ? 'text-green-400' : 'text-muted-foreground hover:bg-secondary/50')
+            ]"
+            :title="'Основной чат для мобильного приложения'"
+            @click.stop="showDefaultMobileMenu = !showDefaultMobileMenu; if (showDefaultMobileMenu) { loadDefaultMobileUsers(); }"
+          >
+            <Smartphone class="w-4 h-4" />
+            <span
+              v-if="defaultMobileUsers.length"
+              class="absolute -top-0.5 -right-0.5 bg-green-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center"
+            >{{ defaultMobileUsers.length }}</span>
+          </button>
+          <div
+            v-if="showDefaultMobileMenu"
+            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[220px] animate-scale-in"
+            @click.stop
+          >
+            <div class="px-3 pb-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Основной чат для мобильного
+            </div>
+            <div v-if="!shareableUsersData?.users?.length" class="px-3 py-2 text-sm text-muted-foreground">
+              {{ t('chatView.noUsersToShare') }}
+            </div>
+            <template v-else>
+              <button
+                v-for="u in shareableUsersData?.users"
+                :key="u.id"
+                class="flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left hover:bg-secondary/50"
+                :class="defaultMobileUsers.some(d => d.user_id === u.id) ? 'text-green-400' : 'text-foreground'"
+                @click="toggleDefaultMobile(u.id)"
+              >
+                <span
+class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
+                  :class="defaultMobileUsers.some(d => d.user_id === u.id) ? 'border-green-400 bg-green-400/20' : 'border-muted-foreground/30'"
+                >
+                  <Check v-if="defaultMobileUsers.some(d => d.user_id === u.id)" class="w-3 h-3" />
+                </span>
+                <span class="flex-1 truncate">{{ u.display_name || u.username }}</span>
+                <span class="text-[10px] text-muted-foreground">{{ u.role }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
 
         <!-- Claude Code toggle (restricted users, admin only) -->
         <button
