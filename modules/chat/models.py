@@ -205,6 +205,7 @@ class ChatSessionShare(Base):
     )
     shared_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     branch_message_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    is_default_mobile: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     __table_args__ = (
         Index("ix_chat_session_shares_session_user", "session_id", "user_id", unique=True),
@@ -219,6 +220,7 @@ class ChatSessionShare(Base):
             "shared_by": self.shared_by,
             "shared_at": self.shared_at.isoformat() if self.shared_at else None,
             "branch_message_id": self.branch_message_id,
+            "is_default_mobile": self.is_default_mobile,
         }
 
 

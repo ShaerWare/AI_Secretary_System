@@ -232,4 +232,9 @@ export const chatApi = {
 
     return { abort: () => controller.abort() };
   },
+
+  getMyDefaultMobileSession: () =>
+    api.get<{ session_id: string | null }>(
+      "/admin/chat/my-default-mobile-session",
+    ),
 };

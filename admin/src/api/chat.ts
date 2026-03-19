@@ -82,6 +82,7 @@ export interface ChatSessionSummary {
   is_shared_with_me?: boolean
   share_permission?: string
   share_count?: number
+  is_default_mobile?: boolean
 }
 
 export interface ChatShare {
@@ -298,6 +299,21 @@ export const chatApi = {
 
   getShareableUsers: () =>
     api.get<{ users: ShareableUser[] }>('/admin/chat/shareable-users'),
+
+  // Default mobile chat
+  getDefaultMobileUsers: (sessionId: string) =>
+    api.get<{ users: { user_id: number; username: string; display_name: string }[] }>(
+      `/admin/chat/sessions/${sessionId}/default-mobile-users`,
+    ),
+
+  setDefaultMobile: (sessionId: string, userIds: number[]) =>
+    api.put(`/admin/chat/sessions/${sessionId}/default-mobile`, { user_ids: userIds }),
+
+  unsetDefaultMobile: (sessionId: string, userId: number) =>
+    api.delete(`/admin/chat/sessions/${sessionId}/default-mobile/${userId}`),
+
+  getMyDefaultMobileSession: () =>
+    api.get<{ session_id: string | null }>('/admin/chat/my-default-mobile-session'),
 
   // Image upload
   uploadImage: (sessionId: string, file: File) =>

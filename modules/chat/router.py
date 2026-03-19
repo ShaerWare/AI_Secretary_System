@@ -452,6 +452,9 @@ async def admin_list_chat_sessions(
     if owner_id is not None:
         shared_perms = await chat_share_service.get_shared_sessions_with_permissions(user.id)
 
+    # Check default mobile session for current user
+    default_mobile_sid = await chat_share_service.get_user_default_mobile_session(user.id)
+
     def _enrich(sessions_list: list[dict], share_counts: dict[str, int]) -> list[dict]:
         for s in sessions_list:
             sid = s.get("id", "")
@@ -463,6 +466,7 @@ async def admin_list_chat_sessions(
                 s["is_shared_with_me"] = False
                 s["share_permission"] = "owner"
             s["share_count"] = share_counts.get(sid, 0)
+            s["is_default_mobile"] = sid == default_mobile_sid
         return sessions_list
 
     if group_by == "source":
@@ -1526,6 +1530,63 @@ async def admin_get_shareable_users(user: User = Depends(require_permission("cha
     """Список пользователей для шаринга"""
     users = await chat_share_service.list_shareable_users(exclude_user_id=user.id)
     return {"users": users}
+
+
+# ============== Default Mobile Chat Endpoints ==============
+
+
+class SetDefaultMobileRequest(BaseModel):
+    user_ids: list[int]
+
+
+@router.get("/sessions/{session_id}/default-mobile-users")
+async def get_default_mobile_users(
+    session_id: str,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Get users who have this session as their default mobile chat."""
+    users = await chat_share_service.get_default_mobile_users(session_id)
+    return {"users": users}
+
+
+@router.put("/sessions/{session_id}/default-mobile")
+async def set_default_mobile_chat(
+    session_id: str,
+    req: SetDefaultMobileRequest,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Set this session as default mobile chat for selected users.
+
+    Clears previous defaults for each user before setting new ones.
+    Auto-creates share if not exists.
+    """
+    results = []
+    for uid in req.user_ids:
+        share = await chat_share_service.set_default_mobile(session_id, uid, shared_by=user.id)
+        results.append(share)
+    return {"shares": results}
+
+
+@router.delete("/sessions/{session_id}/default-mobile/{target_user_id}")
+async def unset_default_mobile_chat(
+    session_id: str,
+    target_user_id: int,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Remove default mobile flag for a user on this session."""
+    ok = await chat_share_service.unset_default_mobile(session_id, target_user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Share not found")
+    return {"status": "ok"}
+
+
+@router.get("/my-default-mobile-session")
+async def get_my_default_mobile_session(
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Get the default mobile session for the current user."""
+    session_id = await chat_share_service.get_user_default_mobile_session(user.id)
+    return {"session_id": session_id}
 
 
 # ============== Image Endpoints ==============
