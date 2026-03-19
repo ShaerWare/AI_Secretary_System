@@ -674,9 +674,9 @@ onUnmounted(() => {
             title="Session settings"
             @click="toggleSettings"
           >
+            <!-- Settings2 icon (sliders) -->
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
             </svg>
           </button>
 
@@ -716,9 +716,9 @@ onUnmounted(() => {
           title="Настройки чата"
           @click="toggleSettings"
         >
-          <!-- Settings gear icon -->
+          <!-- Settings2 icon (sliders) — same as web version -->
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
           </svg>
         </button>
 
@@ -774,7 +774,7 @@ onUnmounted(() => {
       <template v-if="!isLandscape && anyPanelOpen">
         <!-- Panel content -->
         <div
-          class="shrink-0 bg-stone-900/95 border-b border-stone-700 overflow-y-auto"
+          class="shrink-0 bg-stone-900/95 border-b border-stone-700 overflow-y-auto flex flex-col"
           :style="{ height: panelSize + 'px' }"
         >
           <!-- Branch Tree -->
@@ -889,16 +889,17 @@ onUnmounted(() => {
 
             <!-- Prompt tab -->
             <template v-if="settingsTab === 'prompt'">
-              <div class="px-3 py-3">
+              <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
                 <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
                 <textarea
                   v-model="customPrompt"
-                  rows="5"
-                  class="w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-y min-h-[80px]"
+                  class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
                   placeholder="Пользовательский промпт для этой сессии..."
                 />
+              </div>
+              <div class="shrink-0 px-3 pb-1">
                 <button
-                  class="mt-2 w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
+                  class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
                   @click="saveSystemPrompt"
                 >
                   Сохранить
@@ -1122,16 +1123,17 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-if="settingsTab === 'prompt'">
-            <div class="px-3 py-3">
+            <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
               <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
               <textarea
                 v-model="customPrompt"
-                rows="8"
-                class="w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-y min-h-[80px]"
+                class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
                 placeholder="Пользовательский промпт для этой сессии..."
               />
+            </div>
+            <div class="shrink-0 px-3 pb-2">
               <button
-                class="mt-2 w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
+                class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
                 @click="saveSystemPrompt"
               >
                 Сохранить
