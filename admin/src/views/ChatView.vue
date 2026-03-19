@@ -950,6 +950,12 @@ function selectSession(sessionId: string) {
   showSidebar.value = false
 }
 
+watch(currentSessionId, () => {
+  defaultMobileUsers.value = []
+  showDefaultMobileMenu.value = false
+  if (currentSessionId.value) loadDefaultMobileUsers()
+})
+
 function createNewChat() {
   createSessionMutation.mutate()
 }
