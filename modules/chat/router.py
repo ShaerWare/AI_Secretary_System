@@ -60,7 +60,7 @@ KNOWLEDGE_SEARCH_TOOL = {
         },
     },
 }
-MAX_TOOL_ITERATIONS = 5
+MAX_TOOL_ITERATIONS = 10
 
 # Temporary cache for OCR text from uploaded images (upload → send are two separate requests)
 _pending_image_ocr: dict[str, str] = {}
@@ -715,8 +715,15 @@ async def admin_send_chat_message(
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
+                        logger.warning(
+                            f"Agentic RAG: malformed tool args "
+                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                        )
                         args = {}
                     query = args.get("query", "")
+                    if not query:
+                        logger.warning("Agentic RAG: empty search query, skipping iteration")
+                        continue
                     search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
                     loop_messages.append(
                         {
@@ -988,8 +995,15 @@ async def admin_stream_chat_message(
                         try:
                             args = json.loads(tc["function"]["arguments"])
                         except json.JSONDecodeError:
+                            logger.warning(
+                                f"Agentic RAG: malformed tool args "
+                                f"(likely truncated): {tc['function']['arguments'][:100]}"
+                            )
                             args = {}
                         query = args.get("query", "")
+                        if not query:
+                            logger.warning("Agentic RAG: empty search query, skipping iteration")
+                            continue
                         yield f"data: {json.dumps({'type': 'tool_start', 'name': fn_name, 'query': query}, ensure_ascii=False)}\n\n"
 
                         result = _execute_knowledge_search(wiki_rag, query, collection_ids)
@@ -1117,8 +1131,15 @@ async def admin_edit_chat_message(
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
+                        logger.warning(
+                            f"Agentic RAG: malformed tool args "
+                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                        )
                         args = {}
                     query = args.get("query", "")
+                    if not query:
+                        logger.warning("Agentic RAG: empty search query, skipping iteration")
+                        continue
                     search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
                     loop_messages.append(
                         {
@@ -1247,8 +1268,15 @@ async def admin_regenerate_chat_response(
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
+                        logger.warning(
+                            f"Agentic RAG: malformed tool args "
+                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                        )
                         args = {}
                     query = args.get("query", "")
+                    if not query:
+                        logger.warning("Agentic RAG: empty search query, skipping iteration")
+                        continue
                     search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
                     loop_messages.append(
                         {
