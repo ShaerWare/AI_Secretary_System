@@ -297,8 +297,10 @@ export const chatApi = {
   forkSession: (sessionId: string, title?: string) =>
     api.post<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}/fork`, { title }),
 
-  getShareableUsers: () =>
-    api.get<{ users: ShareableUser[] }>('/admin/chat/shareable-users'),
+  getShareableUsers: (includeSelf = false) =>
+    api.get<{ users: ShareableUser[] }>(
+      `/admin/chat/shareable-users${includeSelf ? '?include_self=true' : ''}`,
+    ),
 
   // Default mobile chat
   getDefaultMobileUsers: (sessionId: string) =>

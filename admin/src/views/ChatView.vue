@@ -587,7 +587,7 @@ async function loadDefaultMobileUsers() {
   try {
     const [mobileResp, usersResp] = await Promise.all([
       chatApi.getDefaultMobileUsers(currentSessionId.value),
-      shareableUsersData.value ? Promise.resolve(shareableUsersData.value) : chatApi.getShareableUsers(),
+      shareableUsersData.value ? Promise.resolve(shareableUsersData.value) : chatApi.getShareableUsers(true),
     ])
     defaultMobileUsers.value = mobileResp.users || []
     shareableUsersData.value = usersResp
