@@ -1526,9 +1526,13 @@ async def admin_fork_session(
 
 
 @router.get("/shareable-users")
-async def admin_get_shareable_users(user: User = Depends(require_permission("chat", "view"))):
+async def admin_get_shareable_users(
+    include_self: bool = False,
+    user: User = Depends(require_permission("chat", "view")),
+):
     """Список пользователей для шаринга"""
-    users = await chat_share_service.list_shareable_users(exclude_user_id=user.id)
+    exclude_id = None if include_self else user.id
+    users = await chat_share_service.list_shareable_users(exclude_user_id=exclude_id)
     return {"users": users}
 
 
