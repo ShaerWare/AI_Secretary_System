@@ -2663,6 +2663,53 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </div>
         </div>
         <div class="flex items-center flex-wrap gap-1 sm:gap-2 shrink-0">
+          <!-- Default Mobile Chat (admin only) -->
+          <div v-if="!cc.isActive.value && !isChatOnly && currentSessionId" class="relative" @click.stop>
+            <button
+              :class="[
+                'p-2 rounded-lg border transition-colors',
+                showDefaultMobileMenu ? 'border-primary bg-primary/10 text-primary' : (defaultMobileUsers.length ? 'border-green-600 bg-green-600/10 text-green-500' : 'border-border text-muted-foreground hover:bg-secondary/50')
+              ]"
+              :title="'Основной чат для мобильного приложения'"
+              @click="showDefaultMobileMenu = !showDefaultMobileMenu; if (showDefaultMobileMenu) { loadDefaultMobileUsers(); }"
+            >
+              <Smartphone class="w-4 h-4" />
+              <span
+                v-if="defaultMobileUsers.length"
+                class="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center"
+              >{{ defaultMobileUsers.length }}</span>
+            </button>
+            <div
+              v-if="showDefaultMobileMenu"
+              class="absolute right-0 top-full mt-1 bg-popover border border-border rounded-xl shadow-xl py-2 z-50 min-w-[220px]"
+            >
+              <div class="px-3 pb-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Основной чат для мобильного
+              </div>
+              <div v-if="!shareableUsersData?.users?.length" class="px-3 py-2 text-sm text-muted-foreground">
+                Нет пользователей
+              </div>
+              <template v-else>
+                <button
+                  v-for="u in shareableUsersData?.users"
+                  :key="u.id"
+                  class="flex items-center gap-2 w-full px-3 py-1.5 text-sm transition-colors text-left hover:bg-secondary/50"
+                  :class="defaultMobileUsers.some(d => d.user_id === u.id) ? 'text-green-500' : 'text-foreground'"
+                  @click="toggleDefaultMobile(u.id)"
+                >
+                  <span
+class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
+                    :class="defaultMobileUsers.some(d => d.user_id === u.id) ? 'border-green-500 bg-green-500/20' : 'border-muted-foreground/30'"
+                  >
+                    <Check v-if="defaultMobileUsers.some(d => d.user_id === u.id)" class="w-3 h-3" />
+                  </span>
+                  <span class="flex-1 truncate">{{ u.display_name || u.username }}</span>
+                  <span class="text-[10px] text-muted-foreground">{{ u.role }}</span>
+                </button>
+              </template>
+            </div>
+          </div>
+
           <!-- Claude Code toggle (restricted users) -->
           <button
             v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
