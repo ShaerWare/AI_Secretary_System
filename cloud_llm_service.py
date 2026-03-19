@@ -326,7 +326,14 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 )
                 response.raise_for_status()
                 result = response.json()
-                message = result["choices"][0]["message"]
+                choice = result["choices"][0]
+                finish_reason = choice.get("finish_reason")
+                if finish_reason == "length":
+                    logger.warning(
+                        f"[{self.provider_id}] Response truncated (finish_reason=length) "
+                        f"with model '{model}'. Consider increasing max_tokens."
+                    )
+                message = choice["message"]
                 tool_calls = message.get("tool_calls")
                 if tool_calls:
                     return message  # dict with role, content, tool_calls
@@ -367,6 +374,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     # Accumulate tool_calls from delta chunks
                     tool_calls_acc: Dict[int, dict] = {}
                     has_tool_calls = False
+                    finish_reason = None
 
                     for line in response.iter_lines():
                         if line.startswith("data: "):
@@ -375,7 +383,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                                 break
                             try:
                                 chunk = json.loads(data)
-                                delta = chunk["choices"][0].get("delta", {})
+                                choice = chunk["choices"][0]
+                                delta = choice.get("delta", {})
+
+                                # Track finish_reason for truncation detection
+                                fr = choice.get("finish_reason")
+                                if fr:
+                                    finish_reason = fr
 
                                 # Content chunk
                                 content = delta.get("content")
@@ -405,12 +419,33 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                             except json.JSONDecodeError:
                                 continue
 
+                    # Detect truncated response (max_tokens hit)
+                    if finish_reason == "length":
+                        logger.warning(
+                            f"[{self.provider_id}] Response truncated (finish_reason=length) "
+                            f"with model '{model}'. Consider increasing max_tokens."
+                        )
+
                     # Emit accumulated tool_calls at the end
                     if has_tool_calls and tool_calls_acc:
-                        yield {
-                            "type": "tool_calls",
-                            "tool_calls": [tool_calls_acc[i] for i in sorted(tool_calls_acc)],
-                        }
+                        # Validate tool call arguments are parseable JSON
+                        valid_tool_calls = []
+                        for i in sorted(tool_calls_acc):
+                            tc = tool_calls_acc[i]
+                            args_str = tc["function"]["arguments"]
+                            try:
+                                json.loads(args_str)
+                                valid_tool_calls.append(tc)
+                            except json.JSONDecodeError:
+                                logger.warning(
+                                    f"[{self.provider_id}] Truncated tool call arguments "
+                                    f"(index={i}, fn={tc['function']['name']}): {args_str[:100]}"
+                                )
+                        if valid_tool_calls:
+                            yield {
+                                "type": "tool_calls",
+                                "tool_calls": valid_tool_calls,
+                            }
                     return  # Stream completed successfully
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
@@ -435,11 +470,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def _build_request_json(
         self, model: str, messages: List[Dict], stream: bool, tools: Optional[List[Dict]] = None
     ) -> dict:
+        default_max_tokens = 512
+        # Tool-calling (agentic RAG) needs much more tokens: text + JSON tool calls
+        # + accumulated context from prior search results
+        if tools:
+            default_max_tokens = 4096
         payload = {
             "model": model,
             "messages": messages,
             "temperature": self.runtime_params.get("temperature", 0.7),
-            "max_tokens": self.runtime_params.get("max_tokens", 512),
+            "max_tokens": self.runtime_params.get("max_tokens", default_max_tokens),
             "top_p": self.runtime_params.get("top_p", 0.9),
             "stream": stream,
         }
