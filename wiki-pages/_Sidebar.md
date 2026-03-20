@@ -2,6 +2,7 @@
 
 ### Главная
 * [[Home]]
+* [[Architecture]]
 
 ### Мониторинг
 * [[Dashboard]]
@@ -24,16 +25,19 @@
 * [[Telegram]]
 * [[WhatsApp]]
 * [[Widget]]
+* [[Mobile-App]]
 * [[GSM]]
 
 ### Бизнес
 * [[FAQ]]
 * [[Sales]]
 * [[CRM]]
+* [[WooCommerce]]
 * [[Payments]]
 * [[Kanban]]
 
 ### Система
+* [[Users]]
 * [[Settings]]
 * [[Backup]]
 * [[Wiki-RAG]]

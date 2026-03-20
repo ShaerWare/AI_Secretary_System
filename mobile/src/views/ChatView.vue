@@ -143,7 +143,7 @@ async function loadSession() {
     customPrompt.value = data.session.system_prompt || "";
     await scrollToBottom();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to load";
+    error.value = e instanceof Error ? e.message : "Не удалось загрузить";
   } finally {
     isLoading.value = false;
   }
@@ -200,7 +200,7 @@ async function sendMessage(content: string) {
           }
           break;
         case "tool_start":
-          streamingContent.value += "\n_Searching..._\n";
+          streamingContent.value += "\n_Поиск..._\n";
           break;
         case "done":
           isStreaming.value = false;
@@ -283,7 +283,7 @@ async function switchBranch(messageId: string) {
     await loadBranches();
     await scrollToBottom();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to switch";
+    error.value = e instanceof Error ? e.message : "Не удалось переключить";
   }
 }
 
@@ -298,17 +298,17 @@ async function createNewBranch() {
     if (showBranches.value) await loadBranches();
     await scrollToBottom();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to create branch";
+    error.value = e instanceof Error ? e.message : "Не удалось создать ветку";
   }
 }
 
 async function deleteBranch() {
   const activeMessages = messages.value;
   if (!activeMessages.length) {
-    error.value = "No messages to delete";
+    error.value = "Нет сообщений для удаления";
     return;
   }
-  if (!confirm("Delete current branch? All messages will be removed from the server.")) return;
+  if (!confirm("Удалить текущую ветку? Все сообщения будут удалены с сервера.")) return;
   try {
     for (let i = activeMessages.length - 1; i >= 0; i--) {
       const m = activeMessages[i]!;
@@ -319,7 +319,7 @@ async function deleteBranch() {
     messages.value = [];
     if (showBranches.value) await loadBranches();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to delete";
+    error.value = e instanceof Error ? e.message : "Не удалось удалить";
     await loadSession();
   }
 }
@@ -375,7 +375,7 @@ async function saveContextFiles() {
       context_files: contextFiles.value,
     });
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to save files";
+    error.value = e instanceof Error ? e.message : "Не удалось сохранить файлы";
   }
 }
 
@@ -393,7 +393,7 @@ async function saveSystemPrompt() {
       system_prompt: customPrompt.value,
     });
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to save prompt";
+    error.value = e instanceof Error ? e.message : "Не удалось сохранить промпт";
   }
 }
 
@@ -462,7 +462,7 @@ async function handleEditMessage(messageId: string, content: string) {
     await chatApi.editMessage(sessionId.value, messageId, content);
     await loadSession();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to edit";
+    error.value = e instanceof Error ? e.message : "Не удалось отредактировать";
   }
 }
 
@@ -485,7 +485,7 @@ async function handleSummarizeBranch(messageId: string) {
     showBranches.value = false;
     showSettings.value = false;
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to summarize";
+    error.value = e instanceof Error ? e.message : "Не удалось суммаризировать";
   }
 }
 
@@ -494,12 +494,12 @@ async function handleRegenerateResponse(messageId: string) {
     await chatApi.regenerateResponse(sessionId.value, messageId);
     await loadSession();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to regenerate";
+    error.value = e instanceof Error ? e.message : "Не удалось перегенерировать";
   }
 }
 
 async function handleDeleteFromMessage(messageId: string) {
-  if (!confirm("Delete this message and everything after it?")) return;
+  if (!confirm("Удалить это сообщение и все последующие?")) return;
   const idx = messages.value.findIndex((m) => m.id === messageId);
   if (idx < 0) return;
   try {
@@ -512,16 +512,16 @@ async function handleDeleteFromMessage(messageId: string) {
     messages.value = messages.value.slice(0, idx);
     if (showBranches.value) await loadBranches();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to delete";
+    error.value = e instanceof Error ? e.message : "Не удалось удалить";
     await loadSession();
   }
 }
 
 const anyPanelOpen = computed(() => showBranches.value || showContextFiles.value || showSettings.value);
 const activePanelName = computed(() => {
-  if (showBranches.value) return "Branch Tree";
-  if (showContextFiles.value) return "Context Files";
-  if (showSettings.value) return "Settings";
+  if (showBranches.value) return "Дерево веток";
+  if (showContextFiles.value) return "Файлы контекста";
+  if (showSettings.value) return "Настройки";
   return "";
 });
 
@@ -636,7 +636,7 @@ onUnmounted(() => {
             <button
               class="p-1.5 rounded-lg transition-colors"
               :class="selectedCollectionIds.length ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-              title="Knowledge Base"
+              title="База знаний"
               @click="showRagDropdown = !showRagDropdown; showLlmDropdown = false; showExportDropdown = false"
             >
               <!-- BookOpen icon -->
@@ -671,7 +671,7 @@ onUnmounted(() => {
           <button
             class="p-1.5 rounded-lg transition-colors"
             :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-            title="Session settings"
+            title="Настройки сессии"
             @click="toggleSettings"
           >
             <!-- Settings2 icon (sliders) -->
@@ -684,7 +684,7 @@ onUnmounted(() => {
           <div class="relative" @click.stop>
             <button
               class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
-              title="Export"
+              title="Экспорт"
               @click="showExportDropdown = !showExportDropdown; showLlmDropdown = false; showRagDropdown = false"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -697,19 +697,30 @@ onUnmounted(() => {
               class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[160px] py-1"
             >
               <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="copyChatToClipboard">
-                Copy to clipboard
+                Копировать в буфер
               </button>
               <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatMarkdown">
-                Export Markdown
+                Экспорт Markdown
               </button>
               <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatJson">
-                Export JSON
+                Экспорт JSON
               </button>
             </div>
           </div>
         </template>
 
         <!-- Toolbar buttons — available to all users -->
+        <button
+          class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
+          title="Новая ветка"
+          @click="createNewBranch"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+
         <button
           class="p-1.5 rounded-lg transition-colors"
           :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
@@ -725,7 +736,7 @@ onUnmounted(() => {
         <button
           class="p-1.5 rounded-lg transition-colors"
           :class="showBranches ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-          title="Branch tree"
+          title="Дерево веток"
           @click="toggleBranches"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -737,19 +748,8 @@ onUnmounted(() => {
         </button>
 
         <button
-          class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
-          title="New branch"
-          @click="createNewBranch"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-
-        <button
           class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 transition-colors"
-          title="Delete branch"
+          title="Удалить ветку"
           @click="deleteBranch"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -780,13 +780,13 @@ onUnmounted(() => {
           <!-- Branch Tree -->
           <template v-if="showBranches">
             <div class="px-3 py-2 text-xs font-medium text-stone-400 uppercase tracking-wide">
-              Branch Tree
+              Дерево веток
             </div>
             <div v-if="branchesLoading" class="flex justify-center py-4">
               <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
             <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">
-              No branches yet
+              Пока нет истории диалогов
             </div>
             <div v-else class="pb-2 overflow-x-auto">
               <div class="min-w-max">
@@ -807,7 +807,7 @@ onUnmounted(() => {
                     </svg>
                   </span>
                   <span>{{ node.content_preview || '...' }}</span>
-                  <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">active</span>
+                  <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
                 </button>
               </div>
             </div>
@@ -817,14 +817,14 @@ onUnmounted(() => {
           <template v-if="showContextFiles">
             <div class="px-3 py-2 flex items-center justify-between">
               <span class="text-xs font-medium text-stone-400 uppercase tracking-wide">
-                Context Files ({{ contextFiles.length }})
+                Файлы контекста ({{ contextFiles.length }})
               </span>
               <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">
-                + Add file
+                + Добавить
               </button>
             </div>
             <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-            <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">No files attached</div>
+            <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет прикреплённых файлов</div>
             <div v-else class="pb-2">
               <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
@@ -931,7 +931,7 @@ onUnmounted(() => {
 
           <div v-if="error" class="mx-4 mb-3 p-3 rounded-xl bg-red-900/30 border border-red-800/50 text-red-400 text-sm">
             {{ error }}
-            <button class="ml-2 underline text-xs" @click="error = null">dismiss</button>
+            <button class="ml-2 underline text-xs" @click="error = null">закрыть</button>
           </div>
 
           <template v-if="!isLoading">
@@ -1033,7 +1033,7 @@ onUnmounted(() => {
           <div v-if="branchesLoading" class="flex justify-center py-4">
             <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
-          <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">No branches yet</div>
+          <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">Пока нет истории диалогов</div>
           <div v-else class="flex-1 overflow-y-auto overflow-x-auto pb-2">
             <div class="min-w-max">
               <button
@@ -1053,7 +1053,7 @@ onUnmounted(() => {
                   </svg>
                 </span>
                 <span>{{ node.content_preview || '...' }}</span>
-                <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">active</span>
+                <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
               </button>
             </div>
           </div>
@@ -1063,11 +1063,11 @@ onUnmounted(() => {
         <template v-if="showContextFiles">
           <div class="shrink-0 px-3 py-2 flex justify-end">
             <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">
-              + Add file
+              + Добавить
             </button>
           </div>
           <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-          <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">No files attached</div>
+          <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет прикреплённых файлов</div>
           <div v-else class="flex-1 overflow-y-auto pb-2">
             <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">

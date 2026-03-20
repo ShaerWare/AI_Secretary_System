@@ -35,7 +35,7 @@ async function loadSessions() {
       await autoOpenChat();
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to load";
+    error.value = e instanceof Error ? e.message : "Не удалось загрузить";
   } finally {
     isLoading.value = false;
   }
@@ -77,7 +77,7 @@ async function createNewChat() {
     const data = await chatApi.createSession();
     router.push(`/chat/${data.session.id}`);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to create";
+    error.value = e instanceof Error ? e.message : "Не удалось создать";
   } finally {
     isCreating.value = false;
   }
@@ -85,12 +85,12 @@ async function createNewChat() {
 
 async function deleteSession(id: string, event: Event) {
   event.stopPropagation();
-  if (!confirm("Delete this chat?")) return;
+  if (!confirm("Удалить этот чат?")) return;
   try {
     await chatApi.deleteSession(id);
     sessions.value = sessions.value.filter((s) => s.id !== id);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to delete";
+    error.value = e instanceof Error ? e.message : "Не удалось удалить";
   }
 }
 
@@ -135,7 +135,7 @@ async function sendFromWelcome() {
       router.push(`/chat/${data.session.id}?msg=${encodeURIComponent(text)}`);
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to start chat";
+    error.value = e instanceof Error ? e.message : "Не удалось начать чат";
   } finally {
     isSending.value = false;
   }
@@ -173,7 +173,7 @@ onMounted(loadSessions);
         </div>
         <div v-else-if="error" class="p-4 text-center">
           <p class="text-red-400 text-sm">{{ error }}</p>
-          <button class="mt-2 text-amber-400 text-sm" @click="loadSessions">Retry</button>
+          <button class="mt-2 text-amber-400 text-sm" @click="loadSessions">Повторить</button>
         </div>
         <div v-else-if="!sessions.length" class="flex flex-col items-center justify-center h-64 text-stone-500">
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-3 opacity-50">
@@ -195,11 +195,11 @@ onMounted(loadSessions);
                 <span class="text-xs text-stone-500 shrink-0">{{ formatDate(session.updated) }}</span>
               </div>
               <p class="text-xs text-stone-400 truncate">{{ truncate(session.last_message || "", 80) }}</p>
-              <span class="text-xs text-stone-600">{{ session.message_count }} messages</span>
+              <span class="text-xs text-stone-600">{{ session.message_count }} сообщ.</span>
             </div>
             <button
               class="shrink-0 p-2 rounded-lg text-stone-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-              title="Delete chat"
+              title="Удалить чат"
               @click="deleteSession(session.id, $event)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -262,7 +262,7 @@ onMounted(loadSessions);
           <div v-else-if="error" class="flex-1 flex items-center justify-center text-center">
             <div>
               <p class="text-red-400 text-sm mb-2">{{ error }}</p>
-              <button class="text-amber-400 text-sm" @click="loadSessions">Retry</button>
+              <button class="text-amber-400 text-sm" @click="loadSessions">Повторить</button>
             </div>
           </div>
 

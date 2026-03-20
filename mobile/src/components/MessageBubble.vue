@@ -90,11 +90,11 @@ function cancelEdit() {
           <button
             class="text-xs text-stone-400 hover:text-white px-2 py-1 rounded"
             @click="cancelEdit"
-          >Cancel</button>
+          >Отмена</button>
           <button
             class="text-xs text-amber-400 hover:text-amber-300 bg-amber-600/20 px-2 py-1 rounded"
             @click="saveEdit"
-          >Save</button>
+          >Сохранить</button>
         </div>
       </template>
 
@@ -125,7 +125,7 @@ function cancelEdit() {
           <!-- TTS -->
           <button
             class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
-            :title="isSpeaking ? 'Stop' : 'Speak'"
+            :title="isSpeaking ? 'Стоп' : 'Озвучить'"
             @click="handleSpeak"
           >
             <svg v-if="!isSpeaking" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -142,7 +142,7 @@ function cancelEdit() {
           <button
             class="p-1.5 rounded transition-colors"
             :class="copied ? 'text-green-400' : 'text-stone-500 hover:text-stone-300'"
-            title="Copy"
+            title="Копировать"
             @click="handleCopy"
           >
             <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -157,7 +157,7 @@ function cancelEdit() {
             <!-- Edit -->
             <button
               class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
-              title="Edit"
+              title="Редактировать"
               @click="startEdit"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -168,7 +168,7 @@ function cancelEdit() {
             <!-- Save to context -->
             <button
               class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
-              title="Save to context"
+              title="В контекст"
               @click="$emit('saveToContext', message.id, message.content)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -179,7 +179,7 @@ function cancelEdit() {
             <!-- Summarize branch -->
             <button
               class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
-              title="Summarize branch"
+              title="Суммаризация ветки"
               @click="$emit('summarizeBranch', message.id)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -190,7 +190,7 @@ function cancelEdit() {
             <!-- Delete branch from here -->
             <button
               class="p-1.5 rounded text-stone-500 hover:text-red-400 transition-colors"
-              title="Delete branch"
+              title="Удалить ветку"
               @click="$emit('deleteBranch', message.id)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -207,7 +207,7 @@ function cancelEdit() {
           <!-- TTS -->
           <button
             class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
-            :title="isSpeaking ? 'Stop' : 'Speak'"
+            :title="isSpeaking ? 'Стоп' : 'Озвучить'"
             @click="handleSpeak"
           >
             <svg v-if="!isSpeaking" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -222,7 +222,7 @@ function cancelEdit() {
           <button
             class="p-1.5 rounded transition-colors"
             :class="copied ? 'text-green-400' : 'text-amber-300/50 hover:text-amber-200'"
-            title="Copy"
+            title="Копировать"
             @click="handleCopy"
           >
             <svg v-if="!copied" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -237,7 +237,7 @@ function cancelEdit() {
             <!-- Edit -->
             <button
               class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
-              title="Edit"
+              title="Редактировать"
               @click="startEdit"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -248,7 +248,7 @@ function cancelEdit() {
             <!-- Regenerate response -->
             <button
               class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
-              title="Regenerate response"
+              title="Перегенерировать"
               @click="$emit('regenerate', message.id)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -259,7 +259,7 @@ function cancelEdit() {
             <!-- Summarize branch -->
             <button
               class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
-              title="Summarize branch"
+              title="Суммаризация ветки"
               @click="$emit('summarizeBranch', message.id)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -270,7 +270,7 @@ function cancelEdit() {
             <!-- Delete branch from here -->
             <button
               class="p-1.5 rounded text-amber-300/50 hover:text-red-400 transition-colors"
-              title="Delete branch"
+              title="Удалить ветку"
               @click="$emit('deleteBranch', message.id)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
