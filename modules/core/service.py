@@ -151,9 +151,7 @@ class UserService:
         from modules.core.events import SessionRevoked
 
         try:
-            await get_container().event_bus.publish(
-                SessionRevoked(user_id=user_id, reason=reason)
-            )
+            await get_container().event_bus.publish(SessionRevoked(user_id=user_id, reason=reason))
         except Exception as e:
             logger.warning("Failed to publish SessionRevoked for user %d: %s", user_id, e)
 
@@ -380,9 +378,7 @@ class WorkspaceService:
                     )
                 )
             except Exception as e:
-                logger.warning(
-                    "Failed to publish UserRoleChanged for user %d: %s", user_id, e
-                )
+                logger.warning("Failed to publish UserRoleChanged for user %d: %s", user_id, e)
         return result
 
     async def remove_member(self, workspace_id: int, user_id: int) -> bool:
@@ -400,9 +396,7 @@ class WorkspaceService:
                     SessionRevoked(user_id=user_id, reason="member_removed")
                 )
             except Exception as e:
-                logger.warning(
-                    "Failed to publish SessionRevoked for user %d: %s", user_id, e
-                )
+                logger.warning("Failed to publish SessionRevoked for user %d: %s", user_id, e)
         return result
 
     async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:

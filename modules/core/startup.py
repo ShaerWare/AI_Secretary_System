@@ -202,9 +202,7 @@ async def init_internet_monitor(container, deployment_mode: str) -> None:
         from modules.core.internet_monitor import InternetMonitor
         from modules.llm.startup import create_llm_switch_callback
 
-        internet_monitor = InternetMonitor(
-            event_bus=container.event_bus, check_interval=30
-        )
+        internet_monitor = InternetMonitor(event_bus=container.event_bus, check_interval=30)
         internet_monitor.set_switch_callback(create_llm_switch_callback(container))
         await internet_monitor.start()
         container.internet_monitor = internet_monitor
