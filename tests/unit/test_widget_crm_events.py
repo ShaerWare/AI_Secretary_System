@@ -1,6 +1,6 @@
 """Tests for Widget → CRM event handlers."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from modules.channels.widget.events import (
     WidgetContactSubmitted,
@@ -9,6 +9,7 @@ from modules.channels.widget.events import (
 )
 from modules.core.events import EventBus
 from modules.crm.startup import setup_crm_event_subscriptions
+
 
 # Patch target for amoCRM API functions (lazy-imported as module in handlers)
 _AMO = "app.services.amocrm_service"
