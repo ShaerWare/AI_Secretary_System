@@ -190,7 +190,13 @@ async def setup_event_subscriptions(event_bus) -> None:
 
     event_bus.subscribe(UserRoleChanged, on_user_role_changed)
     event_bus.subscribe(SessionRevoked, on_session_revoked)
-    logger.info("Event subscriptions registered (UserRoleChanged, SessionRevoked)")
+
+    # Domain-specific subscriptions
+    from modules.llm.startup import setup_llm_event_subscriptions
+
+    await setup_llm_event_subscriptions(event_bus)
+
+    logger.info("Event subscriptions registered")
 
 
 async def init_internet_monitor(container, deployment_mode: str) -> None:

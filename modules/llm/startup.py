@@ -208,6 +208,29 @@ def create_llm_switch_callback(container):
     return switch_llm
 
 
+async def setup_llm_event_subscriptions(event_bus) -> None:
+    """Register LLM-domain event handlers."""
+    from modules.knowledge.events import KnowledgeUpdated
+
+    async def on_knowledge_updated(event: KnowledgeUpdated) -> None:
+        """Reload FAQ cache when FAQ entries change."""
+        if event.kind != "faq":
+            return
+
+        from app.dependencies import get_container
+        from modules.knowledge.service import faq_service
+
+        container = get_container()
+        llm_service = container.llm_service
+        if llm_service and hasattr(llm_service, "reload_faq"):
+            faq_dict = await faq_service.get_all()
+            llm_service.reload_faq(faq_dict)
+            logger.info("KnowledgeUpdated handled: FAQ cache reloaded (action=%s)", event.action)
+
+    event_bus.subscribe(KnowledgeUpdated, on_knowledge_updated)
+    logger.info("LLM event subscriptions registered (KnowledgeUpdated)")
+
+
 async def auto_start_bridge() -> None:
     """Auto-start CLI-OpenAI Bridge if any enabled claude_bridge provider exists."""
     from bridge_manager import bridge_manager
