@@ -46,6 +46,7 @@
 ### Интеграции
 * [[Cloud-LLM-Providers]]
 * [[Claude-Code]]
+* [[Vector-Search]]
 * [[VLESS-Proxy]]
 
 ### Безопасность
