@@ -146,7 +146,7 @@ def create_llm_switch_callback(container):
     from db.integration import async_cloud_provider_manager
 
     async def switch_llm(status) -> str:
-        from modules.core.internet_monitor import ConnectivityStatus
+        from modules.core.events import ConnectivityStatus
 
         if status in (ConnectivityStatus.ONLINE, ConnectivityStatus.DEGRADED):
             # Try cloud provider: claude_bridge first, then default, then any enabled

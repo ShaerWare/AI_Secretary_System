@@ -106,13 +106,13 @@ class UserService:
             return result
 
     async def update_password(self, user_id: int, new_password: str) -> bool:
-        """Update user password. Revokes all existing sessions."""
+        """Update user password. Publishes SessionRevoked event."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.update_password(user_id, new_password)
             await session.commit()
         if result:
-            await self._revoke_user_sessions(user_id)
+            await self._publish_session_revoked(user_id, "password_changed")
         return result
 
     async def update_profile(
@@ -126,33 +126,36 @@ class UserService:
             return result
 
     async def set_role(self, user_id: int, role: str) -> bool:
-        """Change user role. Revokes all existing sessions."""
+        """Change user role. Publishes SessionRevoked event."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.set_role(user_id, role)
             await session.commit()
         if result:
-            await self._revoke_user_sessions(user_id)
+            await self._publish_session_revoked(user_id, "role_changed")
         return result
 
     async def set_active(self, user_id: int, active: bool) -> bool:
-        """Enable or disable user. Revokes sessions on deactivation."""
+        """Enable or disable user. Publishes SessionRevoked on deactivation."""
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
             result = await repo.set_active(user_id, active)
             await session.commit()
         if result and not active:
-            await self._revoke_user_sessions(user_id)
+            await self._publish_session_revoked(user_id, "deactivated")
         return result
 
-    async def _revoke_user_sessions(self, user_id: int) -> None:
-        """Revoke all sessions and clear cache for a user."""
-        from auth_manager import revoke_all_user_sessions
+    async def _publish_session_revoked(self, user_id: int, reason: str) -> None:
+        """Publish SessionRevoked event via the global event bus."""
+        from app.dependencies import get_container
+        from modules.core.events import SessionRevoked
 
         try:
-            await revoke_all_user_sessions(user_id)
+            await get_container().event_bus.publish(
+                SessionRevoked(user_id=user_id, reason=reason)
+            )
         except Exception as e:
-            logger.warning(f"Failed to revoke sessions for user {user_id}: {e}")
+            logger.warning("Failed to publish SessionRevoked for user %d: %s", user_id, e)
 
     async def list_users(self, include_inactive: bool = False) -> List[dict]:
         """List all users."""
@@ -357,20 +360,50 @@ class WorkspaceService:
     async def update_member_role(
         self, workspace_id: int, user_id: int, role_name: str
     ) -> Optional[dict]:
-        """Change a member's role."""
+        """Change a member's role. Publishes UserRoleChanged event."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
+            old_role = await repo.get_member_role_name(user_id, workspace_id)
             result = await repo.update_member_role(workspace_id, user_id, role_name)
             await session.commit()
-            return result
+        if result:
+            from app.dependencies import get_container
+            from modules.core.events import UserRoleChanged
+
+            try:
+                await get_container().event_bus.publish(
+                    UserRoleChanged(
+                        user_id=user_id,
+                        workspace_id=workspace_id,
+                        old_role=old_role or "",
+                        new_role=role_name,
+                    )
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to publish UserRoleChanged for user %d: %s", user_id, e
+                )
+        return result
 
     async def remove_member(self, workspace_id: int, user_id: int) -> bool:
-        """Remove a member from workspace."""
+        """Remove a member from workspace. Publishes SessionRevoked event."""
         async with AsyncSessionLocal() as session:
             repo = WorkspaceRepository(session)
             result = await repo.remove_member(workspace_id, user_id)
             await session.commit()
-            return result
+        if result:
+            from app.dependencies import get_container
+            from modules.core.events import SessionRevoked
+
+            try:
+                await get_container().event_bus.publish(
+                    SessionRevoked(user_id=user_id, reason="member_removed")
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to publish SessionRevoked for user %d: %s", user_id, e
+                )
+        return result
 
     async def get_workspace_owner_id(self, workspace_id: int) -> Optional[int]:
         """Get the owner_id for a workspace."""

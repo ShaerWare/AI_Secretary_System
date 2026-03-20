@@ -9,10 +9,8 @@ from pydantic import BaseModel, Field
 from app.rate_limiter import limit_auth
 from auth_manager import (
     User,
-    _member_role_cache,
     create_session,
     require_permission,
-    revoke_all_user_sessions,
 )
 from modules.core.service import role_service, user_service, workspace_service
 from modules.monitoring.service import audit_service
@@ -96,9 +94,6 @@ async def update_member_role(
     if not result:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    # Invalidate cached permissions
-    _member_role_cache.invalidate_user(user_id)
-
     await audit_service.log(
         action="update",
         resource="workspace_member",
@@ -128,13 +123,6 @@ async def remove_member(
     removed = await workspace_service.remove_member(ws_id, user_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Member not found")
-
-    # Revoke sessions and clear cache
-    _member_role_cache.invalidate_user(user_id)
-    try:
-        await revoke_all_user_sessions(user_id)
-    except Exception:
-        pass  # best-effort
 
     await audit_service.log(
         action="delete",
