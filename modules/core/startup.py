@@ -192,9 +192,11 @@ async def setup_event_subscriptions(event_bus) -> None:
     event_bus.subscribe(SessionRevoked, on_session_revoked)
 
     # Domain-specific subscriptions
+    from modules.crm.startup import setup_crm_event_subscriptions
     from modules.knowledge.startup import setup_knowledge_event_subscriptions
     from modules.llm.startup import setup_llm_event_subscriptions
 
+    await setup_crm_event_subscriptions(event_bus)
     await setup_knowledge_event_subscriptions(event_bus)
     await setup_llm_event_subscriptions(event_bus)
 
