@@ -233,6 +233,7 @@ async def startup_event():
         await auto_start_bridge()
 
         # Register background tasks via TaskRegistry
+        from modules.channels.startup import watch_bot_processes
         from modules.core.maintenance import cleanup_expired_sessions, periodic_vacuum
         from modules.ecommerce.tasks import woocommerce_daily_sync
         from modules.kanban.tasks import sync_kanban_issues
@@ -245,6 +246,9 @@ async def startup_event():
             "kanban-sync", sync_kanban_issues, interval=15 * 60, initial_delay=60
         )
         task_registry.register("woocommerce-sync", woocommerce_daily_sync)
+        task_registry.register(
+            "bot-process-watcher", watch_bot_processes, interval=30, initial_delay=15
+        )
 
         await task_registry.start_all()
         logger.info("✅ Основные сервисы загружены успешно")
