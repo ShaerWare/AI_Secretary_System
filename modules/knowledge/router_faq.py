@@ -1,6 +1,8 @@
 # app/routers/faq.py
 """FAQ management router - CRUD operations for FAQ entries."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +11,8 @@ from auth_manager import User, require_permission, workspace_context
 from modules.knowledge.service import faq_service
 from modules.monitoring.service import audit_service
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/faq", tags=["faq"])
 
@@ -22,13 +26,16 @@ class AdminFAQTestRequest(BaseModel):
     text: str
 
 
-async def _reload_llm_faq():
-    """Загружает FAQ из БД и обновляет LLM сервис."""
-    container = get_container()
-    llm_service = container.llm_service
-    if llm_service and hasattr(llm_service, "reload_faq"):
-        faq_dict = await faq_service.get_all()
-        llm_service.reload_faq(faq_dict)
+async def _publish_knowledge_updated(action: str, item_id: int | None = None) -> None:
+    """Publish KnowledgeUpdated event for FAQ changes."""
+    from modules.knowledge.events import KnowledgeUpdated
+
+    try:
+        await get_container().event_bus.publish(
+            KnowledgeUpdated(kind="faq", action=action, item_id=item_id)
+        )
+    except Exception as e:
+        logger.warning("Failed to publish KnowledgeUpdated: %s", e)
 
 
 @router.get("")
@@ -56,8 +63,7 @@ async def admin_add_faq(
         details={"response": request.response[:100]},
     )
 
-    # Перезагружаем FAQ в LLM сервисе из БД
-    await _reload_llm_faq()
+    await _publish_knowledge_updated("created")
 
     return {"status": "ok", "trigger": request.trigger}
 
@@ -83,7 +89,7 @@ async def admin_update_faq(
         details={"old_trigger": trigger, "response": request.response[:100]},
     )
 
-    await _reload_llm_faq()
+    await _publish_knowledge_updated("updated")
 
     return {"status": "ok", "trigger": request.trigger}
 
@@ -100,7 +106,7 @@ async def admin_delete_faq(trigger: str, user: User = Depends(require_permission
         action="delete", resource="faq", resource_id=trigger, user_id=user.username
     )
 
-    await _reload_llm_faq()
+    await _publish_knowledge_updated("deleted")
 
     return {"status": "ok", "deleted": trigger}
 
@@ -108,7 +114,7 @@ async def admin_delete_faq(trigger: str, user: User = Depends(require_permission
 @router.post("/reload")
 async def admin_reload_faq(user: User = Depends(require_permission("faq", "edit"))):
     """Перезагрузить FAQ из БД"""
-    await _reload_llm_faq()
+    await _publish_knowledge_updated("reloaded")
     container = get_container()
     llm_service = container.llm_service
     faq_count = len(llm_service.faq) if llm_service and hasattr(llm_service, "faq") else 0
