@@ -135,15 +135,15 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phase 4 complete: all 28 routers migrated (Phase 3), all inline endpoints extracted (Phase 4.1–4.5), all background tasks via `TaskRegistry` (Phase 4.6), all startup helpers + service init extracted to domain `startup.py` modules, global service variables removed (Phase 4.7a/b). Phase 5 (EventBus events) and Phase 6 (protocol interfaces) pending.
+Foundation layer for modular decomposition (issue #489). Phase 4 complete: all 28 routers migrated (Phase 3), all inline endpoints extracted (Phase 4.1–4.5), all background tasks via `TaskRegistry` (Phase 4.6), all startup helpers + service init extracted to domain `startup.py` modules, global service variables removed (Phase 4.7a/b). Phase 5.1 complete (EventBus infrastructure + first events). Phase 5.2–5.6 and Phase 6 (protocol interfaces) pending.
 
-- **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp.
+- **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp. Singleton in `ServiceContainer.event_bus`. Domain events: `InternetStatusChanged`, `UserRoleChanged`, `SessionRevoked`. Subscriptions registered via `setup_event_subscriptions()` in `modules/core/startup.py`.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error. 6 tasks registered in `startup_event()`: `session-cleanup` (1h), `periodic-vacuum` (7d), `kanban-sync` (15min), `woocommerce-sync` (daily 23:00 UTC), `wiki-embeddings` (one-shot), `wiki-collection-indexes` (one-shot). Task functions in `modules/core/maintenance.py`, `modules/knowledge/tasks.py`, `modules/kanban/tasks.py`, `modules/ecommerce/tasks.py`.
 - **`HealthRegistry`** (`modules/core/health.py`): Modular health checks with per-check timeout (`asyncio.wait_for`). Status aggregation: all ok → ok, any degraded → degraded, any error → error.
 
-- **`InternetMonitor`** (`modules/core/internet_monitor.py`): Periodic connectivity checker (ping DNS/Cloudflare). Auto-switches LLM backend: online → cloud provider (claude_bridge priority), offline → local vLLM. Publishes `InternetStatusChanged` events via EventBus. Configurable thresholds, 30s default interval. Status endpoint: `GET /admin/gsm/internet-status`. Health check includes `internet` section.
+- **`InternetMonitor`** (`modules/core/internet_monitor.py`): Periodic connectivity checker (ping DNS/Cloudflare). Auto-switches LLM backend: online → cloud provider (claude_bridge priority), offline → local vLLM. Publishes `InternetStatusChanged` events via EventBus (`container.event_bus`). Configurable thresholds, 30s default interval. Status endpoint: `GET /admin/gsm/internet-status`. Health check includes `internet` section.
 
-Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`.
+Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`, `HealthRegistry`, `HealthStatus`, `UserRoleChanged`, `SessionRevoked`.
 
 ### Domain Services (`modules/*/service.py`)
 
@@ -212,7 +212,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **`orchestrator.py`** (~320 lines): FastAPI entry point — **pure wiring**, zero domain logic. No inline endpoints (Phase 4.1–4.5), no raw `asyncio.create_task()` (Phase 4.6), no helper functions (Phase 4.7a), no global service variables (Phase 4.7b). Contains only: imports, CORS/middleware, declarative router registration (~28 routers), `startup_event()` (calls domain init functions + registers tasks), `shutdown_event()` (delegates to `graceful_shutdown()`), static file serving, Vite dev proxy. All service initialization in domain `startup.py` modules: `modules/speech/startup.py` (TTS/STT), `modules/llm/startup.py` (LLM + fallback chain + InternetMonitor callback), `modules/knowledge/startup.py` (Wiki RAG + embeddings), `modules/core/startup.py` (seed, monitor, shutdown), `modules/telephony/startup.py` (GSM), `modules/channels/{telegram,whatsapp}/startup.py` (bot auto-start).
 
-**`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services — the **single source of truth** for service state (no global variables). Routers get services via FastAPI `Depends`. Populated during app startup by domain `init_*()` functions. Runtime mutations (LLM backend switch) write directly to container.
+**`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services — the **single source of truth** for service state (no global variables). Includes `event_bus: EventBus` singleton for inter-module events. Routers get services via FastAPI `Depends`. Populated during app startup by domain `init_*()` functions. Runtime mutations (LLM backend switch) write directly to container.
 
 **Two service layers**: Core AI services at project root (`cloud_llm_service.py`, `vllm_llm_service.py`, `voice_clone_service.py`, `stt_service.py`, etc.). Domain services in `app/services/` (`amocrm_service.py`, `wiki_rag_service.py`, `backup_service.py`, `sales_funnel.py`, etc.).
 

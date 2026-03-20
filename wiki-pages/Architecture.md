@@ -61,10 +61,12 @@
 
 ```
 modules/core/
-├── __init__.py      ← реэкспорт EventBus, TaskRegistry, HealthRegistry
-├── events.py        ← EventBus + BaseEvent
+├── __init__.py      ← реэкспорт EventBus, TaskRegistry, HealthRegistry, UserRoleChanged, SessionRevoked
+├── events.py        ← EventBus + BaseEvent + domain events (ConnectivityStatus, InternetStatusChanged, UserRoleChanged, SessionRevoked)
 ├── tasks.py         ← TaskRegistry + TaskInfo
-└── health.py        ← HealthRegistry + HealthStatus
+├── health.py        ← HealthRegistry + HealthStatus
+├── startup.py       ← seed, setup_event_subscriptions(), init_internet_monitor, graceful_shutdown
+└── internet_monitor.py  ← InternetMonitor (imports events from events.py)
 ```
 
 ### Импорт
@@ -112,6 +114,20 @@ async def on_user_created(event: UserCreated):
 bus.subscribe(UserCreated, on_user_created)
 await bus.publish(UserCreated(user_id=42, username="alice"))
 ```
+
+**Инфраструктура (Phase 5.1):**
+
+- **Singleton:** `ServiceContainer.event_bus` (`app/dependencies.py`) — доступен через `get_container().event_bus`
+- **Подписки:** регистрируются в `setup_event_subscriptions()` (`modules/core/startup.py`), вызывается при старте до инициализации сервисов
+- **Каноническое место для событий:** `modules/core/events.py` (core events) и `modules/{domain}/events.py` (domain events)
+
+**Действующие события:**
+
+| Событие | Файл | Издатель | Подписчик |
+|---------|------|----------|-----------|
+| `InternetStatusChanged` | `modules/core/events.py` | `InternetMonitor` | — (GSM, future) |
+| `UserRoleChanged` | `modules/core/events.py` | `WorkspaceService.update_member_role()` | `on_user_role_changed` → cache invalidation + session revocation |
+| `SessionRevoked` | `modules/core/events.py` | `UserService` (password/role/deactivation), `WorkspaceService.remove_member()` | `on_session_revoked` → cache invalidation + session revocation |
 
 ---
 
@@ -614,19 +630,103 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 
 **Результат:** orchestrator.py: 1121 → 1030 строк (−91). Удалены `asyncio`, `datetime`, `timedelta` из импортов.
 
+### Phase 4.7a: Startup helpers → modules/*/startup.py + graceful shutdown
+
+> **Статус:** реализовано (PR [#583](https://github.com/ShaerWare/AI_Secretary_System/pull/583), issue [#580](https://github.com/ShaerWare/AI_Secretary_System/issues/580))
+
+Извлечение 8 helper-функций из `orchestrator.py` в доменные `startup.py` модули + добавление graceful shutdown.
+
+**Новые файлы:**
+
+| Файл | Функции |
+|------|---------|
+| `modules/core/startup.py` | `seed_system_roles()`, `seed_default_workspace()` |
+| `modules/llm/startup.py` | `get_or_create_default_gemini_provider()`, `auto_start_bridge()` |
+| `modules/channels/telegram/startup.py` | `auto_start_bots()` |
+| `modules/channels/whatsapp/startup.py` | `auto_start_bots()` |
+| `modules/knowledge/startup.py` | `reload_llm_faq(container)` |
+| `modules/speech/startup.py` | `reload_voice_presets(container)` |
+
+**Ключевые решения:**
+- `reload_llm_faq` и `reload_voice_presets` принимают `container` как аргумент (вместо глобальных переменных), вызываются после заполнения контейнера
+- Graceful shutdown в `shutdown_event()`: `multi_bot_manager.stop_all()`, `whatsapp_manager.stop_all()`, `bridge_manager.stop()` — каждый в try/except
+- 5 неиспользуемых импортов удалены из `db.integration`
+
+**Результат:** orchestrator.py: 1030 → 805 строк (−225, −22%).
+
+### Phase 4.7b: Модульная инициализация сервисов + удаление глобалов
+
+> **Статус:** реализовано (PR [#585](https://github.com/ShaerWare/AI_Secretary_System/pull/585), issue [#581](https://github.com/ShaerWare/AI_Secretary_System/issues/581))
+
+Вынос всей inline-инициализации сервисов из `startup_event()` в доменные startup-модули. Удаление 8 глобальных переменных — `ServiceContainer` стал единственным источником правды.
+
+**Новые/расширенные файлы:**
+
+| Файл | Функции |
+|------|---------|
+| `modules/speech/startup.py` | `init_tts_services(deployment_mode)`, `init_stt_service()`, `init_streaming_tts_manager()` |
+| `modules/llm/startup.py` | `init_llm_service(llm_backend)` → (service, backend), `create_llm_switch_callback(container)` |
+| `modules/knowledge/startup.py` | `init_wiki_rag(container, deployment_mode, task_registry)` |
+| `modules/core/startup.py` | `init_internet_monitor(container, deployment_mode)`, `check_legacy_files()`, `graceful_shutdown()` |
+| `modules/telephony/startup.py` | `init_gsm_services(container, deployment_mode)` |
+
+**Ключевые решения:**
+- `_switch_llm` callback переделан в фабрику замыканий `create_llm_switch_callback(container)` — записывает только в `container.llm_service` и `os.environ["LLM_BACKEND"]`, глобальные переменные не используются
+- Optional imports (`VLLM_AVAILABLE`, `PIPER_AVAILABLE`, `XTTS_AVAILABLE`, `OPENVOICE_AVAILABLE`) перенесены в соответствующие domain startup модули
+- `init_tts_services()` возвращает dict с ключами, совпадающими с атрибутами `ServiceContainer`
+- `init_llm_service()` возвращает кортеж `(service, updated_backend)` для обновления `os.environ`
+
+**Удалённые глобальные переменные:** `voice_service`, `anna_voice_service`, `piper_service`, `openvoice_service`, `stt_service`, `llm_service`, `streaming_tts_manager`, `current_voice_config`.
+
+**Результат:** orchestrator.py: 805 → 321 строку (−60%). Чистый wiring: импорты, middleware, регистрация роутеров, вызовы доменных init-функций, static files.
+
+---
+
+## Phase 5: EventBus-события
+
+### Phase 5.1: Инфраструктура EventBus + UserRoleChanged / SessionRevoked
+
+> **Статус:** реализовано (PR [#623](https://github.com/ShaerWare/AI_Secretary_System/pull/623), issue [#617](https://github.com/ShaerWare/AI_Secretary_System/issues/617))
+
+Первая реализация EventBus-паттерна в продакшене: инфраструктура (singleton в контейнере, setup_event_subscriptions) + два реальных события.
+
+**Инфраструктура:**
+- `event_bus: EventBus` добавлен в `ServiceContainer` (`app/dependencies.py`)
+- `setup_event_subscriptions(event_bus)` в `modules/core/startup.py` — вызывается в `orchestrator.py` startup, регистрирует обработчики
+- `InternetMonitor` теперь получает `container.event_bus` (раньше `None`)
+- `ConnectivityStatus` и `InternetStatusChanged` перенесены из `internet_monitor.py` в `modules/core/events.py`
+
+**События:**
+
+| Событие | Издатель | Обработчик |
+|---------|----------|------------|
+| `UserRoleChanged` | `WorkspaceService.update_member_role()` | `_member_role_cache.invalidate_user()` + `revoke_all_user_sessions()` |
+| `SessionRevoked` | `UserService.update_password()`, `set_role()`, `set_active()`, `WorkspaceService.remove_member()` | `_member_role_cache.invalidate_user()` + `revoke_all_user_sessions()` |
+
+**Что убрано:**
+- Прямые вызовы `_member_role_cache.invalidate_user()` и `revoke_all_user_sessions()` из `router_workspace.py`
+- Прямой вызов `auth_manager.revoke_all_user_sessions()` из `UserService._revoke_user_sessions()`
+- Метод `UserService._revoke_user_sessions()` заменён на `_publish_session_revoked()`
+
+**Конвенция для следующих Phase 5.x:**
+- События определяются в `modules/{domain}/events.py` (или `modules/core/events.py` для core)
+- Подписки регистрируются в `setup_events()` функции в `startup.py` домена
+- Издатель получает bus через `get_container().event_bus` (lazy import)
+
 ---
 
 ## Тесты
 
-24 unit-теста для core-инфраструктуры:
+30 unit-тестов для core-инфраструктуры:
 
 ```bash
-pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/test_health_registry.py -v
+pytest tests/unit/test_event_bus.py tests/unit/test_event_subscriptions.py tests/unit/test_task_registry.py tests/unit/test_health_registry.py -v
 ```
 
 | Файл | Тестов | Что покрывает |
 |------|--------|---------------|
-| `test_event_bus.py` | 8 | publish/subscribe, error isolation, type filtering, clear |
+| `test_event_bus.py` | 11 | publish/subscribe, error isolation, type filtering, clear, UserRoleChanged, SessionRevoked |
+| `test_event_subscriptions.py` | 3 | setup_event_subscriptions wiring — cache invalidation + session revocation via events |
 | `test_task_registry.py` | 8 | periodic/one-shot, cancel, errors, initial_delay, list |
 | `test_health_registry.py` | 8 | aggregation (ok/degraded/error), timeout, exceptions |
 
@@ -643,8 +743,8 @@ pytest tests/unit/test_event_bus.py tests/unit/test_task_registry.py tests/unit/
 | **1** | Разделение `db/models.py` → доменные модули | [#491](https://github.com/ShaerWare/AI_Secretary_System/issues/491) | ✅ Завершена |
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
-| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | 🔄 4.1 ✅ 4.2 ✅ 4.3 ✅ 4.4 ✅ 4.5 ✅ 4.6 ✅ |
-| **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | ⏳ |
+| **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ✅ Завершена (4.1–4.7b) |
+| **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | 🔄 5.1 ✅ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
 ### Ключевые ограничения
