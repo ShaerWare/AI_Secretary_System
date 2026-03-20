@@ -37,6 +37,16 @@ Default login: admin / admin. Guest demo: demo / demo (read-only).
 
 **Deploy gotcha**: Vite deletes and recreates `admin/dist/` (new inode), breaking Docker bind mounts. Always `docker compose restart` after `npm run build`.
 
+### Mobile App
+
+```bash
+cd mobile && npm install     # First-time setup
+cd mobile && npm run build   # Production build (vue-tsc type-check + vite build)
+cd mobile && npm run dev     # Dev server
+cd mobile && npx cap sync android  # Sync web assets to Android project
+cd mobile && npx cap open android  # Open in Android Studio → Build APK
+```
+
 ### User Management
 
 ```bash
@@ -115,7 +125,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                  Orchestrator (port 8002)                     │
-│  orchestrator.py + app/routers/ (21 routers, ~371 endpoints) │
+│  orchestrator.py + modules/*/router*.py (~28 routers)        │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │        Vue 3 Admin Panel (24 views, PWA)                │  │
 │  │                admin/dist/                              │  │
@@ -269,6 +279,8 @@ New routers import domain services directly (`from modules.monitoring.service im
 - ~77KB gzipped (vs ~2MB admin)
 
 **Build**: `cd mobile && npm run build && npx cap sync android`. APK via Android Studio: `npx cap open android` → Build → Build APK.
+
+**No lint/format/test** — mobile app has only `dev`, `build`, `preview` scripts. Type checking happens during `npm run build` via `vue-tsc -b`.
 
 ## Code Patterns
 
