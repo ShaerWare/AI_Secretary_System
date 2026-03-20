@@ -713,20 +713,47 @@ from modules.kanban.service import kanban_service as async_kanban_manager
 - Подписки регистрируются в `setup_events()` функции в `startup.py` домена
 - Издатель получает bus через `get_container().event_bus` (lazy import)
 
+### Phase 5.2: KnowledgeUpdated event — FAQ cache reload
+
+> **Статус:** реализовано (PR [#625](https://github.com/ShaerWare/AI_Secretary_System/pull/625), issue [#618](https://github.com/ShaerWare/AI_Secretary_System/issues/618))
+
+Развязка доменов `knowledge` и `llm`: FAQ-роутер публикует `KnowledgeUpdated` событие, LLM-домен подписывается и перезагружает FAQ-кеш.
+
+**Новый файл:** `modules/knowledge/events.py`
+
+```python
+@dataclass
+class KnowledgeUpdated(BaseEvent):
+    kind: str = ""      # "faq", "wiki", "collection"
+    action: str = ""    # "created", "updated", "deleted", "reloaded"
+    item_id: int | None = None
+```
+
+| Событие | Издатель | Обработчик |
+|---------|----------|------------|
+| `KnowledgeUpdated(kind="faq")` | FAQ CRUD в `router_faq.py` (add, update, delete, reload) | `setup_llm_event_subscriptions()` → reload FAQ cache в LLM service |
+
+**Ключевые решения:**
+- Startup FAQ reload (`modules/knowledge/startup.py:reload_llm_faq`) остаётся прямым вызовом — надёжность при инициализации
+- Обработчик живёт в `modules/llm/startup.py` (рядом с LLM логикой), вызывается из `setup_event_subscriptions()`
+- `/reload` и `/test` endpoints по-прежнему читают `container.llm_service` напрямую (view-layer, не coupling)
+- Event generic — в будущем wiki/collection updates могут переиспользовать `KnowledgeUpdated`
+
 ---
 
 ## Тесты
 
-30 unit-тестов для core-инфраструктуры:
+33 unit-теста для core-инфраструктуры:
 
 ```bash
-pytest tests/unit/test_event_bus.py tests/unit/test_event_subscriptions.py tests/unit/test_task_registry.py tests/unit/test_health_registry.py -v
+pytest tests/unit/test_event_bus.py tests/unit/test_event_subscriptions.py tests/unit/test_knowledge_events.py tests/unit/test_task_registry.py tests/unit/test_health_registry.py -v
 ```
 
 | Файл | Тестов | Что покрывает |
 |------|--------|---------------|
 | `test_event_bus.py` | 11 | publish/subscribe, error isolation, type filtering, clear, UserRoleChanged, SessionRevoked |
 | `test_event_subscriptions.py` | 3 | setup_event_subscriptions wiring — cache invalidation + session revocation via events |
+| `test_knowledge_events.py` | 3 | KnowledgeUpdated → FAQ reload, non-faq ignored, event fields |
 | `test_task_registry.py` | 8 | periodic/one-shot, cancel, errors, initial_delay, list |
 | `test_health_registry.py` | 8 | aggregation (ok/degraded/error), timeout, exceptions |
 
@@ -744,7 +771,7 @@ pytest tests/unit/test_event_bus.py tests/unit/test_event_subscriptions.py tests
 | **2** | Разделение `db/integration.py` → доменные сервисы + фасад | [#492](https://github.com/ShaerWare/AI_Secretary_System/issues/492) | ✅ Завершена (#501, #502, #503) |
 | **3** | Перенос роутеров в доменные модули | [#493](https://github.com/ShaerWare/AI_Secretary_System/issues/493) | ✅ Завершена (#508 ✅, #509 ✅, #510 ✅, #511 ✅, #512 ✅, #513 ✅, #514) |
 | **4** | Декомпозиция `orchestrator.py` | [#494](https://github.com/ShaerWare/AI_Secretary_System/issues/494) | ✅ Завершена (4.1–4.7b) |
-| **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | 🔄 5.1 ✅ |
+| **5** | Внедрение EventBus-событий | [#495](https://github.com/ShaerWare/AI_Secretary_System/issues/495) | 🔄 5.1 ✅ 5.2 ✅ |
 | **6** | Протокольные интерфейсы | [#496](https://github.com/ShaerWare/AI_Secretary_System/issues/496) | ⏳ |
 
 ### Ключевые ограничения
