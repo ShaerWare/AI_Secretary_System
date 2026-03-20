@@ -159,6 +159,40 @@ def check_legacy_files() -> None:
         logger.warning("=" * 60)
 
 
+async def setup_event_subscriptions(event_bus) -> None:
+    """Register event handlers for UserRoleChanged and SessionRevoked."""
+    from modules.core.events import SessionRevoked, UserRoleChanged
+
+    async def on_user_role_changed(event: UserRoleChanged) -> None:
+        """Invalidate caches and revoke sessions on role change."""
+        from auth_manager import _member_role_cache, revoke_all_user_sessions
+
+        _member_role_cache.invalidate_user(event.user_id)
+        await revoke_all_user_sessions(event.user_id)
+        logger.info(
+            "UserRoleChanged handled: user=%d role=%s->%s",
+            event.user_id,
+            event.old_role,
+            event.new_role,
+        )
+
+    async def on_session_revoked(event: SessionRevoked) -> None:
+        """Revoke all sessions and invalidate caches for a user."""
+        from auth_manager import _member_role_cache, revoke_all_user_sessions
+
+        _member_role_cache.invalidate_user(event.user_id)
+        await revoke_all_user_sessions(event.user_id)
+        logger.info(
+            "SessionRevoked handled: user=%d reason=%s",
+            event.user_id,
+            event.reason,
+        )
+
+    event_bus.subscribe(UserRoleChanged, on_user_role_changed)
+    event_bus.subscribe(SessionRevoked, on_session_revoked)
+    logger.info("Event subscriptions registered (UserRoleChanged, SessionRevoked)")
+
+
 async def init_internet_monitor(container, deployment_mode: str) -> None:
     """Initialize Internet Monitor + LLM auto-switching (GPU/full mode only)."""
     if deployment_mode == "cloud":
@@ -168,7 +202,7 @@ async def init_internet_monitor(container, deployment_mode: str) -> None:
         from modules.core.internet_monitor import InternetMonitor
         from modules.llm.startup import create_llm_switch_callback
 
-        internet_monitor = InternetMonitor(check_interval=30)
+        internet_monitor = InternetMonitor(event_bus=container.event_bus, check_interval=30)
         internet_monitor.set_switch_callback(create_llm_switch_callback(container))
         await internet_monitor.start()
         container.internet_monitor = internet_monitor

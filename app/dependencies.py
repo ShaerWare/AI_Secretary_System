@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from modules.core.events import EventBus
+
 
 if TYPE_CHECKING:
     from typing import Any
@@ -28,6 +30,9 @@ class ServiceContainer:
     """
 
     def __init__(self):
+        # Event bus (singleton, available to all services)
+        self.event_bus: EventBus = EventBus()
+
         # TTS services
         self.voice_service: VoiceCloneService | None = None  # XTTS Марина
         self.anna_voice_service: VoiceCloneService | None = None  # XTTS Анна

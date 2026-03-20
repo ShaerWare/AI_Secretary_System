@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from modules.core.events import BaseEvent, EventBus
+from modules.core.events import BaseEvent, EventBus, SessionRevoked, UserRoleChanged
 
 
 @dataclass
@@ -122,3 +122,46 @@ async def test_multiple_publishes():
     await bus.publish(SampleEvent(value="second"))
 
     assert received == ["first", "second"]
+
+
+# ---------------------------------------------------------------------------
+# Domain event tests
+# ---------------------------------------------------------------------------
+
+
+async def test_user_role_changed_event():
+    bus = EventBus()
+    received = []
+
+    async def handler(event: UserRoleChanged):
+        received.append((event.user_id, event.old_role, event.new_role))
+
+    bus.subscribe(UserRoleChanged, handler)
+    await bus.publish(
+        UserRoleChanged(user_id=1, workspace_id=1, old_role="viewer", new_role="admin")
+    )
+    assert received == [(1, "viewer", "admin")]
+
+
+async def test_session_revoked_event():
+    bus = EventBus()
+    received = []
+
+    async def handler(event: SessionRevoked):
+        received.append((event.user_id, event.reason))
+
+    bus.subscribe(SessionRevoked, handler)
+    await bus.publish(SessionRevoked(user_id=42, reason="password_changed"))
+    assert received == [(42, "password_changed")]
+
+
+async def test_user_role_changed_does_not_trigger_session_revoked():
+    bus = EventBus()
+    revoked = []
+
+    async def handler(event: SessionRevoked):
+        revoked.append(event.user_id)
+
+    bus.subscribe(SessionRevoked, handler)
+    await bus.publish(UserRoleChanged(user_id=1, new_role="admin"))
+    assert revoked == []

@@ -182,6 +182,12 @@ async def startup_event():
 
         # Populate service container
         container = get_container()
+
+        # Wire up event subscriptions before any service starts publishing
+        from modules.core.startup import setup_event_subscriptions
+
+        await setup_event_subscriptions(container.event_bus)
+
         container.voice_service = tts_result["voice_service"]
         container.anna_voice_service = tts_result["anna_voice_service"]
         container.piper_service = tts_result["piper_service"]

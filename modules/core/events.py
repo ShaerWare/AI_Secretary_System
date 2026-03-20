@@ -7,6 +7,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Awaitable, Callable, TypeVar
 
 
@@ -20,6 +21,46 @@ class BaseEvent:
     """Base class for all events. Subclass with domain-specific fields."""
 
     timestamp: float = field(default_factory=time.time)
+
+
+# ---------------------------------------------------------------------------
+# Domain events
+# ---------------------------------------------------------------------------
+
+
+class ConnectivityStatus(str, Enum):
+    """Internet connectivity status for InternetMonitor."""
+
+    ONLINE = "online"
+    OFFLINE = "offline"
+    DEGRADED = "degraded"  # internet works but LLM provider unreachable
+
+
+@dataclass
+class InternetStatusChanged(BaseEvent):
+    """Emitted when internet connectivity status changes."""
+
+    status: ConnectivityStatus = ConnectivityStatus.OFFLINE
+    previous_status: ConnectivityStatus = ConnectivityStatus.OFFLINE
+    llm_backend: str = ""  # current active backend after switch
+
+
+@dataclass
+class UserRoleChanged(BaseEvent):
+    """Emitted when a user's role is changed (workspace or legacy)."""
+
+    user_id: int = 0
+    workspace_id: int = 0
+    old_role: str = ""
+    new_role: str = ""
+
+
+@dataclass
+class SessionRevoked(BaseEvent):
+    """Emitted when all sessions for a user should be revoked."""
+
+    user_id: int = 0
+    reason: str = ""  # "password_changed", "deactivated", "member_removed"
 
 
 class EventBus:

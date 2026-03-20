@@ -13,33 +13,17 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from modules.core.events import BaseEvent
+from modules.core.events import ConnectivityStatus, InternetStatusChanged
 
 
 if TYPE_CHECKING:
     from modules.core.events import EventBus
 
 logger = logging.getLogger(__name__)
-
-
-class ConnectivityStatus(str, Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
-    DEGRADED = "degraded"  # internet works but LLM provider unreachable
-
-
-@dataclass
-class InternetStatusChanged(BaseEvent):
-    """Emitted when internet connectivity status changes."""
-
-    status: ConnectivityStatus = ConnectivityStatus.OFFLINE
-    previous_status: ConnectivityStatus = ConnectivityStatus.OFFLINE
-    llm_backend: str = ""  # current active backend after switch
 
 
 @dataclass
