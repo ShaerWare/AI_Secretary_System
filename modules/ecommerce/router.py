@@ -13,6 +13,10 @@ from modules.knowledge.service import knowledge_collection_service, knowledge_do
 from modules.monitoring.service import audit_service
 
 
+# knowledge_collection_service and knowledge_doc_service are used only for
+# read-only dataset-status queries; mutations go through DatasetSynced events.
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/woocommerce", tags=["woocommerce"])
@@ -164,23 +168,24 @@ async def wc_dataset_status(user: User = Depends(require_permission("sales", "vi
 @router.delete("/dataset")
 async def wc_dataset_clear(user: User = Depends(require_permission("sales", "manage"))):
     """Clear WooCommerce dataset."""
-    collection = await knowledge_collection_service.get_by_slug(WC_COLLECTION_SLUG)
-    if collection:
-        # Remove DB records
-        docs = await knowledge_doc_service.get_by_collection(collection["id"])
-        for doc in docs:
-            await knowledge_doc_service.delete(doc["id"])
-
-        # Clear RAG index
-        from app.dependencies import get_container
-
-        container = get_container()
-        wiki_rag = container.wiki_rag_service
-        if wiki_rag:
-            wiki_rag.reload_collection(collection["id"], [], WC_DIR)
-
     # Remove files
     removed = clean_wc_files()
+
+    # Publish DatasetSynced(cleared) — knowledge domain handles DB + RAG
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
+
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="woocommerce",
+                collection_slug=WC_COLLECTION_SLUG,
+                action="cleared",
+                base_dir=str(WC_DIR),
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced(cleared): %s", e)
 
     # Reset config counts
     await woocommerce_service.save_config(

@@ -20,7 +20,6 @@ from app.services.woocommerce_service import (
     get_categories,
 )
 from modules.ecommerce.service import woocommerce_service
-from modules.knowledge.service import knowledge_collection_service, knowledge_doc_service
 
 
 logger = logging.getLogger(__name__)
@@ -115,44 +114,47 @@ async def run_woocommerce_sync() -> dict:
     (WC_DIR / summary_filename).write_text(summary_content, encoding="utf-8")
     written_files.append((summary_filename, summary_content, "WooCommerce: Сводка"))
 
-    # 5. Ensure "woocommerce" collection exists
-    collection = await knowledge_collection_service.get_by_slug(WC_COLLECTION_SLUG)
-    if not collection:
-        collection = await knowledge_collection_service.create(
-            name=WC_COLLECTION_NAME,
-            slug=WC_COLLECTION_SLUG,
-            description="Товары, категории и заказы из WooCommerce магазина (автосинхронизация)",
-            enabled=True,
-            base_dir="data/woocommerce-dataset",
-        )
-    collection_id = collection["id"]
+    # 5. Publish DatasetSynced event — knowledge domain handles DB + RAG
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
 
-    # 6. Remove old DB records, create new ones
-    existing_docs = await knowledge_doc_service.get_by_collection(collection_id)
-    for doc in existing_docs:
-        await knowledge_doc_service.delete(doc["id"])
-
+    documents = []
     for filename, content, title in written_files:
         sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
-        await knowledge_doc_service.create(
-            filename=filename,
-            title=title,
-            source_type="woocommerce",
-            file_size_bytes=len(content.encode("utf-8")),
-            section_count=sections,
-            collection_id=collection_id,
+        documents.append(
+            {
+                "filename": filename,
+                "title": title,
+                "source_type": "woocommerce",
+                "file_size_bytes": len(content.encode("utf-8")),
+                "section_count": sections,
+            }
         )
 
-    # 7. Re-index the collection in WikiRAG
-    from app.dependencies import get_container
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="woocommerce",
+                collection_slug=WC_COLLECTION_SLUG,
+                action="synced",
+                collection_name=WC_COLLECTION_NAME,
+                collection_description=(
+                    "Товары, категории и заказы из WooCommerce магазина (автосинхронизация)"
+                ),
+                base_dir=str(WC_DIR),
+                documents=documents,
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced: %s", e)
 
-    container = get_container()
-    wiki_rag = container.wiki_rag_service
-    if wiki_rag:
-        filenames = [f[0] for f in written_files]
-        wiki_rag.reload_collection(collection_id, filenames, WC_DIR)
+    # Resolve collection_id for response (read-only)
+    from modules.knowledge.service import knowledge_collection_service
 
-    # 8. Update config with counts
+    collection = await knowledge_collection_service.get_by_slug(WC_COLLECTION_SLUG)
+    collection_id = collection["id"] if collection else None
+
+    # 6. Update config with counts
     await woocommerce_service.save_config(
         products_count=len(all_products),
         categories_count=len(all_categories),

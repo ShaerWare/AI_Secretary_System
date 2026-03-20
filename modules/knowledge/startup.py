@@ -1,10 +1,112 @@
-"""Knowledge domain startup: FAQ reload + Wiki RAG init."""
+"""Knowledge domain startup: FAQ reload, Wiki RAG init, event subscriptions."""
 
 import logging
 from functools import partial
+from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+
+
+async def setup_knowledge_event_subscriptions(event_bus) -> None:
+    """Register knowledge-domain event handlers."""
+    from modules.core.events import DatasetSynced
+
+    async def on_dataset_synced(event: DatasetSynced) -> None:
+        """Sync knowledge DB records and RAG index after dataset files are written."""
+        from modules.knowledge.service import knowledge_collection_service, knowledge_doc_service
+
+        if event.action == "synced":
+            await _handle_dataset_sync(event, knowledge_collection_service, knowledge_doc_service)
+        elif event.action == "cleared":
+            await _handle_dataset_clear(event, knowledge_collection_service, knowledge_doc_service)
+        else:
+            logger.warning("DatasetSynced: unknown action=%s", event.action)
+
+    event_bus.subscribe(DatasetSynced, on_dataset_synced)
+    logger.info("Knowledge event subscriptions registered (DatasetSynced)")
+
+
+async def _handle_dataset_sync(event, collection_svc, doc_svc) -> None:
+    """Create/update knowledge collection and document records, reload RAG."""
+    collection = await collection_svc.get_by_slug(event.collection_slug)
+    if not collection:
+        collection = await collection_svc.create(
+            name=event.collection_name,
+            slug=event.collection_slug,
+            description=event.collection_description,
+            enabled=True,
+            base_dir=event.base_dir,
+        )
+    collection_id = collection["id"]
+
+    # Remove old document records
+    existing_docs = await doc_svc.get_by_collection(collection_id)
+    for doc in existing_docs:
+        await doc_svc.delete(doc["id"])
+
+    # Create new document records
+    for doc_info in event.documents:
+        await doc_svc.create(
+            filename=doc_info["filename"],
+            title=doc_info["title"],
+            source_type=doc_info["source_type"],
+            file_size_bytes=doc_info.get("file_size_bytes", 0),
+            section_count=doc_info.get("section_count", 0),
+            collection_id=collection_id,
+        )
+
+    # Reload RAG index
+    from app.dependencies import get_container
+
+    container = get_container()
+    wiki_rag = container.wiki_rag_service
+    if wiki_rag:
+        filenames = [d["filename"] for d in event.documents]
+        wiki_rag.reload_collection(collection_id, filenames, Path(event.base_dir))
+
+    logger.info(
+        "DatasetSynced handled: source=%s slug=%s docs=%d",
+        event.source,
+        event.collection_slug,
+        len(event.documents),
+    )
+
+
+async def _handle_dataset_clear(event, collection_svc, doc_svc) -> None:
+    """Remove knowledge document records and unload RAG index."""
+    collection = await collection_svc.get_by_slug(event.collection_slug)
+    if not collection:
+        return
+
+    collection_id = collection["id"]
+
+    # Delete document records
+    docs = await doc_svc.get_by_collection(collection_id)
+    for doc in docs:
+        await doc_svc.delete(doc["id"])
+
+    # Unload/clear RAG index
+    from app.dependencies import get_container
+
+    container = get_container()
+    wiki_rag = container.wiki_rag_service
+    if wiki_rag:
+        if event.delete_collection:
+            wiki_rag.unload_collection(collection_id)
+        else:
+            wiki_rag.reload_collection(collection_id, [], Path(event.base_dir))
+
+    # Delete collection record if requested
+    if event.delete_collection:
+        await collection_svc.delete(collection_id)
+
+    logger.info(
+        "DatasetSynced(cleared) handled: source=%s slug=%s delete_collection=%s",
+        event.source,
+        event.collection_slug,
+        event.delete_collection,
+    )
 
 
 async def reload_llm_faq(container) -> None:

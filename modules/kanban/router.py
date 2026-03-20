@@ -16,6 +16,10 @@ from modules.knowledge.service import knowledge_collection_service, knowledge_do
 from modules.monitoring.service import audit_service
 
 
+# knowledge_collection_service and knowledge_doc_service are used only for
+# read-only dataset-status queries; mutations go through DatasetSynced events.
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/kanban", tags=["kanban"])
@@ -514,52 +518,43 @@ async def dataset_sync(
     (project_dir / summary_filename).write_text(summary, encoding="utf-8")
     documents.append((summary_filename, f"{project.name}: Сводка", summary))
 
-    # Auto-create or find collection
-    collection = None
-    existing_collections = await knowledge_collection_service.get_all()
-    for col in existing_collections:
-        if col.get("slug") == slug:
-            collection = col
-            break
+    # Publish DatasetSynced event — knowledge domain handles DB + RAG
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
 
-    if not collection:
-        collection = await knowledge_collection_service.create(
-            name=f"Kanban: {project.name}",
-            slug=slug,
-            description=f"Задачи: {project.github_owner}/{project.github_repo}",
-            enabled=True,
-            base_dir=str(project_dir),
-        )
-
-    collection_id = collection["id"]
-
-    # Clear existing documents for this collection
-    existing_docs = await knowledge_doc_service.get_by_collection(collection_id)
-    for doc in existing_docs:
-        await knowledge_doc_service.delete(doc["id"])
-
-    # Create new knowledge document records
+    doc_infos = []
     total_sections = 0
     for filename, title, content in documents:
         sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
         total_sections += sections
-        await knowledge_doc_service.create(
-            filename=filename,
-            title=title,
-            source_type="kanban",
-            file_size_bytes=len(content.encode("utf-8")),
-            section_count=sections,
-            collection_id=collection_id,
+        doc_infos.append(
+            {
+                "filename": filename,
+                "title": title,
+                "source_type": "kanban",
+                "file_size_bytes": len(content.encode("utf-8")),
+                "section_count": sections,
+            }
         )
 
-    # Reload RAG index
-    from app.dependencies import get_container
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="kanban",
+                collection_slug=slug,
+                action="synced",
+                collection_name=f"Kanban: {project.name}",
+                collection_description=f"Задачи: {project.github_owner}/{project.github_repo}",
+                base_dir=str(project_dir),
+                documents=doc_infos,
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced: %s", e)
 
-    container = get_container()
-    wiki_rag = container.wiki_rag_service
-    if wiki_rag:
-        filenames = [d[0] for d in documents]
-        wiki_rag.reload_collection(collection_id, filenames, project_dir)
+    # Resolve collection_id for response (read-only)
+    collection = await knowledge_collection_service.get_by_slug(slug)
+    collection_id = collection["id"] if collection else None
 
     await audit_service.log(
         action="dataset_sync",
@@ -634,36 +629,27 @@ async def dataset_clear(
         raise HTTPException(status_code=404, detail="Project not found")
 
     slug = f"kanban-{project.github_owner}-{project.github_repo}".lower()
-
-    # Find and delete collection
-    existing_collections = await knowledge_collection_service.get_all()
-    collection = None
-    for col in existing_collections:
-        if col.get("slug") == slug:
-            collection = col
-            break
-
-    if collection:
-        collection_id = collection["id"]
-
-        # Delete knowledge documents
-        docs = await knowledge_doc_service.get_by_collection(collection_id)
-        for doc in docs:
-            await knowledge_doc_service.delete(doc["id"])
-
-        # Clear RAG index
-        from app.dependencies import get_container
-
-        container = get_container()
-        wiki_rag = container.wiki_rag_service
-        if wiki_rag:
-            project_dir = get_project_dir(slug)
-            wiki_rag.reload_collection(collection_id, [], project_dir)
-
-        await knowledge_collection_service.delete(collection_id)
+    project_dir = get_project_dir(slug)
 
     # Remove files
     clean_kanban_files(slug)
+
+    # Publish DatasetSynced(cleared) — knowledge domain handles DB + RAG + collection deletion
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
+
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="kanban",
+                collection_slug=slug,
+                action="cleared",
+                base_dir=str(project_dir),
+                delete_collection=True,
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced(cleared): %s", e)
 
     await audit_service.log(
         action="dataset_clear",
