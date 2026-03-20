@@ -33,7 +33,9 @@ async def test_widget_session_created_creates_lead():
             "modules.crm.service.amocrm_service.get_config_with_secrets",
             AsyncMock(return_value=mock_config),
         ),
-        patch(f"{_AMO}.create_lead", AsyncMock(return_value={"_embedded": {"leads": [{"id": 777}]}})) as mock_create,
+        patch(
+            f"{_AMO}.create_lead", AsyncMock(return_value={"_embedded": {"leads": [{"id": 777}]}})
+        ) as mock_create,
         patch(f"{_AMO}.add_note_to_lead", AsyncMock()) as mock_note,
         patch("modules.crm.startup._save_session_field", AsyncMock()) as mock_save,
     ):
