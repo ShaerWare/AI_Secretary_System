@@ -63,6 +63,26 @@ class SessionRevoked(BaseEvent):
     reason: str = ""  # "password_changed", "deactivated", "member_removed"
 
 
+@dataclass
+class DatasetSynced(BaseEvent):
+    """Emitted after CRM/ecommerce/kanban sync writes files to disk.
+
+    Knowledge domain subscribes to create/update DB records and reload RAG index.
+    """
+
+    source: str = ""  # "amocrm" | "woocommerce" | "kanban"
+    collection_slug: str = ""
+    action: str = ""  # "synced" | "cleared"
+    # Collection metadata (used for auto-creation on first sync)
+    collection_name: str = ""
+    collection_description: str = ""
+    base_dir: str = ""
+    # Document list for "synced" action: [{filename, title, source_type, file_size_bytes, section_count}]
+    documents: list = field(default_factory=list)
+    # Whether to delete the collection record on "cleared" (kanban does this)
+    delete_collection: bool = False
+
+
 class EventBus:
     """Simple in-process pub/sub for async event handlers.
 

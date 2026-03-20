@@ -47,6 +47,10 @@ from modules.knowledge.service import knowledge_collection_service, knowledge_do
 from modules.monitoring.service import audit_service
 
 
+# knowledge_collection_service and knowledge_doc_service are used only for
+# read-only dataset-status queries; mutations go through DatasetSynced events.
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/crm", tags=["crm"])
@@ -907,44 +911,43 @@ async def crm_dataset_sync(user: User = Depends(require_permission("sales", "edi
     (CRM_DIR / summary_filename).write_text(summary_content, encoding="utf-8")
     written_files.append((summary_filename, summary_content, "amoCRM: Сводка по сделкам"))
 
-    # 5. Ensure "amoCRM" collection exists
-    collection = await knowledge_collection_service.get_by_slug("amocrm")
-    if not collection:
-        collection = await knowledge_collection_service.create(
-            name="amoCRM",
-            slug="amocrm",
-            description="Данные из amoCRM: сделки, контакты, воронки (автосинхронизация)",
-            enabled=True,
-            base_dir="data/crm-dataset",
-        )
-    collection_id = collection["id"]
+    # 5. Publish DatasetSynced event — knowledge domain handles DB + RAG
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
 
-    # 6. Remove old DB records for CRM docs, create new ones
-    existing_docs = await knowledge_doc_service.get_by_collection(collection_id)
-    for doc in existing_docs:
-        await knowledge_doc_service.delete(doc["id"])
-
+    documents = []
     for filename, content, title in written_files:
         sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
-        await knowledge_doc_service.create(
-            filename=filename,
-            title=title,
-            source_type="amocrm",
-            file_size_bytes=len(content.encode("utf-8")),
-            section_count=sections,
-            collection_id=collection_id,
+        documents.append(
+            {
+                "filename": filename,
+                "title": title,
+                "source_type": "amocrm",
+                "file_size_bytes": len(content.encode("utf-8")),
+                "section_count": sections,
+            }
         )
 
-    # 7. Re-index the collection in WikiRAG
-    from app.dependencies import get_container
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="amocrm",
+                collection_slug="amocrm",
+                action="synced",
+                collection_name="amoCRM",
+                collection_description="Данные из amoCRM: сделки, контакты, воронки (автосинхронизация)",
+                base_dir=str(CRM_DIR),
+                documents=documents,
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced: %s", e)
 
-    container = get_container()
-    wiki_rag = container.wiki_rag_service
-    if wiki_rag:
-        filenames = [f[0] for f in written_files]
-        wiki_rag.reload_collection(collection_id, filenames, CRM_DIR)
+    # Resolve collection_id for response (read-only)
+    collection = await knowledge_collection_service.get_by_slug("amocrm")
+    collection_id = collection["id"] if collection else None
 
-    # 8. Log sync event
+    # 6. Log sync event
     await amocrm_service.log_sync(
         direction="incoming",
         entity_type="dataset",
@@ -1024,18 +1027,20 @@ async def crm_dataset_clear(user: User = Depends(require_permission("sales", "ma
     """Clear CRM dataset — remove files, DB records, and collection index."""
     removed = clean_crm_files()
 
-    collection = await knowledge_collection_service.get_by_slug("amocrm")
-    if collection:
-        docs = await knowledge_doc_service.get_by_collection(collection["id"])
-        for doc in docs:
-            await knowledge_doc_service.delete(doc["id"])
+    from app.dependencies import get_container
+    from modules.core.events import DatasetSynced
 
-        from app.dependencies import get_container
-
-        container = get_container()
-        wiki_rag = container.wiki_rag_service
-        if wiki_rag:
-            wiki_rag.unload_collection(collection["id"])
+    try:
+        await get_container().event_bus.publish(
+            DatasetSynced(
+                source="amocrm",
+                collection_slug="amocrm",
+                action="cleared",
+                base_dir=str(CRM_DIR),
+            )
+        )
+    except Exception as e:
+        logger.warning("Failed to publish DatasetSynced(cleared): %s", e)
 
     return {"status": "ok", "files_removed": len(removed)}
 
