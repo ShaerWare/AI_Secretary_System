@@ -83,6 +83,21 @@ class DatasetSynced(BaseEvent):
     delete_collection: bool = False
 
 
+@dataclass
+class ConfigChanged(BaseEvent):
+    """Emitted when a global config key is updated via ConfigService.
+
+    Subscribers should filter by *namespace* (derived from the key,
+    e.g. ``"widget"``, ``"telegram"``, ``"tts"``) and ignore irrelevant
+    changes.  Handlers must be idempotent.
+    """
+
+    key: str = ""
+    value: Any = None
+    previous_value: Any = None
+    namespace: str = ""  # first segment of dotted key, or key itself
+
+
 class EventBus:
     """Simple in-process pub/sub for async event handlers.
 

@@ -191,6 +191,30 @@ async def setup_event_subscriptions(event_bus) -> None:
     event_bus.subscribe(UserRoleChanged, on_user_role_changed)
     event_bus.subscribe(SessionRevoked, on_session_revoked)
 
+    # Config change audit logging
+    from modules.core.events import ConfigChanged
+    from modules.monitoring.service import audit_service
+
+    async def on_config_changed(event: ConfigChanged) -> None:
+        """Log config changes to audit trail."""
+        await audit_service.log(
+            action="config_changed",
+            resource="config",
+            resource_id=event.key,
+            details={
+                "namespace": event.namespace,
+                "previous_value": event.previous_value,
+                "new_value": event.value,
+            },
+        )
+        logger.info(
+            "ConfigChanged handled: key=%s namespace=%s",
+            event.key,
+            event.namespace,
+        )
+
+    event_bus.subscribe(ConfigChanged, on_config_changed)
+
     # Domain-specific subscriptions
     from modules.channels.startup import setup_channel_event_subscriptions
     from modules.crm.startup import setup_crm_event_subscriptions
