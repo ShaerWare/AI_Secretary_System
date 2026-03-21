@@ -533,9 +533,7 @@ class ConfigService:
         await self._publish_config_changed(key, value, previous_value)
         return result
 
-    async def _publish_config_changed(
-        self, key: str, value: Any, previous_value: Any
-    ) -> None:
+    async def _publish_config_changed(self, key: str, value: Any, previous_value: Any) -> None:
         """Publish ConfigChanged via EventBus if available."""
         try:
             from modules.core.events import ConfigChanged

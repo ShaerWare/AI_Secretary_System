@@ -196,6 +196,4 @@ async def test_config_changed_handler_error_does_not_propagate():
     ):
         await setup_event_subscriptions(bus)
         # Should not raise
-        await bus.publish(
-            ConfigChanged(key="tts", value="new", namespace="tts")
-        )
+        await bus.publish(ConfigChanged(key="tts", value="new", namespace="tts"))
