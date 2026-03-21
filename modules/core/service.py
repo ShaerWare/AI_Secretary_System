@@ -20,6 +20,16 @@ from db.retry import retry_on_busy
 logger = logging.getLogger(__name__)
 
 
+def _get_event_bus():
+    """Return the EventBus from the app container, or None during startup."""
+    try:
+        from app.dependencies import get_container
+
+        return get_container().event_bus
+    except Exception:
+        return None
+
+
 class DatabaseService:
     """Singleton manager for database operations.
     Provides async context managers for repository access.
@@ -513,12 +523,37 @@ class ConfigService:
             return await repo.get_config(key, default)
 
     async def set(self, key: str, value: Any) -> bool:
-        """Set config value."""
+        """Set config value and publish ConfigChanged event."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
+            previous_value = await repo.get_config(key)
             result = await repo.set_config(key, value)
             await session.commit()
-            return result
+
+        await self._publish_config_changed(key, value, previous_value)
+        return result
+
+    async def _publish_config_changed(
+        self, key: str, value: Any, previous_value: Any
+    ) -> None:
+        """Publish ConfigChanged via EventBus if available."""
+        try:
+            from modules.core.events import ConfigChanged
+
+            event_bus = _get_event_bus()
+            if event_bus is None:
+                return
+            namespace = key.split(".", maxsplit=1)[0] if key else ""
+            await event_bus.publish(
+                ConfigChanged(
+                    key=key,
+                    value=value,
+                    previous_value=previous_value,
+                    namespace=namespace,
+                )
+            )
+        except Exception:
+            logger.debug("ConfigChanged publish skipped", exc_info=True)
 
     async def get_telegram(self) -> dict:
         """Get Telegram config."""
@@ -530,9 +565,13 @@ class ConfigService:
         """Set Telegram config."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
+            previous_value = await repo.get_telegram_config()
             result = await repo.set_telegram_config(config)
             await session.commit()
-            return result
+
+        merged = {**previous_value, **config}
+        await self._publish_config_changed("telegram", merged, previous_value)
+        return result
 
     async def get_widget(self) -> dict:
         """Get widget config."""
@@ -544,9 +583,13 @@ class ConfigService:
         """Set widget config."""
         async with AsyncSessionLocal() as session:
             repo = ConfigRepository(session)
+            previous_value = await repo.get_widget_config()
             result = await repo.set_widget_config(config)
             await session.commit()
-            return result
+
+        merged = {**previous_value, **config}
+        await self._publish_config_changed("widget", merged, previous_value)
+        return result
 
 
 class UserIdentityService:
