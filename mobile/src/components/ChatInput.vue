@@ -61,7 +61,7 @@ function removePastedBlock(id: string) {
 
 <template>
   <div
-    class="border-t border-stone-800 bg-stone-950/95 backdrop-blur px-4 py-3 safe-bottom"
+    class="flex-1"
   >
     <!-- Pasted blocks chips -->
     <div v-if="pastedBlocks.length" class="flex flex-wrap gap-2 mb-2">

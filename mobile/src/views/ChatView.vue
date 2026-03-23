@@ -55,6 +55,7 @@ const showLlmDropdown = ref(false);
 const showRagDropdown = ref(false);
 const showExportDropdown = ref(false);
 const customPrompt = ref("");
+const webSearchEnabled = ref(false);
 
 const llmOptions = computed<LlmOption[]>(() => {
   const opts: LlmOption[] = [
@@ -141,11 +142,21 @@ async function loadSession() {
     );
     contextFiles.value = data.session.context_files || [];
     customPrompt.value = data.session.system_prompt || "";
+    webSearchEnabled.value = !!data.session.web_search_enabled;
     await scrollToBottom();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось загрузить";
   } finally {
     isLoading.value = false;
+  }
+}
+
+function toggleWebSearch() {
+  webSearchEnabled.value = !webSearchEnabled.value;
+  if (sessionId.value) {
+    chatApi.updateSession(sessionId.value, {
+      web_search_enabled: webSearchEnabled.value,
+    });
   }
 }
 
@@ -200,7 +211,10 @@ async function sendMessage(content: string) {
           }
           break;
         case "tool_start":
-          streamingContent.value += "\n_Поиск..._\n";
+          streamingContent.value +=
+            chunk.name === "web_search"
+              ? `\n_Поиск в интернете: «${chunk.query || ""}»_\n`
+              : `\n_Поиск по базе знаний: «${chunk.query || ""}»_\n`;
           break;
         case "done":
           isStreaming.value = false;
@@ -992,13 +1006,27 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Input -->
-      <ChatInput
-        :disabled="isLoading"
-        :is-streaming="isStreaming"
-        @send="sendMessage"
-        @stop="stopStreaming"
-      />
+      <!-- Input with web search toggle -->
+      <div class="flex items-end gap-1 px-2 pb-2 pt-1 border-t border-stone-700/50 bg-stone-900/95">
+        <button
+          :class="[
+            'p-2.5 rounded-xl transition-colors shrink-0',
+            webSearchEnabled ? 'bg-blue-500/20 text-blue-400' : 'text-stone-500 hover:text-stone-300'
+          ]"
+          :title="webSearchEnabled ? 'Веб-поиск включён' : 'Веб-поиск выключен'"
+          @click="toggleWebSearch"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        </button>
+        <div class="flex-1">
+          <ChatInput
+            :disabled="isLoading"
+            :is-streaming="isStreaming"
+            @send="sendMessage"
+            @stop="stopStreaming"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Landscape: side panel slides from right -->

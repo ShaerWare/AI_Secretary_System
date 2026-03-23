@@ -1343,6 +1343,17 @@ const messages = {
       profileUpdated: "Профиль обновлён",
       guestReadOnly: "Гостевой аккаунт (только чтение)",
     },
+    google: {
+      connectButton: "Подключить Google",
+      connectDescription: "Подключите Google для доступа к Диску, Документам, Таблицам и Gmail",
+      connectedAs: "Подключён как {email}",
+      disconnect: "Отключить",
+      disconnectTitle: "Отключить Google",
+      disconnectConfirm: "Вы уверены? Доступ к Google Диску, Документам и Gmail будет отключён.",
+      connected: "Google аккаунт подключён",
+      disconnected: "Google аккаунт отключён",
+      connectionFailed: "Не удалось подключить Google",
+    },
   },
   en: {
     // Navigation
@@ -2684,6 +2695,17 @@ const messages = {
       profileUpdated: "Profile updated",
       guestReadOnly: "Guest account (read-only)",
     },
+    google: {
+      connectButton: "Connect Google",
+      connectDescription: "Connect Google for Drive, Docs, Sheets and Gmail access",
+      connectedAs: "Connected as {email}",
+      disconnect: "Disconnect",
+      disconnectTitle: "Disconnect Google",
+      disconnectConfirm: "Are you sure? Access to Google Drive, Docs and Gmail will be revoked.",
+      connected: "Google account connected",
+      disconnected: "Google account disconnected",
+      connectionFailed: "Failed to connect Google",
+    },
   },
   kk: {
     // Navigation
@@ -4024,6 +4046,17 @@ const messages = {
       passwordMismatch: "Құпия сөздер сәйкес емес",
       profileUpdated: "Профиль жаңартылды",
       guestReadOnly: "Қонақ аккаунты (тек оқу)",
+    },
+    google: {
+      connectButton: "Google қосу",
+      connectDescription: "Google Drive, Docs, Sheets және Gmail қол жетімділігі үшін қосыңыз",
+      connectedAs: "{email} ретінде қосылған",
+      disconnect: "Ажырату",
+      disconnectTitle: "Google ажырату",
+      disconnectConfirm: "Сенімдісіз бе? Google Drive, Docs және Gmail қол жетімділігі ажыратылады.",
+      connected: "Google аккаунт қосылды",
+      disconnected: "Google аккаунт ажыратылды",
+      connectionFailed: "Google қосу сәтсіз аяқталды",
     },
   },
 };

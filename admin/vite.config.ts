@@ -2,6 +2,18 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+// API path segments that should be proxied to the orchestrator.
+// Everything else under /admin/ is served by Vite (SPA, HMR, assets).
+const apiSegments = [
+  'auth', 'chat', 'wiki-rag', 'telegram', 'whatsapp', 'widget', 'mobile',
+  'faq', 'roles', 'workspace', 'backup', 'legal', 'llm', 'tts', 'stt',
+  'services', 'voices', 'voice', 'models', 'logs', 'finetune', 'tts-finetune',
+  'gsm', 'kanban', 'claude-code', 'github-webhook', 'github-repos', 'audit',
+  'usage', 'monitor', 'deployment-mode', 'amocrm', 'woocommerce', 'bot-sales',
+  'resource-shares', 'yoomoney', 'google',
+]
+const apiRegex = new RegExp(`^/admin/(${apiSegments.join('|')})(/|$)`)
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const isDemo = env.VITE_DEMO_MODE === 'true'
@@ -19,13 +31,23 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/admin': {
           target: 'http://localhost:8002',
-          changeOrigin: true
+          changeOrigin: true,
+          bypass(req) {
+            // Only proxy known API paths; let Vite handle SPA, assets, HMR
+            if (!req.url || !apiRegex.test(req.url)) {
+              return req.url
+            }
+          }
         },
         '/v1': {
           target: 'http://localhost:8002',
           changeOrigin: true
         },
         '/health': {
+          target: 'http://localhost:8002',
+          changeOrigin: true
+        },
+        '/webhooks': {
           target: 'http://localhost:8002',
           changeOrigin: true
         }

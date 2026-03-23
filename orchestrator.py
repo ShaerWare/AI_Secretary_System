@@ -57,6 +57,7 @@ from app.routers import (  # noqa: E402
     faq,
     github_repos,
     github_webhook,
+    google,
     gsm,
     kanban,
     legal,
@@ -111,6 +112,8 @@ for _r in _ALWAYS_ROUTERS:
     app.include_router(_r.router)
 app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
+app.include_router(google.callback_router)  # Must be before static mount
+app.include_router(google.router)
 app.include_router(health_router)
 app.include_router(compat_router)
 app.include_router(logs_router)
@@ -292,7 +295,7 @@ if DEV_MODE:
                 return Response(
                     content=resp.content, status_code=resp.status_code, headers=dict(resp.headers)
                 )
-            except httpx.ConnectError:
+            except (httpx.ConnectError, httpx.ReadTimeout):
                 return Response(
                     content=b"Vite dev server not running. Start with: cd admin && npm run dev",
                     status_code=503,
