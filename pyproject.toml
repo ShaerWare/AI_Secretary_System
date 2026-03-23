@@ -116,7 +116,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__
-"tests/*" = ["ARG", "PLR"]  # allow unused args and complexity in tests
+"tests/*" = ["ARG", "PLR", "TCH"]  # allow unused args, complexity, and runtime type imports in tests
 "finetune/*" = ["ERA"]  # allow commented code in finetune scripts
 "app/*" = ["UP"]  # allow Optional[X] style in routers (compatibility)
 
