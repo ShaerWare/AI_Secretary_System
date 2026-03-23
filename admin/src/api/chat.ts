@@ -59,6 +59,7 @@ export interface ChatSession {
   owner_id?: number | null
   rag_mode?: string | null
   knowledge_collection_ids?: number[] | null
+  web_search_enabled?: boolean
   created: string
   updated: string
   sibling_info?: Record<string, SiblingInfo>
@@ -136,7 +137,7 @@ export const chatApi = {
       source_id: sourceId,
     }),
 
-  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[]; rag_mode?: string; knowledge_collection_ids?: number[] }) =>
+  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[]; rag_mode?: string; knowledge_collection_ids?: number[]; web_search_enabled?: boolean }) =>
     api.put<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`, data),
 
   deleteSession: (sessionId: string) =>

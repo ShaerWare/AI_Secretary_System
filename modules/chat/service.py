@@ -97,6 +97,7 @@ class ChatService:
         knowledge_collection_id: Optional[int] = None,
         knowledge_collection_ids: Optional[list[int]] = None,
         context_files: Optional[list] = None,
+        web_search_enabled: Optional[bool] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
         async with AsyncSessionLocal() as session:
@@ -110,6 +111,7 @@ class ChatService:
                 knowledge_collection_id=knowledge_collection_id,
                 knowledge_collection_ids=knowledge_collection_ids,
                 context_files=context_files,
+                web_search_enabled=web_search_enabled,
             )
             await session.commit()
             return result
