@@ -1,9 +1,16 @@
-"""Knowledge domain background tasks: Wiki RAG embeddings and collection indexes."""
+"""Knowledge domain background tasks: Wiki RAG embeddings, collection indexes, vector search sync."""
+
+from __future__ import annotations
 
 import asyncio
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+
+if TYPE_CHECKING:
+    from app.services.vector_search_client import VectorSearchClient
+    from app.services.wiki_rag_service import WikiRAGService
 
 logger = logging.getLogger(__name__)
 
@@ -35,3 +42,68 @@ async def load_collection_indexes(wiki_rag) -> None:
             loaded += 1
     if loaded:
         logger.info(f"📚 Wiki RAG: загружено {loaded} коллекционных индексов")
+
+
+async def sync_vector_search(wiki_rag: WikiRAGService, vs_client: VectorSearchClient) -> None:
+    """Full sync: upsert all sections from all collections into Vector Search."""
+    from db.integration import async_knowledge_collection_manager
+
+    # Check connectivity
+    health = await vs_client.health()
+    if not health:
+        logger.warning("Vector Search: service unavailable, skipping sync")
+        return
+
+    total_upserted = 0
+
+    # Sync per-collection indexes
+    collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
+    for col in collections:
+        slug = col.get("slug", str(col["id"]))
+        count = await sync_collection_to_vector_search(wiki_rag, vs_client, col["id"], slug)
+        total_upserted += count
+
+    # Sync global index
+    for section in wiki_rag.sections:
+        text = f"{section.title}\n{section.body}"
+        await vs_client.upsert(
+            text=text,
+            doc_id=section.source_file,
+            group="default",
+            metadata={"title": section.title, "source_file": section.source_file},
+        )
+        total_upserted += 1
+
+    logger.info("✅ Vector Search sync: %d sections upserted", total_upserted)
+
+
+async def sync_collection_to_vector_search(
+    wiki_rag: WikiRAGService,
+    vs_client: VectorSearchClient,
+    collection_id: int,
+    collection_slug: str,
+) -> int:
+    """Sync a single collection's sections to Vector Search. Returns upsert count."""
+    group = collection_slug or str(collection_id)
+    idx = wiki_rag._collection_indexes.get(collection_id)
+    if not idx:
+        return 0
+
+    count = 0
+    for section in idx.sections:
+        text = f"{section.title}\n{section.body}"
+        await vs_client.upsert(
+            text=text,
+            doc_id=section.source_file,
+            group=group,
+            metadata={"title": section.title, "source_file": section.source_file},
+        )
+        count += 1
+
+    logger.info(
+        "Vector Search: synced %d sections for collection %s (slug=%s)",
+        count,
+        collection_id,
+        group,
+    )
+    return count

@@ -54,6 +54,9 @@ class ServiceContainer:
         # Wiki RAG service
         self.wiki_rag_service = None
 
+        # Vector Search client (HTTP → microservice)
+        self.vector_search_client = None
+
         # Current voice configuration
         self.current_voice_config = {
             "engine": "xtts",
@@ -133,3 +136,8 @@ def get_streaming_tts_manager():
 def get_gsm_service():
     """Dependency: Get GSM telephony service."""
     return get_container().gsm_service
+
+
+def get_vector_search_client():
+    """Dependency: Get Vector Search microservice client."""
+    return get_container().vector_search_client

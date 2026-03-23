@@ -96,6 +96,19 @@ async def health_check():
     if container.streaming_tts_manager is not None:
         result["streaming_tts_stats"] = container.streaming_tts_manager.get_stats()
 
+    # Vector Search status
+    vs_client = container.vector_search_client
+    if vs_client is not None:
+        try:
+            vs_health = await vs_client.health()
+            result["vector_search"] = {
+                "status": "ok" if vs_health else "unavailable",
+                "url": vs_client.base_url,
+                **(vs_health if vs_health else {}),
+            }
+        except Exception:
+            result["vector_search"] = {"status": "unavailable", "url": vs_client.base_url}
+
     # Internet monitor status
     im = getattr(container, "internet_monitor", None)
     if im is not None:

@@ -95,6 +95,9 @@ services:
       - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-}
       # amoCRM proxy (run scripts/amocrm_proxy.py on host)
       - AMOCRM_PROXY=${AMOCRM_PROXY:-}
+      # Vector Search microservice
+      - VECTOR_SEARCH_URL=${VECTOR_SEARCH_URL:-}
+      - VECTOR_SEARCH_TOKEN=${VECTOR_SEARCH_TOKEN:-}
       # TTS
       - COQUI_TOS_AGREED=1
       - TTS_CACHE_PATH=/root/.local/share/tts
@@ -183,11 +186,37 @@ services:
     networks:
       - ai-secretary
 
+  # ---------------------------------------------------------------------------
+  # Vector Search - Semantic Search Microservice (optional)
+  # ---------------------------------------------------------------------------
+  # Start with: docker compose --profile vector-search up -d
+  vector-search:
+    build: ./services/vector-search
+    container_name: ai-secretary-vector-search
+    profiles: ["vector-search"]
+    ports:
+      - "8003:8000"
+    environment:
+      - VECTOR_SEARCH_TOKEN=${VECTOR_SEARCH_TOKEN:-}
+    volumes:
+      - vector_search_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - ai-secretary
+
 # =============================================================================
 # Volumes
 # =============================================================================
 volumes:
   redis_data:
+    driver: local
+  vector_search_data:
     driver: local
 
 # =============================================================================

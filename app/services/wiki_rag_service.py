@@ -26,6 +26,7 @@ import snowballstemmer
 
 if TYPE_CHECKING:
     from app.services.embedding_provider import BaseEmbeddingProvider
+    from app.services.vector_search_client import VectorSearchClient
 
 
 logger = logging.getLogger(__name__)
@@ -176,6 +177,9 @@ class WikiRAGService:
         self._embedding_provider: Optional[BaseEmbeddingProvider] = None
         self._embeddings: dict[str, list[float]] = {}  # section_id → vector
         self._embedding_cache_path = Path("data/wiki_embeddings.json")
+
+        # Vector Search microservice client
+        self._vector_search_client: Optional[VectorSearchClient] = None
 
         if wiki_dir and wiki_dir.exists():
             self._load_and_index(wiki_dir)
@@ -750,6 +754,197 @@ class WikiRAGService:
             )
         return results
 
+    # ---- Vector Search integration ----
+
+    def set_vector_search_client(self, client: VectorSearchClient) -> None:
+        """Set the Vector Search microservice client."""
+        self._vector_search_client = client
+
+    @property
+    def vector_search_available(self) -> bool:
+        """True if vector search client is configured."""
+        return self._vector_search_client is not None
+
+    async def _vector_search_async(
+        self, query: str, top_k: int, collection_slug: str = "default"
+    ) -> list[dict]:
+        """Search via Vector Search microservice. Returns results in standard format."""
+        if not self._vector_search_client:
+            return []
+
+        try:
+            results = await self._vector_search_client.search(
+                text=query, group=collection_slug, limit=top_k, min_similarity=0.3
+            )
+        except Exception as e:
+            logger.warning("Vector Search query failed: %s", e)
+            return []
+
+        output = []
+        for r in results:
+            meta = r.get("metadata", {})
+            output.append(
+                {
+                    "title": meta.get("title", ""),
+                    "body": r.get("text", "")[:500],
+                    "source_file": meta.get("doc_id", meta.get("source_file", "")),
+                    "score": r.get("similarity", 0.0),
+                    "engine": "vector_search",
+                }
+            )
+        return output
+
+    async def search_async(
+        self, query: str, top_k: int = 3, collection_id: Optional[int] = None
+    ) -> list[dict]:
+        """Parallel search across all engines: BM25 + embeddings + vector search.
+
+        Returns deduplicated, merged results sorted by best score.
+        """
+        import asyncio
+
+        # BM25 + embeddings (sync, run in thread)
+        local_results = await asyncio.to_thread(self.search, query, top_k, collection_id)
+
+        # Vector Search (async)
+        collection_slug = "default"
+        if collection_id is not None and collection_id in self._collection_indexes:
+            # Use collection_id as group name
+            collection_slug = str(collection_id)
+
+        vs_results = await self._vector_search_async(query, top_k, collection_slug)
+
+        # Merge and deduplicate
+        return self._merge_results(local_results, vs_results, top_k)
+
+    async def retrieve_async(
+        self,
+        query: str,
+        top_k: int = 3,
+        max_chars: int = 2500,
+        collection_id: Optional[int] = None,
+    ) -> str:
+        """Like retrieve() but includes vector search results.
+
+        Returns formatted markdown context string.
+        """
+        results = await self.search_async(query, top_k, collection_id)
+        if not results:
+            return ""
+
+        return self._format_results(results, max_chars)
+
+    async def retrieve_multi_async(
+        self,
+        query: str,
+        collection_ids: list[int],
+        top_k: int = 3,
+        max_chars: int = 3000,
+    ) -> str:
+        """Like retrieve_multi() but includes vector search results."""
+        import asyncio
+
+        if not collection_ids or not query.strip():
+            return ""
+
+        # BM25 multi-collection (sync)
+        local_results_raw = await asyncio.to_thread(
+            self._retrieve_multi_search, query, collection_ids, top_k
+        )
+
+        # Vector Search across all collection slugs (async)
+        vs_tasks = []
+        for cid in collection_ids:
+            vs_tasks.append(self._vector_search_async(query, top_k, str(cid)))
+
+        vs_all = await asyncio.gather(*vs_tasks)
+        vs_results = [r for batch in vs_all for r in batch]
+
+        merged = self._merge_results(local_results_raw, vs_results, top_k)
+        if not merged:
+            return ""
+
+        return self._format_results(merged, max_chars)
+
+    def _retrieve_multi_search(
+        self, query: str, collection_ids: list[int], top_k: int
+    ) -> list[dict]:
+        """BM25 search across multiple collections. Returns structured results."""
+        query_tokens = self._tokenize(query)
+        if not query_tokens:
+            return []
+
+        all_scored: list[tuple[float, WikiSection]] = []
+        for cid in collection_ids:
+            if cid not in self._collection_indexes:
+                continue
+            cidx = self._collection_indexes[cid]
+            for section in cidx.sections:
+                score = self._bm25_score_with_index(
+                    query_tokens, section, cidx.doc_freqs, cidx.total_docs, cidx.avg_dl
+                )
+                if score >= MIN_SCORE:
+                    all_scored.append((score, section))
+
+        if not all_scored:
+            return []
+
+        all_scored.sort(key=lambda x: x[0], reverse=True)
+        results = []
+        for score, section in all_scored[:top_k]:
+            results.append(
+                {
+                    "title": section.title,
+                    "body": section.body[:500],
+                    "source_file": section.source_file,
+                    "score": round(score, 3),
+                    "engine": "bm25",
+                }
+            )
+        return results
+
+    @staticmethod
+    def _merge_results(local_results: list[dict], vs_results: list[dict], top_k: int) -> list[dict]:
+        """Merge and deduplicate results from multiple engines.
+
+        Deduplicates by (source_file, title), keeping the highest score.
+        """
+        seen: dict[tuple[str, str], dict] = {}
+        for r in local_results + vs_results:
+            key = (r.get("source_file", ""), r.get("title", ""))
+            if key in seen:
+                if r.get("score", 0) > seen[key].get("score", 0):
+                    seen[key] = r
+            else:
+                seen[key] = r
+
+        merged = sorted(seen.values(), key=lambda x: x.get("score", 0), reverse=True)
+        return merged[:top_k]
+
+    @staticmethod
+    def _format_results(results: list[dict], max_chars: int) -> str:
+        """Format search results into markdown context string."""
+        parts: list[str] = ["[Документация по теме:]"]
+        total_chars = len(parts[0])
+
+        for r in results:
+            header_line = f"\n\n## {r['title']} ({r['source_file']})"
+            body = r.get("body", "")
+            available = max_chars - total_chars - len(header_line) - 4
+            if available <= 0:
+                break
+            if len(body) > available:
+                body = body[:available] + "..."
+
+            part = f"{header_line}\n{body}"
+            parts.append(part)
+            total_chars += len(part)
+
+            if total_chars >= max_chars:
+                break
+
+        return "".join(parts) if len(parts) > 1 else ""
+
     def list_source_files(self) -> list[str]:
         """List unique source files in the index."""
         return sorted({s.source_file for s in self.sections})
@@ -769,10 +964,21 @@ class WikiRAGService:
                 "unique_tokens": len(cidx.doc_freqs),
             }
 
+        engine_parts = []
+        if self._embeddings:
+            engine_parts.append("embeddings")
+        engine_parts.append("bm25")
+        if self._vector_search_client:
+            engine_parts.append("vector_search")
+
         return {
-            "engine": "embeddings+bm25" if self._embeddings else "bm25",
+            "engine": "+".join(engine_parts),
             "embedding_engine": embedding_engine,
             "embedding_sections": len(self._embeddings),
+            "vector_search_available": self._vector_search_client is not None,
+            "vector_search_url": (
+                self._vector_search_client.base_url if self._vector_search_client else None
+            ),
             "sections_indexed": len(self.sections),
             "files_indexed": self._files_indexed,
             "unique_tokens": len(self.doc_freqs),

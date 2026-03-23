@@ -141,10 +141,24 @@ def _should_use_agentic_rag(
 
 
 def _execute_knowledge_search(wiki_rag, query: str, collection_ids: list[int]) -> str:
-    """Execute a knowledge base search and return results text."""
+    """Execute a knowledge base search and return results text (sync)."""
     if len(collection_ids) == 1:
         return wiki_rag.retrieve(query, top_k=5, max_chars=3000, collection_id=collection_ids[0])
     return wiki_rag.retrieve_multi(query, collection_ids, top_k=5, max_chars=3000)
+
+
+async def _execute_knowledge_search_async(wiki_rag, query: str, collection_ids: list[int]) -> str:
+    """Execute knowledge search with vector search support (async)."""
+    if not wiki_rag.vector_search_available:
+        import asyncio
+
+        return await asyncio.to_thread(_execute_knowledge_search, wiki_rag, query, collection_ids)
+
+    if len(collection_ids) == 1:
+        return await wiki_rag.retrieve_async(
+            query, top_k=5, max_chars=3000, collection_id=collection_ids[0]
+        )
+    return await wiki_rag.retrieve_multi_async(query, collection_ids, top_k=5, max_chars=3000)
 
 
 def _build_tools(use_agentic: bool, use_web_search: bool) -> list[dict]:
@@ -366,6 +380,59 @@ def _inject_rag_context(
         return f"{base}{rag_instruction}\n{wiki_context}"
 
     # RAG search returned nothing — instruct LLM not to hallucinate
+    no_context_instruction = (
+        "\n\n--- ВАЖНО ---\n"
+        "По данному запросу в базе знаний не найдено релевантной информации. "
+        "НЕ выдумывай ответ. Если ты не уверен в точности информации — "
+        "честно скажи, что не нашёл данных в базе знаний, и предложи "
+        "обратиться к менеджеру или уточнить вопрос.\n"
+    )
+    return f"{base}{no_context_instruction}"
+
+
+async def _inject_rag_context_async(
+    wiki_rag,
+    user_content: str,
+    base_prompt: Optional[str],
+    rag_mode: str,
+    collection_ids: list[int],
+) -> Optional[str]:
+    """Async version of _inject_rag_context — includes vector search results."""
+    if not wiki_rag or not user_content or rag_mode == "none" or not collection_ids:
+        return base_prompt
+
+    if not wiki_rag.vector_search_available:
+        import asyncio
+
+        return await asyncio.to_thread(
+            _inject_rag_context, wiki_rag, user_content, base_prompt, rag_mode, collection_ids
+        )
+
+    if len(collection_ids) == 1:
+        wiki_context = await wiki_rag.retrieve_async(
+            user_content, top_k=7, max_chars=4000, collection_id=collection_ids[0]
+        )
+    else:
+        wiki_context = await wiki_rag.retrieve_multi_async(
+            user_content, collection_ids, top_k=7, max_chars=4000
+        )
+
+    logger.info(
+        f"RAG inject (async): context found={bool(wiki_context)}, "
+        f"len={len(wiki_context) if wiki_context else 0}"
+    )
+
+    base = base_prompt or _DEFAULT_RAG_PROMPT
+    if wiki_context:
+        rag_instruction = (
+            "\n\n--- КОНТЕКСТ ИЗ БАЗЫ ЗНАНИЙ (обязательно к использованию) ---\n"
+            "Ниже приведена релевантная информация из базы знаний. "
+            "ОБЯЗАТЕЛЬНО используй эти данные при ответе. "
+            "Если информация ниже отвечает на вопрос пользователя — ответь на основе неё. "
+            "НЕ выдумывай информацию, которой нет в контексте ниже.\n"
+        )
+        return f"{base}{rag_instruction}\n{wiki_context}"
+
     no_context_instruction = (
         "\n\n--- ВАЖНО ---\n"
         "По данному запросу в базе знаний не найдено релевантной информации. "
@@ -763,7 +830,7 @@ async def admin_send_chat_message(
     use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
-        default_prompt = _inject_rag_context(
+        default_prompt = await _inject_rag_context_async(
             wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
         )
 
@@ -1013,7 +1080,7 @@ async def admin_stream_chat_message(
 
     if not use_agentic:
         # One-shot RAG: inject context into prompt (existing behavior)
-        default_prompt = _inject_rag_context(
+        default_prompt = await _inject_rag_context_async(
             wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
         )
 
@@ -1168,7 +1235,7 @@ async def admin_edit_chat_message(
     use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
-        default_prompt = _inject_rag_context(
+        default_prompt = await _inject_rag_context_async(
             wiki_rag, request.content, default_prompt, rag_mode, collection_ids
         )
 
@@ -1297,7 +1364,7 @@ async def admin_regenerate_chat_response(
     use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
-        default_prompt = _inject_rag_context(
+        default_prompt = await _inject_rag_context_async(
             wiki_rag, user_content, default_prompt, rag_mode, collection_ids
         )
 

@@ -1,6 +1,7 @@
 """Knowledge domain startup: FAQ reload, Wiki RAG init, event subscriptions."""
 
 import logging
+import os
 from functools import partial
 from pathlib import Path
 
@@ -65,6 +66,18 @@ async def _handle_dataset_sync(event, collection_svc, doc_svc) -> None:
         filenames = [d["filename"] for d in event.documents]
         wiki_rag.reload_collection(collection_id, filenames, Path(event.base_dir))
 
+    # Sync to Vector Search if available
+    vs_client = container.vector_search_client
+    if vs_client and wiki_rag:
+        try:
+            from modules.knowledge.tasks import sync_collection_to_vector_search
+
+            await sync_collection_to_vector_search(
+                wiki_rag, vs_client, collection_id, event.collection_slug
+            )
+        except Exception as vs_err:
+            logger.warning("Vector Search sync failed for %s: %s", event.collection_slug, vs_err)
+
     logger.info(
         "DatasetSynced handled: source=%s slug=%s docs=%d",
         event.source,
@@ -96,6 +109,16 @@ async def _handle_dataset_clear(event, collection_svc, doc_svc) -> None:
             wiki_rag.unload_collection(collection_id)
         else:
             wiki_rag.reload_collection(collection_id, [], Path(event.base_dir))
+
+    # Clean up Vector Search
+    vs_client = container.vector_search_client
+    if vs_client and event.delete_collection:
+        try:
+            await vs_client.delete_group(event.collection_slug)
+        except Exception as vs_err:
+            logger.warning(
+                "Vector Search group delete failed for %s: %s", event.collection_slug, vs_err
+            )
 
     # Delete collection record if requested
     if event.delete_collection:
@@ -184,6 +207,25 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
         task_registry.register(
             "wiki-collection-indexes", partial(load_collection_indexes, wiki_rag)
         )
+
+        # Initialize Vector Search client if configured
+        vector_url = os.environ.get("VECTOR_SEARCH_URL", "")
+        vector_token = os.environ.get("VECTOR_SEARCH_TOKEN", "")
+        if vector_url:
+            try:
+                from app.services.vector_search_client import VectorSearchClient
+                from modules.knowledge.tasks import sync_vector_search
+
+                vs_client = VectorSearchClient(base_url=vector_url, token=vector_token)
+                container.vector_search_client = vs_client
+                wiki_rag.set_vector_search_client(vs_client)
+
+                task_registry.register(
+                    "vector-search-sync", partial(sync_vector_search, wiki_rag, vs_client)
+                )
+                logger.info("✅ Vector Search client: %s", vector_url)
+            except Exception as vs_err:
+                logger.warning("⚠️ Vector Search client init failed: %s", vs_err)
 
     except Exception as wiki_err:
         logger.warning(f"⚠️ Wiki RAG service not available: {wiki_err}")

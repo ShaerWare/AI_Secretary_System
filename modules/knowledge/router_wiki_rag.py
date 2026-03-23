@@ -404,14 +404,20 @@ async def wiki_rag_search(
     request: WikiSearchRequest,
     user: User = Depends(require_permission("wiki", "view")),
 ):
-    """Test search: query → scored results. Optionally filter by collection."""
+    """Test search: query → scored results. Uses all available engines including vector search."""
     wiki_rag = _get_wiki_rag()
     if not wiki_rag:
         return {"results": [], "query": request.query}
 
-    results = wiki_rag.search(
-        request.query, top_k=request.top_k, collection_id=request.collection_id
-    )
+    # Use async search if vector search is available
+    if wiki_rag.vector_search_available:
+        results = await wiki_rag.search_async(
+            request.query, top_k=request.top_k, collection_id=request.collection_id
+        )
+    else:
+        results = wiki_rag.search(
+            request.query, top_k=request.top_k, collection_id=request.collection_id
+        )
     return {"results": results, "query": request.query}
 
 
@@ -624,3 +630,50 @@ async def delete_document(doc_id: int, user: User = Depends(require_permission("
     )
 
     return {"status": "ok", "deleted": doc["filename"]}
+
+
+# ---- Vector Search Endpoints ----
+
+
+@router.get("/vector-search/status")
+async def vector_search_status(user: User = Depends(require_permission("wiki", "view"))):
+    """Get Vector Search microservice status."""
+    container = get_container()
+    vs_client = container.vector_search_client
+    if not vs_client:
+        return {"available": False, "message": "Vector Search not configured"}
+
+    health = await vs_client.health()
+    if not health:
+        return {"available": False, "message": "Vector Search service unavailable"}
+
+    return {
+        "available": True,
+        "url": vs_client.base_url,
+        "health": health,
+    }
+
+
+@router.post("/vector-search/sync")
+async def vector_search_sync(user: User = Depends(require_permission("wiki", "manage"))):
+    """Manually trigger full sync of all sections to Vector Search."""
+    container = get_container()
+    vs_client = container.vector_search_client
+    wiki_rag = container.wiki_rag_service
+
+    if not vs_client:
+        raise HTTPException(status_code=503, detail="Vector Search не настроен")
+    if not wiki_rag:
+        raise HTTPException(status_code=503, detail="Wiki RAG сервис не инициализирован")
+
+    from modules.knowledge.tasks import sync_vector_search
+
+    await sync_vector_search(wiki_rag, vs_client)
+
+    await audit_service.log(
+        action="sync",
+        resource="vector_search",
+        user_id=user.username,
+    )
+
+    return {"status": "ok", "message": "Vector Search sync completed"}
