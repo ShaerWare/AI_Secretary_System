@@ -55,6 +55,9 @@ class ChatSession(Base):
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
     knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    web_search_enabled: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True, default=False
+    )
 
     # amoCRM lead tracking (widget → CRM)
     amocrm_lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -84,6 +87,7 @@ class ChatSession(Base):
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
             else None,
+            "web_search_enabled": bool(self.web_search_enabled),
             "amocrm_lead_id": self.amocrm_lead_id,
             "amocrm_contact_id": self.amocrm_contact_id,
             "visitor_metadata": json.loads(self.visitor_metadata)
@@ -114,6 +118,7 @@ class ChatSession(Base):
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
             else None,
+            "web_search_enabled": bool(self.web_search_enabled),
             "amocrm_lead_id": self.amocrm_lead_id,
             "amocrm_contact_id": self.amocrm_contact_id,
             "created": self.created.isoformat() if self.created else None,

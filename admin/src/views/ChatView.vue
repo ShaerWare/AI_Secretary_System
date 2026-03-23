@@ -149,6 +149,7 @@ const inputMessage = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const searchingQuery = ref<string | null>(null)
+const searchingTool = ref<string>('knowledge_search')
 const pendingUserContent = ref<string | null>(null)
 const summarizingMessageId = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
@@ -446,6 +447,7 @@ const selectedLlmBackend = ref<string>(localStorage.getItem('chat-llm-backend') 
 // RAG selection state (per-session, loaded from session data)
 const selectedRagMode = ref<string>('')
 const selectedCollectionIds = ref<number[]>([])
+const webSearchEnabled = ref(false)
 
 // Save voice mode preference
 watch(voiceMode, (val) => {
@@ -475,6 +477,12 @@ function saveRagToSession() {
 }
 watch(selectedRagMode, saveRagToSession)
 watch(selectedCollectionIds, saveRagToSession, { deep: true })
+
+// Save web search toggle to session
+watch(webSearchEnabled, (val) => {
+  if (!currentSessionId.value) return
+  chatApi.updateSession(currentSessionId.value, { web_search_enabled: val })
+})
 
 // Queries
 const { data: sessionsData, refetch: refetchSessions } = useQuery({
@@ -711,6 +719,7 @@ watch(currentSession, (session) => {
     // Load per-session RAG settings
     selectedRagMode.value = session.rag_mode || ''
     selectedCollectionIds.value = session.knowledge_collection_ids || []
+    webSearchEnabled.value = !!session.web_search_enabled
   }
   attachedFiles.value = []
 })
@@ -1146,6 +1155,7 @@ function sendMessage() {
   const stream = chatApi.streamMessage(currentSessionId.value, content, (data) => {
     if (data.type === 'tool_start') {
       searchingQuery.value = data.query || ''
+      searchingTool.value = data.name || 'knowledge_search'
     } else if (data.type === 'tool_end') {
       searchingQuery.value = null
     } else if (data.type === 'chunk' && data.content) {
@@ -2266,6 +2276,20 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
               <span>{{ col.name }}</span>
             </label>
           </div>
+        </div>
+
+        <!-- Web Search toggle (non-CC, admin only) -->
+        <div v-if="!cc.isActive.value && !isChatOnly && currentSessionId" class="shrink-0">
+          <button
+            :class="[
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              webSearchEnabled ? 'bg-blue-500/20 text-blue-400' : 'text-muted-foreground hover:bg-secondary/50'
+            ]"
+            :title="webSearchEnabled ? t('chatView.webSearchOn') : t('chatView.webSearchOff')"
+            @click="webSearchEnabled = !webSearchEnabled"
+          >
+            <Globe class="w-4 h-4" />
+          </button>
         </div>
 
         <!-- Share button (non-CC, owner only, admin only) -->
@@ -3626,7 +3650,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
               <div class="chat-markdown break-words" v-html="renderMarkdown(streamingContent)"></div>
               <div v-if="searchingQuery !== null" class="flex items-center gap-2 text-xs text-muted-foreground mt-2 px-1">
                 <Search class="w-3 h-3 animate-pulse" />
-                <span>{{ t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
+                <span>{{ searchingTool === 'web_search' ? t('chatView.searchingWeb', { query: searchingQuery }) : t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
               </div>
             </div>
           </div>
@@ -3639,7 +3663,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             <div class="claude-message-content">
               <div v-if="searchingQuery !== null" class="flex items-center gap-2 text-xs text-muted-foreground px-1">
                 <Search class="w-3 h-3 animate-pulse" />
-                <span>{{ t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
+                <span>{{ searchingTool === 'web_search' ? t('chatView.searchingWeb', { query: searchingQuery }) : t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
               </div>
               <div v-else class="flex items-center gap-1.5">
                 <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:0ms]"></span>

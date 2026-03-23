@@ -176,6 +176,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         knowledge_collection_id: Optional[int] = None,
         knowledge_collection_ids: Optional[list[int]] = None,
         context_files: Optional[list] = None,
+        web_search_enabled: Optional[bool] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
         result = await self.session.execute(
@@ -213,6 +214,8 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.context_files = (
                 json.dumps(context_files, ensure_ascii=False) if context_files else None
             )
+        if web_search_enabled is not None:
+            session.web_search_enabled = web_search_enabled
         session.updated = datetime.utcnow()
 
         await self.session.flush()

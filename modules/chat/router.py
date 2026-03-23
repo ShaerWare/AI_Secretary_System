@@ -22,6 +22,7 @@ from modules.channels.widget.service import widget_instance_service
 from modules.chat.service import chat_service, chat_share_service
 from modules.knowledge.service import knowledge_collection_service
 from modules.llm.service import cloud_provider_service
+from modules.search.service import web_search_service
 
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ KNOWLEDGE_SEARCH_TOOL = {
         },
     },
 }
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": (
+            "Search the internet for current information. "
+            "Use when the user asks about recent events, prices, weather, news, "
+            "or anything that requires up-to-date data from the web."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query in the language of the user's question.",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+}
 MAX_TOOL_ITERATIONS = 10
 
 # Temporary cache for OCR text from uploaded images (upload → send are two separate requests)
@@ -70,6 +92,12 @@ _AGENTIC_RAG_SUFFIX = (
     "Используй его когда вопрос связан с документацией или требует фактических данных. "
     "Можешь вызвать несколько раз с разными запросами. "
     "Не выдумывай — если не нашёл информацию, честно скажи."
+)
+
+_WEB_SEARCH_SUFFIX = (
+    "\n\nУ тебя есть инструмент web_search для поиска в интернете. "
+    "Используй его когда нужна актуальная информация: новости, цены, погода, "
+    "события, факты. Можешь вызвать несколько раз с разными запросами."
 )
 
 
@@ -83,10 +111,19 @@ def _inject_context_files(prompt: str | None, session: dict) -> str | None:
     return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
 
 
-def _finalize_prompt(prompt: str | None, agentic_rag: bool = False) -> str:
-    """Add suffix to system prompt: agentic RAG instructions or anti-tool-call guard."""
+def _finalize_prompt(
+    prompt: str | None, agentic_rag: bool = False, web_search: bool = False
+) -> str:
+    """Add suffix to system prompt: agentic RAG / web search instructions or anti-tool-call guard."""
     base = prompt or _DEFAULT_RAG_PROMPT
-    return base + (_AGENTIC_RAG_SUFFIX if agentic_rag else _NO_TOOLS_SUFFIX)
+    if not agentic_rag and not web_search:
+        return base + _NO_TOOLS_SUFFIX
+    result = base
+    if agentic_rag:
+        result += _AGENTIC_RAG_SUFFIX
+    if web_search:
+        result += _WEB_SEARCH_SUFFIX
+    return result
 
 
 def _should_use_agentic_rag(
@@ -108,6 +145,53 @@ def _execute_knowledge_search(wiki_rag, query: str, collection_ids: list[int]) -
     if len(collection_ids) == 1:
         return wiki_rag.retrieve(query, top_k=5, max_chars=3000, collection_id=collection_ids[0])
     return wiki_rag.retrieve_multi(query, collection_ids, top_k=5, max_chars=3000)
+
+
+def _build_tools(use_agentic: bool, use_web_search: bool) -> list[dict]:
+    """Build the tools list based on enabled features."""
+    tools: list[dict] = []
+    if use_agentic:
+        tools.append(KNOWLEDGE_SEARCH_TOOL)
+    if use_web_search:
+        tools.append(WEB_SEARCH_TOOL)
+    return tools
+
+
+def _supports_tools(llm_service) -> bool:
+    """Check if the LLM provider supports tool calling."""
+    if getattr(llm_service, "supports_tools", False):
+        return True
+    return hasattr(llm_service, "provider") and getattr(
+        llm_service.provider, "supports_tools", False
+    )
+
+
+def _execute_tool_call(
+    fn_name: str,
+    args: dict,
+    wiki_rag,
+    collection_ids: list[int],
+) -> tuple[str, bool]:
+    """Execute a tool call and return (result_text, found).
+
+    Returns the result text and whether the search found anything.
+    """
+    if fn_name == "knowledge_search":
+        query = args.get("query", "")
+        if not query:
+            return "Пустой поисковый запрос.", False
+        result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+        found = bool(result and result.strip())
+        return result or "Ничего не найдено в базе знаний.", found
+    elif fn_name == "web_search":
+        query = args.get("query", "")
+        if not query:
+            return "Пустой поисковый запрос.", False
+        result = web_search_service.search(query, max_results=5)
+        found = bool(result and "No web results" not in result and "failed" not in result)
+        return result, found
+    else:
+        return f"Неизвестный инструмент: {fn_name}", False
 
 
 def _extract_collection_ids(data: dict) -> list[int]:
@@ -353,6 +437,7 @@ class UpdateSessionRequest(BaseModel):
     knowledge_collection_id: Optional[int] = None
     knowledge_collection_ids: Optional[list[int]] = None
     context_files: Optional[list] = None  # [{"name": str, "content": str}]
+    web_search_enabled: Optional[bool] = None
 
 
 class LLMOverrideConfig(BaseModel):
@@ -588,6 +673,7 @@ async def admin_update_chat_session(
         knowledge_collection_id=request.knowledge_collection_id,
         knowledge_collection_ids=request.knowledge_collection_ids,
         context_files=request.context_files,
+        web_search_enabled=request.web_search_enabled,
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -674,6 +760,7 @@ async def admin_send_chat_message(
     rag_mode, collection_ids = await _resolve_rag_config(session, msg_request.llm_override)
     wiki_rag = container.wiki_rag_service
     use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
         default_prompt = _inject_rag_context(
@@ -684,7 +771,8 @@ async def admin_send_chat_message(
     default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await chat_service.get_messages_for_llm(
-        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+        session_id,
+        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
     )
 
     # Trim to fit context window
@@ -693,9 +781,9 @@ async def admin_send_chat_message(
 
     # Генерируем ответ
     try:
-        if use_agentic:
+        if use_agentic or use_web_search:
             # Agentic RAG loop (non-streaming)
-            tools = [KNOWLEDGE_SEARCH_TOOL]
+            tools = _build_tools(use_agentic, use_web_search)
             loop_messages = list(messages)
             response_text = ""
 
@@ -714,27 +802,17 @@ async def admin_send_chat_message(
 
                 loop_messages.append(result)  # assistant message with tool_calls
                 for tc in tool_calls:
-                    if tc["function"]["name"] != "knowledge_search":
-                        continue
+                    fn_name = tc["function"]["name"]
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
                         logger.warning(
-                            f"Agentic RAG: malformed tool args "
-                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
                         )
                         args = {}
-                    query = args.get("query", "")
-                    if not query:
-                        logger.warning("Agentic RAG: empty search query, skipping iteration")
-                        continue
-                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
                     loop_messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": search_result or "Ничего не найдено в базе знаний.",
-                        }
+                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                     )
         else:
             response_text = llm_service.generate_response_from_messages(messages, stream=False)
@@ -931,6 +1009,7 @@ async def admin_stream_chat_message(
     )
     wiki_rag = container.wiki_rag_service
     use_agentic = _should_use_agentic_rag(active_llm, rag_mode, collection_ids, wiki_rag)
+    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(active_llm)
 
     if not use_agentic:
         # One-shot RAG: inject context into prompt (existing behavior)
@@ -942,7 +1021,8 @@ async def admin_stream_chat_message(
     default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await chat_service.get_messages_for_llm(
-        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+        session_id,
+        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
     )
 
     # Trim to fit context window
@@ -955,9 +1035,9 @@ async def admin_stream_chat_message(
             # Отправляем сообщение пользователя
             yield f"data: {json.dumps({'type': 'user_message', 'message': user_msg}, ensure_ascii=False)}\n\n"
 
-            if use_agentic:
+            if use_agentic or use_web_search:
                 # Agentic RAG loop: LLM decides when to search
-                tools = [KNOWLEDGE_SEARCH_TOOL]
+                tools = _build_tools(use_agentic, use_web_search)
                 loop_messages = list(messages)
 
                 for _iteration in range(MAX_TOOL_ITERATIONS):
@@ -994,32 +1074,23 @@ async def admin_stream_chat_message(
 
                     for tc in tool_calls_result:
                         fn_name = tc["function"]["name"]
-                        if fn_name != "knowledge_search":
-                            continue
                         try:
                             args = json.loads(tc["function"]["arguments"])
                         except json.JSONDecodeError:
                             logger.warning(
-                                f"Agentic RAG: malformed tool args "
-                                f"(likely truncated): {tc['function']['arguments'][:100]}"
+                                f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
                             )
                             args = {}
                         query = args.get("query", "")
-                        if not query:
-                            logger.warning("Agentic RAG: empty search query, skipping iteration")
-                            continue
                         yield f"data: {json.dumps({'type': 'tool_start', 'name': fn_name, 'query': query}, ensure_ascii=False)}\n\n"
 
-                        result = _execute_knowledge_search(wiki_rag, query, collection_ids)
-                        found = bool(result and result.strip())
+                        result_text, found = _execute_tool_call(
+                            fn_name, args, wiki_rag, collection_ids
+                        )
                         yield f"data: {json.dumps({'type': 'tool_end', 'name': fn_name, 'found': found}, ensure_ascii=False)}\n\n"
 
                         loop_messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "content": result or "Ничего не найдено в базе знаний.",
-                            }
+                            {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                         )
             else:
                 # One-shot: existing streaming path
@@ -1094,6 +1165,7 @@ async def admin_edit_chat_message(
     rag_mode, collection_ids = await _resolve_rag_config(session)
     wiki_rag = container.wiki_rag_service
     use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
         default_prompt = _inject_rag_context(
@@ -1104,7 +1176,8 @@ async def admin_edit_chat_message(
     default_prompt = _inject_context_files(default_prompt, session)
 
     messages = await chat_service.get_messages_for_llm(
-        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+        session_id,
+        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
     )
 
     # Trim to fit context window
@@ -1112,8 +1185,8 @@ async def admin_edit_chat_message(
     messages, _ = _trim_and_log(messages, model, session_id)
 
     try:
-        if use_agentic:
-            tools = [KNOWLEDGE_SEARCH_TOOL]
+        if use_agentic or use_web_search:
+            tools = _build_tools(use_agentic, use_web_search)
             loop_messages = list(messages)
             response_text = ""
 
@@ -1130,27 +1203,17 @@ async def admin_edit_chat_message(
                     break
                 loop_messages.append(result)
                 for tc in tool_calls:
-                    if tc["function"]["name"] != "knowledge_search":
-                        continue
+                    fn_name = tc["function"]["name"]
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
                         logger.warning(
-                            f"Agentic RAG: malformed tool args "
-                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
                         )
                         args = {}
-                    query = args.get("query", "")
-                    if not query:
-                        logger.warning("Agentic RAG: empty search query, skipping iteration")
-                        continue
-                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
                     loop_messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": search_result or "Ничего не найдено в базе знаний.",
-                        }
+                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                     )
         else:
             response_text = llm_service.generate_response_from_messages(messages, stream=False)
@@ -1231,6 +1294,7 @@ async def admin_regenerate_chat_response(
     rag_mode, collection_ids = await _resolve_rag_config(session)
     wiki_rag = container.wiki_rag_service
     use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
+    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
     if not use_agentic:
         default_prompt = _inject_rag_context(
@@ -1241,7 +1305,8 @@ async def admin_regenerate_chat_response(
     default_prompt = _inject_context_files(default_prompt, session)
 
     llm_messages = await chat_service.get_messages_for_llm(
-        session_id, _finalize_prompt(default_prompt, agentic_rag=use_agentic)
+        session_id,
+        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
     )
 
     # Trim to fit context window
@@ -1249,8 +1314,8 @@ async def admin_regenerate_chat_response(
     llm_messages, _ = _trim_and_log(llm_messages, model, session_id)
 
     try:
-        if use_agentic:
-            tools = [KNOWLEDGE_SEARCH_TOOL]
+        if use_agentic or use_web_search:
+            tools = _build_tools(use_agentic, use_web_search)
             loop_messages = list(llm_messages)
             response_text = ""
 
@@ -1267,27 +1332,17 @@ async def admin_regenerate_chat_response(
                     break
                 loop_messages.append(result)
                 for tc in tool_calls:
-                    if tc["function"]["name"] != "knowledge_search":
-                        continue
+                    fn_name = tc["function"]["name"]
                     try:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
                         logger.warning(
-                            f"Agentic RAG: malformed tool args "
-                            f"(likely truncated): {tc['function']['arguments'][:100]}"
+                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
                         )
                         args = {}
-                    query = args.get("query", "")
-                    if not query:
-                        logger.warning("Agentic RAG: empty search query, skipping iteration")
-                        continue
-                    search_result = _execute_knowledge_search(wiki_rag, query, collection_ids)
+                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
                     loop_messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": search_result or "Ничего не найдено в базе знаний.",
-                        }
+                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                     )
         else:
             response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
