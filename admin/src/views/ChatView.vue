@@ -2278,20 +2278,6 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </div>
         </div>
 
-        <!-- Web Search toggle (non-CC, admin only) -->
-        <div v-if="!cc.isActive.value && !isChatOnly && currentSessionId" class="shrink-0">
-          <button
-            :class="[
-              'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-              webSearchEnabled ? 'bg-blue-500/20 text-blue-400' : 'text-muted-foreground hover:bg-secondary/50'
-            ]"
-            :title="webSearchEnabled ? t('chatView.webSearchOn') : t('chatView.webSearchOff')"
-            @click="webSearchEnabled = !webSearchEnabled"
-          >
-            <Globe class="w-4 h-4" />
-          </button>
-        </div>
-
         <!-- Share button (non-CC, owner only, admin only) -->
         <div v-if="!cc.isActive.value && !isChatOnly && isSessionOwner && !isSharedWithMe" class="relative shrink-0">
           <button
@@ -3241,6 +3227,18 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
           ]"
         >
+          <!-- Web search toggle -->
+          <button
+            v-if="currentSessionId && !isReadOnly"
+            :class="[
+              'p-3 rounded-lg transition-colors shrink-0',
+              webSearchEnabled ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+            ]"
+            :title="webSearchEnabled ? t('chatView.webSearchOn') : t('chatView.webSearchOff')"
+            @click="webSearchEnabled = !webSearchEnabled"
+          >
+            <Globe class="w-5 h-5" />
+          </button>
           <textarea
             ref="messageInputRef"
             v-model="inputMessage"
