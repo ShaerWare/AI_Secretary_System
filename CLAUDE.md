@@ -15,6 +15,7 @@ AI Secretary System — virtual secretary with voice cloning (XTTS v2, OpenVoice
 cp .env.docker.example .env && docker compose up -d          # GPU mode
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d  # CPU mode
 docker compose -f docker-compose.yml -f docker-compose.full.yml up -d # Full containerized (includes vLLM)
+docker compose --profile vector-search up -d                 # + Vector Search microservice (:8003)
 
 # Local
 ./start_gpu.sh              # GPU: XTTS + Qwen2.5-7B + LoRA
@@ -238,7 +239,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `db/models.py`. Supports model fallback via `fallback_models` list. `supports_tools` flag + `generate_with_tools()` on `OpenAICompatibleProvider` and `VLLMLLMService` for tool-calling (agentic RAG).
 
-**Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming. Multi-collection support. Per-instance RAG config on bots/widgets. **Agentic RAG** (`modules/chat/router.py`): server-side loop where LLM calls `knowledge_search` tool to query the knowledge base on demand (max 5 iterations). Providers without `supports_tools` (Gemini SDK) fall back to one-shot RAG injection. Frontend shows inline search indicator via `tool_start`/`tool_end` SSE events.
+**Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming, (3) Vector Search microservice (if `VECTOR_SEARCH_URL` configured). Multi-collection support. Per-instance RAG config on bots/widgets. **Agentic RAG** (`modules/chat/router.py`): server-side loop where LLM calls `knowledge_search` tool to query the knowledge base on demand (max 5 iterations). Providers without `supports_tools` (Gemini SDK) fall back to one-shot RAG injection. Frontend shows inline search indicator via `tool_start`/`tool_end` SSE events. **Vector Search** (`services/vector-search/`): standalone FastAPI microservice using ChromaDB + `paraphrase-multilingual-mpnet-base-v2` (768 dims). Client: `app/services/vector_search_client.py` (async httpx). Runs as Docker profile `vector-search` on port 8003. Async search methods (`search_async`, `retrieve_async`, `retrieve_multi_async`) run all engines in parallel via `asyncio.gather` and merge/deduplicate results. Background task `vector-search-sync` upserts all sections on startup. `DatasetSynced` event triggers incremental sync. Admin endpoints: `GET /admin/wiki-rag/vector-search/status`, `POST /admin/wiki-rag/vector-search/sync`.
 
 ### Frontend Architecture
 
@@ -333,6 +334,8 @@ ORCHESTRATOR_PORT=8002
 ADMIN_JWT_SECRET=...                # Auto-generated if empty
 REDIS_URL=redis://localhost:6379/0  # Optional, graceful fallback
 DEV_MODE=1                          # Backend proxies to Vite dev server (:5173)
+VECTOR_SEARCH_URL=http://localhost:8003  # Optional, Vector Search microservice
+VECTOR_SEARCH_TOKEN=                # Bearer token for Vector Search API
 ```
 
 ## Deployment
