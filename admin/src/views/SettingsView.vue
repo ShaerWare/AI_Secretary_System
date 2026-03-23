@@ -374,7 +374,6 @@ function toggleLocale() {
           </button>
         </div>
       </div>
-    </div>
 
       <!-- Google Account -->
       <div class="bg-card rounded-xl border border-border p-4">
