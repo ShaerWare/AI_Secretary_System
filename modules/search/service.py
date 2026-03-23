@@ -1,17 +1,22 @@
-"""Web search service using DuckDuckGo."""
+"""Web search service using DuckDuckGo (ddgs package)."""
 
 import logging
 
 
 logger = logging.getLogger(__name__)
 
+DDGS_AVAILABLE = False
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 
     DDGS_AVAILABLE = True
 except ImportError:
-    DDGS_AVAILABLE = False
-    logger.warning("duckduckgo-search not installed, web search unavailable")
+    try:
+        from duckduckgo_search import DDGS
+
+        DDGS_AVAILABLE = True
+    except ImportError:
+        logger.warning("ddgs/duckduckgo-search not installed, web search unavailable")
 
 
 class WebSearchService:
@@ -26,12 +31,9 @@ class WebSearchService:
         max_results: int = 5,
         region: str = "ru-ru",
     ) -> str:
-        """Search the web and return formatted results.
-
-        Returns a text block suitable for injection into LLM context.
-        """
+        """Search the web and return formatted results."""
         if not self.available:
-            return "Web search is not available (duckduckgo-search not installed)."
+            return "Web search is not available (ddgs not installed)."
 
         try:
             with DDGS() as ddgs:
