@@ -304,7 +304,7 @@ async function handleSubmit() {
 
             <!-- Telegram Support -->
             <a
-              href="https://t.me/shaerware_digital_bot"
+              href="https://t.me/ai_sekretar24bot"
               target="_blank"
               rel="noopener noreferrer"
               title="Техподдержка 24/7 в Telegram"
@@ -815,7 +815,7 @@ async function handleSubmit() {
           </p>
           <div class="flex flex-wrap gap-3">
             <a
-              href="https://t.me/shaerware_digital_bot"
+              href="https://t.me/ai_sekretar24bot"
               target="_blank"
               rel="noopener noreferrer"
               class="inline-flex items-center gap-2 rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white ring-1 ring-zinc-700 hover:bg-zinc-700 hover:ring-orange-600/50 transition-all"
