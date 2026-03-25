@@ -39,6 +39,7 @@ export interface ChatSession {
   system_prompt?: string;
   source?: string | null;
   context_files?: ContextFile[];
+  web_search_enabled?: boolean;
   created: string;
   updated: string;
   token_usage?: TokenUsage;
@@ -98,6 +99,7 @@ export const chatApi = {
       title?: string;
       system_prompt?: string;
       context_files?: ContextFile[];
+      web_search_enabled?: boolean;
     },
   ) =>
     api.put<{ session: ChatSession }>(

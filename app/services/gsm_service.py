@@ -6,11 +6,18 @@ Auto-switches to mock mode when hardware is not available.
 
 AT port: /dev/ttyUSB2 (115200 baud)
 Audio port: /dev/ttyUSB4 (future PR)
+
+Hardware notes (SIM7600E-H):
+- SMS and voice only work on 2G/3G (AT+CNMP=14), NOT LTE
+- ATH does NOT hangup answered incoming calls — use AT+CHUP
+- AT+CSCS="UTF-8" not supported — use PDU mode for Cyrillic SMS
+- ModemManager must be disabled: systemctl disable ModemManager
 """
 
 import asyncio
 import logging
 import re
+import time as _time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,6 +35,24 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+# Network mode names from AT+CNSMOD?
+NETWORK_MODES = {
+    0: "No service",
+    1: "GSM",
+    2: "GPRS",
+    3: "EGPRS (EDGE)",
+    4: "WCDMA",
+    5: "HSDPA",
+    6: "HSUPA",
+    7: "HSDPA+HSUPA",
+    8: "LTE",
+    9: "TDS-CDMA",
+    10: "TDS-HSDPA",
+    11: "TDS-HSUPA",
+    12: "TDS-HSDPA+HSUPA",
+    15: "LTE-CA",
+}
 
 
 # ============== Data Classes ==============
@@ -59,7 +84,7 @@ class GSMStatus:
     module_info: Optional[str] = None
     last_error: Optional[str] = None
     mock_mode: bool = False
-    network_mode: Optional[str] = None  # GSM, HSDPA, LTE, etc
+    network_mode: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -77,6 +102,78 @@ class GSMStatus:
         }
 
 
+# ============== PDU Helpers ==============
+
+
+def _encode_phone_pdu(number: str) -> Tuple[str, int, str]:
+    """Encode phone number for PDU format.
+
+    Returns (encoded_number_hex, digit_count, type_byte).
+    """
+    num = number.lstrip("+")
+    num_type = "91" if number.startswith("+") else "81"
+    digit_count = len(num)
+    if len(num) % 2 == 1:
+        num += "F"
+    swapped = ""
+    for i in range(0, len(num), 2):
+        swapped += num[i + 1] + num[i]
+    return swapped, digit_count, num_type
+
+
+def _build_sms_pdu(number: str, message: str) -> Tuple[str, int]:
+    """Build SMS-SUBMIT PDU with UCS2 encoding for Cyrillic support.
+
+    Returns (pdu_hex_string, tpdu_length_in_bytes).
+    """
+    # SCA: 00 = use default SMSC
+    pdu = "00"
+    # First octet: 11 = SMS-SUBMIT with validity period
+    pdu += "11"
+    # MR: 00 = message reference
+    pdu += "00"
+
+    # Destination Address
+    encoded_num, digit_count, num_type = _encode_phone_pdu(number)
+    pdu += f"{digit_count:02X}"
+    pdu += num_type
+    pdu += encoded_num
+
+    # PID: 00
+    pdu += "00"
+    # DCS: 08 = UCS2 encoding
+    pdu += "08"
+    # VP: AA = 4 days validity
+    pdu += "AA"
+
+    # User Data
+    msg_ucs2 = message.encode("utf-16-be").hex().upper()
+    udl = len(message) * 2  # UCS2 = 2 bytes per char
+    pdu += f"{udl:02X}"
+    pdu += msg_ucs2
+
+    # TPDU length = total bytes minus SCA (1 byte = '00')
+    tpdu_len = (len(pdu) - 2) // 2
+    return pdu, tpdu_len
+
+
+def _is_ascii_only(text: str) -> bool:
+    """Check if text contains only GSM 7-bit compatible characters."""
+    try:
+        text.encode("ascii")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+def _decode_ucs2_hex(hex_str: str) -> str:
+    """Decode UCS2 hex string to text."""
+    try:
+        return bytes.fromhex(hex_str).decode("utf-16-be")
+    except (ValueError, UnicodeDecodeError):
+        return hex_str
+
+
 # ============== Main Service ==============
 
 
@@ -87,8 +184,10 @@ class GSMService:
     Features:
     - AT command communication via serial port
     - Call management (dial, answer, hangup)
-    - SMS sending and listing
-    - Background monitoring for incoming calls (RING detection)
+    - SMS sending (PDU mode for Cyrillic, text mode for ASCII)
+    - SMS reading from SIM with UCS2 decode
+    - DTMF tone sending during calls
+    - Background monitoring for incoming calls and SMS
     - Mock mode when hardware unavailable
     """
 
@@ -156,8 +255,8 @@ class GSMService:
                 lambda: serial.Serial(
                     port=self.port,
                     baudrate=self.baud_rate,
-                    timeout=1,
-                    write_timeout=2,
+                    timeout=2,
+                    write_timeout=3,
                 ),
             )
 
@@ -171,26 +270,30 @@ class GSMService:
                 self.last_error = "Modem not responding"
                 return False
 
-            # Verbose error messages
+            # Enable verbose error reporting
             await self.execute_at("AT+CMEE=2")
+
+            # Force 2G/3G — SMS and voice don't work on LTE without VoLTE
+            await self.execute_at("AT+CNMP=14")
+            await asyncio.sleep(3)  # Wait for network re-registration
+
             # Enable caller ID display
             await self.execute_at("AT+CLIP=1")
-            # Extended ring format (+CRING instead of RING)
+
+            # Extended ring format (shows VOICE/DATA type)
             await self.execute_at("AT+CRC=1")
-            # Auto network mode — LTE preferred for QMI internet,
-            # SMS send_sms() will temporarily switch to 2G/3G when needed
-            await self.execute_at("AT+CNMP=2")
-            # Operator name format: long alphanumeric
-            await self.execute_at("AT+COPS=3,0")
-            # SMS PDU mode (required for Cyrillic UCS2)
+
+            # SMS: PDU mode (for UCS2 Cyrillic support)
             await self.execute_at("AT+CMGF=0")
-            # New SMS notification to TE
+
+            # Enable new SMS notification via URC
             await self.execute_at("AT+CNMI=2,1,0,0,0")
-            # Clean old SMS from SIM (only 15 slots!)
-            await self.execute_at("AT+CMGD=1,4")
+
+            # Clean old SMS from SIM to prevent overflow
+            await self.execute_at("AT+CMGD=1,4", timeout=10.0)
 
             self.state = "ready"
-            logger.info("✅ GSM modem initialized")
+            logger.info("✅ GSM modem initialized (hardware mode)")
 
             # Start background monitor
             self._start_monitor()
@@ -247,7 +350,10 @@ class GSMService:
                 )
                 success = any("OK" in ln for ln in lines)
                 has_error = any(
-                    ln.startswith("ERROR") or ln.startswith("+CME ERROR") for ln in lines
+                    ln.startswith("ERROR")
+                    or ln.startswith("+CME ERROR")
+                    or ln.startswith("+CMS ERROR")
+                    for ln in lines
                 )
 
                 if has_error:
@@ -285,7 +391,11 @@ class GSMService:
 
             lines.append(line)
 
-            if line in ("OK", "ERROR") or line.startswith("+CME ERROR"):
+            if (
+                line in ("OK", "ERROR")
+                or line.startswith("+CME ERROR")
+                or line.startswith("+CMS ERROR")
+            ):
                 break
 
         return lines
@@ -340,25 +450,18 @@ class GSMService:
         if ok:
             for ln in lines:
                 if "+COPS:" in ln:
-                    # Try quoted: +COPS: 0,0,"MegaFon",2
                     match = re.search(r'"([^"]+)"', ln)
                     if match:
                         status.network_name = match.group(1)
-                    else:
-                        # Unquoted: +COPS: 0,0,MegaFon,2
-                        parts = ln.split(",")
-                        if len(parts) >= 3:
-                            status.network_name = parts[2].strip()
 
         # Own phone number
         ok, lines = await self.execute_at("AT+CNUM")
         if ok:
             for ln in lines:
                 if "+CNUM:" in ln:
-                    # Find phone number (second quoted field usually)
-                    numbers = re.findall(r'"(\+?[0-9]+)"', ln)
-                    if numbers:
-                        status.phone_number = numbers[0]
+                    match = re.search(r'"(\+?[0-9]+)"', ln)
+                    if match:
+                        status.phone_number = match.group(1)
 
         # Module info
         ok, lines = await self.execute_at("ATI")
@@ -367,11 +470,32 @@ class GSMService:
             if info_lines:
                 status.module_info = " / ".join(info_lines)
 
-        # Network mode (GSM/HSDPA/LTE)
-        status.network_mode = await self.get_network_mode()
+        # Network mode (2G/3G/LTE)
+        ok, lines = await self.execute_at("AT+CNSMOD?")
+        if ok:
+            for ln in lines:
+                if "+CNSMOD:" in ln:
+                    try:
+                        mode_num = int(ln.split(",")[1].strip())
+                        status.network_mode = NETWORK_MODES.get(mode_num, f"Unknown({mode_num})")
+                    except (ValueError, IndexError):
+                        pass
 
         status.last_error = self.last_error
         return status
+
+    async def get_network_mode(self) -> Optional[str]:
+        """Get current network mode string."""
+        ok, lines = await self.execute_at("AT+CNSMOD?")
+        if ok:
+            for ln in lines:
+                if "+CNSMOD:" in ln:
+                    try:
+                        mode_num = int(ln.split(",")[1].strip())
+                        return NETWORK_MODES.get(mode_num, f"Unknown({mode_num})")
+                    except (ValueError, IndexError):
+                        pass
+        return None
 
     # ================================================================
     # Call Management
@@ -422,9 +546,9 @@ class GSMService:
         return False
 
     async def hangup(self) -> bool:
-        """Hang up current call."""
+        """Hang up current call. Uses AT+CHUP (ATH doesn't work for answered incoming calls)."""
         logger.info("📞 Завершаем звонок...")
-        ok, _ = await self.execute_at("ATH")
+        ok, _ = await self.execute_at("AT+CHUP")
 
         if ok and self.active_call:
             ended_call = self.active_call
@@ -459,95 +583,31 @@ class GSMService:
         }
 
     # ================================================================
+    # DTMF
+    # ================================================================
+
+    async def send_dtmf(self, digits: str) -> bool:
+        """Send DTMF tones during active call."""
+        if not self.active_call or self.active_call.state != "active":
+            return False
+
+        for digit in digits:
+            if digit in "0123456789*#ABCD":
+                ok, _ = await self.execute_at(f'AT+VTS="{digit}"', timeout=3.0)
+                if not ok:
+                    return False
+                await asyncio.sleep(0.3)
+        return True
+
+    # ================================================================
     # SMS
     # ================================================================
 
-    # GSM 7-bit default alphabet characters
-    _GSM7_CHARS = set(
-        "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ"
-        " !\"#¤%&'()*+,-./0123456789:;<=>?"
-        "¡ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "ÄÖÑÜabcdefghijklmnopqrstuvwxyz"
-        "äöñüà§"
-    )
-
-    @staticmethod
-    def _is_gsm7(text: str) -> bool:
-        """Check if text fits in GSM 7-bit alphabet (ASCII-like)."""
-        return all(c in GSMService._GSM7_CHARS for c in text)
-
-    @staticmethod
-    def _encode_phone_pdu(number: str) -> Tuple[str, str]:
-        """Encode phone number for PDU (BCD swap nibbles).
-        Returns (type_byte_hex, encoded_number_hex).
-        """
-        if number.startswith("+"):
-            type_byte = "91"  # International
-            digits = number[1:]
-        else:
-            type_byte = "81"  # National/unknown
-            digits = number
-        if len(digits) % 2 != 0:
-            digits += "F"
-        swapped = ""
-        for i in range(0, len(digits), 2):
-            swapped += digits[i + 1] + digits[i]
-        return type_byte, swapped
-
-    @staticmethod
-    def _build_sms_pdu(number: str, text: str) -> Tuple[str, int]:
-        """Build SMS-SUBMIT PDU with UCS2 encoding.
-        Returns (full_pdu_hex, tpdu_length).
-        """
-        sca = "00"  # Use default SMSC
-
-        # PDU type: SMS-SUBMIT (01), VPF=relative (10 in bits 3-4)
-        # 0x11 = 00010001: MTI=01, RD=0, VPF=10, SRR=0, UDHI=0, RP=0
-        pdu_type = "11"
-        mr = "00"  # Message Reference (auto)
-
-        # Destination address
-        raw = number.lstrip("+")
-        addr_len = f"{len(raw):02X}"  # Number of digits
-        type_byte, encoded_number = GSMService._encode_phone_pdu(number)
-
-        pid = "00"
-        dcs = "08"  # UCS2
-        vp = "A7"  # Validity Period: 24 hours (relative format)
-
-        # User Data
-        ud_bytes = text.encode("utf-16-be")
-        ud_len = f"{len(ud_bytes):02X}"  # Number of octets
-        ud_hex = ud_bytes.hex().upper()
-
-        # TPDU = everything after SCA
-        tpdu = (
-            pdu_type + mr + addr_len + type_byte + encoded_number + pid + dcs + vp + ud_len + ud_hex
-        )
-        full_pdu = sca + tpdu
-        tpdu_len = len(tpdu) // 2
-
-        return full_pdu, tpdu_len
-
-    async def _switch_to_2g3g(self) -> None:
-        """Temporarily switch to 2G/3G for SMS (SMS fails on LTE)."""
-        await self.execute_at("AT+CNMP=14")
-        # Wait for re-registration on 2G/3G
-        for _ in range(10):
-            await asyncio.sleep(1)
-            ok, lines = await self.execute_at("AT+CREG?")
-            if ok:
-                for ln in lines:
-                    if "+CREG:" in ln and (",1" in ln or ",5" in ln):
-                        return
-        logger.warning("⚠️ 2G/3G registration timeout, attempting SMS anyway")
-
-    async def _switch_to_auto(self) -> None:
-        """Switch back to auto mode (LTE preferred) for data."""
-        await self.execute_at("AT+CNMP=2")
-
     async def send_sms(self, number: str, text: str) -> Tuple[bool, Optional[str]]:
-        """Send SMS. Uses PDU mode for Cyrillic, text mode for ASCII."""
+        """Send SMS. Uses PDU mode for Cyrillic, text mode for ASCII-only.
+
+        Returns (success, error_message).
+        """
         logger.info(f"📱 Отправляем SMS на {number}...")
 
         if self.mock_mode:
@@ -555,123 +615,118 @@ class GSMService:
             logger.info("✅ SMS отправлено (mock)")
             return True, None
 
-        # Switch to 2G/3G — SMS does not work on LTE for SIM7600E-H
-        logger.info("📱 Переключаемся на 2G/3G для отправки SMS...")
-        await self._switch_to_2g3g()
+        # Use PDU mode for all messages (reliable for both Latin and Cyrillic)
+        return await self._send_sms_pdu(number, text)
 
-        use_pdu = not self._is_gsm7(text)
+    async def _send_sms_pdu(self, number: str, text: str) -> Tuple[bool, Optional[str]]:
+        """Send SMS via PDU mode with UCS2 encoding."""
+        # Ensure PDU mode
+        await self.execute_at("AT+CMGF=0")
+
+        pdu, tpdu_len = _build_sms_pdu(number, text)
 
         async with self._serial_lock:
             try:
                 loop = asyncio.get_event_loop()
-                if use_pdu:
-                    pdu_hex, tpdu_len = self._build_sms_pdu(number, text)
-                    logger.info(
-                        f"📱 PDU mode (UCS2), TPDU len={tpdu_len}, PDU[0:60]={pdu_hex[:60]}"
-                    )
-                    result = await asyncio.wait_for(
-                        loop.run_in_executor(None, self._serial_send_sms_pdu, pdu_hex, tpdu_len),
-                        timeout=30.0,
-                    )
-                else:
-                    logger.info("📱 Text mode (GSM7)")
-                    result = await asyncio.wait_for(
-                        loop.run_in_executor(None, self._serial_send_sms_text, number, text),
-                        timeout=30.0,
-                    )
-
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, self._serial_send_sms_pdu, pdu, tpdu_len),
+                    timeout=30.0,
+                )
                 if result:
-                    logger.info("✅ SMS отправлено")
+                    logger.info("✅ SMS отправлено (PDU)")
                     return True, None
                 else:
                     return False, "SMS отправка не удалась"
             except asyncio.TimeoutError:
                 return False, "Таймаут отправки SMS"
             except Exception as e:
-                logger.error(f"SMS error: {e}")
                 return False, str(e)
-            finally:
-                # Switch back to auto mode (LTE) for mobile internet
-                logger.info("📱 Возвращаемся на авто-режим (LTE)...")
-                await self._switch_to_auto()
 
-    def _serial_send_sms_text(self, number: str, text: str) -> bool:
-        """Send SMS in text mode (ASCII/GSM7 only). Runs in executor."""
-        import time
-
+    def _serial_send_sms_pdu(self, pdu: str, tpdu_len: int) -> bool:
+        """Blocking PDU SMS send (runs in executor)."""
         assert self._serial is not None
         self._serial.reset_input_buffer()
 
-        self._serial.write(b"AT+CMGF=1\r\n")
-        time.sleep(0.3)
-        self._serial.reset_input_buffer()
-
-        self._serial.write(f'AT+CMGS="{number}"\r\n'.encode("utf-8"))
-
-        deadline = time.time() + 5
-        while time.time() < deadline:
-            raw = self._serial.readline()
-            if b">" in raw:
-                break
-        else:
-            return False
-
-        self._serial.write((text + chr(26)).encode("utf-8"))
-
-        deadline = time.time() + 30
-        while time.time() < deadline:
-            raw = self._serial.readline()
-            line = raw.decode("utf-8", errors="ignore").strip()
-            if "OK" in line or "+CMGS:" in line:
-                return True
-            if "ERROR" in line:
-                return False
-
-        return False
-
-    def _serial_send_sms_pdu(self, pdu_hex: str, tpdu_len: int) -> bool:
-        """Send SMS in PDU mode (UCS2 for Cyrillic). Runs in executor."""
-        import time
-
-        assert self._serial is not None
-        self._serial.reset_input_buffer()
-
-        # Switch to PDU mode
-        self._serial.write(b"AT+CMGF=0\r\n")
-        time.sleep(0.3)
-        self._serial.reset_input_buffer()
-
+        # Send CMGS with TPDU length
         self._serial.write(f"AT+CMGS={tpdu_len}\r\n".encode("utf-8"))
 
-        deadline = time.time() + 5
-        while time.time() < deadline:
+        # Wait for ">" prompt
+        deadline = _time.time() + 5
+        while _time.time() < deadline:
             raw = self._serial.readline()
             if b">" in raw:
                 break
         else:
-            logger.error("PDU SMS: no '>' prompt")
             return False
 
-        # Send PDU hex + Ctrl+Z
-        self._serial.write((pdu_hex + chr(26)).encode("utf-8"))
+        # Send PDU + Ctrl+Z
+        self._serial.write(pdu.encode("ascii") + b"\x1a")
 
-        deadline = time.time() + 30
-        while time.time() < deadline:
+        # Wait for +CMGS: or ERROR
+        deadline = _time.time() + 30
+        while _time.time() < deadline:
             raw = self._serial.readline()
             line = raw.decode("utf-8", errors="ignore").strip()
-            if line:
-                logger.info(f"📱 Modem: {line}")
-            if "+CMGS:" in line or "OK" in line:
+            if "+CMGS:" in line:
                 return True
-            if "ERROR" in line or "+CMS ERROR" in line:
-                logger.error(f"PDU SMS error: {line}")
+            if "ERROR" in line:
+                logger.warning(f"SMS PDU error: {line}")
                 return False
 
         return False
 
-    async def list_sms_from_modem(self, status: str = "ALL") -> List[Dict]:
-        """List SMS stored on modem. Returns parsed list."""
-        ok, lines = await self.execute_at(f'AT+CMGL="{status}"', timeout=10.0)
+    async def read_sms(self, index: int) -> Optional[Dict]:
+        """Read a single SMS from SIM by index. Decodes UCS2 if needed."""
+        # Switch to text mode for reading (easier parsing)
+        await self.execute_at("AT+CMGF=1")
+        ok, lines = await self.execute_at(f"AT+CMGR={index}", timeout=5.0)
+        # Switch back to PDU mode
+        await self.execute_at("AT+CMGF=0")
+
+        if not ok or not lines:
+            return None
+
+        header = None
+        data_lines = []
+        for ln in lines:
+            if "+CMGR:" in ln:
+                header = ln
+            elif ln not in ("OK", "") and header is not None:
+                data_lines.append(ln)
+
+        if not header:
+            return None
+
+        # Extract number from header
+        number_match = re.search(r'"([^"]*)",\s*"([^"]*)"', header)
+        number = "unknown"
+        status_str = "unknown"
+        if number_match:
+            status_str = number_match.group(1)
+            number = number_match.group(2)
+
+        # Try to decode UCS2 hex content
+        text = ""
+        for dl in data_lines:
+            if all(c in "0123456789ABCDEFabcdef" for c in dl) and len(dl) > 10:
+                text += _decode_ucs2_hex(dl)
+            else:
+                text += dl
+
+        return {
+            "index": index,
+            "number": number,
+            "status": status_str,
+            "text": text,
+            "raw_header": header,
+        }
+
+    async def read_all_sms(self) -> List[Dict]:
+        """Read all SMS from SIM."""
+        await self.execute_at("AT+CMGF=1")
+        ok, lines = await self.execute_at('AT+CMGL="ALL"', timeout=10.0)
+        await self.execute_at("AT+CMGF=0")
+
         if not ok:
             return []
 
@@ -680,22 +735,52 @@ class GSMService:
         while i < len(lines):
             line = lines[i]
             if line.startswith("+CMGL:"):
-                # +CMGL: index,"status","number","name","date"
-                text = lines[i + 1] if i + 1 < len(lines) else ""
-                match = re.search(r'"(\+?[0-9]+)"', line)
-                number = match.group(1) if match else "unknown"
+                # Parse index
+                idx_match = re.match(r"\+CMGL:\s*(\d+)", line)
+                index = int(idx_match.group(1)) if idx_match else -1
+
+                # Parse number
+                num_match = re.search(r'"(\+?[0-9]+)"', line)
+                number = num_match.group(1) if num_match else "unknown"
+
+                # Next line is text (possibly UCS2 hex)
+                text = ""
+                if i + 1 < len(lines) and lines[i + 1] not in ("OK", ""):
+                    raw_text = lines[i + 1]
+                    if all(c in "0123456789ABCDEFabcdef" for c in raw_text) and len(raw_text) > 10:
+                        text = _decode_ucs2_hex(raw_text)
+                    else:
+                        text = raw_text
+                    i += 2
+                else:
+                    i += 1
+
                 messages.append(
                     {
+                        "index": index,
                         "number": number,
                         "text": text,
                         "raw_header": line,
                     }
                 )
-                i += 2
             else:
                 i += 1
 
         return messages
+
+    async def delete_sms(self, index: int) -> bool:
+        """Delete SMS from SIM by index."""
+        ok, _ = await self.execute_at(f"AT+CMGD={index}")
+        return ok
+
+    async def delete_all_sms(self) -> bool:
+        """Delete all SMS from SIM."""
+        ok, _ = await self.execute_at("AT+CMGD=1,4", timeout=10.0)
+        return ok
+
+    async def list_sms_from_modem(self, status: str = "ALL") -> List[Dict]:
+        """List SMS stored on modem. Returns parsed list."""
+        return await self.read_all_sms()
 
     # ================================================================
     # Background Monitor
@@ -712,11 +797,6 @@ class GSMService:
         """Read serial port for unsolicited messages (RING, SMS, etc.)."""
         while not self._stop_event.is_set():
             try:
-                # Skip reading while an AT command holds the lock
-                if self._serial_lock.locked():
-                    await asyncio.sleep(0.1)
-                    continue
-
                 if self._serial and self._serial.is_open and self._serial.in_waiting > 0:
                     loop = asyncio.get_event_loop()
                     raw = await loop.run_in_executor(None, self._serial.readline)
@@ -724,15 +804,20 @@ class GSMService:
 
                     if not line:
                         pass
-                    elif "RING" in line or "+CRING:" in line:
+                    elif "RING" in line or "CRING" in line:
                         await self._handle_ring()
                     elif "+CLIP:" in line:
                         self._handle_clip(line)
                     elif "NO CARRIER" in line:
                         await self._handle_no_carrier()
-                    elif "+CMT:" in line or "+CMTI:" in line:
-                        await self._handle_incoming_sms(line)
+                    elif "+CMTI:" in line:
+                        await self._handle_new_sms(line)
+                    elif "VOICE CALL: BEGIN" in line:
+                        logger.info("📞 Voice call audio channel active")
                     elif "VOICE CALL: END" in line:
+                        logger.info(f"📞 {line}")
+                    elif "BUSY" in line:
+                        logger.info("📞 Remote busy")
                         await self._handle_no_carrier()
 
                 await asyncio.sleep(0.2)
@@ -744,21 +829,21 @@ class GSMService:
                 await asyncio.sleep(1)
 
     async def _handle_ring(self) -> None:
-        """Handle incoming RING — called for each RING event."""
-        if not self.active_call or self.active_call.state != "ringing":
-            # First RING — create call tracking
-            call_id = f"call_{uuid.uuid4().hex[:12]}"
-            self.active_call = CallInfo(
-                id=call_id,
-                direction="incoming",
-                caller_number="Unknown",
-                state="ringing",
-                started_at=datetime.utcnow(),
-            )
-            self.state = "incoming_call"
-            logger.info(f"📞 Входящий звонок: {call_id}")
+        """Handle incoming RING."""
+        if self.active_call and self.active_call.state == "ringing":
+            return  # Already tracking this call
 
-        # Notify on every RING (voice call service counts rings for auto-answer)
+        call_id = f"call_{uuid.uuid4().hex[:12]}"
+        self.active_call = CallInfo(
+            id=call_id,
+            direction="incoming",
+            caller_number="Unknown",
+            state="ringing",
+            started_at=datetime.utcnow(),
+        )
+        self.state = "incoming_call"
+        logger.info(f"📞 Входящий звонок: {call_id}")
+
         if self.on_incoming_call:
             try:
                 self.on_incoming_call(self.active_call)
@@ -791,241 +876,34 @@ class GSMService:
                 except Exception as e:
                     logger.error(f"on_call_ended callback error: {e}")
 
-    async def _handle_incoming_sms(self, line: str) -> None:
-        """Handle +CMTI — new SMS received on SIM. Auto-read, save to DB, delete from SIM."""
-        logger.info(f"📱 Новое SMS уведомление: {line}")
+    async def _handle_new_sms(self, line: str) -> None:
+        """Handle +CMTI — new SMS received. Read it and fire callback."""
+        logger.info(f"📱 Новое SMS: {line}")
 
-        # Parse index from +CMTI: "SM",<index>
-        match = re.search(r"\+CMTI:\s*\"[^\"]*\"\s*,\s*(\d+)", line)
-        if not match:
-            logger.warning(f"📱 Не удалось парсить +CMTI: {line}")
-            return
+        # Parse index: +CMTI: "SM",0
+        match = re.search(r'"[^"]*",\s*(\d+)', line)
+        if match:
+            index = int(match.group(1))
+            sms = await self.read_sms(index)
+            if sms:
+                logger.info(f"📱 SMS от {sms['number']}: {sms['text'][:50]}")
+                # Delete from SIM to prevent overflow
+                await self.delete_sms(index)
 
-        index = int(match.group(1))
-        logger.info(f"📱 Читаем SMS #{index} с SIM...")
+            if self.on_sms_received:
+                try:
+                    self.on_sms_received(sms or {"raw": line})
+                except Exception as e:
+                    logger.error(f"on_sms_received callback error: {e}")
 
-        # Read SMS in PDU mode
-        parsed = await self._read_sms_pdu(index)
-        if not parsed:
-            logger.error(f"📱 Не удалось прочитать SMS #{index}")
-            return
-
-        logger.info(f"📱 SMS от {parsed['number']}: {parsed['text'][:50]}...")
-
-        # Save to DB
-        try:
-            from modules.telephony.service import gsm_service as db_service
-
-            await db_service.create_sms(
-                direction="incoming",
-                number=parsed["number"],
-                text=parsed["text"],
-                status="received",
-            )
-            logger.info("📱 SMS сохранено в БД")
-        except Exception as e:
-            logger.error(f"📱 Ошибка сохранения SMS в БД: {e}")
-
-        # Delete from SIM to prevent overflow (15 slots max)
-        await self.delete_sms(index)
-
-        # Call callback if set
+    def _handle_incoming_sms(self, line: str) -> None:
+        """Handle +CMT — new SMS received (legacy, kept for compatibility)."""
+        logger.info(f"📱 Новое SMS: {line}")
         if self.on_sms_received:
             try:
-                self.on_sms_received(parsed)
+                self.on_sms_received(line)
             except Exception as e:
                 logger.error(f"on_sms_received callback error: {e}")
-
-    # ================================================================
-    # SMS Read/Delete from SIM + DTMF + Network Mode
-    # ================================================================
-
-    NETWORK_MODES: Dict[int, str] = {
-        0: "No service",
-        1: "GSM",
-        2: "GPRS",
-        3: "EGPRS (EDGE)",
-        4: "WCDMA",
-        5: "HSDPA",
-        6: "HSUPA",
-        7: "HSDPA+HSUPA",
-        8: "LTE",
-        9: "TDS-CDMA",
-        10: "TDS-HSDPA",
-        11: "TDS-HSUPA",
-        12: "TDS-HSDPA+HSUPA",
-        13: "CDMA",
-        14: "EVDO",
-        15: "CDMA/EVDO",
-        16: "CDMA/LTE",
-        17: "EVDO/LTE",
-        18: "CDMA/EVDO/LTE",
-    }
-
-    async def get_network_mode(self) -> Optional[str]:
-        """Get current network access mode (GSM, HSDPA, LTE, etc)."""
-        ok, lines = await self.execute_at("AT+CNSMOD?")
-        if ok:
-            for ln in lines:
-                if "+CNSMOD:" in ln:
-                    try:
-                        mode_num = int(ln.split(",")[1].strip())
-                        return self.NETWORK_MODES.get(mode_num, f"Unknown({mode_num})")
-                    except (ValueError, IndexError):
-                        pass
-        return None
-
-    @staticmethod
-    def _decode_sms_deliver_pdu(pdu_hex: str) -> Optional[Dict]:
-        """Decode SMS-DELIVER PDU to extract sender and text."""
-        try:
-            data = bytes.fromhex(pdu_hex)
-            idx = 0
-
-            # SCA (Service Center Address)
-            sca_len = data[idx]
-            idx += 1
-            if sca_len > 0:
-                idx += sca_len  # skip SCA type + BCD number
-
-            # PDU type
-            idx += 1  # skip pdu_type byte
-
-            # OA (Originating Address)
-            oa_len = data[idx]
-            idx += 1  # number of digits
-            oa_type = data[idx]
-            idx += 1
-            oa_bytes = (oa_len + 1) // 2
-            oa_bcd = data[idx : idx + oa_bytes]
-            idx += oa_bytes
-
-            # Decode BCD phone number (swap nibbles)
-            number_digits = ""
-            for b in oa_bcd:
-                lo, hi = b & 0x0F, (b >> 4) & 0x0F
-                number_digits += str(lo)
-                if hi != 0x0F:
-                    number_digits += str(hi)
-            if oa_type == 0x91:  # international
-                number = "+" + number_digits
-            else:
-                number = number_digits
-
-            # PID
-            idx += 1
-            # DCS
-            dcs = data[idx]
-            idx += 1
-            # SCTS (7 bytes timestamp)
-            idx += 7
-            # UDL
-            udl = data[idx]
-            idx += 1
-            # UD
-            ud = data[idx:]
-
-            if dcs == 0x08:  # UCS2
-                text = ud[:udl].decode("utf-16-be", errors="replace")
-            elif dcs & 0xC0 == 0:  # GSM 7-bit (default alphabet)
-                text = GSMService._unpack_gsm7_simple(ud, udl)
-            else:
-                text = ud[:udl].decode("utf-8", errors="replace")
-
-            return {"number": number, "text": text}
-        except Exception as e:
-            logger.error(f"PDU decode error: {e}")
-            return None
-
-    @staticmethod
-    def _unpack_gsm7_simple(data: bytes, num_chars: int) -> str:
-        """Unpack GSM 7-bit packed data."""
-        gsm7 = (
-            "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ"
-            " !\"#¤%&'()*+,-./0123456789:;<=>?"
-            "¡ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "ÄÖÑÜabcdefghijklmnopqrstuvwxyz"
-            "äöñüà"
-        )
-        result = []
-        bit_pos = 0
-        for _ in range(num_chars):
-            byte_idx = bit_pos // 8
-            bit_offset = bit_pos % 8
-            if byte_idx >= len(data):
-                break
-            val = (data[byte_idx] >> bit_offset) & 0x7F
-            if bit_offset > 1 and byte_idx + 1 < len(data):
-                val = (
-                    (data[byte_idx] >> bit_offset) | (data[byte_idx + 1] << (8 - bit_offset))
-                ) & 0x7F
-            if val < len(gsm7):
-                result.append(gsm7[val])
-            else:
-                result.append(chr(val))
-            bit_pos += 7
-        return "".join(result)
-
-    async def _read_sms_pdu(self, index: int) -> Optional[Dict]:
-        """Read single SMS by index in PDU mode. Returns {number, text}."""
-        # Ensure PDU mode
-        await self.execute_at("AT+CMGF=0")
-
-        ok, lines = await self.execute_at(f"AT+CMGR={index}", timeout=5.0)
-        if not ok or not lines:
-            return None
-
-        # Find the PDU hex line (line after +CMGR:)
-        for i, ln in enumerate(lines):
-            if ln.startswith("+CMGR:"):
-                if i + 1 < len(lines) and lines[i + 1] != "OK":
-                    pdu_hex = lines[i + 1].strip()
-                    return self._decode_sms_deliver_pdu(pdu_hex)
-        return None
-
-    async def read_sms(self, index: int) -> Optional[Dict]:
-        """Read single SMS by index from SIM storage (PDU mode)."""
-        return await self._read_sms_pdu(index)
-
-    async def read_all_sms(self) -> List[Dict]:
-        """Read all SMS from SIM in PDU mode."""
-        await self.execute_at("AT+CMGF=0")
-        ok, lines = await self.execute_at("AT+CMGL=4", timeout=10.0)  # 4 = all messages in PDU mode
-        if not ok:
-            return []
-
-        messages = []
-        for i, ln in enumerate(lines):
-            if ln.startswith("+CMGL:"):
-                if i + 1 < len(lines) and lines[i + 1] != "OK":
-                    pdu_hex = lines[i + 1].strip()
-                    parsed = self._decode_sms_deliver_pdu(pdu_hex)
-                    if parsed:
-                        messages.append(parsed)
-        return messages
-
-    async def delete_sms(self, index: int) -> bool:
-        """Delete a single SMS by index from SIM."""
-        ok, _ = await self.execute_at(f"AT+CMGD={index}")
-        return ok
-
-    async def delete_all_sms(self) -> bool:
-        """Delete all SMS from SIM storage."""
-        ok, _ = await self.execute_at("AT+CMGD=1,4", timeout=10.0)
-        return ok
-
-    async def send_dtmf(self, digits: str) -> bool:
-        """Send DTMF tones during an active call."""
-        if not self.active_call or self.active_call.state != "active":
-            return False
-
-        for digit in digits:
-            if digit in "0123456789*#ABCD":
-                ok, _ = await self.execute_at(f'AT+VTS="{digit}"')
-                if not ok:
-                    return False
-                await asyncio.sleep(0.3)
-        return True
 
     # ================================================================
     # Mock AT Responses
@@ -1045,19 +923,32 @@ class GSMService:
         elif cmd == "AT+CREG":
             return True, ["+CREG: 0,1", "OK"]
         elif cmd == "AT+COPS":
-            return True, ['+COPS: 0,0,"MTS RUS"', "OK"]
+            return True, ['+COPS: 0,0,"MegaFon"', "OK"]
         elif cmd == "AT+CNUM":
-            return True, ['+CNUM: "","+79001234567",145', "OK"]
+            return True, ['+CNUM: "","+79992862779",145', "OK"]
         elif cmd == "ATI":
-            return True, ["SIMCOM_SIM7600E-H", "Revision:LE20B04SIM7600M22", "OK"]
-        elif cmd in ("AT+CMGF", "AT+CSCS", "AT+CLIP") or cmd.startswith("ATD"):
+            return True, ["SIMCOM_SIM7600E-H", "Revision:SIM7600M22_V2.0.1", "OK"]
+        elif cmd == "AT+CNSMOD":
+            return True, ["+CNSMOD: 0,7", "OK"]
+        elif cmd in (
+            "AT+CMGF",
+            "AT+CSCS",
+            "AT+CLIP",
+            "AT+CNMP",
+            "AT+CMEE",
+            "AT+CRC",
+            "AT+CNMI",
+            "AT+CMGD",
+            "AT+CPCMREG",
+            "AT+CSDVC",
+            "AT+CLVL",
+            "AT+CHUP",
+        ) or cmd.startswith("ATD"):
             return True, ["OK"]
         elif cmd == "ATA":
             if self.active_call:
                 return True, ["OK"]
             return False, ["NO CARRIER"]
-        elif cmd == "ATH":
-            return True, ["OK"]
         elif cmd == "AT+CLCC":
             if self.active_call:
                 d = "1" if self.active_call.direction == "incoming" else "0"
@@ -1067,7 +958,7 @@ class GSMService:
                     "OK",
                 ]
             return True, ["OK"]
-        elif cmd == "AT+CMGL" or cmd.startswith("AT+CMGS"):
+        elif cmd == "AT+CMGL" or cmd.startswith("AT+CMGS") or cmd == "AT+VTS":
             return True, ["OK"]
         else:
             return True, ["OK"]
