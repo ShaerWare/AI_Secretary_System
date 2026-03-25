@@ -206,6 +206,7 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 | `modules/chat/` | `router.py` | `app/routers/chat.py` |
 | `modules/llm/` | `router.py` | `app/routers/llm.py` |
 | `modules/google/` | `router.py` (+ `callback_router`) | `app/routers/google.py` |
+| `modules/knowledge/` | `router_google_drive.py` | Google Drive RAG sync (`/admin/google-drive/*`) |
 
 **Phase 4 routers** (extracted from `orchestrator.py`, not from `app/routers/`):
 

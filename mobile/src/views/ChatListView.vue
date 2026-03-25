@@ -155,13 +155,11 @@ async function toggleSessionPanel(sessionId: string, tab: "llm" | "rag" | "share
 
   if (tab === "share") {
     await loadSessionShares(sessionId);
-  } else if (tab === "mobile") {
-    await loadSessionMobileInstance(sessionId);
   } else if (tab === "rename") {
     const s = sessions.value.find((s) => s.id === sessionId);
     renameValue.value = s?.title || "";
-  } else if (tab === "llm" || tab === "rag") {
-    // Load session details to get current overrides
+  } else {
+    // llm, rag, mobile — all need session details
     await loadSessionDetails(sessionId);
   }
 }
@@ -169,13 +167,34 @@ async function toggleSessionPanel(sessionId: string, tab: "llm" | "rag" | "share
 async function loadSessionDetails(sessionId: string) {
   panelLoading.value = true;
   try {
-    await chatApi.getSession(sessionId);
-    // Reset to defaults — session doesn't store LLM override persistently
+    const data = await chatApi.getSession(sessionId);
+    const s = data.session;
+
+    // Source-based LLM: if linked to mobile instance, resolve its LLM
+    sessionLlm.value = "default";
+    if (s.source === "mobile" && s.source_id) {
+      const inst = mobileInstances.value.find((i) => i.id === s.source_id);
+      if (inst?.llm_backend) {
+        sessionLlm.value = inst.llm_backend;
+      }
+    }
+
+    // RAG collections from session
+    sessionRagIds.value = [];
+    if (s.knowledge_collection_ids) {
+      const ids = typeof s.knowledge_collection_ids === "string"
+        ? JSON.parse(s.knowledge_collection_ids)
+        : s.knowledge_collection_ids;
+      if (Array.isArray(ids)) sessionRagIds.value = ids;
+    } else if (s.knowledge_collection_id) {
+      sessionRagIds.value = [s.knowledge_collection_id];
+    }
+
+    // Also set mobile instance
+    sessionMobileInstanceId.value = s.source_id || null;
+  } catch {
     sessionLlm.value = "default";
     sessionRagIds.value = [];
-    // If session has web_search or other settings, we could load them here
-  } catch {
-    // ignore
   } finally {
     panelLoading.value = false;
   }
@@ -193,18 +212,6 @@ async function loadSessionShares(sessionId: string) {
   }
 }
 
-async function loadSessionMobileInstance(sessionId: string) {
-  panelLoading.value = true;
-  try {
-    const data = await chatApi.getSession(sessionId);
-    // source_id stores the mobile instance id when source is "mobile"
-    sessionMobileInstanceId.value = data.session.source_id || null;
-  } catch {
-    sessionMobileInstanceId.value = null;
-  } finally {
-    panelLoading.value = false;
-  }
-}
 
 // === Actions ===
 
@@ -217,6 +224,25 @@ async function renameSession() {
     expandedSessionId.value = null;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось переименовать";
+  }
+}
+
+async function toggleRagCollection(colId: number) {
+  const idx = sessionRagIds.value.indexOf(colId);
+  if (idx >= 0) {
+    sessionRagIds.value.splice(idx, 1);
+  } else {
+    sessionRagIds.value.push(colId);
+  }
+  // Auto-save
+  if (!expandedSessionId.value) return;
+  try {
+    await chatApi.updateSession(expandedSessionId.value, {
+      rag_mode: sessionRagIds.value.length > 0 ? "selected" : "all",
+      knowledge_collection_ids: sessionRagIds.value,
+    });
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось сохранить RAG";
   }
 }
 
@@ -334,6 +360,18 @@ onMounted(() => {
       <div class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-800">
         <h1 class="text-lg font-semibold text-white">Чаты</h1>
         <div class="flex items-center gap-3">
+          <button
+            class="text-amber-400 hover:text-amber-300 transition-colors"
+            :class="isCreating ? 'opacity-50' : ''"
+            :disabled="isCreating"
+            title="Новый чат"
+            @click="createNewChat"
+          >
+            <div v-if="isCreating" class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
           <button class="text-stone-400 hover:text-white transition-colors" @click="$router.push('/settings')">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3" />
@@ -489,13 +527,17 @@ onMounted(() => {
               <!-- LLM Provider -->
               <template v-else-if="panelTab === 'llm'">
                 <label class="block text-xs text-stone-400 mb-1.5">LLM провайдер</label>
+                <!-- Current source info -->
+                <div v-if="sessionMobileInstanceId" class="mb-2 px-3 py-2 bg-stone-800/50 rounded-lg text-xs text-stone-400">
+                  Источник: моб. приложение
+                  <span class="text-amber-400">{{ mobileInstances.find(i => i.id === sessionMobileInstanceId)?.name || sessionMobileInstanceId }}</span>
+                </div>
                 <div class="space-y-1 max-h-[200px] overflow-y-auto">
                   <button
                     v-for="opt in llmOptions"
                     :key="opt.value"
                     class="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-stone-800 transition-colors flex items-center gap-2"
                     :class="sessionLlm === opt.value ? 'text-amber-400 bg-amber-600/10' : 'text-stone-300'"
-                    @click="sessionLlm = opt.value"
                   >
                     <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="opt.value.startsWith('cloud:') ? 'bg-blue-400' : 'bg-green-400'" />
                     {{ opt.label }}
@@ -504,7 +546,10 @@ onMounted(() => {
                     </svg>
                   </button>
                 </div>
-                <p class="text-[10px] text-stone-600 mt-2">Выбор провайдера применится при отправке сообщения в чат</p>
+                <p class="text-[10px] text-stone-600 mt-2">
+                  <template v-if="sessionMobileInstanceId">Провайдер определяется привязанным моб. приложением</template>
+                  <template v-else>Используется провайдер по умолчанию</template>
+                </p>
               </template>
 
               <!-- RAG Collections -->
@@ -521,12 +566,16 @@ onMounted(() => {
                       type="checkbox"
                       :checked="sessionRagIds.includes(col.id)"
                       class="accent-amber-500"
-                      @change="sessionRagIds.includes(col.id) ? sessionRagIds.splice(sessionRagIds.indexOf(col.id), 1) : sessionRagIds.push(col.id)"
+                      @change="toggleRagCollection(col.id)"
                     />
                     <span class="flex-1">{{ col.name }}</span>
                     <span class="text-stone-600 text-[10px]">{{ col.document_count }} docs</span>
                   </label>
                 </div>
+                <p class="text-[10px] text-stone-600 mt-2">
+                  <template v-if="sessionRagIds.length">Выбрано: {{ sessionRagIds.length }}</template>
+                  <template v-else>Используются все коллекции</template>
+                </p>
               </template>
 
               <!-- Share -->
@@ -609,18 +658,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- FAB -->
-      <button
-        class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-lg shadow-amber-900/30 flex items-center justify-center transition-all safe-bottom"
-        :class="isCreating ? 'opacity-50' : ''"
-        :disabled="isCreating"
-        @click="createNewChat"
-      >
-        <div v-if="isCreating" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-        <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white">
-          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
     </template>
 
     <!-- ============ NON-ADMIN: CLAUDE-LIKE WELCOME ============ -->

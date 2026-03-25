@@ -39,6 +39,9 @@ export interface ChatSession {
   system_prompt?: string;
   source?: string | null;
   source_id?: string | null;
+  rag_mode?: string | null;
+  knowledge_collection_id?: number | null;
+  knowledge_collection_ids?: number[] | string | null;
   context_files?: ContextFile[];
   web_search_enabled?: boolean;
   created: string;
@@ -103,6 +106,9 @@ export const chatApi = {
       web_search_enabled?: boolean;
       source?: string;
       source_id?: string;
+      rag_mode?: string;
+      knowledge_collection_ids?: number[];
+      [key: string]: unknown;
     },
   ) =>
     api.put<{ session: ChatSession }>(
