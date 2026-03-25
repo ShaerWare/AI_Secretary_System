@@ -1,4 +1,4 @@
-"""Knowledge base models: collections, documents, FAQ, GitHub repos."""
+"""Knowledge base models: collections, documents, FAQ, GitHub repos, Google Drive."""
 
 import json
 from datetime import datetime
@@ -249,6 +249,59 @@ class GitHubRepoProject(Base):
             "last_commit_sha": self.last_commit_sha,
             "include_patterns": self.get_include_patterns(),
             "exclude_patterns": self.get_exclude_patterns(),
+            "file_count": self.file_count,
+            "total_size_bytes": self.total_size_bytes,
+            "workspace_id": self.workspace_id,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
+class GoogleDriveProject(Base):
+    """Google Drive folder connected as a knowledge base collection."""
+
+    __tablename__ = "google_drive_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    folder_id: Mapped[str] = mapped_column(String(200), nullable=False, server_default="root")
+    folder_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True
+    )
+    sync_status: Mapped[str] = mapped_column(String(20), default="idle", server_default="idle")
+    sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    file_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    include_mime_types: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "user_id": self.user_id,
+            "folder_id": self.folder_id,
+            "folder_name": self.folder_name,
+            "collection_id": self.collection_id,
+            "sync_status": self.sync_status,
+            "sync_error": self.sync_error,
+            "last_synced": self.last_synced.isoformat() if self.last_synced else None,
             "file_count": self.file_count,
             "total_size_bytes": self.total_size_bytes,
             "workspace_id": self.workspace_id,
