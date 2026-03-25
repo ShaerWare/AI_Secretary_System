@@ -243,5 +243,244 @@ class GoogleOAuthService:
             logger.info(f"Google OAuth disconnected for user {user_id}")
             return True
 
+    # ── Google Drive ──────────────────────────────────────────────
+
+    async def drive_list(
+        self,
+        user_id: int,
+        folder_id: str = "root",
+        query: str | None = None,
+        page_token: str | None = None,
+        page_size: int = 50,
+    ) -> dict:
+        """List files in a Drive folder. Returns {files, nextPageToken}."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        fields = "nextPageToken, files(id, name, mimeType, modifiedTime, size, iconLink)"
+        q_parts = [f"'{folder_id}' in parents", "trashed = false"]
+        if query:
+            q_parts.append(f"name contains '{query}'")
+        q = " and ".join(q_parts)
+
+        params: dict = {
+            "q": q,
+            "fields": fields,
+            "pageSize": page_size,
+            "orderBy": "folder,name",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://www.googleapis.com/drive/v3/files",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params=params,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        return {
+            "files": [
+                {
+                    "id": f["id"],
+                    "name": f["name"],
+                    "mimeType": f["mimeType"],
+                    "modifiedTime": f.get("modifiedTime"),
+                    "size": f.get("size"),
+                    "isFolder": f["mimeType"] == "application/vnd.google-apps.folder",
+                }
+                for f in data.get("files", [])
+            ],
+            "nextPageToken": data.get("nextPageToken"),
+        }
+
+    async def drive_search(self, user_id: int, query: str, page_size: int = 20) -> dict:
+        """Search files across entire Drive."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        fields = "files(id, name, mimeType, modifiedTime, size)"
+        q = f"name contains '{query}' and trashed = false"
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://www.googleapis.com/drive/v3/files",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params={"q": q, "fields": fields, "pageSize": page_size},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        return {
+            "files": [
+                {
+                    "id": f["id"],
+                    "name": f["name"],
+                    "mimeType": f["mimeType"],
+                    "modifiedTime": f.get("modifiedTime"),
+                    "size": f.get("size"),
+                    "isFolder": f["mimeType"] == "application/vnd.google-apps.folder",
+                }
+                for f in data.get("files", [])
+            ]
+        }
+
+    # ── Google Docs ──────────────────────────────────────────────
+
+    async def docs_get_text(self, user_id: int, document_id: str) -> dict:
+        """Get Google Doc content as plain text. Returns {title, text}."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://docs.googleapis.com/v1/documents/{document_id}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            doc = resp.json()
+
+        title = doc.get("title", "Untitled")
+        # Extract text from document body
+        text_parts: list[str] = []
+        for element in doc.get("body", {}).get("content", []):
+            paragraph = element.get("paragraph")
+            if not paragraph:
+                continue
+            for pe in paragraph.get("elements", []):
+                text_run = pe.get("textRun")
+                if text_run:
+                    text_parts.append(text_run.get("content", ""))
+
+        return {"title": title, "text": "".join(text_parts), "id": document_id}
+
+    # ── Google Sheets ────────────────────────────────────────────
+
+    async def sheets_get_data(
+        self,
+        user_id: int,
+        spreadsheet_id: str,
+        sheet_name: str | None = None,
+    ) -> dict:
+        """Get Google Sheet as markdown table. Returns {title, sheets, markdown}."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        async with httpx.AsyncClient() as client:
+            # Get spreadsheet metadata
+            resp = await client.get(
+                f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params={"fields": "properties.title,sheets.properties.title"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            meta = resp.json()
+            title = meta.get("properties", {}).get("title", "Untitled")
+            sheet_names = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+            # Determine which sheet to read
+            target = sheet_name if sheet_name and sheet_name in sheet_names else sheet_names[0]
+
+            # Read values
+            resp = await client.get(
+                f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{target}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            values = resp.json().get("values", [])
+
+        # Convert to markdown table
+        md = self._values_to_markdown(values)
+        return {
+            "title": title,
+            "sheet": target,
+            "sheets": sheet_names,
+            "markdown": md,
+            "rows": len(values),
+            "id": spreadsheet_id,
+        }
+
+    @staticmethod
+    def _values_to_markdown(values: list[list[str]]) -> str:
+        """Convert sheet values to markdown table."""
+        if not values:
+            return "(empty sheet)"
+        # Header
+        header = values[0]
+        col_count = len(header)
+        lines = ["| " + " | ".join(str(c) for c in header) + " |"]
+        lines.append("| " + " | ".join("---" for _ in range(col_count)) + " |")
+        # Data rows (limit to 500 rows for context)
+        for row in values[1:500]:
+            padded = list(row) + [""] * (col_count - len(row))
+            lines.append("| " + " | ".join(str(c) for c in padded[:col_count]) + " |")
+        if len(values) > 501:
+            lines.append(f"... ({len(values) - 501} more rows)")
+        return "\n".join(lines)
+
+    # ── Generic file download ────────────────────────────────────
+
+    async def drive_get_file_content(self, user_id: int, file_id: str, mime_type: str) -> dict:
+        """Get file content based on type. Routes to appropriate method."""
+        if mime_type == "application/vnd.google-apps.document":
+            return await self.docs_get_text(user_id, file_id)
+        elif mime_type == "application/vnd.google-apps.spreadsheet":
+            return await self.sheets_get_data(user_id, file_id)
+        else:
+            # Regular file — download as text
+            return await self._download_file_as_text(user_id, file_id)
+
+    async def _download_file_as_text(self, user_id: int, file_id: str) -> dict:
+        """Download a regular Drive file as text (for txt, csv, md, etc.)."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        async with httpx.AsyncClient() as client:
+            # Get file metadata
+            meta_resp = await client.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params={"fields": "name,mimeType,size"},
+                timeout=10,
+            )
+            meta_resp.raise_for_status()
+            meta = meta_resp.json()
+
+            # Download content (limit 1MB)
+            size = int(meta.get("size", 0))
+            if size > 1_048_576:
+                return {
+                    "title": meta["name"],
+                    "text": f"(file too large: {size / 1048576:.1f} MB, max 1 MB)",
+                    "id": file_id,
+                }
+
+            resp = await client.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params={"alt": "media"},
+                timeout=30,
+            )
+            resp.raise_for_status()
+
+            try:
+                text = resp.text
+            except Exception:
+                text = "(binary file — cannot display as text)"
+
+        return {"title": meta["name"], "text": text, "id": file_id}
+
 
 google_oauth_service = GoogleOAuthService()
