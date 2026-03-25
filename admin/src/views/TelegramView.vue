@@ -997,6 +997,44 @@ watch(instances, (newInstances) => {
 
           <!-- Users Tab -->
           <template v-if="activeTab === 'users'">
+            <!-- Bot Users List -->
+            <div class="bg-card rounded-xl border border-border p-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-medium">{{ t('telegram.botUsers') }} ({{ sessions.length }})</h3>
+              </div>
+              <div v-if="sessions.length === 0" class="text-center py-8 text-muted-foreground">
+                {{ t('telegram.noUsers') }}
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="session in sessions"
+                  :key="session.user_id"
+                  class="flex items-center justify-between p-3 bg-secondary rounded-lg"
+                >
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
+                      {{ (session.first_name || session.username || 'U')[0].toUpperCase() }}
+                    </div>
+                    <div>
+                      <p class="font-medium">
+                        {{ session.first_name || session.username || `User ${session.user_id}` }}
+                        <span v-if="session.last_name"> {{ session.last_name }}</span>
+                      </p>
+                      <p class="text-sm text-muted-foreground">
+                        ID: {{ session.user_id }}
+                        <span v-if="session.username"> · @{{ session.username }}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right text-xs text-muted-foreground">
+                    <p v-if="session.updated">{{ new Date(session.updated).toLocaleDateString() }}</p>
+                    <p v-if="session.created" class="opacity-60">{{ t('telegram.userSince') }} {{ new Date(session.created).toLocaleDateString() }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Access Settings -->
             <div class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('telegram.allowedUsersList') }}</h3>
               <p class="text-sm text-muted-foreground mb-3">{{ t('telegram.allowedUsersDesc') }}</p>
