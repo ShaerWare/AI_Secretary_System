@@ -65,4 +65,34 @@ export const googleApi = {
       `/admin/google/drive/file/${fileId}/content?${params}`
     )
   },
+
+  // Drive RAG projects
+  driveRagProjects: () =>
+    api.get<GoogleDriveProject[]>('/admin/google-drive/projects'),
+
+  createDriveRagProject: (data: { name: string; folder_id: string; folder_name?: string }) =>
+    api.post<GoogleDriveProject>('/admin/google-drive/projects', data),
+
+  syncDriveRagProject: (id: number) =>
+    api.post<{ status: string }>(`/admin/google-drive/projects/${id}/sync`),
+
+  deleteDriveRagProject: (id: number) =>
+    api.delete<{ status: string }>(`/admin/google-drive/projects/${id}`),
+}
+
+export interface GoogleDriveProject {
+  id: number
+  name: string
+  user_id: number
+  folder_id: string
+  folder_name: string | null
+  collection_id: number | null
+  sync_status: string
+  sync_error: string | null
+  last_synced: string | null
+  file_count: number
+  total_size_bytes: number
+  workspace_id: number
+  created: string | null
+  updated: string | null
 }
