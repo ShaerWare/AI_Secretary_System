@@ -9,12 +9,6 @@ import {
   type BranchNode,
   type ContextFile,
 } from "@/api/chat";
-import {
-  adminApi,
-  type CloudProvider,
-  type KnowledgeCollection,
-  type LlmOption,
-} from "@/api/admin";
 import { useAuthStore } from "@/stores/auth";
 import { useTts } from "@/composables/useTts";
 import MessageBubble from "@/components/MessageBubble.vue";
@@ -24,7 +18,6 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const tts = useTts();
-const isAdmin = computed(() => auth.isAdmin);
 
 const sessionId = computed(() => route.params.id as string);
 const title = ref("Chat");
@@ -39,38 +32,13 @@ const messagesContainer = ref<HTMLElement | null>(null);
 // Panels
 const showBranches = ref(false);
 const showContextFiles = ref(false);
-const showSettings = ref(false);
 const branches = ref<BranchNode[]>([]);
 const contextFiles = ref<ContextFile[]>([]);
 const branchesLoading = ref(false);
 const contextFileInputRef = ref<HTMLInputElement | null>(null);
-const settingsTab = ref<"files" | "prompt">("files");
 
-// Admin: LLM & RAG
-const llmProviders = ref<CloudProvider[]>([]);
-const ragCollections = ref<KnowledgeCollection[]>([]);
-const selectedLlm = ref<string>("default");
-const selectedCollectionIds = ref<number[]>([]);
-const showLlmDropdown = ref(false);
-const showRagDropdown = ref(false);
-const showExportDropdown = ref(false);
-const customPrompt = ref("");
+// Web search
 const webSearchEnabled = ref(false);
-
-const llmOptions = computed<LlmOption[]>(() => {
-  const opts: LlmOption[] = [
-    { value: "default", label: "Default", type: "vllm" },
-    { value: "vllm", label: "vLLM (Local)", type: "vllm" },
-  ];
-  for (const p of llmProviders.value) {
-    opts.push({
-      value: `cloud:${p.id}`,
-      label: `${p.name} (${p.model_name})`,
-      type: "cloud",
-    });
-  }
-  return opts;
-});
 
 // Resizable panel height (portrait) / width (landscape)
 const panelSize = ref(200);
@@ -112,22 +80,6 @@ function onResizeEnd() {
   isResizing.value = false;
 }
 
-// === Admin data ===
-
-async function loadAdminData() {
-  if (!isAdmin.value) return;
-  try {
-    const [providerData, collectionData] = await Promise.all([
-      adminApi.getProviders(),
-      adminApi.getCollections(),
-    ]);
-    llmProviders.value = providerData.providers;
-    ragCollections.value = collectionData.collections.filter((c) => c.enabled);
-  } catch {
-    // Non-critical — admin features just won't show options
-  }
-}
-
 // === Session ===
 
 async function loadSession() {
@@ -141,7 +93,6 @@ async function loadSession() {
       (m) => m.is_active !== false,
     );
     contextFiles.value = data.session.context_files || [];
-    customPrompt.value = data.session.system_prompt || "";
     webSearchEnabled.value = !!data.session.web_search_enabled;
     await scrollToBottom();
   } catch (e) {
@@ -172,18 +123,6 @@ async function sendMessage(content: string) {
 
   isStreaming.value = true;
   streamingContent.value = "";
-
-  // Build LLM/RAG overrides for admin
-  const overrides: Record<string, unknown> = {};
-  if (isAdmin.value) {
-    if (selectedLlm.value && selectedLlm.value !== "default") {
-      overrides.llm_backend = selectedLlm.value;
-    }
-    if (selectedCollectionIds.value.length > 0) {
-      overrides.rag_mode = "selected";
-      overrides.knowledge_collection_ids = selectedCollectionIds.value;
-    }
-  }
 
   const { abort } = chatApi.streamMessage(
     sessionId.value,
@@ -227,7 +166,6 @@ async function sendMessage(content: string) {
           break;
       }
     },
-    overrides,
   );
 
   abortStream = abort;
@@ -280,7 +218,6 @@ async function loadBranches() {
 
 function toggleBranches() {
   showContextFiles.value = false;
-  showSettings.value = false;
   showBranches.value = !showBranches.value;
   if (showBranches.value) loadBranches();
 }
@@ -356,6 +293,11 @@ const flatBranches = computed(() => flattenBranches(branches.value));
 
 // === Context Files ===
 
+function toggleContextFiles() {
+  showBranches.value = false;
+  showContextFiles.value = !showContextFiles.value;
+}
+
 function triggerFileUpload() {
   contextFileInputRef.value?.click();
 }
@@ -393,82 +335,6 @@ async function saveContextFiles() {
   }
 }
 
-// === Settings panel ===
-
-function toggleSettings() {
-  showBranches.value = false;
-  showContextFiles.value = false;
-  showSettings.value = !showSettings.value;
-}
-
-async function saveSystemPrompt() {
-  try {
-    await chatApi.updateSession(sessionId.value, {
-      system_prompt: customPrompt.value,
-    });
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "Не удалось сохранить промпт";
-  }
-}
-
-// === LLM / RAG dropdowns ===
-
-function selectLlm(value: string) {
-  selectedLlm.value = value;
-  showLlmDropdown.value = false;
-}
-
-function toggleCollection(id: number) {
-  const idx = selectedCollectionIds.value.indexOf(id);
-  if (idx >= 0) {
-    selectedCollectionIds.value.splice(idx, 1);
-  } else {
-    selectedCollectionIds.value.push(id);
-  }
-}
-
-// === Export ===
-
-function copyChatToClipboard() {
-  const text = messages.value
-    .map((m) => `**${m.role === "user" ? "User" : "Assistant"}:**\n${m.content}`)
-    .join("\n\n---\n\n");
-  navigator.clipboard.writeText(text);
-  showExportDropdown.value = false;
-}
-
-function exportChatMarkdown() {
-  const text = `# ${title.value}\n\n` + messages.value
-    .map((m) => `## ${m.role === "user" ? "User" : "Assistant"}\n\n${m.content}`)
-    .join("\n\n---\n\n");
-  downloadFile(`${title.value}.md`, text, "text/markdown");
-  showExportDropdown.value = false;
-}
-
-function exportChatJson() {
-  const data = {
-    title: title.value,
-    exported: new Date().toISOString(),
-    messages: messages.value.map((m) => ({
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp,
-    })),
-  };
-  downloadFile(`${title.value}.json`, JSON.stringify(data, null, 2), "application/json");
-  showExportDropdown.value = false;
-}
-
-function downloadFile(name: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 // === Message actions ===
 
 async function handleEditMessage(messageId: string, content: string) {
@@ -486,7 +352,6 @@ function handleSaveToContext(_messageId: string, content: string) {
   saveContextFiles();
   showContextFiles.value = true;
   showBranches.value = false;
-  showSettings.value = false;
 }
 
 async function handleSummarizeBranch(messageId: string) {
@@ -497,7 +362,6 @@ async function handleSummarizeBranch(messageId: string) {
     saveContextFiles();
     showContextFiles.value = true;
     showBranches.value = false;
-    showSettings.value = false;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось суммаризировать";
   }
@@ -531,25 +395,16 @@ async function handleDeleteFromMessage(messageId: string) {
   }
 }
 
-const anyPanelOpen = computed(() => showBranches.value || showContextFiles.value || showSettings.value);
+const anyPanelOpen = computed(() => showBranches.value || showContextFiles.value);
 const activePanelName = computed(() => {
   if (showBranches.value) return "Дерево веток";
   if (showContextFiles.value) return "Файлы контекста";
-  if (showSettings.value) return "Настройки";
   return "";
 });
 
 function closePanel() {
   showBranches.value = false;
   showContextFiles.value = false;
-  showSettings.value = false;
-}
-
-// Close dropdowns on outside click
-function onGlobalClick() {
-  showLlmDropdown.value = false;
-  showRagDropdown.value = false;
-  showExportDropdown.value = false;
 }
 
 watch(streamingContent, () => {
@@ -558,7 +413,6 @@ watch(streamingContent, () => {
 
 onMounted(async () => {
   await loadSession();
-  loadAdminData();
   // Auto-send message from welcome screen
   const msg = route.query.msg as string | undefined;
   if (msg) {
@@ -571,7 +425,6 @@ onMounted(async () => {
   window.addEventListener("mouseup", onResizeEnd);
   window.addEventListener("touchmove", onResizeMove, { passive: false });
   window.addEventListener("touchend", onResizeEnd);
-  document.addEventListener("click", onGlobalClick);
 });
 
 onUnmounted(() => {
@@ -580,7 +433,6 @@ onUnmounted(() => {
   window.removeEventListener("mouseup", onResizeEnd);
   window.removeEventListener("touchmove", onResizeMove);
   window.removeEventListener("touchend", onResizeEnd);
-  document.removeEventListener("click", onGlobalClick);
 });
 </script>
 
@@ -593,7 +445,6 @@ onUnmounted(() => {
         class="shrink-0 flex items-center gap-1.5 px-2 py-2.5 border-b border-stone-800 bg-stone-950/95 backdrop-blur"
       >
         <button
-          v-if="isAdmin"
           class="text-stone-400 hover:text-white transition-colors p-1"
           @click="router.back()"
         >
@@ -601,129 +452,16 @@ onUnmounted(() => {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <svg v-if="!isAdmin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-6 h-6 shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-6 h-6 shrink-0">
           <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F0A830"/><stop offset="100%" stop-color="#C27010"/></linearGradient></defs>
           <path fill="url(#hg)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"/>
         </svg>
         <h1 class="text-sm font-medium text-white truncate flex-1">
-          {{ isAdmin ? title : 'AI Секретарь' }}
+          {{ title }}
         </h1>
 
-        <!-- Admin toolbar buttons -->
-        <template v-if="isAdmin">
-          <!-- LLM Selector -->
-          <div class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg transition-colors"
-              :class="selectedLlm !== 'default' ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-              title="LLM Provider"
-              @click="showLlmDropdown = !showLlmDropdown; showRagDropdown = false; showExportDropdown = false"
-            >
-              <!-- Brain icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
-              </svg>
-            </button>
-            <!-- LLM Dropdown -->
-            <div
-              v-if="showLlmDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[200px] py-1 max-h-[300px] overflow-y-auto"
-            >
-              <button
-                v-for="opt in llmOptions"
-                :key="opt.value"
-                class="w-full text-left px-3 py-2 text-xs hover:bg-stone-800 transition-colors flex items-center gap-2"
-                :class="selectedLlm === opt.value ? 'text-amber-400' : 'text-stone-300'"
-                @click="selectLlm(opt.value)"
-              >
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="opt.type === 'cloud' ? 'bg-blue-400' : 'bg-green-400'" />
-                {{ opt.label }}
-                <svg v-if="selectedLlm === opt.value" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ml-auto shrink-0">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- RAG Collections -->
-          <div v-if="ragCollections.length" class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg transition-colors"
-              :class="selectedCollectionIds.length ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-              title="База знаний"
-              @click="showRagDropdown = !showRagDropdown; showLlmDropdown = false; showExportDropdown = false"
-            >
-              <!-- BookOpen icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-              </svg>
-            </button>
-            <!-- RAG Dropdown -->
-            <div
-              v-if="showRagDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[220px] py-1 max-h-[300px] overflow-y-auto"
-            >
-              <label
-                v-for="col in ragCollections"
-                :key="col.id"
-                class="flex items-center gap-2 px-3 py-2 text-xs hover:bg-stone-800 transition-colors cursor-pointer"
-                :class="selectedCollectionIds.includes(col.id) ? 'text-amber-400' : 'text-stone-300'"
-              >
-                <input
-                  type="checkbox"
-                  :checked="selectedCollectionIds.includes(col.id)"
-                  class="accent-amber-500"
-                  @change="toggleCollection(col.id)"
-                />
-                <span class="flex-1">{{ col.name }}</span>
-                <span class="text-stone-600 text-[10px]">{{ col.document_count }} docs</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Settings (system prompt) -->
-          <button
-            class="p-1.5 rounded-lg transition-colors"
-            :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-            title="Настройки сессии"
-            @click="toggleSettings"
-          >
-            <!-- Settings2 icon (sliders) -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
-            </svg>
-          </button>
-
-          <!-- Export -->
-          <div class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
-              title="Экспорт"
-              @click="showExportDropdown = !showExportDropdown; showLlmDropdown = false; showRagDropdown = false"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
-            <!-- Export Dropdown -->
-            <div
-              v-if="showExportDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[160px] py-1"
-            >
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="copyChatToClipboard">
-                Копировать в буфер
-              </button>
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatMarkdown">
-                Экспорт Markdown
-              </button>
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatJson">
-                Экспорт JSON
-              </button>
-            </div>
-          </div>
-        </template>
-
         <!-- Toolbar buttons — available to all users -->
+        <!-- New branch -->
         <button
           class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
           title="Новая ветка"
@@ -735,18 +473,19 @@ onUnmounted(() => {
           </svg>
         </button>
 
+        <!-- Context files -->
         <button
           class="p-1.5 rounded-lg transition-colors"
-          :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-          title="Настройки чата"
-          @click="toggleSettings"
+          :class="showContextFiles ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
+          title="Файлы контекста"
+          @click="toggleContextFiles"
         >
-          <!-- Settings2 icon (sliders) — same as web version -->
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
 
+        <!-- Branch tree -->
         <button
           class="p-1.5 rounded-lg transition-colors"
           :class="showBranches ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
@@ -761,6 +500,7 @@ onUnmounted(() => {
           </svg>
         </button>
 
+        <!-- Delete branch -->
         <button
           class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 transition-colors"
           title="Удалить ветку"
@@ -786,7 +526,6 @@ onUnmounted(() => {
 
       <!-- Portrait: panel drops down below header -->
       <template v-if="!isLandscape && anyPanelOpen">
-        <!-- Panel content -->
         <div
           class="shrink-0 bg-stone-900/95 border-b border-stone-700 overflow-y-auto flex flex-col"
           :style="{ height: panelSize + 'px' }"
@@ -854,76 +593,9 @@ onUnmounted(() => {
               </div>
             </div>
           </template>
-
-          <!-- Settings panel with tabs -->
-          <template v-if="showSettings">
-            <!-- Tabs -->
-            <div class="flex border-b border-stone-700">
-              <button
-                class="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors"
-                :class="settingsTab === 'files' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-stone-500 hover:text-stone-300'"
-                @click="settingsTab = 'files'"
-              >
-                Файлы ({{ contextFiles.length }})
-              </button>
-              <button
-                class="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors"
-                :class="settingsTab === 'prompt' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-stone-500 hover:text-stone-300'"
-                @click="settingsTab = 'prompt'"
-              >
-                Промпт
-              </button>
-            </div>
-
-            <!-- Files tab -->
-            <template v-if="settingsTab === 'files'">
-              <div class="px-3 py-2 flex items-center justify-between">
-                <span class="text-xs text-stone-400">Контекстные файлы</span>
-                <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">
-                  + Добавить
-                </button>
-              </div>
-              <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-              <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет файлов</div>
-              <div v-else class="pb-2">
-                <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-                  <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-                  <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </template>
-
-            <!-- Prompt tab -->
-            <template v-if="settingsTab === 'prompt'">
-              <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
-                <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
-                <textarea
-                  v-model="customPrompt"
-                  class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
-                  placeholder="Пользовательский промпт для этой сессии..."
-                />
-              </div>
-              <div class="shrink-0 px-3 pb-1">
-                <button
-                  class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
-                  @click="saveSystemPrompt"
-                >
-                  Сохранить
-                </button>
-              </div>
-            </template>
-          </template>
         </div>
 
-        <!-- Resize handle (portrait: horizontal bar at bottom of panel) -->
+        <!-- Resize handle (portrait) -->
         <div
           class="shrink-0 h-3 flex items-center justify-center cursor-row-resize bg-stone-900/80 border-b border-stone-700 touch-none select-none"
           @mousedown="onResizeStart"
@@ -933,7 +605,7 @@ onUnmounted(() => {
         </div>
       </template>
 
-      <!-- Messages wrapper (relative for scroll buttons) -->
+      <!-- Messages wrapper -->
       <div class="flex-1 relative min-h-0">
         <div
           ref="messagesContainer"
@@ -954,7 +626,6 @@ onUnmounted(() => {
               :key="msg.id"
               :message="msg"
               :is-speaking="tts.speakingMessageId.value === msg.id"
-              :is-admin="isAdmin"
               @speak="tts.speak($event, msg.id)"
               @stop-speak="tts.stop()"
               @edit="handleEditMessage"
@@ -968,7 +639,6 @@ onUnmounted(() => {
               v-if="isStreaming && streamingContent"
               :message="{ id: 'streaming', role: 'assistant', content: streamingContent, timestamp: new Date().toISOString() }"
               :is-streaming="true"
-              :is-admin="isAdmin"
             />
 
             <div v-if="isStreaming && !streamingContent" class="flex justify-start px-4 mb-3">
@@ -1031,7 +701,7 @@ onUnmounted(() => {
 
     <!-- Landscape: side panel slides from right -->
     <template v-if="isLandscape && anyPanelOpen">
-      <!-- Resize handle (vertical bar on left edge of panel) -->
+      <!-- Resize handle (vertical) -->
       <div
         class="shrink-0 w-3 flex items-center justify-center cursor-col-resize bg-stone-900/80 border-l border-stone-700 touch-none select-none"
         @mousedown="onResizeStart"
@@ -1110,64 +780,6 @@ onUnmounted(() => {
               </button>
             </div>
           </div>
-        </template>
-
-        <!-- Settings (landscape) -->
-        <template v-if="showSettings">
-          <div class="flex border-b border-stone-700">
-            <button
-              class="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors"
-              :class="settingsTab === 'files' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-stone-500 hover:text-stone-300'"
-              @click="settingsTab = 'files'"
-            >
-              Файлы ({{ contextFiles.length }})
-            </button>
-            <button
-              class="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors"
-              :class="settingsTab === 'prompt' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-stone-500 hover:text-stone-300'"
-              @click="settingsTab = 'prompt'"
-            >
-              Промпт
-            </button>
-          </div>
-          <template v-if="settingsTab === 'files'">
-            <div class="px-3 py-2 flex justify-end">
-              <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">+ Добавить</button>
-            </div>
-            <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет файлов</div>
-            <div v-else class="flex-1 overflow-y-auto pb-2">
-              <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-                <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-                <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </template>
-          <template v-if="settingsTab === 'prompt'">
-            <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
-              <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
-              <textarea
-                v-model="customPrompt"
-                class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
-                placeholder="Пользовательский промпт для этой сессии..."
-              />
-            </div>
-            <div class="shrink-0 px-3 pb-2">
-              <button
-                class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors"
-                @click="saveSystemPrompt"
-              >
-                Сохранить
-              </button>
-            </div>
-          </template>
         </template>
       </div>
     </template>

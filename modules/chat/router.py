@@ -505,6 +505,8 @@ class UpdateSessionRequest(BaseModel):
     knowledge_collection_ids: Optional[list[int]] = None
     context_files: Optional[list] = None  # [{"name": str, "content": str}]
     web_search_enabled: Optional[bool] = None
+    source: Optional[str] = None  # "admin", "mobile", "telegram", "widget"
+    source_id: Optional[str] = None  # e.g. mobile_app_instance id
 
 
 class LLMOverrideConfig(BaseModel):
@@ -741,6 +743,8 @@ async def admin_update_chat_session(
         knowledge_collection_ids=request.knowledge_collection_ids,
         context_files=request.context_files,
         web_search_enabled=request.web_search_enabled,
+        source=request.source,
+        source_id=request.source_id,
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
