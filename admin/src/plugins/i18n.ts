@@ -1353,6 +1353,8 @@ const messages = {
       connected: "Google аккаунт подключён",
       disconnected: "Google аккаунт отключён",
       connectionFailed: "Не удалось подключить Google",
+      searchFiles: "Поиск файлов...",
+      noFiles: "Нет файлов",
     },
   },
   en: {
@@ -2705,6 +2707,8 @@ const messages = {
       connected: "Google account connected",
       disconnected: "Google account disconnected",
       connectionFailed: "Failed to connect Google",
+      searchFiles: "Search files...",
+      noFiles: "No files",
     },
   },
   kk: {
@@ -4057,6 +4061,8 @@ const messages = {
       connected: "Google аккаунт қосылды",
       disconnected: "Google аккаунт ажыратылды",
       connectionFailed: "Google қосу сәтсіз аяқталды",
+      searchFiles: "Файлдарды іздеу...",
+      noFiles: "Файлдар жоқ",
     },
   },
 };

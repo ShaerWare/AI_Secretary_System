@@ -1,4 +1,4 @@
-"""Google OAuth router — auth flow, status, disconnect."""
+"""Google OAuth + Drive/Docs/Sheets router."""
 
 import logging
 
@@ -63,3 +63,61 @@ async def google_oauth_callback(
     except Exception as e:
         logger.error(f"Google OAuth callback error: {e}")
         return RedirectResponse(url="/admin/#/settings?google=error")
+
+
+# ── Drive / Docs / Sheets ────────────────────────────────────
+
+
+@router.get("/drive/files")
+async def drive_list_files(
+    folder_id: str = Query("root"),
+    query: str = Query(None),
+    page_token: str = Query(None),
+    page_size: int = Query(50, ge=1, le=100),
+    user: User = Depends(get_current_user),
+):
+    """List files in a Google Drive folder."""
+    try:
+        return await google_oauth_service.drive_list(
+            user.id, folder_id, query, page_token, page_size
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        logger.error(f"Drive list error: {e}")
+        raise HTTPException(status_code=502, detail="Google Drive error")
+
+
+@router.get("/drive/search")
+async def drive_search(
+    query: str = Query(..., min_length=1),
+    page_size: int = Query(20, ge=1, le=50),
+    user: User = Depends(get_current_user),
+):
+    """Search files across Google Drive."""
+    try:
+        return await google_oauth_service.drive_search(user.id, query, page_size)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        logger.error(f"Drive search error: {e}")
+        raise HTTPException(status_code=502, detail="Google Drive error")
+
+
+@router.get("/drive/file/{file_id}/content")
+async def drive_get_content(
+    file_id: str,
+    mime_type: str = Query(...),
+    sheet_name: str = Query(None),
+    user: User = Depends(get_current_user),
+):
+    """Get file content (auto-detects Docs/Sheets/text files)."""
+    try:
+        if mime_type == "application/vnd.google-apps.spreadsheet" and sheet_name:
+            return await google_oauth_service.sheets_get_data(user.id, file_id, sheet_name)
+        return await google_oauth_service.drive_get_file_content(user.id, file_id, mime_type)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        logger.error(f"File content error: {e}")
+        raise HTTPException(status_code=502, detail="Google API error")

@@ -178,6 +178,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 | `modules/crm/` | `service.py` | `AmoCRMService` |
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
 | `modules/telephony/` | `service.py` | `GSMService` |
+| `modules/google/` | `service.py`, `models.py` | `GoogleOAuthService` |
 
 **Import pattern**: `from modules.chat.service import chat_service` (direct, preferred) or `from db.integration import async_chat_manager` (backward-compatible alias). Domain `__init__.py` files do NOT re-export services (see Known Issues #9).
 
@@ -204,6 +205,7 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 | `modules/monitoring/` | `router_audit.py`, `router_usage.py`, `router_monitor.py` | `app/routers/audit.py`, `usage.py`, `monitor.py` |
 | `modules/chat/` | `router.py` | `app/routers/chat.py` |
 | `modules/llm/` | `router.py` | `app/routers/llm.py` |
+| `modules/google/` | `router.py` (+ `callback_router`) | `app/routers/google.py` |
 
 **Phase 4 routers** (extracted from `orchestrator.py`, not from `app/routers/`):
 
@@ -336,6 +338,9 @@ REDIS_URL=redis://localhost:6379/0  # Optional, graceful fallback
 DEV_MODE=1                          # Backend proxies to Vite dev server (:5173)
 VECTOR_SEARCH_URL=http://localhost:8003  # Optional, Vector Search microservice
 VECTOR_SEARCH_TOKEN=                # Bearer token for Vector Search API
+GOOGLE_CLIENT_ID=                   # Google OAuth 2.0 (Drive, Docs, Sheets, Gmail)
+GOOGLE_CLIENT_SECRET=               # Google OAuth 2.0 client secret
+GOOGLE_REDIRECT_URI=                # OAuth callback URL (default: {BASE_URL}/admin/oauth/google/callback)
 ```
 
 ## Deployment
