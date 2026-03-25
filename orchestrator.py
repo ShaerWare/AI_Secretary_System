@@ -80,6 +80,7 @@ from app.routers import (  # noqa: E402
 from modules.channels.widget.router_public import router as widget_public_router  # noqa: E402
 from modules.compat.router import router as compat_router  # noqa: E402
 from modules.core.router_health import router as health_router  # noqa: E402
+from modules.knowledge.router_google_drive import router as google_drive_rag_router  # noqa: E402
 from modules.monitoring.router_logs import router as logs_router  # noqa: E402
 
 
@@ -114,6 +115,7 @@ app.include_router(amocrm.router)
 app.include_router(amocrm.webhook_router)
 app.include_router(google.callback_router)  # Must be before static mount
 app.include_router(google.router)
+app.include_router(google_drive_rag_router)
 app.include_router(health_router)
 app.include_router(compat_router)
 app.include_router(logs_router)
