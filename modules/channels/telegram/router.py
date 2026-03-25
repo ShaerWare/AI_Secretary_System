@@ -649,6 +649,24 @@ async def admin_get_bot_instance_sessions(
     return {"sessions": sessions}
 
 
+@router.post("/instances/{instance_id}/register-user")
+async def register_bot_user(instance_id: str, request: dict):
+    """Register a Telegram user for a bot instance (called by bot middleware, no auth)."""
+    user_id = request.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+
+    await telegram_session_service.register_user(
+        user_id=user_id,
+        bot_id=instance_id,
+        username=request.get("username"),
+        first_name=request.get("first_name"),
+        last_name=request.get("last_name"),
+    )
+
+    return {"status": "ok"}
+
+
 @router.post("/instances/{instance_id}/sessions")
 async def admin_create_bot_instance_session(instance_id: str, request: dict):
     """Create/register a session for a bot instance (used by telegram_bot_service)"""

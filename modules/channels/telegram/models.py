@@ -27,9 +27,10 @@ class TelegramSession(Base):
     # Composite primary key: bot_id + user_id
     bot_id: Mapped[str] = mapped_column(String(50), primary_key=True, default="default")
     user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    chat_session_id: Mapped[str] = mapped_column(
+    chat_session_id: Mapped[Optional[str]] = mapped_column(
         String(50),
-        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        ForeignKey("chat_sessions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

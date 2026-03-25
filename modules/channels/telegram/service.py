@@ -1,11 +1,13 @@
 """Telegram channel services."""
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from db.database import AsyncSessionLocal
 from db.repositories import BotInstanceRepository, TelegramRepository, UserIdentityRepository
 from db.retry import retry_on_busy
+from modules.channels.telegram.models import TelegramSession
 
 
 logger = logging.getLogger(__name__)
@@ -153,6 +155,64 @@ class TelegramSessionService:
             )
 
             # Track Telegram contact as user identity
+            try:
+                identity_repo = UserIdentityRepository(session)
+                display = first_name or username or str(user_id)
+                await identity_repo.find_or_create(
+                    provider="telegram",
+                    provider_uid=str(user_id),
+                    display_name=display,
+                    metadata_dict={
+                        "username": username,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                    },
+                )
+            except Exception:
+                logger.debug("Failed to track Telegram identity for %s", user_id, exc_info=True)
+
+            await session.commit()
+
+    async def register_user(
+        self,
+        user_id: int,
+        bot_id: str,
+        username: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+    ) -> None:
+        """Register a Telegram user for a bot (without chat session)."""
+        async with AsyncSessionLocal() as session:
+            repo = TelegramRepository(session, bot_id=bot_id)
+            existing = await repo.get_session(user_id, bot_id=bot_id)
+            if existing:
+                # Update user info
+                from sqlalchemy import select
+
+                result = await session.execute(
+                    select(TelegramSession).where(
+                        TelegramSession.bot_id == bot_id,
+                        TelegramSession.user_id == user_id,
+                    )
+                )
+                ts = result.scalar_one_or_none()
+                if ts:
+                    ts.username = username
+                    ts.first_name = first_name
+                    ts.last_name = last_name
+                    ts.updated = datetime.utcnow()
+            else:
+                ts = TelegramSession(
+                    bot_id=bot_id,
+                    user_id=user_id,
+                    chat_session_id=None,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                session.add(ts)
+
+            # Track identity
             try:
                 identity_repo = UserIdentityRepository(session)
                 display = first_name or username or str(user_id)
