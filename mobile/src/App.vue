@@ -11,7 +11,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full safe-top safe-bottom">
+  <div class="h-full safe-top">
     <router-view />
   </div>
 </template>
