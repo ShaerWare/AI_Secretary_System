@@ -2688,8 +2688,8 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
 
-      <!-- Welcome screen for chat-only users with no session selected -->
-      <div v-if="isChatOnly && !currentSessionId" class="flex-1 flex flex-col items-center px-6">
+      <!-- Welcome screen for chat-only users with no session selected (hidden when panels open) -->
+      <div v-if="isChatOnly && !currentSessionId && !showBranchTree && !showSettings" class="flex-1 flex flex-col items-center px-6">
         <div class="flex-1" />
         <div class="text-center max-w-lg w-full">
           <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-primary/15 flex items-center justify-center">
@@ -3843,7 +3843,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         />
         <ArtifactPanel
           :artifact="activeArtifact"
-          class="artifact-panel fixed inset-0 z-50 md:relative md:inset-auto md:z-0 flex-shrink-0 overflow-hidden"
+          class="artifact-panel fixed inset-0 z-50 md:relative md:inset-auto md:z-0 md:h-full flex-shrink-0 overflow-hidden"
           :style="{ '--artifact-w': artifactWidth + 'px' }"
           @close="closeArtifact"
         />
@@ -3864,7 +3864,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       />
       <div
         v-if="showSettings"
-        class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
+        class="fixed inset-0 z-50 md:relative md:inset-auto md:z-0 md:h-full border-l border-border bg-card flex flex-col flex-shrink-0 overflow-hidden settings-panel"
         :style="{ '--settings-w': settingsWidth + 'px' }"
       >
         <!-- Panel header -->
