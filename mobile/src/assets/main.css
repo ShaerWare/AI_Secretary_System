@@ -36,6 +36,10 @@ body {
 .safe-bottom {
   padding-bottom: var(--safe-area-bottom);
 }
+/* Bottom input area: safe-area + fallback for Android nav bar */
+.safe-input-bottom {
+  padding-bottom: calc(0.5rem + var(--safe-area-bottom));
+}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {

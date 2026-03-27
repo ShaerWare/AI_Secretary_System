@@ -41,7 +41,7 @@ const contextFileInputRef = ref<HTMLInputElement | null>(null);
 const webSearchEnabled = ref(false);
 
 // Resizable panel height (portrait) / width (landscape)
-const panelSize = ref(200);
+const panelSize = ref(Math.round(window.innerHeight * 0.5));
 const isResizing = ref(false);
 const resizeStartPos = ref(0);
 const resizeStartSize = ref(0);
@@ -72,7 +72,7 @@ function onResizeMove(e: TouchEvent | MouseEvent) {
     panelSize.value = Math.max(150, Math.min(window.innerWidth * 0.7, resizeStartSize.value + delta));
   } else {
     const delta = pos.clientY - resizeStartPos.value;
-    panelSize.value = Math.max(100, Math.min(window.innerHeight * 0.6, resizeStartSize.value + delta));
+    panelSize.value = Math.max(100, Math.min(window.innerHeight * 0.9, resizeStartSize.value + delta));
   }
 }
 
@@ -677,7 +677,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Input with web search toggle -->
-      <div class="flex items-end gap-1 px-2 pb-2 pt-1 border-t border-stone-700/50 bg-stone-900/95">
+      <div class="flex items-end gap-1 px-2 pt-1 border-t border-stone-700/50 bg-stone-900/95 safe-input-bottom">
         <button
           :class="[
             'p-2.5 rounded-xl transition-colors shrink-0',
