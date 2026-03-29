@@ -25,7 +25,9 @@ class TestKnowledgeServiceProtocolCompliance:
         """KnowledgeServiceImpl must implement every method from the Protocol."""
         protocol_methods = {
             name
-            for name, _ in inspect.getmembers(KnowledgeServiceProtocol, predicate=inspect.isfunction)
+            for name, _ in inspect.getmembers(
+                KnowledgeServiceProtocol, predicate=inspect.isfunction
+            )
             if not name.startswith("_")
         }
         impl_methods = {

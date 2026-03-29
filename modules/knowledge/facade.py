@@ -198,9 +198,7 @@ class KnowledgeServiceImpl:
         """Get a single collection by ID."""
         from modules.knowledge.service import knowledge_collection_service
 
-        raw = await knowledge_collection_service.get_by_id(
-            collection_id, workspace_id=workspace_id
-        )
+        raw = await knowledge_collection_service.get_by_id(collection_id, workspace_id=workspace_id)
         if raw is None:
             return None
         return _to_collection_info(raw)
@@ -250,7 +248,9 @@ class KnowledgeServiceImpl:
                 slug = collection["slug"] if collection else str(collection_id)
                 await sync_collection_to_vector_search(wiki_rag, vs_client, collection_id, slug)
             except Exception as vs_err:
-                logger.warning("Vector Search sync failed for collection %d: %s", collection_id, vs_err)
+                logger.warning(
+                    "Vector Search sync failed for collection %d: %s", collection_id, vs_err
+                )
 
         return SyncResult(
             collection_id=collection_id,
