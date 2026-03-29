@@ -202,6 +202,14 @@ async def startup_event():
         container.llm_service = llm_service
         container.streaming_tts_manager = streaming_tts_manager
 
+        # LLM service facade (Phase 7.3)
+        from modules.llm import facade as _llm_facade_module
+        from modules.llm.facade import LLMServiceImpl
+
+        llm_facade = LLMServiceImpl(container)
+        container.llm_service_facade = llm_facade
+        _llm_facade_module.llm_service_facade = llm_facade
+
         # Reload FAQ and voice presets from DB
         from modules.knowledge.startup import reload_llm_faq
         from modules.speech.startup import reload_voice_presets
