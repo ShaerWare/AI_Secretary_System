@@ -146,6 +146,13 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
     """Initialize Wiki RAG service with tiered embedding provider."""
     from pathlib import Path
 
+    from modules.knowledge import facade as _facade_module
+    from modules.knowledge.facade import KnowledgeServiceImpl
+
+    facade = KnowledgeServiceImpl(container)
+    container.knowledge_service = facade
+    _facade_module.knowledge_service = facade
+
     try:
         from app.services.wiki_rag_service import WikiRAGService
 
