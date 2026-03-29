@@ -165,10 +165,10 @@ async def setup_event_subscriptions(event_bus) -> None:
 
     async def on_user_role_changed(event: UserRoleChanged) -> None:
         """Invalidate caches and revoke sessions on role change."""
-        from auth_manager import _member_role_cache, revoke_all_user_sessions
+        from modules.core.auth_service import auth_service
 
-        _member_role_cache.invalidate_user(event.user_id)
-        await revoke_all_user_sessions(event.user_id)
+        auth_service.invalidate_member_role_cache(event.user_id)
+        await auth_service.revoke_all_sessions(event.user_id)
         logger.info(
             "UserRoleChanged handled: user=%d role=%s->%s",
             event.user_id,
@@ -178,10 +178,10 @@ async def setup_event_subscriptions(event_bus) -> None:
 
     async def on_session_revoked(event: SessionRevoked) -> None:
         """Revoke all sessions and invalidate caches for a user."""
-        from auth_manager import _member_role_cache, revoke_all_user_sessions
+        from modules.core.auth_service import auth_service
 
-        _member_role_cache.invalidate_user(event.user_id)
-        await revoke_all_user_sessions(event.user_id)
+        auth_service.invalidate_member_role_cache(event.user_id)
+        await auth_service.revoke_all_sessions(event.user_id)
         logger.info(
             "SessionRevoked handled: user=%d reason=%s",
             event.user_id,
