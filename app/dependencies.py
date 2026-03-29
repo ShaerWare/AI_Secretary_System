@@ -54,6 +54,9 @@ class ServiceContainer:
         # Wiki RAG service
         self.wiki_rag_service = None
 
+        # Knowledge service facade (Phase 7.2)
+        self.knowledge_service = None
+
         # Vector Search client (HTTP → microservice)
         self.vector_search_client = None
 
