@@ -28,6 +28,7 @@ import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type Cha
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
+import CcOrchestraPanel from '@/components/CcOrchestraPanel.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
@@ -192,6 +193,7 @@ const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: 
 const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize: startBranchTouchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
 const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
 const { width: artifactWidth, startResize: startArtifactResize, startTouchResize: startArtifactTouchResize } = useResizablePanel('chat-artifact-width', 500, 300, 800, 'left')
+const { width: ccPanelWidth, startResize: startCcPanelResize, startTouchResize: startCcPanelTouchResize } = useResizablePanel('chat-cc-panel-width', 320, 220, 500, 'left')
 
 // Pasted content blocks
 const pastedBlocks = ref<PastedBlock[]>([])
@@ -402,9 +404,13 @@ function renderMarkdown(content: string, messageId?: string): string {
 // Branch tree toggle
 const showBranchTree = ref(false)
 
+// CC Orchestra panel toggle
+const showCcPanel = ref(false)
+
 // Mutual exclusivity: panel watchers
-watch(showBranchTree, (v) => { if (v) closeArtifact() })
-watch(showSettings, (v) => { if (v) closeArtifact() })
+watch(showBranchTree, (v) => { if (v) { closeArtifact(); showCcPanel.value = false } })
+watch(showSettings, (v) => { if (v) { closeArtifact(); showCcPanel.value = false } })
+watch(showCcPanel, (v) => { if (v) { closeArtifact(); showBranchTree.value = false } })
 
 // File attachment state
 const attachedFiles = ref<{ name: string; content: string }[]>([])
@@ -2305,15 +2311,15 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </div>
         </div>
 
-        <!-- Claude Code toggle (restricted users, admin only) -->
+        <!-- CC Orchestra panel toggle (restricted users, admin only) -->
         <button
           v-if="!isChatOnly && ['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
           :class="[
             'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
-            cc.isActive.value ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
+            showCcPanel ? 'bg-green-600/20 text-green-400' : 'text-muted-foreground hover:bg-secondary/50'
           ]"
-          :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-          @click="toggleCcMode()"
+          :title="t('chatView.ccPanel.title')"
+          @click="showCcPanel = !showCcPanel"
         >
           <Terminal class="w-4 h-4" />
         </button>
@@ -2840,15 +2846,15 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             </div>
           </div>
 
-          <!-- Claude Code toggle (restricted users) -->
+          <!-- CC Orchestra panel toggle (restricted users) -->
           <button
             v-if="['shaerware', 'ivan'].includes(authStore.user?.username ?? '')"
             :class="[
               'p-2 rounded-lg border transition-colors',
-              cc.isActive.value ? 'border-green-600 bg-green-600 text-white' : 'border-border text-muted-foreground hover:bg-secondary/50'
+              showCcPanel ? 'border-green-600 bg-green-600 text-white' : 'border-border text-muted-foreground hover:bg-secondary/50'
             ]"
-            :title="cc.isActive.value ? t('chatView.claudeCode.disable') : t('chatView.claudeCode.enable')"
-            @click="toggleCcMode()"
+            :title="t('chatView.ccPanel.title')"
+            @click="showCcPanel = !showCcPanel"
           >
             <Terminal class="w-4 h-4" />
           </button>
@@ -3808,6 +3814,21 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
       </div>
       </div> <!-- /messages wrapper -->
+
+      <!-- CC Orchestra Panel -->
+      <template v-if="showCcPanel">
+        <div
+          class="w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0"
+          @mousedown="startCcPanelResize"
+          @touchstart="startCcPanelTouchResize"
+        />
+        <CcOrchestraPanel
+          :session-id="currentSessionId"
+          :style="{ width: ccPanelWidth + 'px' }"
+          @close="showCcPanel = false"
+          @open-session="loadCcSession"
+        />
+      </template>
 
       <!-- Branch Tree Panel -->
       <template v-if="showBranchTree">

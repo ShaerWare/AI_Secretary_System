@@ -247,7 +247,7 @@ async def startup_event():
         # Auto-start bots and bridge
         from modules.channels.telegram.startup import auto_start_bots as auto_start_telegram
         from modules.channels.whatsapp.startup import auto_start_bots as auto_start_whatsapp
-        from modules.llm.startup import auto_start_bridge
+        from modules.llm.startup import auto_start_bridge, bridge_health_check
 
         await auto_start_telegram()
         await auto_start_whatsapp()
@@ -260,6 +260,9 @@ async def startup_event():
         from modules.kanban.tasks import sync_kanban_issues
 
         task_registry.register("session-cleanup", cleanup_expired_sessions, interval=3600)
+        task_registry.register(
+            "bridge-health-check", bridge_health_check, interval=60, initial_delay=30
+        )
         task_registry.register(
             "periodic-vacuum", periodic_vacuum, interval=7 * 24 * 3600, initial_delay=24 * 3600
         )

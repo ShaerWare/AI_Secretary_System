@@ -255,3 +255,29 @@ async def auto_start_bridge() -> None:
             logger.warning(f"🌉 Bridge auto-start failed: {result.get('error', 'unknown')}")
     except Exception as e:
         logger.error(f"🌉 Error during bridge auto-start: {e}")
+
+
+async def bridge_health_check() -> None:
+    """Periodic health check for bridge — auto-restart if crashed."""
+    from bridge_manager import bridge_manager
+    from db.integration import async_cloud_provider_manager
+
+    try:
+        bridge_providers = await async_cloud_provider_manager.get_by_type(
+            "claude_bridge", enabled_only=True
+        )
+        if not bridge_providers:
+            return
+
+        if bridge_manager.is_running:
+            return
+
+        # Bridge should be running but isn't — restart it
+        logger.warning("🌉 Bridge not running, auto-restarting...")
+        result = await bridge_manager.start()
+        if result.get("status") == "ok":
+            logger.info(f"🌉 Bridge auto-restarted on port {result.get('port', 8787)}")
+        else:
+            logger.warning(f"🌉 Bridge auto-restart failed: {result.get('error', 'unknown')}")
+    except Exception as e:
+        logger.error(f"🌉 Bridge health check error: {e}")

@@ -390,6 +390,14 @@ const messages = {
         attachFiles: "Файлы из чата",
         workDir: "Рабочая папка",
       },
+      ccPanel: {
+        orchestras: "Оркестры",
+        roadmap: "Дорожная карта",
+        noChat: "Выберите чат",
+        noOrchestras: "Нет запущенных оркестров",
+        roadmapPlaceholder: "Дорожная карта (скоро)",
+        title: "Оркестры Claude Code",
+      },
     },
     // Auth
     auth: {
@@ -1747,6 +1755,14 @@ const messages = {
         attachFiles: "Files from chat",
         workDir: "Working directory",
       },
+      ccPanel: {
+        orchestras: "Orchestras",
+        roadmap: "Roadmap",
+        noChat: "Select a chat",
+        noOrchestras: "No orchestras running",
+        roadmapPlaceholder: "Roadmap (coming soon)",
+        title: "Claude Code Orchestras",
+      },
     },
     // Auth
     auth: {
@@ -3103,6 +3119,14 @@ const messages = {
         newSession: "Жаңа Claude Code сессиясы",
         attachFiles: "Чаттан файлдар",
         workDir: "Жұмыс қалтасы",
+      },
+      ccPanel: {
+        orchestras: "Оркестрлер",
+        roadmap: "Жол картасы",
+        noChat: "Чат таңдаңыз",
+        noOrchestras: "Іске қосылған оркестрлер жоқ",
+        roadmapPlaceholder: "Жол картасы (жақында)",
+        title: "Claude Code оркестрлері",
       },
     },
     // Auth
