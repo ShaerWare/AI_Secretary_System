@@ -392,14 +392,8 @@ async def admin_set_llm_backend(
     """Переключить LLM backend с горячей перезагрузкой сервиса"""
     container = get_container()
 
-    # Stop bridge if currently running and switching away from it
-    current_service = container.llm_service
-    if current_service and getattr(current_service, "provider_type", None) == "claude_bridge":
-        from bridge_manager import bridge_manager
-
-        if bridge_manager.is_running:
-            logger.info("🛑 Stopping bridge (switching backend)...")
-            await bridge_manager.stop()
+    # NOTE: bridge is stopped AFTER successful switch (not before),
+    # so if the target backend fails, bridge remains running.
 
     # Auto-convert "gemini" to default cloud Gemini provider
     if request.backend == "gemini":
@@ -512,6 +506,18 @@ async def admin_set_llm_backend(
                     )
             except ImportError:
                 raise HTTPException(status_code=503, detail="VLLMLLMService не доступен")
+
+            # Stop bridge only after vLLM is confirmed working
+            current_service = container.llm_service
+            if (
+                current_service
+                and getattr(current_service, "provider_type", None) == "claude_bridge"
+            ):
+                from bridge_manager import bridge_manager
+
+                if bridge_manager.is_running:
+                    logger.info("🛑 Stopping bridge (switching to vLLM)...")
+                    await bridge_manager.stop()
 
             container.llm_service = new_service
             os.environ["LLM_BACKEND"] = "vllm"
