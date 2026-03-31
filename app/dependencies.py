@@ -45,6 +45,9 @@ class ServiceContainer:
         # LLM service facade (Phase 7.3)
         self.llm_service_facade = None
 
+        # Chat service facade (Phase 7.4)
+        self.chat_service_facade = None
+
         # STT service
         self.stt_service: STTService | None = None
 

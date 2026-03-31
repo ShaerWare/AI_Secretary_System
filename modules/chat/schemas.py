@@ -65,11 +65,22 @@ class MessageInfo(TypedDict):
 class StreamChunk(TypedDict, total=False):
     """A single chunk from ChatService.stream_message().
 
-    ``content`` — text delta from the model.
-    ``done`` — ``True`` on the final chunk (includes ``token_usage``).
+    Event types:
+    - ``user_message`` — echoes saved user message (``message`` field)
+    - ``chunk`` — text delta from the model (``content`` field)
+    - ``tool_start`` — agentic RAG tool invoked (``name``, ``query``)
+    - ``tool_end`` — tool finished (``name``, ``found``)
+    - ``assistant_message`` — full saved response (``message``, ``token_usage``)
+    - ``done`` — stream finished
+    - ``error`` — generation error (``content``)
     """
 
+    type: str
     content: str
+    message: dict
+    name: str
+    query: str
+    found: bool
     done: bool
     token_usage: TokenUsage | None
 
