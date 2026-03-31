@@ -210,6 +210,14 @@ async def startup_event():
         container.llm_service_facade = llm_facade
         _llm_facade_module.llm_service_facade = llm_facade
 
+        # Chat service facade (Phase 7.4)
+        from modules.chat import facade as _chat_facade_module
+        from modules.chat.facade import ChatServiceImpl
+
+        chat_facade = ChatServiceImpl(container)
+        container.chat_service_facade = chat_facade
+        _chat_facade_module.chat_service_facade = chat_facade
+
         # Reload FAQ and voice presets from DB
         from modules.knowledge.startup import reload_llm_faq
         from modules.speech.startup import reload_voice_presets

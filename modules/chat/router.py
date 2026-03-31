@@ -12,17 +12,17 @@ from pydantic import BaseModel
 
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_CHAT, limiter
-from app.utils.tokens import count_message_tokens, get_context_window, trim_messages
+from app.utils.tokens import count_message_tokens, get_context_window
 from auth_manager import User, require_permission, user_has_level, workspace_context
 from cloud_llm_service import CloudLLMService
 from modules.channels.mobile.service import mobile_app_instance_service
 from modules.channels.telegram.service import bot_instance_service
 from modules.channels.whatsapp.service import whatsapp_instance_service
 from modules.channels.widget.service import widget_instance_service
+from modules.chat.facade import ChatServiceImpl, chat_service_facade
 from modules.chat.service import chat_service, chat_share_service
 from modules.knowledge.service import knowledge_collection_service
 from modules.llm.service import cloud_provider_service
-from modules.search.service import web_search_service
 
 
 logger = logging.getLogger(__name__)
@@ -43,47 +43,6 @@ _NO_TOOLS_SUFFIX = (
     "Отвечай только обычным текстом. Используй markdown для форматирования."
 )
 
-# Agentic RAG: LLM decides when to search the knowledge base
-KNOWLEDGE_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "knowledge_search",
-        "description": (
-            "Search the knowledge base for relevant information. "
-            "Use when the user asks something that might be answered by documentation."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query. Be specific."}
-            },
-            "required": ["query"],
-        },
-    },
-}
-WEB_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": (
-            "Search the internet for current information. "
-            "Use when the user asks about recent events, prices, weather, news, "
-            "or anything that requires up-to-date data from the web."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query in the language of the user's question.",
-                }
-            },
-            "required": ["query"],
-        },
-    },
-}
-MAX_TOOL_ITERATIONS = 10
-
 # Temporary cache for OCR text from uploaded images (upload → send are two separate requests)
 _pending_image_ocr: dict[str, str] = {}
 
@@ -101,16 +60,6 @@ _WEB_SEARCH_SUFFIX = (
 )
 
 
-def _inject_context_files(prompt: str | None, session: dict) -> str | None:
-    """Inject context file contents into system prompt if session has any."""
-    context_files = session.get("context_files")
-    if not context_files:
-        return prompt
-    files_text = "\n\n".join(f"# {f['name']}\n{f['content']}" for f in context_files)
-    base = prompt or _DEFAULT_RAG_PROMPT
-    return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
-
-
 def _finalize_prompt(
     prompt: str | None, agentic_rag: bool = False, web_search: bool = False
 ) -> str:
@@ -124,88 +73,6 @@ def _finalize_prompt(
     if web_search:
         result += _WEB_SEARCH_SUFFIX
     return result
-
-
-def _should_use_agentic_rag(
-    llm_service, rag_mode: str, collection_ids: list[int], wiki_rag
-) -> bool:
-    """Check if agentic RAG loop should be used instead of one-shot injection."""
-    if rag_mode == "none" or not collection_ids or not wiki_rag:
-        return False
-    # Check provider supports tools (CloudLLMService wraps provider, VLLMLLMService has it directly)
-    if getattr(llm_service, "supports_tools", False):
-        return True
-    return hasattr(llm_service, "provider") and getattr(
-        llm_service.provider, "supports_tools", False
-    )
-
-
-def _execute_knowledge_search(wiki_rag, query: str, collection_ids: list[int]) -> str:
-    """Execute a knowledge base search and return results text (sync)."""
-    if len(collection_ids) == 1:
-        return wiki_rag.retrieve(query, top_k=5, max_chars=3000, collection_id=collection_ids[0])
-    return wiki_rag.retrieve_multi(query, collection_ids, top_k=5, max_chars=3000)
-
-
-async def _execute_knowledge_search_async(wiki_rag, query: str, collection_ids: list[int]) -> str:
-    """Execute knowledge search with vector search support (async)."""
-    if not wiki_rag.vector_search_available:
-        import asyncio
-
-        return await asyncio.to_thread(_execute_knowledge_search, wiki_rag, query, collection_ids)
-
-    if len(collection_ids) == 1:
-        return await wiki_rag.retrieve_async(
-            query, top_k=5, max_chars=3000, collection_id=collection_ids[0]
-        )
-    return await wiki_rag.retrieve_multi_async(query, collection_ids, top_k=5, max_chars=3000)
-
-
-def _build_tools(use_agentic: bool, use_web_search: bool) -> list[dict]:
-    """Build the tools list based on enabled features."""
-    tools: list[dict] = []
-    if use_agentic:
-        tools.append(KNOWLEDGE_SEARCH_TOOL)
-    if use_web_search:
-        tools.append(WEB_SEARCH_TOOL)
-    return tools
-
-
-def _supports_tools(llm_service) -> bool:
-    """Check if the LLM provider supports tool calling."""
-    if getattr(llm_service, "supports_tools", False):
-        return True
-    return hasattr(llm_service, "provider") and getattr(
-        llm_service.provider, "supports_tools", False
-    )
-
-
-def _execute_tool_call(
-    fn_name: str,
-    args: dict,
-    wiki_rag,
-    collection_ids: list[int],
-) -> tuple[str, bool]:
-    """Execute a tool call and return (result_text, found).
-
-    Returns the result text and whether the search found anything.
-    """
-    if fn_name == "knowledge_search":
-        query = args.get("query", "")
-        if not query:
-            return "Пустой поисковый запрос.", False
-        result = _execute_knowledge_search(wiki_rag, query, collection_ids)
-        found = bool(result and result.strip())
-        return result or "Ничего не найдено в базе знаний.", found
-    elif fn_name == "web_search":
-        query = args.get("query", "")
-        if not query:
-            return "Пустой поисковый запрос.", False
-        result = web_search_service.search(query, max_results=5)
-        found = bool(result and "No web results" not in result and "failed" not in result)
-        return result, found
-    else:
-        return f"Неизвестный инструмент: {fn_name}", False
 
 
 def _extract_collection_ids(data: dict) -> list[int]:
@@ -325,124 +192,6 @@ async def _resolve_rag_config(
     return "all", await _get_all_enabled_collection_ids()
 
 
-def _inject_rag_context(
-    wiki_rag,
-    user_content: str,
-    base_prompt: Optional[str],
-    rag_mode: str,
-    collection_ids: list[int],
-) -> Optional[str]:
-    """Inject RAG context into system prompt based on rag_mode.
-
-    Returns updated prompt or base_prompt unchanged if no RAG injection needed.
-    collection_ids: list of collection IDs to search (resolved by _resolve_rag_config).
-    """
-    logger.info(
-        f"RAG inject: mode={rag_mode}, ids={collection_ids}, "
-        f"wiki_rag={'yes' if wiki_rag else 'NO'}, query={user_content[:80]!r}"
-    )
-    if not wiki_rag or not user_content or rag_mode == "none" or not collection_ids:
-        logger.info(
-            f"RAG inject: skipped (wiki_rag={bool(wiki_rag)}, "
-            f"content={bool(user_content)}, mode={rag_mode}, ids={collection_ids})"
-        )
-        return base_prompt
-
-    loaded_ids = (
-        list(wiki_rag._collection_indexes.keys())
-        if hasattr(wiki_rag, "_collection_indexes")
-        else []
-    )
-    logger.info(f"RAG inject: loaded collection indexes: {loaded_ids}")
-
-    if len(collection_ids) == 1:
-        wiki_context = wiki_rag.retrieve(
-            user_content, top_k=7, max_chars=4000, collection_id=collection_ids[0]
-        )
-    else:
-        wiki_context = wiki_rag.retrieve_multi(
-            user_content, collection_ids, top_k=7, max_chars=4000
-        )
-
-    logger.info(
-        f"RAG inject: context found={bool(wiki_context)}, len={len(wiki_context) if wiki_context else 0}"
-    )
-
-    base = base_prompt or _DEFAULT_RAG_PROMPT
-    if wiki_context:
-        rag_instruction = (
-            "\n\n--- КОНТЕКСТ ИЗ БАЗЫ ЗНАНИЙ (обязательно к использованию) ---\n"
-            "Ниже приведена релевантная информация из базы знаний. "
-            "ОБЯЗАТЕЛЬНО используй эти данные при ответе. "
-            "Если информация ниже отвечает на вопрос пользователя — ответь на основе неё. "
-            "НЕ выдумывай информацию, которой нет в контексте ниже.\n"
-        )
-        return f"{base}{rag_instruction}\n{wiki_context}"
-
-    # RAG search returned nothing — instruct LLM not to hallucinate
-    no_context_instruction = (
-        "\n\n--- ВАЖНО ---\n"
-        "По данному запросу в базе знаний не найдено релевантной информации. "
-        "НЕ выдумывай ответ. Если ты не уверен в точности информации — "
-        "честно скажи, что не нашёл данных в базе знаний, и предложи "
-        "обратиться к менеджеру или уточнить вопрос.\n"
-    )
-    return f"{base}{no_context_instruction}"
-
-
-async def _inject_rag_context_async(
-    wiki_rag,
-    user_content: str,
-    base_prompt: Optional[str],
-    rag_mode: str,
-    collection_ids: list[int],
-) -> Optional[str]:
-    """Async version of _inject_rag_context — includes vector search results."""
-    if not wiki_rag or not user_content or rag_mode == "none" or not collection_ids:
-        return base_prompt
-
-    if not wiki_rag.vector_search_available:
-        import asyncio
-
-        return await asyncio.to_thread(
-            _inject_rag_context, wiki_rag, user_content, base_prompt, rag_mode, collection_ids
-        )
-
-    if len(collection_ids) == 1:
-        wiki_context = await wiki_rag.retrieve_async(
-            user_content, top_k=7, max_chars=4000, collection_id=collection_ids[0]
-        )
-    else:
-        wiki_context = await wiki_rag.retrieve_multi_async(
-            user_content, collection_ids, top_k=7, max_chars=4000
-        )
-
-    logger.info(
-        f"RAG inject (async): context found={bool(wiki_context)}, "
-        f"len={len(wiki_context) if wiki_context else 0}"
-    )
-
-    base = base_prompt or _DEFAULT_RAG_PROMPT
-    if wiki_context:
-        rag_instruction = (
-            "\n\n--- КОНТЕКСТ ИЗ БАЗЫ ЗНАНИЙ (обязательно к использованию) ---\n"
-            "Ниже приведена релевантная информация из базы знаний. "
-            "ОБЯЗАТЕЛЬНО используй эти данные при ответе. "
-            "Если информация ниже отвечает на вопрос пользователя — ответь на основе неё. "
-            "НЕ выдумывай информацию, которой нет в контексте ниже.\n"
-        )
-        return f"{base}{rag_instruction}\n{wiki_context}"
-
-    no_context_instruction = (
-        "\n\n--- ВАЖНО ---\n"
-        "По данному запросу в базе знаний не найдено релевантной информации. "
-        "НЕ выдумывай ответ. Если ты не уверен в точности информации — "
-        "честно скажи, что не нашёл данных в базе знаний, и предложи "
-        "обратиться к менеджеру или уточнить вопрос.\n"
-    )
-    return f"{base}{no_context_instruction}"
-
-
 # ============== Token Counting Helpers ==============
 
 
@@ -466,18 +215,6 @@ def _build_token_usage(messages: list[dict], model: str, trimmed: bool = False) 
         "percent": percent,
         "trimmed": trimmed,
     }
-
-
-def _trim_and_log(messages: list[dict], model: str, session_id: str) -> tuple[list[dict], bool]:
-    """Trim messages to fit context window and log if trimmed."""
-    context_window = get_context_window(model)
-    trimmed_messages, was_trimmed = trim_messages(messages, context_window)
-    if was_trimmed:
-        logger.info(
-            f"Trimmed context for session {session_id}: "
-            f"{len(messages)} -> {len(trimmed_messages)} messages"
-        )
-    return trimmed_messages, was_trimmed
 
 
 # ============== Pydantic Models ==============
@@ -821,80 +558,23 @@ async def admin_send_chat_message(
         session_id, "user", llm_content_ns, extra_data=extra_data_json_ns
     )
 
-    # Получаем историю для LLM
-    # Session prompt takes priority; fallback to LLM service default
-    default_prompt = session.get("system_prompt")
-    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
-        default_prompt = llm_service.get_system_prompt()
-
-    # RAG: inject relevant wiki context based on rag_mode
+    # Resolve RAG config
     rag_mode, collection_ids = await _resolve_rag_config(session, msg_request.llm_override)
-    wiki_rag = container.wiki_rag_service
-    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
-    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
-    if not use_agentic:
-        default_prompt = await _inject_rag_context_async(
-            wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
-        )
-
-    # Inject context files
-    default_prompt = _inject_context_files(default_prompt, session)
-
-    messages = await chat_service.get_messages_for_llm(
-        session_id,
-        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
-    )
-
-    # Trim to fit context window
-    model = _get_model_name(llm_service)
-    messages, _ = _trim_and_log(messages, model, session_id)
-
-    # Генерируем ответ
+    # Delegate generation to ChatService facade
+    facade = chat_service_facade or ChatServiceImpl(container)
     try:
-        if use_agentic or use_web_search:
-            # Agentic RAG loop (non-streaming)
-            tools = _build_tools(use_agentic, use_web_search)
-            loop_messages = list(messages)
-            response_text = ""
-
-            for _iteration in range(MAX_TOOL_ITERATIONS):
-                result = llm_service.generate_response_from_messages(
-                    loop_messages, stream=False, tools=tools
-                )
-                if isinstance(result, str):
-                    response_text = result
-                    break
-                # dict with tool_calls
-                tool_calls = result.get("tool_calls")
-                if not tool_calls:
-                    response_text = (result.get("content") or "").strip()
-                    break
-
-                loop_messages.append(result)  # assistant message with tool_calls
-                for tc in tool_calls:
-                    fn_name = tc["function"]["name"]
-                    try:
-                        args = json.loads(tc["function"]["arguments"])
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
-                        )
-                        args = {}
-                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
-                    loop_messages.append(
-                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
-                    )
-        else:
-            response_text = llm_service.generate_response_from_messages(messages, stream=False)
-            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-                response_text = "".join(response_text)
-
-        assistant_msg = await chat_service.add_message(session_id, "assistant", response_text)
+        assistant_msg = await facade.send_message(
+            session_id,
+            llm_content_ns,
+            llm_service=llm_service,
+            session_data=session,
+            rag_mode=rag_mode,
+            collection_ids=collection_ids,
+        )
         return {"message": user_msg, "response": assistant_msg}
-
     except Exception as e:
-        logger.error(f"❌ Chat error: {e}")
+        logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1065,125 +745,33 @@ async def admin_stream_chat_message(
         session_id, "user", llm_content, extra_data=extra_data_json
     )
 
-    # Получаем историю для LLM
-    # Priority: widget prompt > session prompt > LLM service default
-    default_prompt = custom_prompt or session.get("system_prompt")
-    if not default_prompt and hasattr(active_llm, "get_system_prompt"):
-        default_prompt = active_llm.get_system_prompt()
-
-    # RAG: inject relevant wiki context based on rag_mode
+    # Resolve RAG config (stays in router — depends on override/widget/mobile context)
     rag_mode, collection_ids = await _resolve_rag_config(
         session,
         msg_request.llm_override,
         msg_request.widget_instance_id,
         msg_request.mobile_instance_id,
     )
-    wiki_rag = container.wiki_rag_service
-    use_agentic = _should_use_agentic_rag(active_llm, rag_mode, collection_ids, wiki_rag)
-    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(active_llm)
 
-    if not use_agentic:
-        # One-shot RAG: inject context into prompt (existing behavior)
-        default_prompt = await _inject_rag_context_async(
-            wiki_rag, msg_request.content, default_prompt, rag_mode, collection_ids
-        )
-
-    # Inject context files
-    default_prompt = _inject_context_files(default_prompt, session)
-
-    messages = await chat_service.get_messages_for_llm(
-        session_id,
-        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
-    )
-
-    # Trim to fit context window
-    model = _get_model_name(active_llm)
-    messages, was_trimmed = _trim_and_log(messages, model, session_id)
+    # Delegate generation to ChatService facade
+    facade = chat_service_facade or ChatServiceImpl(container)
 
     async def generate_stream():
-        full_response = []
-        try:
-            # Отправляем сообщение пользователя
-            yield f"data: {json.dumps({'type': 'user_message', 'message': user_msg}, ensure_ascii=False)}\n\n"
-
-            if use_agentic or use_web_search:
-                # Agentic RAG loop: LLM decides when to search
-                tools = _build_tools(use_agentic, use_web_search)
-                loop_messages = list(messages)
-
-                for _iteration in range(MAX_TOOL_ITERATIONS):
-                    content_chunks = []
-                    tool_calls_result = None
-
-                    for event in active_llm.generate_response_from_messages(
-                        loop_messages, stream=True, tools=tools
-                    ):
-                        if isinstance(event, dict):
-                            if event["type"] == "content":
-                                content_chunks.append(event["content"])
-                                full_response.append(event["content"])
-                                yield f"data: {json.dumps({'type': 'chunk', 'content': event['content']}, ensure_ascii=False)}\n\n"
-                            elif event["type"] == "tool_calls":
-                                tool_calls_result = event["tool_calls"]
-                        else:
-                            # Safety fallback: plain str from provider
-                            full_response.append(event)
-                            yield f"data: {json.dumps({'type': 'chunk', 'content': event}, ensure_ascii=False)}\n\n"
-
-                    if not tool_calls_result:
-                        break  # LLM answered with text, done
-
-                    # Execute tool calls and feed results back
-                    assistant_content = "".join(content_chunks) or None
-                    loop_messages.append(
-                        {
-                            "role": "assistant",
-                            "content": assistant_content,
-                            "tool_calls": tool_calls_result,
-                        }
-                    )
-
-                    for tc in tool_calls_result:
-                        fn_name = tc["function"]["name"]
-                        try:
-                            args = json.loads(tc["function"]["arguments"])
-                        except json.JSONDecodeError:
-                            logger.warning(
-                                f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
-                            )
-                            args = {}
-                        query = args.get("query", "")
-                        yield f"data: {json.dumps({'type': 'tool_start', 'name': fn_name, 'query': query}, ensure_ascii=False)}\n\n"
-
-                        result_text, found = _execute_tool_call(
-                            fn_name, args, wiki_rag, collection_ids
-                        )
-                        yield f"data: {json.dumps({'type': 'tool_end', 'name': fn_name, 'found': found}, ensure_ascii=False)}\n\n"
-
-                        loop_messages.append(
-                            {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
-                        )
+        async for chunk in facade.stream_message(
+            session_id,
+            llm_content,
+            llm_service=active_llm,
+            session_data=session,
+            user_msg=user_msg,
+            system_prompt=custom_prompt,
+            rag_mode=rag_mode,
+            collection_ids=collection_ids,
+        ):
+            # Serialize StreamChunk to SSE event
+            if chunk.get("done"):
+                yield "data: [DONE]\n\n"
             else:
-                # One-shot: existing streaming path
-                for chunk in active_llm.generate_response_from_messages(messages, stream=True):
-                    full_response.append(chunk)
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            # Сохраняем полный ответ
-            response_text = "".join(full_response)
-            assistant_msg = await chat_service.add_message(session_id, "assistant", response_text)
-
-            # Build token_usage for the final event
-            all_msgs = messages + [{"role": "assistant", "content": response_text}]
-            token_usage = _build_token_usage(all_msgs, model, was_trimmed)
-
-            # Отправляем финальное сообщение
-            yield f"data: {json.dumps({'type': 'assistant_message', 'message': assistant_msg, 'token_usage': token_usage}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
-
-        except Exception as e:
-            logger.error(f"❌ Chat stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         generate_stream(),
@@ -1228,77 +816,22 @@ async def admin_edit_chat_message(
     if not llm_service:
         return {"message": edited_msg}
 
-    default_prompt = session.get("system_prompt")
-    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
-        default_prompt = llm_service.get_system_prompt()
-
-    # RAG: inject relevant wiki context based on rag_mode
     rag_mode, collection_ids = await _resolve_rag_config(session)
-    wiki_rag = container.wiki_rag_service
-    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
-    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
-    if not use_agentic:
-        default_prompt = await _inject_rag_context_async(
-            wiki_rag, request.content, default_prompt, rag_mode, collection_ids
-        )
-
-    # Inject context files
-    default_prompt = _inject_context_files(default_prompt, session)
-
-    messages = await chat_service.get_messages_for_llm(
-        session_id,
-        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
-    )
-
-    # Trim to fit context window
-    model = _get_model_name(llm_service)
-    messages, _ = _trim_and_log(messages, model, session_id)
-
+    facade = chat_service_facade or ChatServiceImpl(container)
     try:
-        if use_agentic or use_web_search:
-            tools = _build_tools(use_agentic, use_web_search)
-            loop_messages = list(messages)
-            response_text = ""
-
-            for _iteration in range(MAX_TOOL_ITERATIONS):
-                result = llm_service.generate_response_from_messages(
-                    loop_messages, stream=False, tools=tools
-                )
-                if isinstance(result, str):
-                    response_text = result
-                    break
-                tool_calls = result.get("tool_calls")
-                if not tool_calls:
-                    response_text = (result.get("content") or "").strip()
-                    break
-                loop_messages.append(result)
-                for tc in tool_calls:
-                    fn_name = tc["function"]["name"]
-                    try:
-                        args = json.loads(tc["function"]["arguments"])
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
-                        )
-                        args = {}
-                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
-                    loop_messages.append(
-                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
-                    )
-        else:
-            response_text = llm_service.generate_response_from_messages(messages, stream=False)
-            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-                response_text = "".join(response_text)
-
-        # Add response as child of the new edited message
-        assistant_msg = await chat_service.add_message(
-            session_id, "assistant", response_text, parent_id=edited_msg["id"]
+        assistant_msg = await facade.send_message(
+            session_id,
+            request.content,
+            llm_service=llm_service,
+            session_data=session,
+            rag_mode=rag_mode,
+            collection_ids=collection_ids,
+            parent_id=edited_msg["id"],
         )
         return {"message": edited_msg, "response": assistant_msg}
-
     except Exception as e:
-        logger.error(f"❌ Chat regenerate error: {e}")
+        logger.error(f"Chat edit regenerate error: {e}")
         return {"message": edited_msg, "error": str(e)}
 
 
@@ -1355,78 +888,24 @@ async def admin_regenerate_chat_response(
                 break
         parent_id = message_id
 
-    # Generate new response
-    default_prompt = session.get("system_prompt")
-    if not default_prompt and hasattr(llm_service, "get_system_prompt"):
-        default_prompt = llm_service.get_system_prompt()
-
-    # RAG: inject relevant wiki context based on rag_mode
+    # Generate new response via facade
     user_content = target_msg["content"] if target_msg["role"] == "user" else ""
     rag_mode, collection_ids = await _resolve_rag_config(session)
-    wiki_rag = container.wiki_rag_service
-    use_agentic = _should_use_agentic_rag(llm_service, rag_mode, collection_ids, wiki_rag)
-    use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm_service)
 
-    if not use_agentic:
-        default_prompt = await _inject_rag_context_async(
-            wiki_rag, user_content, default_prompt, rag_mode, collection_ids
-        )
-
-    # Inject context files
-    default_prompt = _inject_context_files(default_prompt, session)
-
-    llm_messages = await chat_service.get_messages_for_llm(
-        session_id,
-        _finalize_prompt(default_prompt, agentic_rag=use_agentic, web_search=use_web_search),
-    )
-
-    # Trim to fit context window
-    model = _get_model_name(llm_service)
-    llm_messages, _ = _trim_and_log(llm_messages, model, session_id)
-
+    facade = chat_service_facade or ChatServiceImpl(container)
     try:
-        if use_agentic or use_web_search:
-            tools = _build_tools(use_agentic, use_web_search)
-            loop_messages = list(llm_messages)
-            response_text = ""
-
-            for _iteration in range(MAX_TOOL_ITERATIONS):
-                result = llm_service.generate_response_from_messages(
-                    loop_messages, stream=False, tools=tools
-                )
-                if isinstance(result, str):
-                    response_text = result
-                    break
-                tool_calls = result.get("tool_calls")
-                if not tool_calls:
-                    response_text = (result.get("content") or "").strip()
-                    break
-                loop_messages.append(result)
-                for tc in tool_calls:
-                    fn_name = tc["function"]["name"]
-                    try:
-                        args = json.loads(tc["function"]["arguments"])
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            f"Tool {fn_name}: malformed args: {tc['function']['arguments'][:100]}"
-                        )
-                        args = {}
-                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, collection_ids)
-                    loop_messages.append(
-                        {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
-                    )
-        else:
-            response_text = llm_service.generate_response_from_messages(llm_messages, stream=False)
-            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-                response_text = "".join(response_text)
-
-        assistant_msg = await chat_service.add_message(
-            session_id, "assistant", response_text, parent_id=parent_id
+        assistant_msg = await facade.send_message(
+            session_id,
+            user_content,
+            llm_service=llm_service,
+            session_data=session,
+            rag_mode=rag_mode,
+            collection_ids=collection_ids,
+            parent_id=parent_id,
         )
         return {"response": assistant_msg}
-
     except Exception as e:
-        logger.error(f"❌ Chat regenerate error: {e}")
+        logger.error(f"Chat regenerate error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
