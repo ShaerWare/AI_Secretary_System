@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { activateDemoMode, isDemoActive } from '@/api/client'
+import { activateDemoMode, isDemoActive, deactivateDemoMode } from '@/api/client'
 
 export type UserRole = 'admin' | 'user' | 'web' | 'guest'
 
@@ -189,6 +189,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    if (isDemoActive()) {
+      deactivateDemoMode()
+    }
     token.value = null
     user.value = null
     permissions.value = {}

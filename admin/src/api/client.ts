@@ -23,6 +23,12 @@ export function isDemoActive(): boolean {
   return demoActive;
 }
 
+// Deactivate demo mode (on logout) — interceptor will pass through to real backend
+export function deactivateDemoMode(): void {
+  demoActive = false;
+  demoReady = null;
+}
+
 // Auto-activate demo if page reloads with a demo token in localStorage
 function checkDemoToken(): boolean {
   const token = localStorage.getItem("admin_token");
