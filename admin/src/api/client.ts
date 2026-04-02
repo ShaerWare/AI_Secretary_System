@@ -1,8 +1,43 @@
 // Demo mode interceptor — loaded async but awaited before first API call
-const demoReady: Promise<void> | null =
+// Can be activated at build time (VITE_DEMO_MODE) or at runtime (admin/admin login)
+let demoReady: Promise<void> | null =
   import.meta.env.VITE_DEMO_MODE === "true"
-    ? import("./demo/index").then(({ setupDemoInterceptor }) => setupDemoInterceptor())
+    ? import("./demo/index").then(({ setupDemoInterceptor }) =>
+        setupDemoInterceptor(),
+      )
     : null;
+
+let demoActive = import.meta.env.VITE_DEMO_MODE === "true";
+
+// Activate demo mode at runtime (e.g. admin/admin login on production)
+export function activateDemoMode(): Promise<void> {
+  if (demoActive) return demoReady!;
+  demoActive = true;
+  demoReady = import("./demo/index").then(({ setupDemoInterceptor }) =>
+    setupDemoInterceptor(),
+  );
+  return demoReady;
+}
+
+export function isDemoActive(): boolean {
+  return demoActive;
+}
+
+// Auto-activate demo if page reloads with a demo token in localStorage
+function checkDemoToken(): boolean {
+  const token = localStorage.getItem("admin_token");
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.demo === true;
+  } catch {
+    return false;
+  }
+}
+
+if (!demoActive && checkDemoToken()) {
+  activateDemoMode();
+}
 
 // Base API client
 const BASE_URL = "";
@@ -89,7 +124,7 @@ export const api = {
 // SSE helper with generic type support (fetch-based to send JWT)
 export function createSSE<T = unknown>(endpoint: string, onMessage: (data: T) => void) {
   // In demo mode, use polling via fetch instead of real SSE
-  if (import.meta.env.VITE_DEMO_MODE === "true") {
+  if (demoActive) {
     let stopped = false;
     const poll = async () => {
       if (demoReady) await demoReady;

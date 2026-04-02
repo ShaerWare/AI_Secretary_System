@@ -6,6 +6,7 @@ import {
   type CcContextFile,
   type CcSessionSummary,
 } from '@/api/claudeCode'
+import { isDemoActive } from '@/api/client'
 
 export interface CcMessage {
   role: 'user' | 'assistant'
@@ -46,7 +47,7 @@ let ws: ReturnType<typeof createClaudeCodeWs> | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 5
-const isDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const isDemo = () => import.meta.env.VITE_DEMO_MODE === 'true' || isDemoActive()
 
 function handleEvent(event: CcWsEvent) {
   error.value = null
@@ -170,7 +171,7 @@ function _autoSaveTranscript() {
 }
 
 function connect() {
-  if (isDemo) {
+  if (isDemo()) {
     isConnected.value = true
     return
   }
@@ -264,7 +265,7 @@ function newSession() {
   }
   _resetState()
   // Reconnect if WS dropped
-  if (!ws && !isDemo) {
+  if (!ws && !isDemo()) {
     connect()
   }
 }
@@ -284,7 +285,7 @@ function sendMessage(prompt: string) {
   currentToolBlocks.value = []
   error.value = null
 
-  if (isDemo) {
+  if (isDemo()) {
     _demoSimulate()
     return
   }
@@ -361,7 +362,7 @@ async function loadSession(sessionId: string) {
     if (!isActive.value) {
       isActive.value = true
     }
-    if (!ws && !isDemo) {
+    if (!ws && !isDemo()) {
       connect()
     }
   } catch {
@@ -370,7 +371,7 @@ async function loadSession(sessionId: string) {
 }
 
 function abort() {
-  if (isDemo) {
+  if (isDemo()) {
     isProcessing.value = false
     _flushMessage()
     return
