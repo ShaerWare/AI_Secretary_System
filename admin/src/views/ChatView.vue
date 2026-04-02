@@ -2697,8 +2697,8 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
 
-      <!-- Welcome screen for chat-only users with no session selected -->
-      <div v-if="isChatOnly && !currentSessionId" class="flex-1 flex flex-col items-center px-6">
+      <!-- Welcome screen for chat-only users with no session selected (full version when no panels open) -->
+      <div v-if="isChatOnly && !currentSessionId && !showBranchTree && !showSettings" class="flex-1 flex flex-col items-center px-6">
         <div class="flex-1" />
         <div class="text-center max-w-lg w-full">
           <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-primary/15 flex items-center justify-center">
@@ -2756,6 +2756,30 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </div>
         </div>
         <div class="flex-1" />
+      </div>
+
+      <!-- Compact input when panels open and no session selected -->
+      <div v-else-if="isChatOnly && !currentSessionId && (showBranchTree || showSettings)" class="flex-1 flex items-center justify-center px-4">
+        <div class="w-full max-w-md">
+          <div class="flex items-end gap-2">
+            <textarea
+              v-model="welcomeInput"
+              rows="1"
+              class="flex-1 resize-none rounded-xl bg-card border border-border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              :placeholder="t('chatView.welcomeInputPlaceholder', 'Ask anything...')"
+              @keydown.enter.exact.prevent="sendFromWelcome"
+              @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
+            />
+            <button
+              :disabled="!welcomeInput.trim() || welcomeSending"
+              class="shrink-0 w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:bg-secondary disabled:text-muted-foreground flex items-center justify-center transition-colors"
+              @click="sendFromWelcome"
+            >
+              <Loader2 v-if="welcomeSending" class="w-4 h-4 animate-spin" />
+              <Send v-else class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Chat Header (hidden in zen mode) -->
