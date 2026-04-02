@@ -1,4 +1,5 @@
 import type { DemoRoute, HttpMethod, RouteParams } from './types'
+import { isDemoActive } from '../client'
 import { initStore } from './store'
 import { authRoutes } from './auth'
 import { servicesRoutes } from './services'
@@ -135,6 +136,11 @@ export function setupDemoInterceptor() {
         ? input.pathname + input.search
         : input.url
     const method = (init?.method || 'GET').toUpperCase() as HttpMethod
+
+    // Pass through to real backend if demo mode was deactivated
+    if (!isDemoActive()) {
+      return originalFetch(input, init)
+    }
 
     // Only intercept API routes
     const isApiRoute = url.startsWith('/admin/') || url.startsWith('/v1/') || url.startsWith('/health')
