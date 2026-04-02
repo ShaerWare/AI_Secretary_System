@@ -107,15 +107,18 @@ async function sendFromWelcome() {
   welcomeSending.value = true
   try {
     if (sessions.value.length > 0) {
-      // Open most recent shared chat and let user type there
       currentSessionId.value = sessions.value[0].id
     } else {
-      // Create new session
       const data = await chatApi.createSession(text, undefined, 'admin')
       refetchSessions()
       currentSessionId.value = data.session.id
     }
     welcomeInput.value = ''
+    // Send the message into the newly opened/created session
+    await nextTick()
+    inputMessage.value = text
+    await nextTick()
+    sendMessage()
   } catch {
     // fallback
   } finally {
