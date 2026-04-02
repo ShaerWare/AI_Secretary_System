@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { activateDemoMode, isDemoActive } from '@/api/client'
 
 export type UserRole = 'admin' | 'user' | 'web' | 'guest'
 
@@ -85,9 +86,15 @@ export const useAuthStore = defineStore('auth', () => {
         role: payload.role,
         workspace_id: payload.workspace_id || 1,
       }
-      // Fetch deployment mode and permissions on init
-      fetchDeploymentMode()
-      fetchPermissions()
+      if (payload.demo) {
+        // Demo session — use demo interceptor, don't hit backend
+        deploymentMode.value = 'full'
+        activateDemoMode().then(() => fetchPermissions())
+      } else {
+        // Real session — fetch from backend
+        fetchDeploymentMode()
+        fetchPermissions()
+      }
     } catch {
       token.value = null
       localStorage.removeItem('admin_token')
@@ -100,14 +107,28 @@ export const useAuthStore = defineStore('auth', () => {
     const payload = btoa(JSON.stringify({
       sub: username,
       user_id: 0,
-      role: import.meta.env.VITE_DEMO_ROLE || 'admin',
+      role: 'admin',
       workspace_id: 1,
       exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
       iat: Math.floor(Date.now() / 1000),
-      dev: true
+      demo: true,
     }))
-    const signature = btoa('dev-signature')
+    const signature = btoa('demo-signature')
     return `${header}.${payload}.${signature}`
+  }
+
+  async function loginAsDemo(username: string): Promise<boolean> {
+    await activateDemoMode()
+    const devToken = createDevToken(username)
+    token.value = devToken
+    localStorage.setItem('admin_token', devToken)
+    user.value = { id: 0, username, role: 'admin' as UserRole, workspace_id: 1 }
+    deploymentMode.value = 'full'
+    // Fetch permissions from demo interceptor
+    await fetchPermissions()
+    localStorage.removeItem('chat-fullscreen')
+    error.value = null
+    return true
   }
 
   async function login(username: string, password: string): Promise<boolean> {
@@ -115,6 +136,11 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
+      // admin/admin always enters demo mode (offline, mock data)
+      if (username === 'admin' && password === 'admin') {
+        return await loginAsDemo(username)
+      }
+
       const response = await fetch('/admin/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,14 +176,9 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     } catch (e) {
       // In dev mode, allow login without backend
-      if ((isDev || isDemo) && ((username === 'admin' && password === 'admin') || (username === 'demo' && password === 'demo'))) {
+      if (isDev || isDemo) {
         console.warn('⚠️ Dev/Demo mode: Backend unavailable, using mock authentication')
-        const devToken = createDevToken(username)
-        token.value = devToken
-        localStorage.setItem('admin_token', devToken)
-        user.value = { id: 0, username, role: (import.meta.env.VITE_DEMO_ROLE || 'admin') as UserRole, workspace_id: 1 }
-        error.value = null
-        return true
+        return await loginAsDemo(username)
       }
 
       error.value = 'Connection error - Backend not running'
