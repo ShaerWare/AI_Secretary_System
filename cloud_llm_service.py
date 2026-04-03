@@ -190,6 +190,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def __init__(self, config: dict):
         super().__init__(config)
 
+        # Bridge CLI runs with --tools "" (no tool access), so tool calls
+        # are silently ignored. Disable supports_tools to fall back to
+        # one-shot RAG injection instead of agentic loop.
+        if self.provider_type == "claude_bridge":
+            self.supports_tools = False
+
         # Bridge runs on localhost — must bypass global VLESS/HTTP proxy.
         # GeminiProvider sets HTTP_PROXY globally for xray; httpx picks it up
         # and routes localhost requests through the proxy, which fails.
