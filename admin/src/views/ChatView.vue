@@ -2759,7 +2759,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       </div>
 
       <!-- Compact input when panels open and no session selected -->
-      <div v-else-if="isChatOnly && !currentSessionId && (showBranchTree || showSettings)" class="flex-1 flex items-center justify-center px-4">
+      <div v-else-if="isChatOnly && !currentSessionId && (showBranchTree || showSettings)" class="shrink-0 flex items-center justify-center px-4 py-3">
         <div class="w-full max-w-md">
           <div class="flex items-end gap-2">
             <textarea
