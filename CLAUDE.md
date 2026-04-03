@@ -273,12 +273,12 @@ New routers import domain services directly (`from modules.monitoring.service im
 **Theme**: Night-eyes (warm brown/amber/gold), hardcoded — no theme switching. Background `#1a1308`, text `#d9c9a8`, primary amber-600, cards stone-800.
 
 **Role-based access**:
-- **Admin** (`role=admin`): full chat controls — LLM provider selector, RAG collection multi-select, system prompt editing, export (copy/md/json), branching, context files, all message actions (edit, regenerate, summarize, delete branch), session creation/deletion
-- **Non-admin**: only shared chats visible (`is_shared_with_me` filter), Claude-like welcome screen, basic message actions (TTS + copy only), no branching/context/export/LLM/RAG
+- **Admin** (`role=admin`): full chat controls — LLM provider selector, RAG collection multi-select, system prompt editing, export (copy/md/json), branching, context files, all message actions (edit, regenerate, summarize, delete branch), session creation/deletion. Admin-only controls live in admin panel only (not mobile).
+- **Non-admin**: shared chats (`is_shared_with_me` filter), Claude-like welcome, basic message actions (TTS + copy), branching, context files, web search toggle. No LLM/RAG selectors, no export, no session deletion.
 
 **Mobile Instances**: Admin creates `MobileAppInstance` (LLM backend, persona, system prompt, TTS, RAG) in admin panel (`/mobile-app` view). Users are assigned to instances via `ResourceShare`. On login, mobile app fetches `GET /admin/mobile/my-config` to get assigned instance config. Chat sessions use `source="mobile"` + `mobile_instance_id` for per-instance LLM/prompt routing.
 
-**API layer** (`mobile/src/api/`): `client.ts` (base fetch), `chat.ts` (sessions/streaming/branches), `admin.ts` (LLM providers + RAG collections for admin controls).
+**API layer** (`mobile/src/api/`): `client.ts` (base fetch), `chat.ts` (sessions/streaming/branches), `admin.ts` (admin-only APIs, used only by admin panel).
 
 **Key differences from admin panel**:
 - Hardcoded server URL (`https://ai-sekretar24.ru`), no user configuration

@@ -960,25 +960,17 @@ async def admin_summarize_branch(
 async def _get_branch_visible_ids(session_id: str, user: User) -> tuple[dict, Optional[set[str]]]:
     """Check session access and compute visible message IDs for branch endpoints.
 
-    Returns (session_data, visible_ids). visible_ids is None for owner/admin (full tree).
+    Returns (session_data, visible_ids). visible_ids is always None (full tree)
+    for any user who has access to the session. Access check is done via get_session
+    which filters by owner_id + workspace + shares.
     """
     owner_id, ws_id = workspace_context(user, "chat")
     session_data = await chat_service.get_session(session_id, owner_id=owner_id, workspace_id=ws_id)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    visible_ids: Optional[set[str]] = None
-    if not user_has_level(user, "chat", "manage"):
-        session_owner = session_data.get("owner_id")
-        if session_owner not in (user.id, None):
-            # Shared user — restrict to shared branch
-            share = await chat_share_service.get_user_share(session_id, user.id)
-            if share and share.get("branch_message_id"):
-                visible_ids = await chat_service.compute_branch_visible_ids(
-                    session_id, share["branch_message_id"]
-                )
-
-    return session_data, visible_ids
+    # All users with session access see the full branch tree
+    return session_data, None
 
 
 @router.get("/sessions/{session_id}/branches")

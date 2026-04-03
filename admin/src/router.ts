@@ -37,6 +37,10 @@ const router = createRouter({
     },
     {
       path: "/",
+      redirect: { name: "chat" },
+    },
+    {
+      path: "/dashboard",
       name: "dashboard",
       component: DashboardView,
       meta: { title: "Dashboard", icon: "LayoutDashboard", module: "dashboard", localOnly: true },
@@ -215,14 +219,7 @@ router.beforeEach((to, from, next) => {
     }
   } else if (to.name === "login" && authStore.isAuthenticated) {
     // Already logged in, redirect to landing page
-    const isChatUser = authStore.isChatOnlyUser
-      || (authStore.user?.role !== "admin" && Object.keys(authStore.permissions).length === 0);
-    const landing = isChatUser
-      ? "chat"
-      : authStore.hasModule("dashboard") && !authStore.isCloudMode
-        ? "dashboard"
-        : "chat";
-    next({ name: landing });
+    next({ name: "chat" });
     return;
   }
 
@@ -246,9 +243,7 @@ router.beforeEach((to, from, next) => {
   if (mod && Object.keys(authStore.permissions).length > 0) {
     const minLvl = (to.meta.minLevel as string) || "view";
     if ((LVL[authStore.permissions[mod]] ?? 0) < (LVL[minLvl] ?? 1)) {
-      const landing =
-        authStore.hasModule("dashboard") && !authStore.isCloudMode ? "dashboard" : "chat";
-      next({ name: landing });
+      next({ name: "chat" });
       return;
     }
   }
