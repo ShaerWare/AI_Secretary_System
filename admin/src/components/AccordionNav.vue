@@ -54,7 +54,7 @@ const allNavGroups = computed(() => [
     nameKey: 'nav.group.monitoring',
     icon: Activity,
     items: [
-      { path: '/', nameKey: 'nav.dashboard', icon: LayoutDashboard, module: 'dashboard', localOnly: true },
+      { path: '/dashboard', nameKey: 'nav.dashboard', icon: LayoutDashboard, module: 'dashboard', localOnly: true },
       { path: '/monitoring', nameKey: 'nav.monitoring', icon: Activity, module: 'system', localOnly: true },
       { path: '/services', nameKey: 'nav.services', icon: Server, module: 'system', minLevel: 'manage', localOnly: true },
       { path: '/audit', nameKey: 'nav.audit', icon: FileText, module: 'audit' },

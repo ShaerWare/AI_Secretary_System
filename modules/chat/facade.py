@@ -632,6 +632,21 @@ class ChatServiceImpl:
 
         except Exception as e:
             logger.error(f"Chat stream error: {e}")
+            # Save partial response so the user doesn't lose what was already streamed
+            partial_text = "".join(full_response).strip()
+            if partial_text:
+                try:
+                    partial_msg = await self._crud.add_message(
+                        session_id, "assistant", partial_text
+                    )
+                    logger.info(
+                        f"Saved partial response ({len(partial_text)} chars) for session {session_id}"
+                    )
+                    yield StreamChunk(
+                        type="assistant_message", message=partial_msg, token_usage=None
+                    )
+                except Exception as save_err:
+                    logger.error(f"Failed to save partial response: {save_err}")
             yield StreamChunk(type="error", content=str(e))
 
     # -- Sharing (delegate to ChatShareService) -------------------------------

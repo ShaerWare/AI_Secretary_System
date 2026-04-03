@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { Capacitor } from "@capacitor/core";
 import {
   chatApi,
   type ChatMessage,
@@ -9,12 +10,6 @@ import {
   type BranchNode,
   type ContextFile,
 } from "@/api/chat";
-import {
-  adminApi,
-  type CloudProvider,
-  type KnowledgeCollection,
-  type LlmOption,
-} from "@/api/admin";
 import { useAuthStore } from "@/stores/auth";
 import { useTts } from "@/composables/useTts";
 import MessageBubble from "@/components/MessageBubble.vue";
@@ -40,37 +35,15 @@ const messagesContainer = ref<HTMLElement | null>(null);
 const showBranches = ref(false);
 const showContextFiles = ref(false);
 const showSettings = ref(false);
+const settingsTab = ref<"files" | "prompt">("files");
+const customPrompt = ref("");
 const branches = ref<BranchNode[]>([]);
 const contextFiles = ref<ContextFile[]>([]);
 const branchesLoading = ref(false);
 const contextFileInputRef = ref<HTMLInputElement | null>(null);
-const settingsTab = ref<"files" | "prompt">("files");
 
-// Admin: LLM & RAG
-const llmProviders = ref<CloudProvider[]>([]);
-const ragCollections = ref<KnowledgeCollection[]>([]);
-const selectedLlm = ref<string>("default");
-const selectedCollectionIds = ref<number[]>([]);
-const showLlmDropdown = ref(false);
-const showRagDropdown = ref(false);
-const showExportDropdown = ref(false);
-const customPrompt = ref("");
+// Web search
 const webSearchEnabled = ref(false);
-
-const llmOptions = computed<LlmOption[]>(() => {
-  const opts: LlmOption[] = [
-    { value: "default", label: "Default", type: "vllm" },
-    { value: "vllm", label: "vLLM (Local)", type: "vllm" },
-  ];
-  for (const p of llmProviders.value) {
-    opts.push({
-      value: `cloud:${p.id}`,
-      label: `${p.name} (${p.model_name})`,
-      type: "cloud",
-    });
-  }
-  return opts;
-});
 
 // Resizable panel height (portrait) / width (landscape)
 const panelSize = ref(Math.round(window.innerHeight * 0.5));
@@ -84,22 +57,9 @@ function updateOrientation() {
   isLandscape.value = window.innerWidth > window.innerHeight;
 }
 
-// Safe area bottom (JS fallback for Android)
-const safeAreaBottom = ref(0);
-function detectSafeArea() {
-  const safeVal = getComputedStyle(document.documentElement).getPropertyValue("--safe-area-bottom").trim();
-  const px = parseInt(safeVal, 10);
-  if (px > 0) {
-    safeAreaBottom.value = px;
-  } else {
-    // Fallback: difference between screen height and viewport height
-    const vv = window.visualViewport;
-    if (vv) {
-      const diff = window.screen.height - vv.height;
-      safeAreaBottom.value = diff > 20 ? Math.min(diff, 60) : 0;
-    }
-  }
-}
+// On Android native, always add bottom padding for navigation bar.
+// env(safe-area-inset-bottom) is unreliable in Android WebView.
+const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 
 let abortStream: (() => void) | null = null;
 
@@ -127,22 +87,6 @@ function onResizeMove(e: TouchEvent | MouseEvent) {
 
 function onResizeEnd() {
   isResizing.value = false;
-}
-
-// === Admin data ===
-
-async function loadAdminData() {
-  if (!isAdmin.value) return;
-  try {
-    const [providerData, collectionData] = await Promise.all([
-      adminApi.getProviders(),
-      adminApi.getCollections(),
-    ]);
-    llmProviders.value = providerData.providers;
-    ragCollections.value = collectionData.collections.filter((c) => c.enabled);
-  } catch {
-    // Non-critical
-  }
 }
 
 // === Session ===
@@ -190,18 +134,6 @@ async function sendMessage(content: string) {
   isStreaming.value = true;
   streamingContent.value = "";
 
-  // Build LLM/RAG overrides for admin
-  const overrides: Record<string, unknown> = {};
-  if (isAdmin.value) {
-    if (selectedLlm.value && selectedLlm.value !== "default") {
-      overrides.llm_backend = selectedLlm.value;
-    }
-    if (selectedCollectionIds.value.length > 0) {
-      overrides.rag_mode = "selected";
-      overrides.knowledge_collection_ids = selectedCollectionIds.value;
-    }
-  }
-
   const { abort } = chatApi.streamMessage(
     sessionId.value,
     content,
@@ -239,12 +171,20 @@ async function sendMessage(content: string) {
           break;
         case "error":
           isStreaming.value = false;
-          streamingContent.value = "";
+          // Preserve partial response so the user can still see what was streamed
+          if (streamingContent.value) {
+            messages.value.push({
+              id: "partial-" + Date.now(),
+              role: "assistant",
+              content: streamingContent.value,
+              timestamp: new Date().toISOString(),
+            });
+            streamingContent.value = "";
+          }
           error.value = chunk.content || "Stream error";
           break;
       }
     },
-    overrides,
   );
 
   abortStream = abort;
@@ -379,6 +319,22 @@ function toggleContextFiles() {
   showContextFiles.value = !showContextFiles.value;
 }
 
+function toggleSettings() {
+  showBranches.value = false;
+  showContextFiles.value = false;
+  showSettings.value = !showSettings.value;
+}
+
+async function saveSystemPrompt() {
+  try {
+    await chatApi.updateSession(sessionId.value, {
+      system_prompt: customPrompt.value,
+    });
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось сохранить промпт";
+  }
+}
+
 function triggerFileUpload() {
   contextFileInputRef.value?.click();
 }
@@ -414,82 +370,6 @@ async function saveContextFiles() {
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось сохранить файлы";
   }
-}
-
-// === Settings panel ===
-
-function toggleSettings() {
-  showBranches.value = false;
-  showContextFiles.value = false;
-  showSettings.value = !showSettings.value;
-}
-
-async function saveSystemPrompt() {
-  try {
-    await chatApi.updateSession(sessionId.value, {
-      system_prompt: customPrompt.value,
-    });
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "Не удалось сохранить промпт";
-  }
-}
-
-// === LLM / RAG dropdowns ===
-
-function selectLlm(value: string) {
-  selectedLlm.value = value;
-  showLlmDropdown.value = false;
-}
-
-function toggleCollection(id: number) {
-  const idx = selectedCollectionIds.value.indexOf(id);
-  if (idx >= 0) {
-    selectedCollectionIds.value.splice(idx, 1);
-  } else {
-    selectedCollectionIds.value.push(id);
-  }
-}
-
-// === Export ===
-
-function copyChatToClipboard() {
-  const text = messages.value
-    .map((m) => `${m.role === "user" ? "Вы" : "Ассистент"}: ${m.content}`)
-    .join("\n\n");
-  navigator.clipboard.writeText(text);
-  showExportDropdown.value = false;
-}
-
-function exportChatMarkdown() {
-  const md = messages.value
-    .map((m) => `## ${m.role === "user" ? "Вы" : "Ассистент"}\n\n${m.content}`)
-    .join("\n\n---\n\n");
-  downloadFile(`${title.value}.md`, md, "text/markdown");
-  showExportDropdown.value = false;
-}
-
-function exportChatJson() {
-  const data = {
-    title: title.value,
-    exported: new Date().toISOString(),
-    messages: messages.value.map((m) => ({
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp,
-    })),
-  };
-  downloadFile(`${title.value}.json`, JSON.stringify(data, null, 2), "application/json");
-  showExportDropdown.value = false;
-}
-
-function downloadFile(name: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // === Message actions ===
@@ -568,20 +448,12 @@ function closePanel() {
   showSettings.value = false;
 }
 
-function onGlobalClick() {
-  showLlmDropdown.value = false;
-  showRagDropdown.value = false;
-  showExportDropdown.value = false;
-}
-
 watch(streamingContent, () => {
   scrollToBottom();
 });
 
 onMounted(async () => {
   await loadSession();
-  loadAdminData();
-  detectSafeArea();
   const msg = route.query.msg as string | undefined;
   if (msg) {
     router.replace({ path: route.path, query: {} });
@@ -593,7 +465,6 @@ onMounted(async () => {
   window.addEventListener("mouseup", onResizeEnd);
   window.addEventListener("touchmove", onResizeMove, { passive: false });
   window.addEventListener("touchend", onResizeEnd);
-  document.addEventListener("click", onGlobalClick);
 });
 
 onUnmounted(() => {
@@ -602,7 +473,6 @@ onUnmounted(() => {
   window.removeEventListener("mouseup", onResizeEnd);
   window.removeEventListener("touchmove", onResizeMove);
   window.removeEventListener("touchend", onResizeEnd);
-  document.removeEventListener("click", onGlobalClick);
 });
 </script>
 
@@ -630,115 +500,7 @@ onUnmounted(() => {
           {{ title }}
         </h1>
 
-        <!-- Admin toolbar buttons -->
-        <template v-if="isAdmin">
-          <!-- LLM Selector -->
-          <div class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg transition-colors"
-              :class="selectedLlm !== 'default' ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-              title="LLM Provider"
-              @click="showLlmDropdown = !showLlmDropdown; showRagDropdown = false; showExportDropdown = false"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
-              </svg>
-            </button>
-            <div
-              v-if="showLlmDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[200px] py-1 max-h-[300px] overflow-y-auto"
-            >
-              <button
-                v-for="opt in llmOptions"
-                :key="opt.value"
-                class="w-full text-left px-3 py-2 text-xs hover:bg-stone-800 transition-colors flex items-center gap-2"
-                :class="selectedLlm === opt.value ? 'text-amber-400' : 'text-stone-300'"
-                @click="selectLlm(opt.value)"
-              >
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="opt.type === 'cloud' ? 'bg-blue-400' : 'bg-green-400'" />
-                {{ opt.label }}
-                <svg v-if="selectedLlm === opt.value" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ml-auto shrink-0">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- RAG Collections -->
-          <div v-if="ragCollections.length" class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg transition-colors"
-              :class="selectedCollectionIds.length ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-              title="База знаний"
-              @click="showRagDropdown = !showRagDropdown; showLlmDropdown = false; showExportDropdown = false"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-              </svg>
-            </button>
-            <div
-              v-if="showRagDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[220px] py-1 max-h-[300px] overflow-y-auto"
-            >
-              <label
-                v-for="col in ragCollections"
-                :key="col.id"
-                class="flex items-center gap-2 px-3 py-2 text-xs hover:bg-stone-800 transition-colors cursor-pointer"
-                :class="selectedCollectionIds.includes(col.id) ? 'text-amber-400' : 'text-stone-300'"
-              >
-                <input
-                  type="checkbox"
-                  :checked="selectedCollectionIds.includes(col.id)"
-                  class="accent-amber-500"
-                  @change="toggleCollection(col.id)"
-                />
-                <span class="flex-1">{{ col.name }}</span>
-                <span class="text-stone-600 text-[10px]">{{ col.document_count }} docs</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Settings (system prompt + files) -->
-          <button
-            class="p-1.5 rounded-lg transition-colors"
-            :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-            title="Настройки сессии"
-            @click="toggleSettings"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
-            </svg>
-          </button>
-
-          <!-- Export -->
-          <div class="relative" @click.stop>
-            <button
-              class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
-              title="Экспорт"
-              @click="showExportDropdown = !showExportDropdown; showLlmDropdown = false; showRagDropdown = false"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
-            <div
-              v-if="showExportDropdown"
-              class="absolute right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-xl shadow-xl z-50 min-w-[160px] py-1"
-            >
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="copyChatToClipboard">
-                Копировать в буфер
-              </button>
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatMarkdown">
-                Экспорт Markdown
-              </button>
-              <button class="w-full text-left px-3 py-2 text-xs text-stone-300 hover:bg-stone-800 transition-colors" @click="exportChatJson">
-                Экспорт JSON
-              </button>
-            </div>
-          </div>
-        </template>
-
-        <!-- Toolbar buttons — available to all users -->
+        <!-- Toolbar buttons -->
         <button
           class="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
           title="Новая ветка"
@@ -771,6 +533,17 @@ onUnmounted(() => {
             <circle cx="18" cy="6" r="3" />
             <circle cx="6" cy="18" r="3" />
             <path d="M18 9a9 9 0 0 1-9 9" />
+          </svg>
+        </button>
+
+        <button
+          class="p-1.5 rounded-lg transition-colors"
+          :class="showSettings ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
+          title="Настройки сессии"
+          @click="toggleSettings"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
           </svg>
         </button>
 
@@ -908,6 +681,7 @@ onUnmounted(() => {
               </div>
             </template>
           </template>
+
         </div>
 
         <!-- Resize handle (portrait) -->
@@ -995,8 +769,8 @@ onUnmounted(() => {
 
       <!-- Input with web search toggle -->
       <div
-        class="flex items-end gap-1 px-2 pt-1 border-t border-stone-700/50 bg-stone-900/95 safe-input-bottom"
-        :style="safeAreaBottom > 0 ? { paddingBottom: `calc(0.5rem + ${safeAreaBottom}px)` } : {}"
+        class="flex items-end gap-1 px-2 pt-1 border-t border-stone-700/50 bg-stone-900/95"
+        :class="isNativeAndroid ? 'pb-14' : 'pb-2'"
       >
         <button
           :class="[
@@ -1144,6 +918,7 @@ onUnmounted(() => {
             </div>
           </template>
         </template>
+
       </div>
     </template>
   </div>
