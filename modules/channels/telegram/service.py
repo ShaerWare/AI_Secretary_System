@@ -182,25 +182,23 @@ class TelegramSessionService:
         last_name: Optional[str] = None,
     ) -> None:
         """Register a Telegram user for a bot (without chat session)."""
-        async with AsyncSessionLocal() as session:
-            repo = TelegramRepository(session, bot_id=bot_id)
-            existing = await repo.get_session(user_id, bot_id=bot_id)
-            if existing:
-                # Update user info
-                from sqlalchemy import select
+        from sqlalchemy import select
 
-                result = await session.execute(
-                    select(TelegramSession).where(
-                        TelegramSession.bot_id == bot_id,
-                        TelegramSession.user_id == user_id,
-                    )
+        async with AsyncSessionLocal() as session:
+            # Look up the ORM object directly (not chat_session_id which can be None)
+            result = await session.execute(
+                select(TelegramSession).where(
+                    TelegramSession.bot_id == bot_id,
+                    TelegramSession.user_id == user_id,
                 )
-                ts = result.scalar_one_or_none()
-                if ts:
-                    ts.username = username
-                    ts.first_name = first_name
-                    ts.last_name = last_name
-                    ts.updated = datetime.utcnow()
+            )
+            ts = result.scalar_one_or_none()
+
+            if ts:
+                ts.username = username
+                ts.first_name = first_name
+                ts.last_name = last_name
+                ts.updated = datetime.utcnow()
             else:
                 ts = TelegramSession(
                     bot_id=bot_id,
