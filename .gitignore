@@ -126,3 +126,12 @@ admin/vite.config.js
 # docs
 docs/tz/tz_tg_bot.md
 docs/tz/
+
+# Tax data scraping (scripts tracked, data not)
+tax_data/raw_html/
+tax_data/raw_pdf/
+tax_data/parsed/
+tax_data/datasets/
+tax_data/sitemap.xml
+tax_data/sitemap_urls.json
+tax_data/.venv/
