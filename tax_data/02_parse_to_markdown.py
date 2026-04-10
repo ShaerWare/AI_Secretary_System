@@ -58,7 +58,14 @@ def parse_html_to_markdown(filepath: Path) -> dict | None:
         log.warning("Cannot read %s: %s", filepath.name, e)
         return None
 
-    tree = lxml_html.fromstring(raw)
+    if not raw.strip():
+        return None
+
+    try:
+        tree = lxml_html.fromstring(raw)
+    except Exception as e:
+        log.warning("Cannot parse HTML %s: %s", filepath.name, e)
+        return None
 
     # Extract title
     title_el = tree.xpath("//title/text()")
