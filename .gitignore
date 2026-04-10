@@ -135,3 +135,6 @@ tax_data/datasets/
 tax_data/sitemap.xml
 tax_data/sitemap_urls.json
 tax_data/.venv/
+
+# Wiki RAG scraped data (large, not code)
+wiki-pages/irish-tax/
