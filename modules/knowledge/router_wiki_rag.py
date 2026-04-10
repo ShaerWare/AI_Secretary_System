@@ -518,6 +518,87 @@ async def upload_document(
     return {"status": "ok", "document": doc}
 
 
+@router.post("/documents/bulk-upload")
+async def bulk_upload_documents(
+    files: list[UploadFile],
+    collection_id: Optional[int] = Form(None),
+    user: User = Depends(require_permission("wiki", "edit")),
+):
+    """Upload multiple .md/.txt files at once. Reloads index only once at the end."""
+    if collection_id is None:
+        collection_id = await _get_default_collection_id()
+
+    upload_dir = await _get_collection_dir(collection_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    owner_id, ws_id = workspace_context(user, "wiki")
+    results = {"uploaded": 0, "skipped": 0, "errors": []}
+
+    for file in files:
+        if not file.filename:
+            continue
+
+        suffix = Path(file.filename).suffix.lower()
+        if suffix not in (".md", ".txt"):
+            results["errors"].append(f"{file.filename}: неподдерживаемый формат")
+            continue
+
+        filename = file.filename if suffix == ".md" else Path(file.filename).stem + ".md"
+
+        # Skip duplicates
+        existing = await knowledge_doc_service.get_by_filename(filename)
+        if existing:
+            results["skipped"] += 1
+            continue
+
+        try:
+            content_bytes = await file.read()
+            content = content_bytes.decode("utf-8")
+
+            target = upload_dir / filename
+            target.write_text(content, encoding="utf-8")
+
+            sections = len(re.findall(r"^#{2,3}\s+.+$", content, re.MULTILINE))
+            title = Path(filename).stem.replace("-", " ").replace("_", " ")
+            first_header = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+            if first_header:
+                title = first_header.group(1).strip()
+
+            await knowledge_doc_service.create(
+                filename=filename,
+                title=title,
+                source_type="import",
+                file_size_bytes=len(content_bytes),
+                section_count=sections,
+                owner_id=owner_id,
+                collection_id=collection_id,
+                workspace_id=ws_id,
+            )
+            results["uploaded"] += 1
+        except Exception as e:
+            results["errors"].append(f"{filename}: {e}")
+
+    # Single reload at the end
+    if results["uploaded"] > 0:
+        wiki_rag = _get_wiki_rag()
+        if wiki_rag:
+            wiki_rag.reload(WIKI_DIR)
+            col_dir = await _get_collection_dir(collection_id)
+            filenames = await knowledge_collection_service.get_document_filenames(collection_id)
+            if filenames:
+                wiki_rag.reload_collection(collection_id, filenames, col_dir)
+
+    await audit_service.log(
+        action="bulk_upload",
+        resource="wiki_rag_document",
+        resource_id=str(collection_id),
+        user_id=user.username,
+        details={"uploaded": results["uploaded"], "skipped": results["skipped"]},
+    )
+
+    return {"status": "ok", "results": results}
+
+
 @router.get("/documents/{doc_id}")
 async def get_document(doc_id: int, user: User = Depends(require_permission("wiki", "view"))):
     """Get document metadata + content preview."""
