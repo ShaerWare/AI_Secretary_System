@@ -13,11 +13,10 @@
 
 **Self-hosted AI-секретарь с клонированием голоса, локальным и облачным LLM, Telegram/WhatsApp ботами и Vue 3 админ-панелью**
 
-[![Сайт проекта](https://img.shields.io/badge/Сайт_проекта-ai--sekretar24.ru-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ai-sekretar24.ru/)
-[![Демо](https://img.shields.io/badge/Демо-demo.ai--sekretar24.ru-00C853?style=for-the-badge&logo=google-chrome&logoColor=white)](https://demo.ai-sekretar24.ru/full/)
-[![Telegram](https://img.shields.io/badge/Telegram_бот-@shaerware__digital__bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/shaerware_digital_bot)
+[![Сайт и демо админки](https://img.shields.io/badge/Сайт_и_демо_админки-ai--sekretar24.ru-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ai-sekretar24.ru/)
+[![Telegram поддержка](https://img.shields.io/badge/Поддержка_и_ассистент-@ai__sekretar24bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/ai_sekretar24bot)
 
-[Сайт проекта](https://ai-sekretar24.ru/) | [Демо (Full)](https://demo.ai-sekretar24.ru/full/) | [Демо (Cloud)](https://demo.ai-sekretar24.ru/cloud/) | [Telegram бот](https://t.me/shaerware_digital_bot) | [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) | [Issues](https://github.com/ShaerWare/AI_Secretary_System/issues)
+[Сайт проекта и демо админки](https://ai-sekretar24.ru/) (логин/пароль: `admin` / `admin`) | [Telegram поддержки и ассистент проекта](https://t.me/ai_sekretar24bot) | [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) | [Issues](https://github.com/ShaerWare/AI_Secretary_System/issues)
 
 ---
 
@@ -1235,10 +1234,8 @@ Copyright (c) 2026 ShaerWare
 
 ## Support
 
-- **Сайт проекта:** https://ai-sekretar24.ru/
-- **Демо (полный):** https://demo.ai-sekretar24.ru/full/
-- **Демо (облачный):** https://demo.ai-sekretar24.ru/cloud/
-- **Telegram бот:** https://t.me/shaerware_digital_bot
+- **Сайт проекта и демо админки:** https://ai-sekretar24.ru/ (логин/пароль: `admin` / `admin`)
+- **Telegram поддержки и ассистент проекта:** https://t.me/ai_sekretar24bot
 - **Issues:** https://github.com/ShaerWare/AI_Secretary_System/issues
 - **Wiki:** https://github.com/ShaerWare/AI_Secretary_System/wiki
 
