@@ -19,7 +19,7 @@ const showPassword = ref(false)
 
 // About panel
 const showAbout = ref(false)
-const activeTab = ref<'ai' | 'privacy' | 'features' | 'channels'>('ai')
+const activeTab = ref<'ai' | 'privacy' | 'features' | 'channels' | 'cases'>('cases')
 
 // Matrix rain animation
 const matrixCanvas = ref<HTMLCanvasElement | null>(null)
@@ -370,6 +370,7 @@ async function handleSubmit() {
           <div class="inline-flex rounded-lg bg-zinc-900/80 backdrop-blur-sm p-1 ring-1 ring-zinc-800">
             <button
               v-for="tab in [
+                { id: 'cases', label: 'Успешные кейсы' },
                 { id: 'ai', label: 'ИИ-движки' },
                 { id: 'privacy', label: 'Приватность' },
                 { id: 'features', label: 'Возможности' },
@@ -389,6 +390,116 @@ async function handleSubmit() {
 
         <!-- Tab content -->
         <div class="bg-zinc-900/80 backdrop-blur-sm rounded-xl ring-1 ring-zinc-800 p-5 sm:p-8">
+
+          <!-- Successful Cases -->
+          <div v-if="activeTab === 'cases'" class="space-y-6">
+            <div class="rounded-lg bg-gradient-to-br from-orange-900/20 via-zinc-800/60 to-zinc-800/60 p-5 ring-1 ring-orange-700/30">
+              <h3 class="text-base font-semibold text-white mb-2">Один движок &mdash; любая роль</h3>
+              <p class="text-sm text-gray-400 leading-relaxed">
+                Ключевое преимущество платформы &mdash; из одной и той же системы можно собрать
+                AI-сотрудника под любую профессию. Мы уже создали и готовы создать для вас
+                автономных ассистентов с индивидуальными промптами, базой знаний, голосом
+                и интеграциями. Ниже &mdash; проверенные сценарии внедрения.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-sky-900/50 flex items-center justify-center text-xl">📞</div>
+                  <h4 class="text-base font-semibold text-white">Колл-центр</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Обработка входящих и исходящих звонков через GSM или SIP, распознавание речи,
+                  голосовые ответы, квалификация лидов, передача сложных диалогов оператору.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-emerald-900/50 flex items-center justify-center text-xl">🛠️</div>
+                  <h4 class="text-base font-semibold text-white">Техподдержка</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  L1-линия поддержки 24/7 в Telegram, WhatsApp и чате сайта. RAG по базе знаний,
+                  тикеты, эскалация инженерам, история обращений и аналитика качества.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-violet-900/50 flex items-center justify-center text-xl">📇</div>
+                  <h4 class="text-base font-semibold text-white">Секретарь</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Приём звонков, запись на встречи в Google Calendar, фильтр спама, напоминания,
+                  краткие сводки переписки, работа с почтой и документами.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-amber-900/50 flex items-center justify-center text-xl">⚖️</div>
+                  <h4 class="text-base font-semibold text-white">Юрист</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Консультации по законодательству с опорой на актуальную базу (RAG по НК, ГК,
+                  судебной практике), анализ договоров, подготовка шаблонов документов.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-lime-900/50 flex items-center justify-center text-xl">📊</div>
+                  <h4 class="text-base font-semibold text-white">Бухгалтер</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Ответы по налогам и отчётности, расчёт УСН/НДС, напоминания о сроках,
+                  первичная обработка документов, интеграция с 1С и банковскими выписками.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-rose-900/50 flex items-center justify-center text-xl">💼</div>
+                  <h4 class="text-base font-semibold text-white">Менеджер по продажам</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Воронка продаж в Telegram/WhatsApp/виджете сайта, квалификация, допродажи,
+                  приём платежей (YooKassa, Stars), интеграция с amoCRM и WooCommerce.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-cyan-900/50 flex items-center justify-center text-xl">🎨</div>
+                  <h4 class="text-base font-semibold text-white">Веб-студия</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  AI-бриф, генерация ТЗ, подбор стека, прототипирование landing-страниц,
+                  автоматическая сдача и поддержка сайтов клиентов под ключ.
+                </p>
+              </div>
+
+              <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-9 h-9 rounded-lg bg-indigo-900/50 flex items-center justify-center text-xl">👨‍💻</div>
+                  <h4 class="text-base font-semibold text-white">Команда программистов</h4>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                  Мост с Claude Code CLI: написание и ревью кода, работа с git, запуск тестов
+                  и деплой прямо из чата. Автономный агент для ваших репозиториев.
+                </p>
+              </div>
+            </div>
+
+            <div class="rounded-lg bg-zinc-800/40 p-4 ring-1 ring-zinc-700/40 text-center">
+              <p class="text-sm text-gray-400">
+                Нужна роль, которой нет в списке? Напишите нам &mdash;
+                <a href="https://t.me/ai_sekretar24bot" target="_blank" rel="noopener noreferrer" class="text-orange-400 hover:text-orange-300 underline">соберём под вашу задачу</a>.
+              </p>
+            </div>
+          </div>
 
           <!-- AI Engines -->
           <div v-if="activeTab === 'ai'" class="space-y-6">
