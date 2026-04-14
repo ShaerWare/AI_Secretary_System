@@ -160,10 +160,15 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
         container.wiki_rag_service = wiki_rag
 
         # Initialize embedding provider (tiered: local > cloud > none)
+        # Skip entirely when Vector Search microservice is configured — it owns
+        # embeddings via its own sentence-transformers model, and the legacy
+        # wiki_rag embedding path would just duplicate work (or fail loudly when
+        # the active LLM provider has no /v1/embeddings endpoint, e.g. claude_bridge).
         embedding_provider = None
+        vector_search_configured = bool(os.environ.get("VECTOR_SEARCH_URL", "").strip())
 
         # Local embeddings (best quality, DEPLOYMENT_MODE=full only)
-        if deployment_mode != "cloud":
+        if not vector_search_configured and deployment_mode != "cloud":
             try:
                 from app.services.embedding_provider import (
                     LOCAL_EMBEDDINGS_AVAILABLE,
@@ -178,7 +183,12 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
 
         # Cloud embeddings from active LLM provider
         llm_service = container.llm_service
-        if not embedding_provider and llm_service and hasattr(llm_service, "config"):
+        if (
+            not vector_search_configured
+            and not embedding_provider
+            and llm_service
+            and hasattr(llm_service, "config")
+        ):
             try:
                 cloud_config = llm_service.config
                 provider_type = cloud_config.get("provider_type", "")
@@ -205,6 +215,8 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
             from modules.knowledge.tasks import build_wiki_embeddings
 
             task_registry.register("wiki-embeddings", partial(build_wiki_embeddings, wiki_rag))
+        elif vector_search_configured:
+            logger.info("📚 Wiki RAG: Vector Search microservice (no inline embeddings)")
         else:
             logger.info("📚 Wiki RAG: BM25 only (no embedding provider)")
 
