@@ -245,13 +245,8 @@ function toggleBranches() {
 
 async function switchBranch(messageId: string) {
   try {
-    const data = await chatApi.switchBranch(sessionId.value, messageId);
-    if (data.session) {
-      messages.value = data.session.messages.filter(
-        (m) => m.is_active !== false,
-      );
-      title.value = data.session.title || "Chat";
-    }
+    await chatApi.switchBranch(sessionId.value, messageId);
+    await loadSession();
     await loadBranches();
     await scrollToBottom();
   } catch (e) {
@@ -261,12 +256,8 @@ async function switchBranch(messageId: string) {
 
 async function createNewBranch() {
   try {
-    const data = await chatApi.newBranch(sessionId.value);
-    if (data.session) {
-      messages.value = data.session.messages.filter(
-        (m) => m.is_active !== false,
-      );
-    }
+    await chatApi.newBranch(sessionId.value);
+    await loadSession();
     if (showBranches.value) await loadBranches();
     await scrollToBottom();
   } catch (e) {
