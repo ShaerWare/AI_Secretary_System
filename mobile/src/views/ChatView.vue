@@ -14,6 +14,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useTts } from "@/composables/useTts";
 import MessageBubble from "@/components/MessageBubble.vue";
 import ChatInput from "@/components/ChatInput.vue";
+import ContextFilesPanel from "@/components/ContextFilesPanel.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -357,8 +358,8 @@ function handleFileUpload(event: Event) {
   input.value = "";
 }
 
-function removeContextFile(index: number) {
-  contextFiles.value.splice(index, 1);
+function updateContextFiles(next: ContextFile[]) {
+  contextFiles.value = next;
   saveContextFiles();
 }
 
@@ -609,26 +610,12 @@ onUnmounted(() => {
 
           <!-- Context Files -->
           <template v-if="showContextFiles">
-            <div class="px-3 py-2 flex items-center justify-between">
-              <span class="text-xs text-stone-400 uppercase tracking-wide font-medium">Файлы контекста</span>
-              <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">+ Добавить</button>
-            </div>
             <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-            <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет прикреплённых файлов</div>
-            <div v-else class="pb-2">
-              <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-                <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-                <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            <ContextFilesPanel
+              :files="contextFiles"
+              @update="updateContextFiles"
+              @upload="triggerFileUpload"
+            />
           </template>
 
           <!-- Settings panel with tabs -->
@@ -646,26 +633,12 @@ onUnmounted(() => {
               >Промпт</button>
             </div>
             <template v-if="settingsTab === 'files'">
-              <div class="px-3 py-2 flex items-center justify-between">
-                <span class="text-xs text-stone-400">Контекстные файлы</span>
-                <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">+ Добавить</button>
-              </div>
               <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-              <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет файлов</div>
-              <div v-else class="pb-2">
-                <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-                  <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-                  <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+              <ContextFilesPanel
+                :files="contextFiles"
+                @update="updateContextFiles"
+                @upload="triggerFileUpload"
+              />
             </template>
             <template v-if="settingsTab === 'prompt'">
               <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
@@ -849,25 +822,12 @@ onUnmounted(() => {
 
         <!-- Context Files (landscape) -->
         <template v-if="showContextFiles">
-          <div class="shrink-0 px-3 py-2 flex justify-end">
-            <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">+ Добавить</button>
-          </div>
           <input ref="contextFileInputRef" type="file" multiple accept=".txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.py,.js,.ts,.html,.css" class="hidden" @change="handleFileUpload" />
-          <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет прикреплённых файлов</div>
-          <div v-else class="flex-1 overflow-y-auto pb-2">
-            <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-              </svg>
-              <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-              <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-              <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          <ContextFilesPanel
+            :files="contextFiles"
+            @update="updateContextFiles"
+            @upload="triggerFileUpload"
+          />
         </template>
 
         <!-- Settings (landscape) -->
@@ -885,24 +845,11 @@ onUnmounted(() => {
             >Промпт</button>
           </div>
           <template v-if="settingsTab === 'files'">
-            <div class="px-3 py-2 flex justify-end">
-              <button class="text-xs text-amber-400 hover:text-amber-300 transition-colors" @click="triggerFileUpload">+ Добавить</button>
-            </div>
-            <div v-if="!contextFiles.length" class="px-3 py-3 text-sm text-stone-500">Нет файлов</div>
-            <div v-else class="flex-1 overflow-y-auto pb-2">
-              <div v-for="(file, index) in contextFiles" :key="index" class="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-800/50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-500 shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span class="text-xs text-stone-300 truncate flex-1">{{ file.name }}</span>
-                <span class="text-[10px] text-stone-500">{{ Math.round(file.content.length / 1024) || '<1' }}KB</span>
-                <button class="text-stone-500 hover:text-red-400 transition-colors" @click="removeContextFile(index)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            <ContextFilesPanel
+              :files="contextFiles"
+              @update="updateContextFiles"
+              @upload="triggerFileUpload"
+            />
           </template>
           <template v-if="settingsTab === 'prompt'">
             <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
