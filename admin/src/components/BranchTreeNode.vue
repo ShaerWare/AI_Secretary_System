@@ -17,7 +17,7 @@ const emit = defineEmits<{
   'toggle-select': [messageId: string]
 }>()
 
-const collapsed = ref(false)
+const collapsed = ref(true)
 
 const maxVisualDepth = 8
 const visualDepth = Math.min(props.depth, maxVisualDepth)

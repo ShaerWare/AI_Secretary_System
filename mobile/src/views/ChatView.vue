@@ -287,14 +287,29 @@ async function deleteBranch() {
   }
 }
 
-function flattenBranches(
-  nodes: BranchNode[],
-  depth = 0,
-): { node: BranchNode; depth: number }[] {
-  const result: { node: BranchNode; depth: number }[] = [];
+const expandedBranchNodes = ref<Set<string>>(new Set());
+
+function toggleBranchNode(id: string) {
+  const next = new Set(expandedBranchNodes.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedBranchNodes.value = next;
+}
+
+interface FlatBranch {
+  node: BranchNode;
+  depth: number;
+  hasChildren: boolean;
+  expanded: boolean;
+}
+
+function flattenBranches(nodes: BranchNode[], depth = 0): FlatBranch[] {
+  const result: FlatBranch[] = [];
   for (const n of nodes) {
-    result.push({ node: n, depth });
-    if (n.children?.length) {
+    const hasChildren = !!n.children?.length;
+    const expanded = expandedBranchNodes.value.has(n.id);
+    result.push({ node: n, depth, hasChildren, expanded });
+    if (hasChildren && expanded) {
       result.push(...flattenBranches(n.children, depth + 1));
     }
   }
@@ -576,25 +591,40 @@ onUnmounted(() => {
             <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">Пока нет истории диалогов</div>
             <div v-else class="pb-2 overflow-x-auto">
               <div class="min-w-max">
-                <button
-                  v-for="{ node, depth } in flatBranches"
+                <div
+                  v-for="{ node, depth, hasChildren, expanded } in flatBranches"
                   :key="node.id"
-                  class="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  class="w-full flex items-center gap-1 px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors whitespace-nowrap"
                   :class="node.is_active ? 'text-amber-400' : 'text-stone-400'"
                   :style="{ paddingLeft: `${12 + depth * 16}px` }"
-                  @click="switchBranch(node.id)"
                 >
-                  <span class="shrink-0">
-                    <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                  <button
+                    v-if="hasChildren"
+                    class="shrink-0 w-4 h-4 flex items-center justify-center text-stone-500 hover:text-stone-200 transition-transform"
+                    :class="expanded ? 'rotate-90' : ''"
+                    @click.stop="toggleBranchNode(node.id)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <polyline points="9 18 15 12 9 6" />
                     </svg>
-                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
-                    </svg>
-                  </span>
-                  <span>{{ node.content_preview || '...' }}</span>
-                  <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
-                </button>
+                  </button>
+                  <span v-else class="shrink-0 w-4" />
+                  <button
+                    class="flex items-center gap-1.5 flex-1 text-left min-w-0"
+                    @click="switchBranch(node.id)"
+                  >
+                    <span class="shrink-0">
+                      <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
+                      </svg>
+                    </span>
+                    <span class="truncate">{{ node.content_preview || '...' }}</span>
+                    <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
+                  </button>
+                </div>
               </div>
             </div>
           </template>
