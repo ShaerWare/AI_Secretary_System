@@ -484,12 +484,15 @@ class ChatRepository(BaseRepository[ChatSession]):
     ) -> List[dict]:
         """Get branch tree structure for a session.
 
+        Siblings and roots are ordered newest-first so that recent branches
+        appear at the top of the tree. Linear chains (single-child parents)
+        are unaffected because they have only one element per level.
         If visible_ids is provided, only messages in the set are included.
         """
         result = await self.session.execute(
             select(ChatMessage)
             .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created.asc())
+            .order_by(ChatMessage.created.desc())
         )
         all_messages = result.scalars().all()
 
