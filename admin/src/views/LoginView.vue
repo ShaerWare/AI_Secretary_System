@@ -120,23 +120,25 @@ async function handleSubmit() {
     <!-- Login section -->
     <div class="w-full flex flex-col items-center" :class="showAbout ? 'mb-6' : 'flex-1 justify-center'">
       <div class="sm:mx-auto sm:w-full sm:max-w-md relative" style="z-index: 2;">
-        <!-- Logo -->
+        <!-- Logo (gear from favicon, transparent background) -->
         <div class="flex justify-center">
-          <div class="w-16 h-16 bg-orange-700 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/30">
-            <svg
-              class="w-10 h-10 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
-              />
-            </svg>
-          </div>
+          <svg
+            class="w-20 h-20 drop-shadow-[0_6px_14px_rgba(194,112,16,0.35)]"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 512 512"
+          >
+            <defs>
+              <linearGradient id="loginLogoGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#F0A830" />
+                <stop offset="100%" stop-color="#C27010" />
+              </linearGradient>
+            </defs>
+            <path
+              fill="url(#loginLogoGradient)"
+              fill-rule="evenodd"
+              d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"
+            />
+          </svg>
         </div>
 
         <h1 class="mt-6 text-center text-3xl font-bold tracking-tight text-white">
