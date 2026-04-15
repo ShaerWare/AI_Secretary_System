@@ -65,8 +65,7 @@
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
 
-    <!-- AI Chat Widget (served by orchestrator at /widget.js) -->
-    <script src="/widget.js?instance=tz-generator" defer></script>
+    <!-- AI Chat Widget loaded only on login page (see LoginView.vue) -->
 
     <!-- Force clear old SW caches, then register new SW -->
     <script src="./sw-cleanup.js" defer></script>
