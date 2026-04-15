@@ -25,6 +25,40 @@ const activeTab = ref<'ai' | 'privacy' | 'features' | 'channels' | 'cases'>('cas
 const matrixCanvas = ref<HTMLCanvasElement | null>(null)
 let matrixRaf = 0
 
+// TZ Generator chat widget — mounted only on the login page
+const WIDGET_INSTANCE = 'tz-generator'
+let widgetScriptEl: HTMLScriptElement | null = null
+
+function mountChatWidget() {
+  if (isDemo) return
+  if (document.querySelector('.ai-chat-widget')) return
+  const s = document.createElement('script')
+  s.src = `/widget.js?instance=${WIDGET_INSTANCE}`
+  s.defer = true
+  s.dataset.loginWidget = '1'
+  document.body.appendChild(s)
+  widgetScriptEl = s
+}
+
+function unmountChatWidget() {
+  widgetScriptEl?.remove()
+  widgetScriptEl = null
+  document.querySelectorAll('.ai-chat-widget').forEach((el) => el.remove())
+  // styles injected by the widget script live in <head>; drop them so the
+  // next mount re-applies fresh settings without duplicates
+  document
+    .querySelectorAll('style')
+    .forEach((el) => {
+      if (el.textContent?.includes('.ai-chat-widget')) el.remove()
+    })
+  // clear the global settings the widget reads on init
+  try {
+    delete (window as unknown as { aiChatSettings?: unknown }).aiChatSettings
+  } catch {
+    /* ignore */
+  }
+}
+
 onMounted(() => {
   const canvas = matrixCanvas.value
   if (!canvas) return
@@ -76,10 +110,13 @@ onMounted(() => {
     matrixRaf = requestAnimationFrame(draw)
   }
   draw()
+
+  mountChatWidget()
 })
 
 onUnmounted(() => {
   cancelAnimationFrame(matrixRaf)
+  unmountChatWidget()
 })
 
 async function handleSubmit() {
@@ -786,69 +823,169 @@ async function handleSubmit() {
           </div>
 
           <!-- Channels -->
-          <div v-if="activeTab === 'channels'" class="space-y-5">
-            <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-9 h-9 rounded-lg bg-sky-900/50 flex items-center justify-center">
+          <div v-if="activeTab === 'channels'" class="grid gap-4 sm:grid-cols-2">
+            <!-- Telegram -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-sky-900/50 flex items-center justify-center shrink-0">
                   <svg class="w-5 h-5 text-sky-400" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
                   </svg>
                 </div>
-                <h3 class="text-base font-semibold text-white">Telegram-боты</h3>
+                <h3 class="text-sm font-semibold text-white">Telegram-боты</h3>
               </div>
-              <p class="text-sm text-gray-400 leading-relaxed">
-                Неограниченное количество Telegram-ботов, каждый со своей ролью, LLM-бэкендом и голосом.
-                Бот-поддержка, бот-продавец, бот-консультант &mdash; управляйте всеми из единой панели.
-                Автозапуск ботов при перезагрузке, мультиплатформенные платежи (YooKassa, YooMoney, Telegram Stars),
-                сессии с сохранением контекста.
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Мультиинстансные боты со своей ролью, LLM и голосом. Автозапуск, платежи (YooKassa, YooMoney, Telegram Stars), сохранение сессий.
               </p>
             </div>
 
-            <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-9 h-9 rounded-lg bg-violet-900/50 flex items-center justify-center">
-                  <svg class="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+            <!-- WhatsApp -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-green-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                   </svg>
                 </div>
-                <h3 class="text-base font-semibold text-white">Чат-виджет для сайта</h3>
+                <h3 class="text-sm font-semibold text-white">WhatsApp-боты</h3>
               </div>
-              <p class="text-sm text-gray-400 leading-relaxed">
-                Встраиваемый чат-виджет для любого сайта. Мультиинстансность &mdash;
-                разные виджеты для разных сайтов с индивидуальными настройками.
-                Настраиваемый внешний вид, интеграция с FAQ и LLM-бэкендом.
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Мультиинстансные WhatsApp-боты через Cloud API. Независимые настройки AI, TTS и RAG-коллекций на каждый номер.
               </p>
             </div>
 
-            <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-9 h-9 rounded-lg bg-emerald-900/50 flex items-center justify-center">
+            <!-- Widget -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-violet-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">Чат-виджет для сайта</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Встраиваемый виджет для любого сайта. Разные виджеты для разных доменов, кастомный вид, FAQ, RAG и LLM-бэкенд.
+              </p>
+            </div>
+
+            <!-- Mobile -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-indigo-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">Мобильное приложение</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Android-приложение на Capacitor: чат с ассистентом, TTS, ветвления и shared-сессии. Персональные инстансы на пользователя.
+              </p>
+            </div>
+
+            <!-- GSM Calls -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-emerald-900/50 flex items-center justify-center shrink-0">
                   <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                   </svg>
                 </div>
-                <h3 class="text-base font-semibold text-white">GSM-телефония</h3>
+                <h3 class="text-sm font-semibold text-white">GSM-телефония</h3>
               </div>
-              <p class="text-sm text-gray-400 leading-relaxed">
-                Подключите GSM-модуль SIM7600E-H и принимайте реальные телефонные звонки.
-                Распознавание речи в реальном времени, генерация ответов через LLM, синтез речи
-                с потоковой отдачей аудио. Полноценный голосовой AI-секретарь на обычном телефонном номере.
+              <p class="text-xs text-gray-400 leading-relaxed">
+                SIM7600E-H принимает звонки: STT → LLM → streaming TTS. Живой голосовой секретарь на обычном номере.
               </p>
             </div>
 
-            <div class="rounded-lg bg-zinc-800/60 p-5 ring-1 ring-zinc-700/50">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-9 h-9 rounded-lg bg-orange-900/50 flex items-center justify-center">
+            <!-- SMS -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-cyan-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">SMS-уведомления</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Приём и отправка SMS через тот же GSM-модуль. UCS2 для кириллицы, PDU-режим, интеграция с воронкой продаж.
+              </p>
+            </div>
+
+            <!-- Gmail / Email -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-red-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">Gmail / почта</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                OAuth-подключение Gmail. Ассистент читает входящие, классифицирует, готовит черновики ответов и отправляет письма.
+              </p>
+            </div>
+
+            <!-- Google Workspace -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-yellow-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032 s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2 C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">Google Workspace</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Drive, Docs, Sheets, Calendar через OAuth. Индексация файлов в RAG, создание документов, планирование встреч.
+              </p>
+            </div>
+
+            <!-- amoCRM -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-fuchsia-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-fuchsia-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">amoCRM</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Двусторонняя интеграция: лиды из всех каналов попадают в CRM, webhooks, воронки продаж, автоматические примечания.
+              </p>
+            </div>
+
+            <!-- WooCommerce -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-purple-900/50 flex items-center justify-center shrink-0">
+                  <svg class="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                  </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-white">WooCommerce</h3>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Синхронизация каталога товаров в RAG. Ассистент консультирует по позициям, ценам и остаткам прямо в чатах.
+              </p>
+            </div>
+
+            <!-- OpenAI API -->
+            <div class="rounded-lg bg-zinc-800/60 p-4 ring-1 ring-zinc-700/50 sm:col-span-2">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-9 h-9 rounded-lg bg-orange-900/50 flex items-center justify-center shrink-0">
                   <svg class="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
                   </svg>
                 </div>
-                <h3 class="text-base font-semibold text-white">OpenAI-совместимый API</h3>
+                <h3 class="text-sm font-semibold text-white">OpenAI-совместимый API</h3>
               </div>
-              <p class="text-sm text-gray-400 leading-relaxed">
-                Система предоставляет стандартный <code class="text-orange-400/80">/v1/chat/completions</code> API,
-                совместимый с OpenWebUI и другими клиентами. Подключайте AI-Секретаря как бэкенд
-                к любым инструментам, поддерживающим OpenAI API.
+              <p class="text-xs text-gray-400 leading-relaxed">
+                Стандартный <code class="text-orange-400/80">/v1/chat/completions</code> — подключайте AI-Секретаря как бэкенд к OpenWebUI, LibreChat и любым OpenAI-совместимым клиентам.
               </p>
             </div>
           </div>
