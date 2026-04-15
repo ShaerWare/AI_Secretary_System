@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 import { ChevronRight, ChevronDown, User, Bot, Settings, Trash2 } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
 
@@ -8,6 +8,7 @@ const props = defineProps<{
   depth: number
   deleteMode: boolean
   selectedForDelete: Set<string>
+  collapsedNodes: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -15,9 +16,10 @@ const emit = defineEmits<{
   'scroll-to': [messageId: string]
   'delete-node': [messageId: string]
   'toggle-select': [messageId: string]
+  'toggle-collapse': [messageId: string]
 }>()
 
-const collapsed = ref(true)
+const collapsed = computed(() => props.collapsedNodes.has(props.node.id))
 
 const maxVisualDepth = 8
 const visualDepth = Math.min(props.depth, maxVisualDepth)
@@ -41,7 +43,7 @@ function onClick() {
 
 function toggleCollapse(e: Event) {
   e.stopPropagation()
-  collapsed.value = !collapsed.value
+  emit('toggle-collapse', props.node.id)
 }
 
 function onDeleteNode(e: Event) {
@@ -63,6 +65,10 @@ function onChildDeleteNode(messageId: string) {
 
 function onChildToggleSelect(messageId: string) {
   emit('toggle-select', messageId)
+}
+
+function onChildToggleCollapse(messageId: string) {
+  emit('toggle-collapse', messageId)
 }
 </script>
 
@@ -177,10 +183,12 @@ function onChildToggleSelect(messageId: string) {
           :depth="hasBranches ? depth + 1 : depth"
           :delete-mode="deleteMode"
           :selected-for-delete="selectedForDelete"
+          :collapsed-nodes="collapsedNodes"
           @click-node="onChildClick"
           @scroll-to="onChildScrollTo"
           @delete-node="onChildDeleteNode"
           @toggle-select="onChildToggleSelect"
+          @toggle-collapse="onChildToggleCollapse"
         />
       </div>
     </div>

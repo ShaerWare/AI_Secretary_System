@@ -289,10 +289,37 @@ async function deleteBranch() {
 
 const expandedBranchNodes = ref<Set<string>>(new Set());
 
+function findBranchNode(nodes: BranchNode[], id: string): BranchNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    if (n.children?.length) {
+      const found = findBranchNode(n.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function collectDescendantIds(node: BranchNode, out: string[]) {
+  out.push(node.id);
+  if (node.children?.length) {
+    for (const c of node.children) collectDescendantIds(c, out);
+  }
+}
+
 function toggleBranchNode(id: string) {
   const next = new Set(expandedBranchNodes.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
+  const node = findBranchNode(branches.value, id);
+  if (!node) return;
+  const ids: string[] = [];
+  collectDescendantIds(node, ids);
+  if (next.has(id)) {
+    // Collapse: remove self + all descendants
+    for (const d of ids) next.delete(d);
+  } else {
+    // Expand: add self + all descendants so the whole subtree is visible
+    for (const d of ids) next.add(d);
+  }
   expandedBranchNodes.value = next;
 }
 

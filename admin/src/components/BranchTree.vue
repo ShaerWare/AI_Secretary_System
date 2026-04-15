@@ -23,6 +23,48 @@ const { t } = useI18n()
 
 const deleteMode = ref(false)
 const selectedForDelete = ref(new Set<string>())
+const collapsedNodes = ref(new Set<string>())
+
+function collectDescendantIds(node: BranchNode, out: string[]) {
+  out.push(node.id)
+  if (node.children?.length) {
+    for (const c of node.children) collectDescendantIds(c, out)
+  }
+}
+
+function collectAllIds(nodes: BranchNode[], out: Set<string>) {
+  for (const n of nodes) {
+    out.add(n.id)
+    if (n.children?.length) collectAllIds(n.children, out)
+  }
+}
+
+// Whenever branches change, collapse any new nodes by default
+watch(
+  () => props.branches,
+  (roots) => {
+    const next = new Set(collapsedNodes.value)
+    collectAllIds(roots, next)
+    collapsedNodes.value = next
+  },
+  { immediate: true, deep: true },
+)
+
+function toggleCollapse(messageId: string) {
+  const entry = nodeMap.value[messageId]
+  if (!entry) return
+  const next = new Set(collapsedNodes.value)
+  const ids: string[] = []
+  collectDescendantIds(entry.node, ids)
+  if (next.has(messageId)) {
+    // Expand subtree: remove self + all descendants
+    for (const d of ids) next.delete(d)
+  } else {
+    // Collapse subtree: add self + all descendants
+    for (const d of ids) next.add(d)
+  }
+  collapsedNodes.value = next
+}
 
 // ── nodeMap: quick lookup by id → { node, parentId } ──
 interface NodeEntry {
@@ -254,10 +296,12 @@ onUnmounted(() => {
           :depth="0"
           :delete-mode="deleteMode"
           :selected-for-delete="selectedForDelete"
+          :collapsed-nodes="collapsedNodes"
           @click-node="handleClick"
           @scroll-to="handleScrollTo"
           @delete-node="handleDeleteNode"
           @toggle-select="toggleSelect"
+          @toggle-collapse="toggleCollapse"
         />
       </div>
     </div>
