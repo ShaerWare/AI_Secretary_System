@@ -12,7 +12,7 @@ WORKDIR /build
 
 # Copy package files first for better caching
 COPY admin/package*.json ./
-RUN npm ci --silent
+RUN npm ci --include=dev --silent
 
 # Copy source and build
 COPY admin/ ./
