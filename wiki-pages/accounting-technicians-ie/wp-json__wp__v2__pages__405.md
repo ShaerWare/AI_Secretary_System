@@ -1,0 +1,11 @@
+# Become an Accounting Technician with our \npart-time programme<\/h1>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t
+
+> Source: https://accountingtechniciansireland.ie
+> Site: Accounting Technicians Ireland
+> Scraped: 2026-04-16
+
+\n\t\t\t\t\t\tJanuary 2026 - Varies by CollegeSepetember 2026 - Varies By College\t\t\t\t\t<\/p>\n\t\t\t\t\n\t\t\t<\/div>\n\t\t\t\n\t\t<\/div>\n\t\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t
+
+Access to a computer with reliable internet connection, webcam and a microphone is a requirement for the exams.<\/p>\t\t\t\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t
+
+### \u201cIt is a wonderful foundation, suitable for everyone.\u201d<\/h3>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\t\t\t\t\tThe framework of the course suited because I was able to watch lectures and study after work and combine learning<\/strong> with employment<\/strong> and being a mother<\/strong>.<\/p>\t\t\t\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\tJustyna Bodnar<\/span>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\tATI Online Programme Graduate<\/span>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\t\t\t\t<\/div>\n\t\t\t\t\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\twhat our students say<\/span>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\t\u201cThrough the apprenticeship, I would be able to make a head start on my career,\u201d<\/h3>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\t\t\t\t\tWhile researching what I wanted to do after my A-Levels<\/strong>, I became very interested in the Higher-Level Apprenticeship, as opposed to the traditional university route into the sector.<\/p>I felt through the apprenticeship, I would be able to make a head start on my career<\/strong>, gain experience and develop professionally while studying towards a professional, degree-equivalent qualification.<\/p>\t\t\t\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\tShannon Love<\/span>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\tHigher-Level Apprentice, Northern Ireland.<\/span>\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\t<\/div>\n\t\t\t\t<\/div>\n\t\t\t\t\t\t\t\t<\/div>\n\t\t\t\t\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t
