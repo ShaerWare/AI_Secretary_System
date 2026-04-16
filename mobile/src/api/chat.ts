@@ -42,7 +42,18 @@ export interface BranchNode {
   role: string;
   content_preview: string;
   is_active: boolean;
+  branch_name?: string;
   children: BranchNode[];
+}
+
+export interface BranchSearchMatch {
+  id: string;
+  role: string;
+  content_preview: string;
+  is_active: boolean;
+  branch_name?: string;
+  match_count: number;
+  parent_id?: string | null;
 }
 
 export interface ChatSession {
@@ -160,6 +171,17 @@ export const chatApi = {
   newBranch: (sessionId: string) =>
     api.post<{ status: string; session: ChatSession }>(
       `/admin/chat/sessions/${sessionId}/branches/new`,
+    ),
+
+  renameBranch: (sessionId: string, messageId: string, branchName: string) =>
+    api.put<{ status: string; branch_name: string | null }>(
+      `/admin/chat/sessions/${sessionId}/branches/${messageId}/rename`,
+      { branch_name: branchName },
+    ),
+
+  searchBranches: (sessionId: string, query: string, matchCase = false) =>
+    api.get<{ matches: BranchSearchMatch[]; query: string; total: number }>(
+      `/admin/chat/sessions/${sessionId}/branches/search?q=${encodeURIComponent(query)}&match_case=${matchCase}`,
     ),
 
   regenerateResponse: (sessionId: string, messageId: string) =>

@@ -271,6 +271,10 @@ class SwitchBranchRequest(BaseModel):
     message_id: str
 
 
+class RenameBranchRequest(BaseModel):
+    branch_name: str
+
+
 class ShareSessionRequest(BaseModel):
     user_id: int
     permission: str = "read"  # "read" or "write"
@@ -1023,6 +1027,38 @@ async def admin_new_branch(
     if session:
         session["sibling_info"] = sibling_info
     return {"status": "ok", "session": session}
+
+
+@router.put("/sessions/{session_id}/branches/{message_id}/rename")
+async def admin_rename_branch(
+    session_id: str,
+    message_id: str,
+    request: RenameBranchRequest,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Переименовать ветку (не меняет контекст диалога)"""
+    await _check_write_access(session_id, user)
+    name = request.branch_name.strip()[:100]
+    success = await chat_service.rename_branch(session_id, message_id, name)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return {"status": "ok", "branch_name": name or None}
+
+
+@router.get("/sessions/{session_id}/branches/search")
+async def admin_search_branch_messages(
+    session_id: str,
+    q: str = Query("", min_length=1),
+    match_case: bool = False,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Поиск по всем сообщениям сессии (включая неактивные ветки)"""
+    owner_id, ws_id = workspace_context(user, "chat")
+    session_data = await chat_service.get_session(session_id, owner_id=owner_id, workspace_id=ws_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    matches = await chat_service.search_messages(session_id, q, match_case)
+    return {"matches": matches, "query": q, "total": len(matches)}
 
 
 # ============== Sharing Endpoints ==============

@@ -373,6 +373,86 @@ function flattenBranches(nodes: BranchNode[], depth = 0): FlatBranch[] {
 
 const flatBranches = computed(() => flattenBranches(branches.value));
 
+// === Branch Search ===
+const branchSearchQuery = ref("");
+const branchSearchResults = ref<string[]>([]);
+const branchSearchLoading = ref(false);
+let branchSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+watch(branchSearchQuery, (q) => {
+  if (branchSearchDebounce) clearTimeout(branchSearchDebounce);
+  if (!q.trim()) {
+    branchSearchResults.value = [];
+    return;
+  }
+  branchSearchDebounce = setTimeout(() => doBranchSearch(q.trim()), 300);
+});
+
+async function doBranchSearch(q: string) {
+  if (!sessionId.value || !q) return;
+  branchSearchLoading.value = true;
+  try {
+    const data = await chatApi.searchBranches(sessionId.value, q);
+    branchSearchResults.value = data.matches.map((m) => m.id);
+    // Auto-expand ancestors of matches
+    if (branchSearchResults.value.length > 0) {
+      const next = new Set(expandedBranchNodes.value);
+      for (const matchId of branchSearchResults.value) {
+        // Walk up ancestors via flatBranches/findBranchNode
+        let current: BranchNode | null = findBranchNode(branches.value, matchId);
+        if (current) {
+          // expand all ancestors by adding them
+          const ancestors = findAncestorIds(branches.value, matchId);
+          for (const aid of ancestors) next.add(aid);
+        }
+      }
+      expandedBranchNodes.value = next;
+    }
+  } catch {
+    branchSearchResults.value = [];
+  } finally {
+    branchSearchLoading.value = false;
+  }
+}
+
+function findAncestorIds(nodes: BranchNode[], targetId: string, path: string[] = []): string[] {
+  for (const n of nodes) {
+    if (n.id === targetId) return path;
+    if (n.children?.length) {
+      const result = findAncestorIds(n.children, targetId, [...path, n.id]);
+      if (result.length > 0 || n.children.some((c) => c.id === targetId)) return [...path, n.id];
+    }
+  }
+  return [];
+}
+
+// === Branch Rename ===
+const renamingBranchId = ref<string | null>(null);
+const renameBranchInput = ref("");
+
+function startRenameBranch(nodeId: string, currentName: string) {
+  renamingBranchId.value = nodeId;
+  renameBranchInput.value = currentName;
+}
+
+async function confirmRenameBranch() {
+  if (!renamingBranchId.value || !sessionId.value) return;
+  try {
+    await chatApi.renameBranch(sessionId.value, renamingBranchId.value, renameBranchInput.value.trim());
+    await loadBranches();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось переименовать";
+  } finally {
+    renamingBranchId.value = null;
+    renameBranchInput.value = "";
+  }
+}
+
+function cancelRenameBranch() {
+  renamingBranchId.value = null;
+  renameBranchInput.value = "";
+}
+
 // === Context Files ===
 
 function toggleSettings() {
@@ -622,7 +702,15 @@ onUnmounted(() => {
         >
           <!-- Branch Tree -->
           <template v-if="showBranches">
-            <div class="px-3 py-2 text-xs font-medium text-stone-400 uppercase tracking-wide">Дерево веток</div>
+            <div class="px-3 py-2 flex items-center gap-2">
+              <span class="text-xs font-medium text-stone-400 uppercase tracking-wide">Дерево веток</span>
+              <input
+                v-model="branchSearchQuery"
+                class="flex-1 min-w-0 text-xs bg-stone-800 border border-stone-700 rounded px-2 py-1 text-stone-200 placeholder-stone-500 outline-none focus:ring-1 focus:ring-amber-500"
+                placeholder="Поиск..."
+              />
+              <span v-if="branchSearchQuery && !branchSearchLoading" class="text-[10px] text-stone-500 whitespace-nowrap">{{ branchSearchResults.length }}</span>
+            </div>
             <div v-if="branchesLoading" class="flex justify-center py-4">
               <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
@@ -633,7 +721,10 @@ onUnmounted(() => {
                   v-for="{ node, depth, hasChildren, expanded } in flatBranches"
                   :key="node.id"
                   class="w-full flex items-center gap-1 px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors whitespace-nowrap"
-                  :class="node.is_active ? 'text-amber-400' : 'text-stone-400'"
+                  :class="[
+                    node.is_active ? 'text-amber-400' : 'text-stone-400',
+                    branchSearchResults.includes(node.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : '',
+                  ]"
                   :style="{ paddingLeft: `${12 + depth * 16}px` }"
                 >
                   <button
@@ -647,21 +738,50 @@ onUnmounted(() => {
                     </svg>
                   </button>
                   <span v-else class="shrink-0 w-4" />
-                  <button
-                    class="flex items-center gap-1.5 flex-1 text-left min-w-0"
-                    @click="switchBranch(node.id)"
-                  >
-                    <span class="shrink-0">
-                      <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                      </svg>
-                      <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
-                      </svg>
-                    </span>
-                    <span class="truncate">{{ node.content_preview || '...' }}</span>
-                    <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
-                  </button>
+
+                  <!-- Inline rename -->
+                  <template v-if="renamingBranchId === node.id">
+                    <input
+                      v-model="renameBranchInput"
+                      class="flex-1 min-w-0 text-xs bg-stone-800 border border-stone-600 rounded px-1 py-0.5 text-stone-200 outline-none focus:ring-1 focus:ring-amber-500"
+                      @keydown.enter="confirmRenameBranch"
+                      @keydown.escape="cancelRenameBranch"
+                      @click.stop
+                    />
+                    <button class="shrink-0 text-emerald-400 hover:text-emerald-300 p-0.5" @click.stop="confirmRenameBranch">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12" /></svg>
+                    </button>
+                    <button class="shrink-0 text-stone-500 hover:text-stone-300 p-0.5" @click.stop="cancelRenameBranch">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </template>
+
+                  <!-- Normal display -->
+                  <template v-else>
+                    <button
+                      class="flex items-center gap-1.5 flex-1 text-left min-w-0"
+                      @click="switchBranch(node.id)"
+                    >
+                      <span class="shrink-0">
+                        <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                        </svg>
+                        <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
+                        </svg>
+                      </span>
+                      <span class="truncate" :class="node.branch_name ? 'italic' : ''">{{ node.branch_name || node.content_preview || '...' }}</span>
+                      <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
+                    </button>
+                    <!-- Rename button -->
+                    <button
+                      class="shrink-0 p-0.5 text-stone-600 hover:text-stone-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style="opacity: 1"
+                      @click.stop="startRenameBranch(node.id, node.branch_name || '')"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                    </button>
+                  </template>
                 </div>
               </div>
             </div>
@@ -854,31 +974,69 @@ onUnmounted(() => {
 
         <!-- Branch Tree (landscape) -->
         <template v-if="showBranches">
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-stone-800">
+            <input
+              v-model="branchSearchQuery"
+              class="flex-1 min-w-0 text-xs bg-stone-800 border border-stone-700 rounded px-2 py-1 text-stone-200 placeholder-stone-500 outline-none focus:ring-1 focus:ring-amber-500"
+              placeholder="Поиск..."
+            />
+            <span v-if="branchSearchQuery && !branchSearchLoading" class="text-[10px] text-stone-500 whitespace-nowrap">{{ branchSearchResults.length }}</span>
+          </div>
           <div v-if="branchesLoading" class="flex justify-center py-4">
             <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
           <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">Пока нет истории диалогов</div>
           <div v-else class="flex-1 overflow-y-auto overflow-x-auto pb-2">
             <div class="min-w-max">
-              <button
+              <div
                 v-for="{ node, depth } in flatBranches"
                 :key="node.id"
                 class="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                :class="node.is_active ? 'text-amber-400' : 'text-stone-400'"
+                :class="[
+                  node.is_active ? 'text-amber-400' : 'text-stone-400',
+                  branchSearchResults.includes(node.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : '',
+                ]"
                 :style="{ paddingLeft: `${12 + depth * 16}px` }"
-                @click="switchBranch(node.id)"
               >
-                <span class="shrink-0">
-                  <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                  </svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
-                  </svg>
-                </span>
-                <span>{{ node.content_preview || '...' }}</span>
-                <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
-              </button>
+                <!-- Inline rename -->
+                <template v-if="renamingBranchId === node.id">
+                  <input
+                    v-model="renameBranchInput"
+                    class="flex-1 min-w-0 text-xs bg-stone-800 border border-stone-600 rounded px-1 py-0.5 text-stone-200 outline-none focus:ring-1 focus:ring-amber-500"
+                    @keydown.enter="confirmRenameBranch"
+                    @keydown.escape="cancelRenameBranch"
+                    @click.stop
+                  />
+                  <button class="shrink-0 text-emerald-400 hover:text-emerald-300 p-0.5" @click.stop="confirmRenameBranch">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12" /></svg>
+                  </button>
+                  <button class="shrink-0 text-stone-500 hover:text-stone-300 p-0.5" @click.stop="cancelRenameBranch">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </template>
+
+                <!-- Normal display -->
+                <template v-else>
+                  <button class="flex items-center gap-1.5 flex-1 text-left min-w-0" @click="switchBranch(node.id)">
+                    <span class="shrink-0">
+                      <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
+                      </svg>
+                    </span>
+                    <span class="truncate" :class="node.branch_name ? 'italic' : ''">{{ node.branch_name || node.content_preview || '...' }}</span>
+                    <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
+                  </button>
+                  <button
+                    class="shrink-0 p-0.5 text-stone-600 hover:text-stone-300"
+                    @click.stop="startRenameBranch(node.id, node.branch_name || '')"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
         </template>
