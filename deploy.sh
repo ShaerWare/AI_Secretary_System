@@ -48,7 +48,7 @@ log "Installing bridge dependencies..."
 # Install/update npm deps
 log "Installing npm dependencies..."
 cd "$REPO_DIR/admin"
-npm ci --silent 2>&1 | tee -a "$LOG_FILE"
+npm ci --include=dev --silent 2>&1 | tee -a "$LOG_FILE"
 
 # Ensure .env.production.local exists (base path override)
 if [ ! -f "$REPO_DIR/admin/.env.production.local" ]; then
@@ -76,8 +76,8 @@ rsync -a --delete "$REPO_DIR/admin/dist/" /var/www/admin-ai-sekretar24/
 log "Restarting orchestrator..."
 systemctl restart ai-secretary 2>&1 | tee -a "$LOG_FILE"
 
-# Wait and verify
-sleep 5
+# Wait and verify (orchestrator needs time to initialize services)
+sleep 20
 if curl -sf http://localhost:8002/health > /dev/null 2>&1; then
     log "=== Deploy completed successfully ==="
 else
