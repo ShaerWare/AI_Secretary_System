@@ -358,7 +358,7 @@ async function handleSubmit() {
           <!-- Android APK download -->
           <div class="mt-4 flex justify-center">
             <a
-              href="https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v1.5/ai-secretary-1.5.apk"
+              href="https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v1.55/ai-secretary-1.55.apk"
               target="_blank"
               rel="noopener noreferrer"
               title="Скачать Android-приложение AI-Секретарь"
@@ -368,7 +368,7 @@ async function handleSubmit() {
                 <path d="M17.523 15.341c-.5866 0-1.0615-.4751-1.0615-1.0613 0-.5862.4749-1.0614 1.0615-1.0614.5864 0 1.0613.4752 1.0613 1.0614 0 .5862-.4749 1.0613-1.0613 1.0613m-11.0456 0c-.5868 0-1.0616-.4751-1.0616-1.0613 0-.5862.4748-1.0614 1.0616-1.0614.5863 0 1.0612.4752 1.0612 1.0614 0 .5862-.4749 1.0613-1.0612 1.0613m11.4264-6.0201 2.1195-3.6713a.4413.4413 0 0 0-.1616-.6025.4415.4415 0 0 0-.6024.1616l-2.1465 3.7185C15.4732 8.1637 13.7923 7.7999 12 7.7999c-1.7922 0-3.4732.3638-4.9924 1.0232L4.8611 5.1046a.441.441 0 0 0-.6023-.1616.4413.4413 0 0 0-.1616.6025l2.1195 3.6713C2.574 10.9842.3949 14.3505 0 18.413h24c-.3949-4.0625-2.5734-7.4288-6.2548-9.4991" />
               </svg>
               <span>Скачать Android-приложение</span>
-              <span class="text-[10px] font-bold uppercase tracking-wide bg-white/20 rounded-full px-1.5 py-0.5">v1.5</span>
+              <span class="text-[10px] font-bold uppercase tracking-wide bg-white/20 rounded-full px-1.5 py-0.5">v1.55</span>
             </a>
           </div>
         </div>
