@@ -9,6 +9,7 @@ import {
   type StreamChunk,
   type BranchNode,
   type ContextFile,
+  type ChatImage,
 } from "@/api/chat";
 import { useAuthStore } from "@/stores/auth";
 import { useTts } from "@/composables/useTts";
@@ -45,6 +46,10 @@ const contextFileInputRef = ref<HTMLInputElement | null>(null);
 
 // Web search
 const webSearchEnabled = ref(false);
+
+// File upload
+const pendingFiles = ref<ChatImage[]>([]);
+const isUploading = ref(false);
 
 // Resizable panel height (portrait) / width (landscape)
 const panelSize = ref(Math.round(window.innerHeight * 0.5));
@@ -122,7 +127,29 @@ function toggleWebSearch() {
   }
 }
 
+async function handleUploadFiles(files: File[]) {
+  if (!sessionId.value || isUploading.value) return;
+  isUploading.value = true;
+  try {
+    for (const file of files) {
+      const { image } = await chatApi.uploadImage(sessionId.value, file);
+      pendingFiles.value.push(image);
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось загрузить файл";
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+function removePendingFile(id: string) {
+  pendingFiles.value = pendingFiles.value.filter((f) => f.id !== id);
+}
+
 async function sendMessage(content: string) {
+  const imageIds = pendingFiles.value.map((f) => f.id);
+  pendingFiles.value = [];
+
   const userMsg: ChatMessage = {
     id: "temp-" + Date.now(),
     role: "user",
@@ -186,6 +213,7 @@ async function sendMessage(content: string) {
           break;
       }
     },
+    imageIds.length ? { image_ids: imageIds } : undefined,
   );
 
   abortStream = abort;
@@ -346,12 +374,6 @@ function flattenBranches(nodes: BranchNode[], depth = 0): FlatBranch[] {
 const flatBranches = computed(() => flattenBranches(branches.value));
 
 // === Context Files ===
-
-function toggleContextFiles() {
-  showBranches.value = false;
-  showSettings.value = false;
-  showContextFiles.value = !showContextFiles.value;
-}
 
 function toggleSettings() {
   showBranches.value = false;
@@ -542,17 +564,6 @@ onUnmounted(() => {
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-
-        <button
-          class="p-1.5 rounded-lg transition-colors"
-          :class="showContextFiles ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
-          title="Файлы контекста"
-          @click="toggleContextFiles"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
 
@@ -807,8 +818,12 @@ onUnmounted(() => {
           <ChatInput
             :disabled="isLoading"
             :is-streaming="isStreaming"
+            :pending-files="pendingFiles"
+            :is-uploading="isUploading"
             @send="sendMessage"
             @stop="stopStreaming"
+            @upload-files="handleUploadFiles"
+            @remove-file="removePendingFile"
           />
         </div>
       </div>

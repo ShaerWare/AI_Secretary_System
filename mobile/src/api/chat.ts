@@ -3,6 +3,19 @@ import { useSettingsStore } from "@/stores/settings";
 import { useAuthStore } from "@/stores/auth";
 import { useMobileConfigStore } from "@/stores/mobileConfig";
 
+export interface ChatImage {
+  id: string;
+  url: string;
+  thumb_url?: string | null;
+  ocr_text?: string | null;
+  width: number;
+  height: number;
+  original_name: string;
+  size?: number;
+  mime_type?: string;
+  is_image?: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -247,5 +260,11 @@ export const chatApi = {
   getMyDefaultMobileSession: () =>
     api.get<{ session_id: string | null }>(
       "/admin/chat/my-default-mobile-session",
+    ),
+
+  uploadImage: (sessionId: string, file: File) =>
+    api.upload<{ image: ChatImage }>(
+      `/admin/chat/sessions/${sessionId}/upload-image`,
+      file,
     ),
 };

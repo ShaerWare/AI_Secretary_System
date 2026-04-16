@@ -278,7 +278,9 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **Mobile Instances**: Admin creates `MobileAppInstance` (LLM backend, persona, system prompt, TTS, RAG) in admin panel (`/mobile-app` view). Users are assigned to instances via `ResourceShare`. On login, mobile app fetches `GET /admin/mobile/my-config` to get assigned instance config. Chat sessions use `source="mobile"` + `mobile_instance_id` for per-instance LLM/prompt routing.
 
-**API layer** (`mobile/src/api/`): `client.ts` (base fetch), `chat.ts` (sessions/streaming/branches), `admin.ts` (admin-only APIs, used only by admin panel).
+**API layer** (`mobile/src/api/`): `client.ts` (base fetch + `upload` for multipart FormData), `chat.ts` (sessions/streaming/branches/`uploadImage`), `admin.ts` (admin-only APIs, used only by admin panel).
+
+**File upload in chat**: Same backend as admin (`POST /admin/chat/sessions/{id}/upload-image`). `ChatInput.vue` has paperclip button between input and send. Files uploaded → `image_ids` passed to `streamMessage` → backend injects extracted text (OCR/PDF/DOCX/XLSX) into LLM context. Accepts: JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX, TXT, CSV, MD, JSON, XML, HTML, YAML. Max 10MB.
 
 **Key differences from admin panel**:
 - Hardcoded server URL (`https://ai-sekretar24.ru`), no user configuration

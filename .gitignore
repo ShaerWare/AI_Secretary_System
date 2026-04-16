@@ -136,5 +136,9 @@ tax_data/sitemap.xml
 tax_data/sitemap_urls.json
 tax_data/.venv/
 
+# DigiTax accountancy scraping (scripts tracked, data not)
+scripts/scrape_digitax/raw/
+scripts/scrape_digitax/parsed/
+
 # Wiki RAG scraped data (large, not code)
 wiki-pages/irish-tax/

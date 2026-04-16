@@ -59,4 +59,30 @@ export const api = {
 
   delete: <T>(endpoint: string) =>
     request<T>(endpoint, { method: "DELETE" }),
+
+  upload: <T>(endpoint: string, file: File): Promise<T> => {
+    const url = `${getBaseUrl()}${endpoint}`;
+    const formData = new FormData();
+    formData.append("file", file);
+    const headers = useAuthStore().getAuthHeaders();
+    return fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        if (response.status === 401) {
+          useAuthStore().logout();
+          throw new Error("Session expired");
+        }
+        const error = await response
+          .json()
+          .catch(() => ({ detail: "Upload failed" }));
+        throw new Error(
+          error.detail || `HTTP error ${response.status}`,
+        );
+      }
+      return response.json();
+    });
+  },
 };
