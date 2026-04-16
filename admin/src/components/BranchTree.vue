@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GitBranch, Plus, X, Trash2 } from 'lucide-vue-next'
-import type { BranchNode } from '@/api/chat'
+import { GitBranch, Plus, X, Trash2, Search } from 'lucide-vue-next'
+import type { BranchNode, BranchSearchMatch } from '@/api/chat'
+import { chatApi } from '@/api'
 import BranchTreeNode from '@/components/BranchTreeNode.vue'
 
 const props = defineProps<{
@@ -17,6 +18,8 @@ const emit = defineEmits<{
   close: []
   'delete-branches': [messageIds: string[]]
   'delete-node': [messageId: string]
+  'rename-node': [messageId: string, name: string]
+  'refetch-branches': []
 }>()
 
 const { t } = useI18n()
@@ -24,6 +27,14 @@ const { t } = useI18n()
 const deleteMode = ref(false)
 const selectedForDelete = ref(new Set<string>())
 const collapsedNodes = ref(new Set<string>())
+
+// Search state
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchResults = ref<BranchSearchMatch[]>([])
+const searchMatchIds = ref(new Set<string>())
+const searchLoading = ref(false)
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
 
 function collectDescendantIds(node: BranchNode, out: string[]) {
   out.push(node.id)
@@ -57,10 +68,8 @@ function toggleCollapse(messageId: string) {
   const ids: string[] = []
   collectDescendantIds(entry.node, ids)
   if (next.has(messageId)) {
-    // Expand subtree: remove self + all descendants
     for (const d of ids) next.delete(d)
   } else {
-    // Collapse subtree: add self + all descendants
     for (const d of ids) next.add(d)
   }
   collapsedNodes.value = next
@@ -109,7 +118,6 @@ function toggleSelect(messageId: string) {
   const selecting = !s.has(messageId)
 
   if (entry.node.role === 'user') {
-    // User message: toggle self + all direct assistant children
     const targets = [messageId]
     for (const child of entry.node.children ?? []) {
       if (child.role === 'assistant') targets.push(child.id)
@@ -119,7 +127,6 @@ function toggleSelect(messageId: string) {
       else s.delete(id)
     }
   } else if (entry.node.role === 'assistant' && entry.parentId) {
-    // Assistant message: toggle parent user + all sibling assistants
     const parent = nodeMap.value[entry.parentId]
     if (parent && parent.node.role === 'user') {
       const targets = [entry.parentId]
@@ -131,12 +138,10 @@ function toggleSelect(messageId: string) {
         else s.delete(id)
       }
     } else {
-      // Parent is not user — toggle only self
       if (selecting) s.add(messageId)
       else s.delete(messageId)
     }
   } else {
-    // System or orphan — toggle only self
     if (selecting) s.add(messageId)
     else s.delete(messageId)
   }
@@ -144,13 +149,11 @@ function toggleSelect(messageId: string) {
   selectedForDelete.value = s
 }
 
-// Count unique pairs for display (user messages count as the pair unit)
 const selectedPairCount = computed(() => {
   let count = 0
   for (const id of selectedForDelete.value) {
     const entry = nodeMap.value[id]
     if (!entry) { count++; continue }
-    // Count user messages, and assistant/system only if their parent is not selected
     if (entry.node.role === 'user') {
       count++
     } else if (!entry.parentId || !selectedForDelete.value.has(entry.parentId)) {
@@ -162,7 +165,6 @@ const selectedPairCount = computed(() => {
 
 function confirmDeleteSelected() {
   if (selectedForDelete.value.size === 0) return
-  // Filter to root IDs only — backend cascades descendants
   const ids = Array.from(selectedForDelete.value).filter((id) => {
     const entry = nodeMap.value[id]
     return !entry?.parentId || !selectedForDelete.value.has(entry.parentId)
@@ -184,6 +186,82 @@ function handleDeleteNode(messageId: string) {
   emit('delete-node', messageId)
 }
 
+// ── Rename ──
+async function handleRenameNode(messageId: string, name: string) {
+  if (!props.sessionId) return
+  try {
+    await chatApi.renameBranch(props.sessionId, messageId, name)
+    emit('refetch-branches')
+  } catch { /* toast handled by api client */ }
+}
+
+// ── Search ──
+function toggleSearch() {
+  showSearch.value = !showSearch.value
+  if (!showSearch.value) {
+    searchQuery.value = ''
+    searchResults.value = []
+    searchMatchIds.value = new Set()
+  }
+}
+
+watch(searchQuery, (q) => {
+  if (searchDebounce) clearTimeout(searchDebounce)
+  if (!q.trim()) {
+    searchResults.value = []
+    searchMatchIds.value = new Set()
+    return
+  }
+  searchDebounce = setTimeout(() => doSearch(q.trim()), 300)
+})
+
+async function doSearch(q: string) {
+  if (!props.sessionId || !q) return
+  searchLoading.value = true
+  try {
+    const data = await chatApi.searchBranches(props.sessionId, q)
+    searchResults.value = data.matches
+    const ids = new Set<string>()
+    for (const m of data.matches) ids.add(m.id)
+    searchMatchIds.value = ids
+
+    // Auto-expand branches containing matches
+    if (ids.size > 0) {
+      const next = new Set(collapsedNodes.value)
+      for (const matchId of ids) {
+        // Walk ancestors and uncollapse them
+        let current: string | null = matchId
+        while (current) {
+          next.delete(current)
+          const e: NodeEntry | undefined = nodeMap.value[current]
+          current = e?.parentId ?? null
+        }
+      }
+      collapsedNodes.value = next
+    }
+  } catch {
+    searchResults.value = []
+    searchMatchIds.value = new Set()
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+// Ctrl+F shortcut
+function onKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault()
+    showSearch.value = true
+    setTimeout(() => {
+      const el = document.querySelector('[data-branch-search]') as HTMLInputElement
+      el?.focus()
+    }, 50)
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+
 // ── Drag-to-scroll ──
 const scrollContainer = ref<HTMLElement | null>(null)
 let isDragging = false
@@ -196,7 +274,6 @@ let hasMoved = false
 function onPointerDown(e: PointerEvent) {
   const el = scrollContainer.value
   if (!el) return
-  // Don't hijack clicks on buttons/interactive elements
   if ((e.target as HTMLElement).closest('[data-branch-node], button, input')) return
   isDragging = true
   hasMoved = false
@@ -226,7 +303,6 @@ function onPointerUp(e: PointerEvent) {
   el.releasePointerCapture(e.pointerId)
   el.style.cursor = ''
   el.style.userSelect = ''
-  // If we dragged, prevent the click from triggering node switch
   if (hasMoved) {
     el.addEventListener('click', suppressClick, { capture: true, once: true })
   }
@@ -250,6 +326,18 @@ onUnmounted(() => {
         {{ t('chatView.branchTree') }}
       </h3>
       <div class="flex items-center gap-1">
+        <button
+          :class="[
+            'p-1 rounded transition-colors',
+            showSearch
+              ? 'bg-primary/15 text-primary hover:bg-primary/25'
+              : 'hover:bg-secondary text-muted-foreground',
+          ]"
+          :title="t('chatView.searchBranches')"
+          @click="toggleSearch"
+        >
+          <Search class="w-3.5 h-3.5" />
+        </button>
         <button
           :class="[
             'p-1 rounded transition-colors',
@@ -279,6 +367,20 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Search bar -->
+    <div v-if="showSearch" class="px-3 py-2 border-b border-border flex items-center gap-2 flex-shrink-0">
+      <input
+        v-model="searchQuery"
+        data-branch-search
+        class="flex-1 min-w-0 text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+        :placeholder="t('chatView.searchPlaceholder')"
+      />
+      <span v-if="searchQuery && !searchLoading" class="text-[10px] text-muted-foreground whitespace-nowrap">
+        {{ searchResults.length > 0 ? t('chatView.searchResults', { n: searchResults.length }) : t('chatView.noSearchResults') }}
+      </span>
+      <span v-if="searchLoading" class="text-[10px] text-muted-foreground animate-pulse">...</span>
+    </div>
+
     <div
       v-if="branches.length > 0"
       ref="scrollContainer"
@@ -297,11 +399,13 @@ onUnmounted(() => {
           :delete-mode="deleteMode"
           :selected-for-delete="selectedForDelete"
           :collapsed-nodes="collapsedNodes"
+          :search-match-ids="searchMatchIds"
           @click-node="handleClick"
           @scroll-to="handleScrollTo"
           @delete-node="handleDeleteNode"
           @toggle-select="toggleSelect"
           @toggle-collapse="toggleCollapse"
+          @rename-node="handleRenameNode"
         />
       </div>
     </div>

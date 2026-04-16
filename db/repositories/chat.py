@@ -508,13 +508,16 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         def build_node(msg: ChatMessage) -> dict:
             kids = children_map.get(msg.id, [])
-            return {
+            node: dict = {
                 "id": msg.id,
                 "role": msg.role,
                 "content_preview": msg.content[:50] + ("..." if len(msg.content) > 50 else ""),
                 "is_active": msg.is_active,
                 "children": [build_node(c) for c in kids],
             }
+            if msg.branch_name:
+                node["branch_name"] = msg.branch_name
+            return node
 
         # Root nodes are messages with no parent (or whose parent is filtered out)
         roots = children_map.get(None, [])
@@ -784,6 +787,65 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         path.reverse()
         return [{"role": m.role, "content": m.content} for m in path]
+
+    async def rename_branch(self, session_id: str, message_id: str, name: str) -> bool:
+        """Rename a branch node. Set name to empty string to clear."""
+        result = await self.session.execute(
+            select(ChatMessage).where(
+                ChatMessage.session_id == session_id,
+                ChatMessage.id == message_id,
+            )
+        )
+        msg = result.scalar_one_or_none()
+        if not msg:
+            return False
+        msg.branch_name = name or None
+        await self.session.flush()
+        return True
+
+    async def search_messages(
+        self, session_id: str, query: str, match_case: bool = False
+    ) -> List[dict]:
+        """Search all messages in a session (including inactive branches).
+
+        Returns list of {id, role, content_preview, is_active, branch_name, match_indices}
+        where match_indices are character positions of matches in content.
+        """
+        result = await self.session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created)
+        )
+        all_messages = result.scalars().all()
+
+        if not query:
+            return []
+
+        matches = []
+        search_q = query if match_case else query.lower()
+        for m in all_messages:
+            content = m.content if match_case else m.content.lower()
+            indices = []
+            start = 0
+            while True:
+                idx = content.find(search_q, start)
+                if idx == -1:
+                    break
+                indices.append(idx)
+                start = idx + 1
+            if indices:
+                matches.append(
+                    {
+                        "id": m.id,
+                        "role": m.role,
+                        "content_preview": m.content[:80] + ("..." if len(m.content) > 80 else ""),
+                        "is_active": m.is_active,
+                        "branch_name": m.branch_name,
+                        "match_count": len(indices),
+                        "parent_id": m.parent_id,
+                    }
+                )
+        return matches
 
     async def get_session_count(self) -> int:
         """Get total number of sessions."""

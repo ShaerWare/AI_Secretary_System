@@ -153,6 +153,7 @@ class ChatMessage(Base):
         index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    branch_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Relationships
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
@@ -179,6 +180,7 @@ class ChatMessage(Base):
             "timestamp": self.created.isoformat() if self.created else None,
             "parent_id": self.parent_id,
             "is_active": self.is_active,
+            "branch_name": self.branch_name,
         }
         if self.extra_data:
             try:

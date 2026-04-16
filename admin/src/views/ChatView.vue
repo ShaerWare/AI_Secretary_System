@@ -3874,6 +3874,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           @close="showBranchTree = false"
           @delete-node="deleteBranchNode"
           @delete-branches="deleteBranches"
+          @refetch-branches="refetchBranches"
         />
       </template>
 

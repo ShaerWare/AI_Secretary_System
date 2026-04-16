@@ -273,6 +273,23 @@ class ChatService:
             await session.commit()
             return result
 
+    @retry_on_busy()
+    async def rename_branch(self, session_id: str, message_id: str, name: str) -> bool:
+        """Rename a branch node."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            result = await repo.rename_branch(session_id, message_id, name)
+            await session.commit()
+            return result
+
+    async def search_messages(
+        self, session_id: str, query: str, match_case: bool = False
+    ) -> List[dict]:
+        """Search all messages in a session across all branches."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.search_messages(session_id, query, match_case)
+
     async def count_messages(
         self,
         session_id: str,
