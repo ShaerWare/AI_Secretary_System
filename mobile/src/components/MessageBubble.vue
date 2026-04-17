@@ -6,13 +6,10 @@ import { renderMarkdown } from "@/utils/markdown";
 const props = defineProps<{
   message: ChatMessage;
   isStreaming?: boolean;
-  isSpeaking?: boolean;
   isAdmin?: boolean;
 }>();
 
 const emit = defineEmits<{
-  speak: [text: string, id: string];
-  stopSpeak: [];
   edit: [messageId: string, content: string];
   saveToContext: [messageId: string, content: string];
   summarizeBranch: [messageId: string];
@@ -34,14 +31,6 @@ const renderedContent = computed(() => {
   }
   return renderMarkdown(props.message.content);
 });
-
-function handleSpeak() {
-  if (props.isSpeaking) {
-    emit("stopSpeak");
-  } else {
-    emit("speak", props.message.content, props.message.id);
-  }
-}
 
 function handleCopy() {
   navigator.clipboard.writeText(props.message.content).then(() => {
@@ -67,15 +56,17 @@ function cancelEdit() {
 
 <template>
   <div
-    class="flex mb-3 px-4"
+    class="flex mb-3 px-3 min-w-0"
     :class="isUser ? 'justify-end' : 'justify-start'"
+    :data-message-id="message.id"
+    :data-message-role="message.role"
   >
     <div
-      class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
+      class="rounded-2xl text-sm leading-relaxed min-w-0 msg-content"
       :class="
         isUser
-          ? 'bg-amber-600 text-white rounded-br-md'
-          : 'bg-stone-800 text-stone-300 rounded-bl-md'
+          ? 'max-w-[85%] px-4 py-2.5 bg-amber-600 text-white rounded-br-md'
+          : 'w-full max-w-full px-1 py-1 text-stone-200'
       "
     >
       <!-- Edit mode -->
@@ -119,21 +110,16 @@ function cancelEdit() {
         <!-- Action buttons for assistant messages -->
         <div
           v-if="!isUser && !isStreaming && message.content"
-          class="flex items-center gap-0.5 mt-1.5 -mb-1 -mx-1 flex-wrap"
+          class="flex items-center gap-0.5 mt-1.5 -mb-1 flex-wrap"
         >
-          <!-- TTS -->
+          <!-- Regenerate response -->
           <button
-            class="p-1.5 rounded text-stone-500 hover:text-stone-300 transition-colors"
-            :title="isSpeaking ? 'Стоп' : 'Озвучить'"
-            @click="handleSpeak"
+            class="p-1.5 rounded text-stone-500 hover:text-amber-300 transition-colors"
+            title="Перегенерировать"
+            @click="$emit('regenerate', message.id)"
           >
-            <svg v-if="!isSpeaking" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="6" y="4" width="4" height="16" />
-              <rect x="14" y="4" width="4" height="16" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
           </button>
 
@@ -200,22 +186,8 @@ function cancelEdit() {
         <!-- Action buttons for user messages -->
         <div
           v-if="isUser && !isStreaming && message.content"
-          class="flex items-center justify-end gap-0.5 mt-1.5 -mb-1 -mx-1 flex-wrap"
+          class="flex items-center justify-end gap-0.5 mt-1.5 -mb-1 flex-wrap"
         >
-          <!-- TTS -->
-          <button
-            class="p-1.5 rounded text-amber-300/50 hover:text-amber-200 transition-colors"
-            :title="isSpeaking ? 'Стоп' : 'Озвучить'"
-            @click="handleSpeak"
-          >
-            <svg v-if="!isSpeaking" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-            </svg>
-          </button>
-
           <!-- Copy -->
           <button
             class="p-1.5 rounded transition-colors"
@@ -315,5 +287,25 @@ function cancelEdit() {
 }
 .user-markdown :deep(p) {
   margin: 0.25rem 0;
+}
+/* Force text to wrap within the mobile viewport — no horizontal page scroll */
+.msg-content {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.msg-content :deep(*) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.msg-content :deep(pre) {
+  overflow-x: auto;
+  max-width: 100%;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.msg-content :deep(table) {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
 }
 </style>

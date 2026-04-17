@@ -12,7 +12,6 @@ import {
   type ChatImage,
 } from "@/api/chat";
 import { useAuthStore } from "@/stores/auth";
-import { useTts } from "@/composables/useTts";
 import MessageBubble from "@/components/MessageBubble.vue";
 import ChatInput from "@/components/ChatInput.vue";
 import ContextFilesPanel from "@/components/ContextFilesPanel.vue";
@@ -20,7 +19,6 @@ import ContextFilesPanel from "@/components/ContextFilesPanel.vue";
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const tts = useTts();
 const isAdmin = computed(() => auth.isAdmin);
 
 const sessionId = computed(() => route.params.id as string);
@@ -46,6 +44,35 @@ const contextFileInputRef = ref<HTMLInputElement | null>(null);
 
 // Web search
 const webSearchEnabled = ref(false);
+
+// Token usage
+const tokenUsage = ref<{ tokens: number; context_window: number; percent: number } | null>(null);
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
+}
+
+const contextTicks = computed(() => {
+  if (!tokenUsage.value) return [];
+  const cw = tokenUsage.value.context_window;
+  if (cw <= 0) return [];
+  const candidates = [4096, 8192, 16384, 32768, 65536, 131072, 200000, 500000, 1000000];
+  const ticks: { tokens: number; pct: number; label: string }[] = [];
+  for (const t of candidates) {
+    const pct = (t / cw) * 100;
+    if (pct > 10 && pct < 90) {
+      ticks.push({ tokens: t, pct, label: formatTokens(t) });
+    }
+  }
+  // Keep max 4 ticks to avoid clutter
+  if (ticks.length > 4) {
+    const step = Math.ceil(ticks.length / 4);
+    return ticks.filter((_, i) => i % step === 0).slice(0, 4);
+  }
+  return ticks;
+});
 
 // File upload
 const pendingFiles = ref<ChatImage[]>([]);
@@ -110,6 +137,7 @@ async function loadSession() {
     contextFiles.value = data.session.context_files || [];
     customPrompt.value = data.session.system_prompt || "";
     webSearchEnabled.value = !!data.session.web_search_enabled;
+    tokenUsage.value = data.session.token_usage || null;
     await scrollToBottom();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось загрузить";
@@ -166,6 +194,9 @@ async function sendMessage(content: string) {
     sessionId.value,
     content,
     (chunk: StreamChunk) => {
+      if (chunk.token_usage) {
+        tokenUsage.value = chunk.token_usage;
+      }
       switch (chunk.type) {
         case "chunk":
           streamingContent.value += chunk.content || "";
@@ -248,6 +279,52 @@ async function scrollToBottom() {
     messagesContainer.value.scrollTop =
       messagesContainer.value.scrollHeight;
   }
+}
+
+function getVisibleMessageEl(): HTMLElement | null {
+  const container = messagesContainer.value;
+  if (!container) return null;
+  const nodes = container.querySelectorAll<HTMLElement>("[data-message-id]");
+  if (!nodes.length) return null;
+  const containerRect = container.getBoundingClientRect();
+  const viewportMid = containerRect.top + containerRect.height / 2;
+  let best: HTMLElement | null = null;
+  let bestDist = Infinity;
+  nodes.forEach((el) => {
+    const r = el.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    const dist = Math.abs(mid - viewportMid);
+    if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = el;
+    }
+  });
+  return best;
+}
+
+function scrollToMessageTop() {
+  const container = messagesContainer.value;
+  const el = getVisibleMessageEl();
+  if (!container || !el) return;
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const targetTop = container.scrollTop + (elRect.top - containerRect.top) - 8;
+  container.scrollTo({ top: targetTop, behavior: "smooth" });
+}
+
+function scrollToMessageBottom() {
+  const container = messagesContainer.value;
+  const el = getVisibleMessageEl();
+  if (!container || !el) return;
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const targetTop =
+    container.scrollTop +
+    (elRect.bottom - containerRect.top) -
+    container.clientHeight +
+    8;
+  container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
 }
 
 // === Branches ===
@@ -359,8 +436,14 @@ interface FlatBranch {
 }
 
 function flattenBranches(nodes: BranchNode[], depth = 0): FlatBranch[] {
+  // Sort siblings: pinned first, otherwise preserve original order
+  const sorted = [...nodes].sort((a, b) => {
+    const ap = a.is_pinned ? 1 : 0;
+    const bp = b.is_pinned ? 1 : 0;
+    return bp - ap;
+  });
   const result: FlatBranch[] = [];
-  for (const n of nodes) {
+  for (const n of sorted) {
     const hasChildren = !!n.children?.length;
     const expanded = expandedBranchNodes.value.has(n.id);
     result.push({ node: n, depth, hasChildren, expanded });
@@ -451,6 +534,30 @@ async function confirmRenameBranch() {
 function cancelRenameBranch() {
   renamingBranchId.value = null;
   renameBranchInput.value = "";
+}
+
+// === Branch Pin ===
+async function pinBranchNode(nodeId: string, pinned: boolean) {
+  if (!sessionId.value) return;
+  try {
+    await chatApi.pinBranch(sessionId.value, nodeId, pinned);
+    await loadBranches();
+  } catch {
+    // ignore
+  }
+}
+
+// === Branch Delete (single node) ===
+async function deleteBranchNode(nodeId: string) {
+  if (!sessionId.value) return;
+  if (!confirm("Удалить эту ветку?")) return;
+  try {
+    await chatApi.deleteMessage(sessionId.value, nodeId);
+    await loadBranches();
+    await loadSession();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось удалить";
+  }
 }
 
 // === Context Files ===
@@ -715,17 +822,16 @@ onUnmounted(() => {
               <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
             <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">Пока нет истории диалогов</div>
-            <div v-else class="pb-2 overflow-x-auto">
-              <div class="min-w-max">
+            <div v-else class="pb-2 overflow-y-auto">
                 <div
                   v-for="{ node, depth, hasChildren, expanded } in flatBranches"
                   :key="node.id"
-                  class="w-full flex items-center gap-1 px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors whitespace-nowrap"
+                  class="w-full flex items-center gap-1 px-2 py-1.5 text-xs hover:bg-stone-800/50 transition-colors"
                   :class="[
                     node.is_active ? 'text-amber-400' : 'text-stone-400',
                     branchSearchResults.includes(node.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : '',
                   ]"
-                  :style="{ paddingLeft: `${12 + depth * 16}px` }"
+                  :style="{ paddingLeft: `${8 + depth * 14}px` }"
                 >
                   <button
                     v-if="hasChildren"
@@ -758,32 +864,39 @@ onUnmounted(() => {
 
                   <!-- Normal display -->
                   <template v-else>
+                    <!-- Pinned indicator -->
+                    <svg v-if="node.is_pinned" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-amber-400">
+                      <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+                    </svg>
                     <button
-                      class="flex items-center gap-1.5 flex-1 text-left min-w-0"
+                      class="flex items-center gap-1 flex-1 text-left min-w-0"
                       @click="switchBranch(node.id)"
                     >
                       <span class="shrink-0">
-                        <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                         </svg>
-                        <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
                         </svg>
                       </span>
                       <span class="truncate" :class="node.branch_name ? 'italic' : ''">{{ node.branch_name || node.content_preview || '...' }}</span>
-                      <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
+                      <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">*</span>
                     </button>
-                    <!-- Rename button -->
-                    <button
-                      class="shrink-0 p-0.5 text-stone-600 hover:text-stone-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                      style="opacity: 1"
-                      @click.stop="startRenameBranch(node.id, node.branch_name || '')"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
-                    </button>
+                    <!-- Action buttons -->
+                    <div class="shrink-0 flex items-center">
+                      <button class="p-1 text-stone-600 hover:text-amber-400" title="Закрепить" @click.stop="pinBranchNode(node.id, !node.is_pinned)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+                      </button>
+                      <button class="p-1 text-stone-600 hover:text-stone-300" title="Переименовать" @click.stop="startRenameBranch(node.id, node.branch_name || '')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                      </button>
+                      <button class="p-1 text-stone-600 hover:text-red-400" title="Удалить" @click.stop="deleteBranchNode(node.id)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                      </button>
+                    </div>
                   </template>
                 </div>
-              </div>
             </div>
           </template>
 
@@ -866,10 +979,7 @@ onUnmounted(() => {
               v-for="msg in messages"
               :key="msg.id"
               :message="msg"
-              :is-speaking="tts.speakingMessageId.value === msg.id"
               :is-admin="isAdmin"
-              @speak="tts.speak($event, msg.id)"
-              @stop-speak="tts.stop()"
               @edit="handleEditMessage"
               @save-to-context="handleSaveToContext"
               @summarize-branch="handleSummarizeBranch"
@@ -894,35 +1004,61 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <!-- Scroll buttons -->
+        <!-- Scroll to top of dialog — pinned to top edge -->
+        <button
+          class="absolute right-2 top-2 z-10 p-2 rounded-full bg-stone-800/80 backdrop-blur border border-stone-700 shadow-md text-stone-400 hover:text-white active:bg-stone-700 transition-colors"
+          title="В начало диалога"
+          @click="scrollToTop"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="5 12 12 5 19 12" />
+            <line x1="5" y1="3" x2="19" y2="3" />
+          </svg>
+        </button>
+
+        <!-- Message scroll buttons — centered vertically -->
         <div class="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-1.5">
           <button
             class="p-2 rounded-full bg-stone-800/80 backdrop-blur border border-stone-700 shadow-md text-stone-400 hover:text-white active:bg-stone-700 transition-colors"
-            @click="scrollToTop"
+            title="К началу ответа"
+            @click="scrollToMessageTop"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <polyline points="5 12 12 5 19 12" />
-              <line x1="5" y1="3" x2="19" y2="3" />
             </svg>
           </button>
           <button
             class="p-2 rounded-full bg-stone-800/80 backdrop-blur border border-stone-700 shadow-md text-stone-400 hover:text-white active:bg-stone-700 transition-colors"
-            @click="scrollToBottom"
+            title="К концу ответа"
+            @click="scrollToMessageBottom"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <polyline points="5 12 12 19 19 12" />
-              <line x1="5" y1="21" x2="19" y2="21" />
             </svg>
           </button>
         </div>
+
+        <!-- Scroll to bottom of dialog — pinned to bottom edge -->
+        <button
+          class="absolute right-2 bottom-2 z-10 p-2 rounded-full bg-stone-800/80 backdrop-blur border border-stone-700 shadow-md text-stone-400 hover:text-white active:bg-stone-700 transition-colors"
+          title="В конец диалога"
+          @click="scrollToBottom"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="5 12 12 19 19 12" />
+            <line x1="5" y1="21" x2="19" y2="21" />
+          </svg>
+        </button>
       </div>
 
       <!-- Input with web search toggle -->
       <div
         class="flex items-end gap-1 px-2 pt-1 border-t border-stone-700/50 bg-stone-900/95"
-        :class="isNativeAndroid ? 'pb-14' : 'pb-2'"
+        :class="tokenUsage ? 'pb-0.5' : (isNativeAndroid ? 'pb-14' : 'pb-2')"
       >
         <button
           :class="[
@@ -945,6 +1081,52 @@ onUnmounted(() => {
             @upload-files="handleUploadFiles"
             @remove-file="removePendingFile"
           />
+        </div>
+      </div>
+
+      <!-- Context usage bar -->
+      <div
+        v-if="tokenUsage"
+        class="relative bg-stone-900/95 px-3"
+        :class="isNativeAndroid ? 'pb-12 pt-0.5' : 'pt-0.5 pb-1'"
+      >
+        <!-- Track background -->
+        <div class="relative h-1.5 rounded-full bg-stone-800 overflow-hidden">
+          <!-- Fill bar with gradient -->
+          <div
+            class="h-full rounded-full transition-all duration-500"
+            :class="[
+              tokenUsage.percent >= 90 ? 'bg-gradient-to-r from-green-500 via-yellow-500 to-red-500' :
+              tokenUsage.percent >= 70 ? 'bg-gradient-to-r from-green-500 via-yellow-400 to-amber-500' :
+              'bg-gradient-to-r from-emerald-500 to-green-400'
+            ]"
+            :style="{ width: Math.min(tokenUsage.percent, 100) + '%' }"
+          />
+          <!-- Tick marks -->
+          <template v-if="tokenUsage.context_window > 0">
+            <div
+              v-for="tick in contextTicks"
+              :key="tick.tokens"
+              class="absolute top-0 h-full w-px bg-stone-600/60"
+              :style="{ left: tick.pct + '%' }"
+            />
+          </template>
+        </div>
+        <!-- Labels row -->
+        <div class="relative h-3 mt-0.5">
+          <!-- Left: current usage -->
+          <span class="absolute left-0 text-[9px] leading-none" :class="tokenUsage.percent >= 90 ? 'text-red-400 font-medium' : tokenUsage.percent >= 70 ? 'text-amber-400' : 'text-stone-500'">
+            {{ formatTokens(tokenUsage.tokens) }}
+          </span>
+          <!-- Tick labels -->
+          <span
+            v-for="tick in contextTicks"
+            :key="'l' + tick.tokens"
+            class="absolute text-[8px] text-stone-600 leading-none -translate-x-1/2"
+            :style="{ left: tick.pct + '%' }"
+          >{{ tick.label }}</span>
+          <!-- Right: total -->
+          <span class="absolute right-0 text-[9px] text-stone-500 leading-none">{{ formatTokens(tokenUsage.context_window) }}</span>
         </div>
       </div>
     </div>
@@ -986,17 +1168,16 @@ onUnmounted(() => {
             <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
           <div v-else-if="!flatBranches.length" class="px-3 py-3 text-sm text-stone-500">Пока нет истории диалогов</div>
-          <div v-else class="flex-1 overflow-y-auto overflow-x-auto pb-2">
-            <div class="min-w-max">
+          <div v-else class="flex-1 overflow-y-auto pb-2">
               <div
                 v-for="{ node, depth } in flatBranches"
                 :key="node.id"
-                class="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-800/50 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                class="w-full text-left px-2 py-1.5 text-xs hover:bg-stone-800/50 transition-colors flex items-center gap-1"
                 :class="[
                   node.is_active ? 'text-amber-400' : 'text-stone-400',
                   branchSearchResults.includes(node.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : '',
                 ]"
-                :style="{ paddingLeft: `${12 + depth * 16}px` }"
+                :style="{ paddingLeft: `${8 + depth * 14}px` }"
               >
                 <!-- Inline rename -->
                 <template v-if="renamingBranchId === node.id">
@@ -1017,27 +1198,34 @@ onUnmounted(() => {
 
                 <!-- Normal display -->
                 <template v-else>
-                  <button class="flex items-center gap-1.5 flex-1 text-left min-w-0" @click="switchBranch(node.id)">
+                  <svg v-if="node.is_pinned" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-amber-400">
+                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+                  </svg>
+                  <button class="flex items-center gap-1 flex-1 text-left min-w-0" @click="switchBranch(node.id)">
                     <span class="shrink-0">
-                      <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                       </svg>
-                      <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
                       </svg>
                     </span>
                     <span class="truncate" :class="node.branch_name ? 'italic' : ''">{{ node.branch_name || node.content_preview || '...' }}</span>
-                    <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">текущая</span>
+                    <span v-if="node.is_active" class="shrink-0 text-[10px] bg-amber-600/30 text-amber-400 px-1 rounded">*</span>
                   </button>
-                  <button
-                    class="shrink-0 p-0.5 text-stone-600 hover:text-stone-300"
-                    @click.stop="startRenameBranch(node.id, node.branch_name || '')"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
-                  </button>
+                  <div class="shrink-0 flex items-center">
+                    <button class="p-1 text-stone-600 hover:text-amber-400" title="Закрепить" @click.stop="pinBranchNode(node.id, !node.is_pinned)">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+                    </button>
+                    <button class="p-1 text-stone-600 hover:text-stone-300" title="Переименовать" @click.stop="startRenameBranch(node.id, node.branch_name || '')">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                    </button>
+                    <button class="p-1 text-stone-600 hover:text-red-400" title="Удалить" @click.stop="deleteBranchNode(node.id)">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    </button>
+                  </div>
                 </template>
               </div>
-            </div>
           </div>
         </template>
 

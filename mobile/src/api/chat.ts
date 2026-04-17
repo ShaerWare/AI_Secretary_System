@@ -42,6 +42,7 @@ export interface BranchNode {
   role: string;
   content_preview: string;
   is_active: boolean;
+  is_pinned?: boolean;
   branch_name?: string;
   children: BranchNode[];
 }
@@ -177,6 +178,12 @@ export const chatApi = {
     api.put<{ status: string; branch_name: string | null }>(
       `/admin/chat/sessions/${sessionId}/branches/${messageId}/rename`,
       { branch_name: branchName },
+    ),
+
+  pinBranch: (sessionId: string, messageId: string, pinned: boolean) =>
+    api.put<{ status: string; pinned: boolean }>(
+      `/admin/chat/sessions/${sessionId}/branches/${messageId}/pin`,
+      { pinned },
     ),
 
   searchBranches: (sessionId: string, query: string, matchCase = false) =>
