@@ -55,7 +55,7 @@ SITES = {
         "max_pages": 500,
         "type": "professional",
         "description": (
-            "CPA Ireland — professional body. " "Resources, publications, technical articles."
+            "CPA Ireland — professional body. Resources, publications, technical articles."
         ),
     },
     "accounting-technicians-ie": {
@@ -76,8 +76,7 @@ SITES = {
         "max_pages": 200,
         "type": "academic",
         "description": (
-            "IAFA — academic body. Conferences, papers, "
-            "research in Irish accounting and finance."
+            "IAFA — academic body. Conferences, papers, research in Irish accounting and finance."
         ),
     },
     "accountant-forums-ireland": {

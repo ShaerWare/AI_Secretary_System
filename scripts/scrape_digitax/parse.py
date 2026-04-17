@@ -128,7 +128,7 @@ def strip_boilerplate(tree, slug: str = ""):
     # CPA-specific: remove login forms
     if slug == "cpa-ireland":
         for bad in tree.xpath(
-            './/form[contains(@action, "login")]' '| .//*[contains(@class, "login")]'
+            './/form[contains(@action, "login")]| .//*[contains(@class, "login")]'
         ):
             parent = bad.getparent()
             if parent is not None:
@@ -387,8 +387,7 @@ def parse_forum_boards_ie(filepath: Path, slug: str) -> dict | None:
     ):
         # Author
         author_els = post_el.xpath(
-            './/*[contains(@class, "username")]//text()'
-            '| .//*[contains(@class, "Author")]//a/text()'
+            './/*[contains(@class, "username")]//text()| .//*[contains(@class, "Author")]//a/text()'
         )
         author = ""
         for a in author_els:
@@ -401,7 +400,7 @@ def parse_forum_boards_ie(filepath: Path, slug: str) -> dict | None:
 
         # Date
         date_els = post_el.xpath(
-            ".//time/@datetime" '| .//*[contains(@class, "DateCreated")]//time/text()'
+            './/time/@datetime| .//*[contains(@class, "DateCreated")]//time/text()'
         )
         post_date = date_els[0].strip() if date_els else ""
 
@@ -415,7 +414,7 @@ def parse_forum_boards_ie(filepath: Path, slug: str) -> dict | None:
             strip_boilerplate(body_els[0])
             # Remove signature blocks
             for sig in body_els[0].xpath(
-                './/*[contains(@class, "signature")]' '| .//*[contains(@class, "Signature")]'
+                './/*[contains(@class, "signature")]| .//*[contains(@class, "Signature")]'
             ):
                 parent = sig.getparent()
                 if parent is not None:
@@ -487,15 +486,15 @@ def parse_forum_accountant_forums(
         '| //li[contains(@class, "block-row")]'
     ):
         author_els = post_el.xpath(
-            './/*[contains(@class, "username")]//text()' '| .//a[@class="username"]//text()'
+            './/*[contains(@class, "username")]//text()| .//a[@class="username"]//text()'
         )
         author = author_els[0].strip() if author_els else "Unknown"
 
-        date_els = post_el.xpath(".//time/@datetime" '| .//*[contains(@class, "u-dt")]//text()')
+        date_els = post_el.xpath('.//time/@datetime| .//*[contains(@class, "u-dt")]//text()')
         post_date = date_els[0].strip() if date_els else ""
 
         body_els = post_el.xpath(
-            './/*[contains(@class, "message-body")]' '| .//*[contains(@class, "bbWrapper")]'
+            './/*[contains(@class, "message-body")]| .//*[contains(@class, "bbWrapper")]'
         )
         if body_els:
             strip_boilerplate(body_els[0])
