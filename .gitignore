@@ -140,5 +140,11 @@ tax_data/.venv/
 scripts/scrape_digitax/raw/
 scripts/scrape_digitax/parsed/
 
-# Wiki RAG scraped data (large, not code)
+# Wiki RAG scraped data (stored in external/ai-agents submodule, synced on deploy)
 wiki-pages/irish-tax/
+wiki-pages/boards-ie-accountancy/
+wiki-pages/chartered-accountants-ie/
+wiki-pages/cpa-ireland/
+wiki-pages/accounting-technicians-ie/
+wiki-pages/accountant-forums-ireland/
+wiki-pages/icaew-ireland/
