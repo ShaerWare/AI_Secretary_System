@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from ...config import get_settings
@@ -330,7 +331,7 @@ class ClaudeProvider(BaseProvider):
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(system_prompt)
             except Exception:
-                os.unlink(system_prompt_file)
+                Path(system_prompt_file).unlink(missing_ok=True)
                 raise
             logger.debug(
                 f"System prompt {len(system_prompt)} chars -> {system_prompt_file}"
@@ -356,10 +357,7 @@ class ClaudeProvider(BaseProvider):
                 return await self._sync_complete(cmd, model, user_prompt)
             finally:
                 if system_prompt_file:
-                    try:
-                        os.unlink(system_prompt_file)
-                    except OSError:
-                        pass
+                    Path(system_prompt_file).unlink(missing_ok=True)
 
     async def _sync_complete(
         self,
@@ -515,7 +513,4 @@ class ClaudeProvider(BaseProvider):
             raise
         finally:
             if cleanup_file:
-                try:
-                    os.unlink(cleanup_file)
-                except OSError:
-                    pass
+                Path(cleanup_file).unlink(missing_ok=True)
