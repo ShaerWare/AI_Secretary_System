@@ -333,9 +333,7 @@ class ClaudeProvider(BaseProvider):
             except Exception:
                 Path(system_prompt_file).unlink(missing_ok=True)
                 raise
-            logger.debug(
-                f"System prompt {len(system_prompt)} chars -> {system_prompt_file}"
-            )
+            logger.debug(f"System prompt {len(system_prompt)} chars -> {system_prompt_file}")
 
         cmd = self._build_command(
             model=model,
