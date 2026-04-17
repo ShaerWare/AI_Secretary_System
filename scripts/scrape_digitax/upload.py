@@ -117,18 +117,40 @@ def count_sections(content: str) -> int:
 
 
 async def upload_site(slug: str, cfg: dict, dry_run: bool = False) -> dict:
-    """Upload all parsed markdown for one site to its collection."""
-    parsed_dir = get_site_parsed_dir(slug)
+    """Upload all parsed markdown for one site to its collection.
+
+    Source preference (first non-empty wins):
+      1. scripts/scrape_digitax/parsed/<slug>/  (local scrape pipeline)
+      2. external/ai-agents/digitax/collections/<slug>/  (submodule — server deploy)
+      3. wiki-pages/<slug>/  (already-synced runtime copy)
+    """
     base_dir = f"wiki-pages/{slug}"
     collection_name = cfg["name"]
     description = cfg.get("description", "")
 
-    md_files = sorted(f for f in parsed_dir.glob("*.md") if not f.name.startswith("_"))
-    # Skip manifest.json (it's .json, not .md, but be safe)
+    candidate_dirs = [
+        get_site_parsed_dir(slug),
+        PROJECT_ROOT / f"external/ai-agents/digitax/collections/{slug}",
+        PROJECT_ROOT / base_dir,
+    ]
+    source_dir = None
+    for cand in candidate_dirs:
+        if cand.exists() and any(
+            f.is_file() and f.suffix == ".md" and not f.name.startswith("_") for f in cand.iterdir()
+        ):
+            source_dir = cand
+            break
+
+    if source_dir is None:
+        log.info("[%s] No markdown files found in any source dir", slug)
+        return {"uploaded": 0, "skipped": 0, "errors": 0}
+
+    log.info("[%s] Using source: %s", slug, source_dir.relative_to(PROJECT_ROOT))
+    md_files = sorted(f for f in source_dir.glob("*.md") if not f.name.startswith("_"))
     md_files = [f for f in md_files if f.name != "manifest.json"]
 
     if not md_files:
-        log.info("[%s] No markdown files found in %s", slug, parsed_dir)
+        log.info("[%s] No markdown files found in %s", slug, source_dir)
         return {"uploaded": 0, "skipped": 0, "errors": 0}
 
     log.info("[%s] Found %d markdown files", slug, len(md_files))
