@@ -192,11 +192,38 @@ const inputPosition = ref<'top' | 'bottom'>(
 const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapse } = useSidebarCollapse('chat-sidebar-collapsed')
 
 // Resizable panels
-const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: startSidebarTouchResize } = useResizablePanel('chat-sidebar-width', 288, 200, 480, 'right')
-const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize: startBranchTouchResize } = useResizablePanel('chat-branch-width', 208, 160, 400, 'left')
-const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel('chat-settings-width', 500, 300, 800, 'left')
-const { width: artifactWidth, startResize: startArtifactResize, startTouchResize: startArtifactTouchResize } = useResizablePanel('chat-artifact-width', 500, 300, 800, 'left')
-const { width: ccPanelWidth, startResize: startCcPanelResize, startTouchResize: startCcPanelTouchResize } = useResizablePanel('chat-cc-panel-width', 320, 220, 500, 'left')
+// Right-side panels use a dynamic max = available window width minus the sidebar
+// and a small reserve (~400px) for the messages pane. The onCollapse callback
+// closes the panel when the user keeps dragging past minWidth.
+const MESSAGES_MIN_RESERVE = 380
+
+function rightPanelMax(): number {
+  // Account for the sidebar taking ~sidebarWidth; fall back to 600 if unknown yet.
+  const side = typeof sidebarWidth !== 'undefined' ? sidebarWidth.value : 288
+  return Math.max(320, window.innerWidth - side - MESSAGES_MIN_RESERVE)
+}
+
+const { width: sidebarWidth, startResize: startSidebarResize, startTouchResize: startSidebarTouchResize } = useResizablePanel(
+  'chat-sidebar-width', 288, 200,
+  () => Math.max(240, Math.floor(window.innerWidth * 0.5)),
+  'right',
+)
+const { width: branchTreeWidth, startResize: startBranchResize, startTouchResize: startBranchTouchResize } = useResizablePanel(
+  'chat-branch-width', 208, 160, rightPanelMax, 'left',
+  { onCollapse: () => { showBranchTree.value = false } },
+)
+const { width: settingsWidth, startResize: startSettingsResize, startTouchResize: startSettingsTouchResize } = useResizablePanel(
+  'chat-settings-width', 500, 300, rightPanelMax, 'left',
+  { onCollapse: () => { showSettings.value = false } },
+)
+const { width: artifactWidth, startResize: startArtifactResize, startTouchResize: startArtifactTouchResize } = useResizablePanel(
+  'chat-artifact-width', 500, 300, rightPanelMax, 'left',
+  { onCollapse: () => { closeArtifact() } },
+)
+const { width: ccPanelWidth, startResize: startCcPanelResize, startTouchResize: startCcPanelTouchResize } = useResizablePanel(
+  'chat-cc-panel-width', 320, 220, rightPanelMax, 'left',
+  { onCollapse: () => { showCcPanel.value = false } },
+)
 
 // Pasted content blocks
 const pastedBlocks = ref<PastedBlock[]>([])
