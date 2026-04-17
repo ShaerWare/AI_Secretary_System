@@ -46,9 +46,7 @@ def _isolated_bridge_home() -> Path | None:
         _BRIDGE_HOME_INIT_FAILED = True
         return None
 
-    home_path = Path(
-        os.environ.get("BRIDGE_ISOLATED_HOME", "/var/lib/ai-secretary-bridge")
-    )
+    home_path = Path(os.environ.get("BRIDGE_ISOLATED_HOME", "/var/lib/ai-secretary-bridge"))
     real_claude = Path(os.path.expanduser("~/.claude"))
 
     try:

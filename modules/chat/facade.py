@@ -83,6 +83,7 @@ def _load_platform_agent_prompt() -> str | None:
     _PLATFORM_AGENT_LOADED = True
     return _PLATFORM_AGENT_PROMPT
 
+
 KNOWLEDGE_SEARCH_TOOL = {
     "type": "function",
     "function": {
