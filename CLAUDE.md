@@ -244,6 +244,10 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`).
 
+**Platform agent fallback** (`prompts/platform-agent.md`): When a chat session has no `system_prompt` set, `modules/chat/facade.py` loads this file as the system prompt (lazy, cached per-process) before falling back to `llm.get_system_prompt()`. Persona helps end-users configure their own assistants; no admin/ops content. Override path via `PLATFORM_AGENT_PROMPT_FILE`.
+
+**Bridge HOME isolation** (`services/bridge/src/providers/claude/provider.py`): The Claude CLI subprocess spawned by the bridge inherits `$HOME` from the service, so it picks up `/root/CLAUDE.md` and user-memory files — which historically leaked admin context into end-user chats. Set `BRIDGE_ISOLATE_HOME=1` in `.env` to spawn the CLI with `HOME=/var/lib/ai-secretary-bridge` and `cwd=<home>/sandbox` (outside `/root`), with credentials symlinked from the real `~/.claude/`. Default off to avoid breaking dev setups without the isolated dir.
+
 **Cloud LLM**: `cloud_llm_service.py` factory pattern. OpenAI-compatible providers auto-handled via `OpenAICompatibleProvider`. Custom SDKs get their own provider class inheriting `BaseLLMProvider`. Provider types in `PROVIDER_TYPES` dict in `db/models.py`. Supports model fallback via `fallback_models` list. `supports_tools` flag + `generate_with_tools()` on `OpenAICompatibleProvider` and `VLLMLLMService` for tool-calling (agentic RAG).
 
 **Wiki RAG**: `app/services/wiki_rag_service.py` — tiered search: (1) semantic embeddings (Gemini/OpenAI/local), (2) BM25 with Russian/English stemming, (3) Vector Search microservice (if `VECTOR_SEARCH_URL` configured). Multi-collection support. Per-instance RAG config on bots/widgets. **Agentic RAG** (`modules/chat/router.py`): server-side loop where LLM calls `knowledge_search` tool to query the knowledge base on demand (max 5 iterations). Providers without `supports_tools` (Gemini SDK) fall back to one-shot RAG injection. Frontend shows inline search indicator via `tool_start`/`tool_end` SSE events. **Vector Search** (`services/vector-search/`): standalone FastAPI microservice using ChromaDB + `paraphrase-multilingual-mpnet-base-v2` (768 dims). Client: `app/services/vector_search_client.py` (async httpx). Runs as Docker profile `vector-search` on port 8003. Async search methods (`search_async`, `retrieve_async`, `retrieve_multi_async`) run all engines in parallel via `asyncio.gather` and merge/deduplicate results. Background task `vector-search-sync` upserts all sections on startup. `DatasetSynced` event triggers incremental sync. Admin endpoints: `GET /admin/wiki-rag/vector-search/status`, `POST /admin/wiki-rag/vector-search/sync`.
@@ -348,6 +352,9 @@ VECTOR_SEARCH_TOKEN=                # Bearer token for Vector Search API
 GOOGLE_CLIENT_ID=                   # Google OAuth 2.0 (Drive, Docs, Sheets, Gmail)
 GOOGLE_CLIENT_SECRET=               # Google OAuth 2.0 client secret
 GOOGLE_REDIRECT_URI=                # OAuth callback URL (default: {BASE_URL}/admin/oauth/google/callback)
+PLATFORM_AGENT_PROMPT_FILE=         # Override path to platform-agent fallback prompt (default: /opt/ai-secretary/prompts/platform-agent.md)
+BRIDGE_ISOLATE_HOME=                # "1" to spawn Claude CLI with isolated HOME so host's CLAUDE.md/memory files don't leak into user chats
+BRIDGE_ISOLATED_HOME=               # Override isolated HOME path (default: /var/lib/ai-secretary-bridge)
 ```
 
 ## Deployment

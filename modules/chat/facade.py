@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from modules.chat.schemas import ShareInfo, StreamChunk
@@ -57,6 +59,29 @@ _WEB_SEARCH_SUFFIX = (
     "Используй его когда нужна актуальная информация: новости, цены, погода, "
     "события, факты. Можешь вызвать несколько раз с разными запросами."
 )
+
+# Fallback persona for sessions without an explicit system_prompt — platform
+# agent that helps users configure their own assistants. Loaded once from
+# /opt/ai-secretary/prompts/platform-agent.md (overridable via env var).
+_PLATFORM_AGENT_PROMPT: str | None = None
+_PLATFORM_AGENT_LOADED = False
+
+
+def _load_platform_agent_prompt() -> str | None:
+    global _PLATFORM_AGENT_PROMPT, _PLATFORM_AGENT_LOADED
+    if _PLATFORM_AGENT_LOADED:
+        return _PLATFORM_AGENT_PROMPT
+    path = Path(
+        os.getenv("PLATFORM_AGENT_PROMPT_FILE", "/opt/ai-secretary/prompts/platform-agent.md")
+    )
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        _PLATFORM_AGENT_PROMPT = text or None
+    except OSError as exc:
+        logger.warning("Platform-agent prompt file not loaded (%s): %s", path, exc)
+        _PLATFORM_AGENT_PROMPT = None
+    _PLATFORM_AGENT_LOADED = True
+    return _PLATFORM_AGENT_PROMPT
 
 KNOWLEDGE_SEARCH_TOOL = {
     "type": "function",
@@ -418,6 +443,8 @@ class ChatServiceImpl:
 
         # Build prompt
         prompt = system_prompt or session.get("system_prompt")
+        if not prompt:
+            prompt = _load_platform_agent_prompt()
         if not prompt and hasattr(llm, "get_system_prompt"):
             prompt = llm.get_system_prompt()
 
@@ -524,6 +551,8 @@ class ChatServiceImpl:
 
         # Build prompt
         prompt = system_prompt or session.get("system_prompt")
+        if not prompt:
+            prompt = _load_platform_agent_prompt()
         if not prompt and hasattr(llm, "get_system_prompt"):
             prompt = llm.get_system_prompt()
 
