@@ -23,6 +23,79 @@ logger = logging.getLogger(__name__)
 # to fail with [Errno 7] Argument list too long.
 _SYSTEM_PROMPT_ARGV_LIMIT = 100 * 1024
 
+# Isolated HOME for the spawned CLI. Prevents the real $HOME/CLAUDE.md and the
+# host user's memory files from being pulled into bridge-backed chat sessions.
+# Off by default; enable by setting BRIDGE_ISOLATE_HOME=1. Credentials from
+# the real $HOME/.claude/ are symlinked into the isolated home on first use.
+_BRIDGE_HOME_READY: Path | None = None
+_BRIDGE_HOME_INIT_FAILED = False
+
+
+def _isolated_bridge_home() -> Path | None:
+    """Return the isolated HOME path for the bridge CLI, or None if disabled/unusable.
+
+    Initialises the directory on first call (idempotent). Failures fall back to
+    ``None`` so the caller spawns CLI with the inherited HOME — no regression.
+    """
+    global _BRIDGE_HOME_READY, _BRIDGE_HOME_INIT_FAILED
+    if _BRIDGE_HOME_READY is not None:
+        return _BRIDGE_HOME_READY
+    if _BRIDGE_HOME_INIT_FAILED:
+        return None
+    if os.environ.get("BRIDGE_ISOLATE_HOME", "").strip() not in ("1", "true", "yes", "on"):
+        _BRIDGE_HOME_INIT_FAILED = True
+        return None
+
+    home_path = Path(os.environ.get("BRIDGE_ISOLATED_HOME", "/var/lib/ai-secretary-bridge"))
+    real_claude = Path(os.path.expanduser("~/.claude"))
+
+    try:
+        (home_path / ".claude").mkdir(parents=True, exist_ok=True)
+        # Sandbox cwd lives inside the isolated home so the CLI's CLAUDE.md
+        # search (which walks up from cwd) never reaches /root/CLAUDE.md.
+        (home_path / "sandbox").mkdir(parents=True, exist_ok=True)
+        # Empty marker CLAUDE.md so the CLI's memory search stops here and does
+        # not keep walking up to the real /root/CLAUDE.md.
+        marker = home_path / "CLAUDE.md"
+        if not marker.exists():
+            marker.write_text("", encoding="utf-8")
+        # Symlink credentials + settings so the CLI can still authenticate.
+        for name in (".credentials.json", "settings.json"):
+            src = real_claude / name
+            dst = home_path / ".claude" / name
+            if src.exists() and not dst.exists():
+                try:
+                    dst.symlink_to(src)
+                except OSError:
+                    # Fall back to copy if symlink is refused (e.g. cross-device).
+                    dst.write_bytes(src.read_bytes())
+    except OSError as exc:
+        logger.warning("Bridge HOME isolation disabled — setup failed: %s", exc)
+        _BRIDGE_HOME_INIT_FAILED = True
+        return None
+
+    _BRIDGE_HOME_READY = home_path
+    logger.info("Bridge CLI runs with isolated HOME=%s", home_path)
+    return home_path
+
+
+def _build_cli_env() -> dict[str, str] | None:
+    """Build env dict for the CLI subprocess. Returns None to inherit os.environ."""
+    home = _isolated_bridge_home()
+    if home is None:
+        return None
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    return env
+
+
+def _cli_cwd() -> str | None:
+    """Sandbox cwd for the CLI subprocess, kept outside the host user's $HOME
+    so the CLAUDE.md lookup (which walks up from cwd) cannot reach it.
+    Returns None to let ``create_subprocess`` pick its default sandbox."""
+    home = _isolated_bridge_home()
+    return str(home / "sandbox") if home else None
+
 
 class ClaudeProvider(BaseProvider):
     """Provider for Claude Code CLI.
@@ -365,12 +438,16 @@ class ClaudeProvider(BaseProvider):
     ) -> dict[str, Any]:
         """Non-streaming completion."""
         try:
-            process = await create_subprocess(
-                cmd,
+            cli_kwargs: dict[str, Any] = dict(
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_build_cli_env(),
             )
+            cli_cwd = _cli_cwd()
+            if cli_cwd:
+                cli_kwargs["cwd"] = cli_cwd
+            process = await create_subprocess(cmd, **cli_kwargs)
 
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(input=prompt.encode()),
@@ -433,12 +510,16 @@ class ClaudeProvider(BaseProvider):
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming completion using stream-json format."""
         try:
-            process = await create_subprocess(
-                cmd,
+            cli_kwargs: dict[str, Any] = dict(
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_build_cli_env(),
             )
+            cli_cwd = _cli_cwd()
+            if cli_cwd:
+                cli_kwargs["cwd"] = cli_cwd
+            process = await create_subprocess(cmd, **cli_kwargs)
 
             # Write prompt to stdin and close it
             process.stdin.write(prompt.encode())
