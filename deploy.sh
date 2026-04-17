@@ -59,12 +59,24 @@ fi
 # Build admin panel (production mode)
 # Clean dist/ and Vite cache to prevent stale demo build artifacts
 rm -rf "$REPO_DIR/admin/dist" "$REPO_DIR/admin/node_modules/.vite"
+
+# Abort if VITE_DEMO_MODE=true leaked into the build env (e.g. exported in a
+# parent shell). `VITE_DEMO_MODE=` on the npm command pins it to empty, but a
+# leading check surfaces the failure mode loudly instead of silent fallback.
+if [ "${VITE_DEMO_MODE:-}" = "true" ]; then
+    log "ERROR: VITE_DEMO_MODE=true in shell env — production build unsafe. Aborting."
+    exit 1
+fi
+
 log "Building admin panel..."
 VITE_DEMO_MODE= npm run build 2>&1 | tee -a "$LOG_FILE"
 
-# Verify no demo interceptor leaked into production build
-if grep -q 'setupDemoInterceptor' "$REPO_DIR/admin/dist/assets/"*.js 2>/dev/null; then
-    log "ERROR: Demo interceptor found in production build! Aborting deploy."
+# Sanity check that the build produced something. The old content-grep for
+# 'setupDemoInterceptor' gave false positives after the runtime admin/admin
+# demo-login refactor — the demo chunk now ships in every prod build and only
+# activates at runtime. The real leak is ruled out by the env check above.
+if [ ! -s "$REPO_DIR/admin/dist/index.html" ]; then
+    log "ERROR: admin build produced no index.html. Aborting deploy."
     exit 1
 fi
 
