@@ -4,6 +4,8 @@ import asyncio
 import codecs
 import json
 import logging
+import os
+import tempfile
 from typing import Any, AsyncIterator
 
 from ...config import get_settings
@@ -13,6 +15,12 @@ from ..base import BaseProvider
 
 
 logger = logging.getLogger(__name__)
+
+# Threshold above which system_prompt is passed via --system-prompt-file instead
+# of --system-prompt argv. Linux kernel MAX_ARG_STRLEN is 128 KiB per argv slot;
+# 100 KiB leaves margin for other args + env. Hitting the limit causes execve
+# to fail with [Errno 7] Argument list too long.
+_SYSTEM_PROMPT_ARGV_LIMIT = 100 * 1024
 
 
 class ClaudeProvider(BaseProvider):
@@ -223,6 +231,7 @@ class ClaudeProvider(BaseProvider):
         self,
         model: str,
         system_prompt: str | None = None,
+        system_prompt_file: str | None = None,
         stream: bool = False,
         session_id: str | None = None,
         **kwargs: Any,
@@ -242,9 +251,14 @@ class ClaudeProvider(BaseProvider):
         if session_id:
             cmd.extend(["--resume", session_id])
 
-        # System prompt (if provided) - only on first message
-        if system_prompt and not session_id:
-            cmd.extend(["--system-prompt", system_prompt])
+        # System prompt (if provided) - only on first message.
+        # Large prompts go through --system-prompt-file to avoid the
+        # MAX_ARG_STRLEN (~128 KiB per argv) kernel limit.
+        if not session_id:
+            if system_prompt_file:
+                cmd.extend(["--system-prompt-file", system_prompt_file])
+            elif system_prompt:
+                cmd.extend(["--system-prompt", system_prompt])
 
         # Output format for streaming
         if stream:
@@ -301,9 +315,31 @@ class ClaudeProvider(BaseProvider):
         system_prompt, user_prompt = self._format_messages(
             messages, thinking, resume_session=resume_session
         )
+
+        # Spill oversized system prompts into a temp file to dodge the exec
+        # argv limit (MAX_ARG_STRLEN ~= 128 KiB). Attached context files +
+        # long session prompts routinely cross this threshold.
+        system_prompt_file: str | None = None
+        if (
+            system_prompt
+            and not session_id
+            and len(system_prompt.encode("utf-8")) > _SYSTEM_PROMPT_ARGV_LIMIT
+        ):
+            fd, system_prompt_file = tempfile.mkstemp(prefix="claude-sp-", suffix=".txt")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(system_prompt)
+            except Exception:
+                os.unlink(system_prompt_file)
+                raise
+            logger.debug(
+                f"System prompt {len(system_prompt)} chars -> {system_prompt_file}"
+            )
+
         cmd = self._build_command(
             model=model,
-            system_prompt=system_prompt,
+            system_prompt=None if system_prompt_file else system_prompt,
+            system_prompt_file=system_prompt_file,
             stream=stream,
             session_id=session_id,
             **kwargs,
@@ -314,9 +350,16 @@ class ClaudeProvider(BaseProvider):
         )
 
         if stream:
-            return self._stream_complete(cmd, model, user_prompt)
+            return self._stream_complete(cmd, model, user_prompt, system_prompt_file)
         else:
-            return await self._sync_complete(cmd, model, user_prompt)
+            try:
+                return await self._sync_complete(cmd, model, user_prompt)
+            finally:
+                if system_prompt_file:
+                    try:
+                        os.unlink(system_prompt_file)
+                    except OSError:
+                        pass
 
     async def _sync_complete(
         self,
@@ -390,6 +433,7 @@ class ClaudeProvider(BaseProvider):
         cmd: list[str],
         model: str,
         prompt: str,
+        cleanup_file: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming completion using stream-json format."""
         try:
@@ -469,3 +513,9 @@ class ClaudeProvider(BaseProvider):
         except asyncio.TimeoutError:
             logger.error("Claude CLI stream timeout")
             raise
+        finally:
+            if cleanup_file:
+                try:
+                    os.unlink(cleanup_file)
+                except OSError:
+                    pass
