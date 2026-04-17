@@ -1,0 +1,3 @@
+[submodule "external/ai-agents"]
+	path = external/ai-agents
+	url = https://github.com/CalalbKorina/AI-Agents.git
