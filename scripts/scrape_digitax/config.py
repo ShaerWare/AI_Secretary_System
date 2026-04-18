@@ -106,8 +106,31 @@ SITES = {
     "icaew-ireland": {
         "name": "ICAEW Ireland Standards",
         "base_url": "https://www.icaew.com",
-        "seed_paths": ["/technical/by-country/europe/ireland"],
-        "stay_under": "/technical/by-country/europe/ireland",
+        "seed_paths": [
+            "/technical/by-country/europe/ireland",
+            "/technical/by-country/europe/ireland/accounting-in-ireland",
+            "/technical/by-country/europe/ireland/doing-business-in-ireland",
+            "/technical/by-country/europe/ireland/tax-in-ireland",
+            "/library/subject-gateways/tax-and-duty/country-tax-guides/ireland",
+            "/library/doing-business-in/ireland",
+            "/insights/tax-news/ireland",
+            "/regulation-and-working-in-the-profession/regulations/tax",
+        ],
+        # Previous `stay_under=/technical/by-country/europe/ireland` produced
+        # only 3 pages because that subsection is tiny. Broaden to allow the
+        # crawler to follow outgoing ICAEW links from the Ireland seeds,
+        # relying on Ireland-keyword filtering (below) + the generic filter
+        # to avoid drifting onto unrelated countries.
+        "stay_under": "/",
+        "ireland_filter": True,
+        "ireland_keywords": [
+            "ireland",
+            "irish",
+            "dublin",
+            "revenue.ie",
+            "cai",
+            "cro",
+        ],
         "max_pages": 200,
         "type": "standards",
         "description": (

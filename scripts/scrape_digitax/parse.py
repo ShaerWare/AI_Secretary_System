@@ -125,10 +125,25 @@ def strip_boilerplate(tree, slug: str = ""):
             if parent is not None:
                 parent.remove(bad)
 
-    # CPA-specific: remove login forms
+    # CPA-specific: remove login forms + Kentico chrome (header, search
+    # modal, cookie bar, breadcrumbs, banners, hidden aspnet fields, scripts).
+    # The page is one big <form id="form">, so without this strip the parser
+    # was picking up navigation menus as "content".
     if slug == "cpa-ireland":
         for bad in tree.xpath(
-            './/form[contains(@action, "login")]| .//*[contains(@class, "login")]'
+            './/form[contains(@action, "login")]'
+            '| .//*[contains(@class, "login")]'
+            '| .//*[contains(@class, "header__wrapper")]'
+            '| .//*[contains(@class, "search_modal")]'
+            '| .//*[contains(@class, "aspNetHidden")]'
+            '| .//*[contains(@class, "cookie_bar")]'
+            '| .//*[contains(@class, "m16_breadcrumbs")]'
+            '| .//*[contains(@class, "m01_banner")]'
+            "| .//header"
+            "| .//footer"
+            "| .//input"
+            "| .//script"
+            "| .//noscript"
         ):
             parent = bad.getparent()
             if parent is not None:
@@ -267,8 +282,14 @@ CONTENT_SELECTORS = {
         "//body",
     ],
     "cpa-ireland": [
+        # The site is ASP.NET Web Forms / Kentico; there is no <main> or
+        # <article>, everything lives inside <form id="form">. Old selectors
+        # (content-wysiwyg, m07_three_col) no longer match — the site was
+        # redesigned and the content is now in Kentico-generated divs with
+        # dynamic IDs like p_lt_WebPartZone*_pageplaceholder_*_m02div.
+        # Using the form as root + strip_boilerplate gives us the real page.
+        '//form[@id="form"]',
         '//div[contains(@class, "content-wysiwyg")]',
-        '//div[contains(@class, "grid-container mb")]',
         '//div[contains(@class, "m07_three_col")]',
         "//main",
         "//article",
@@ -340,12 +361,23 @@ def extract_title(tree, slug: str) -> str:
 
 def _clean_forum_post(text: str) -> str:
     """Remove common forum noise from post body text."""
+    # Tabs → single space (XenForo leaves huge tab runs from column layout)
+    text = text.replace("\t", " ")
     # Remove multi-line whitespace runs (broken HTML extraction)
     text = re.sub(r"(\s*\n){3,}", "\n\n", text)
     # Remove "Registered Users, Registered Users 2 Posts: N,NNN ✭✭✭" etc.
     text = re.sub(r"Registered Users.*?Posts:\s*[\d,]+\s*✭*", "", text)
     # Remove "Join Date: ..." lines
     text = re.sub(r"Join\s*\n?\s*Date:.*", "", text)
+    # XenForo profile boilerplate: "Joined\nJun 8, 2017", "Messages\n42",
+    # "Reaction score\n10", "Location\nDublin" — strip the label + its value.
+    text = re.sub(
+        r"^\s*(Joined|Messages|Reaction score|Location|Likes Received|Trophy Points)\s*\n"
+        r"[^\n]{0,80}\n",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
     # Remove post numbers "#1", "#23"
     text = re.sub(r"^\s*#\d+\s*$", "", text, flags=re.MULTILINE)
     # Remove "Help Keep Boards Alive" promos
@@ -356,7 +388,21 @@ def _clean_forum_post(text: str) -> str:
     text = re.sub(r"Private Group for paid up members.*", "", text)
     # Remove "please see this major site announcement" blurbs
     text = re.sub(r"please see this major site announcement.*", "", text, flags=re.IGNORECASE)
-    # Collapse whitespace
+    # Accountantforums.com footer/sidebar promos (appear under every post)
+    text = re.sub(
+        r"(What Are the Key Benefits of Payroll Outsourcing\?.*?Started by Mika[^\n]*)",
+        "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"Similar threads.*", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"(You must log in|Register a new account).*", "", text, flags=re.IGNORECASE)
+    # Drop isolated single-letter avatar initials on their own line
+    text = re.sub(r"^\s*[A-Z]\s*$", "", text, flags=re.MULTILINE)
+    # Collapse leading whitespace on every line
+    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE)
+    # Collapse blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -478,13 +524,23 @@ def parse_forum_accountant_forums(
     # Check Ireland relevance in title
     combined_text = title.lower()
 
-    # Extract posts
+    # Extract posts. XPath may return nested matches (a message inside a
+    # message container also has class "message"), so dedupe by element id.
     posts = []
+    seen_elements = set()
     for post_el in tree.xpath(
         '//article[contains(@class, "message")]'
         '| //div[contains(@class, "message")]'
         '| //li[contains(@class, "block-row")]'
     ):
+        el_id = id(post_el)
+        if el_id in seen_elements:
+            continue
+        seen_elements.add(el_id)
+        # Also skip if this element contains a nested article.message child
+        # (i.e. this is the outer wrapper, not the leaf post).
+        if post_el.xpath('.//article[contains(@class, "message")]'):
+            continue
         author_els = post_el.xpath(
             './/*[contains(@class, "username")]//text()| .//a[@class="username"]//text()'
         )
@@ -493,16 +549,21 @@ def parse_forum_accountant_forums(
         date_els = post_el.xpath('.//time/@datetime| .//*[contains(@class, "u-dt")]//text()')
         post_date = date_els[0].strip() if date_els else ""
 
+        # Prefer bbWrapper (innermost XenForo message container — just the
+        # user text, no avatar/profile chrome). Fall back to message-body.
         body_els = post_el.xpath(
-            './/*[contains(@class, "message-body")]| .//*[contains(@class, "bbWrapper")]'
+            './/*[contains(@class, "bbWrapper")]| .//*[contains(@class, "message-body")]'
         )
         if body_els:
             strip_boilerplate(body_els[0])
-            lines: list[str] = []
-            extract_text_recursive(body_els[0], lines)
-            body = "\n".join(lines).strip()
+            # XenForo bbWrapper holds free-flowing text separated by <br>,
+            # which extract_text_recursive (paragraph-based) silently drops.
+            # text_content() + _clean_forum_post is the right tool here.
+            body = (body_els[0].text_content() or "").strip()
         else:
             body = (post_el.text_content() or "").strip()
+
+        body = _clean_forum_post(body)
 
         if body and len(body) > 20:
             posts.append({"author": author, "date": post_date, "body": body})
