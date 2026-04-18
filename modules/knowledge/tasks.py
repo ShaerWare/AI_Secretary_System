@@ -54,16 +54,34 @@ async def sync_vector_search(wiki_rag: WikiRAGService, vs_client: VectorSearchCl
         logger.warning("Vector Search: service unavailable, skipping sync")
         return
 
+    collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
+
+    # Ensure per-collection BM25 indexes are loaded. The background task
+    # registry starts this sync in parallel with `wiki-collection-indexes`,
+    # so when sync runs first (or the manual endpoint is called before
+    # collections were hot) `_collection_indexes` is empty and each
+    # sync_collection_to_vector_search would return 0 — only the global
+    # default collection would reach Vector Search. Load whatever is missing.
+    missing = [col for col in collections if col["id"] not in wiki_rag._collection_indexes]
+    if missing:
+        logger.info("Vector Search sync: loading %d missing collection indexes first", len(missing))
+        for col in missing:
+            filenames = await async_knowledge_collection_manager.get_document_filenames(col["id"])
+            if not filenames:
+                continue
+            base_dir = Path(col.get("base_dir", "wiki-pages"))
+            await asyncio.to_thread(wiki_rag.load_collection, col["id"], filenames, base_dir)
+
     total_upserted = 0
 
     # Sync per-collection indexes
-    collections = await async_knowledge_collection_manager.get_all(enabled_only=True)
     for col in collections:
         slug = col.get("slug", str(col["id"]))
         count = await sync_collection_to_vector_search(wiki_rag, vs_client, col["id"], slug)
         total_upserted += count
 
-    # Sync global index
+    # Sync global index (legacy "default" group — kept for back-compat with
+    # widgets/bots querying without a collection filter).
     for section in wiki_rag.sections:
         text = f"{section.title}\n{section.body}"
         await vs_client.upsert(
