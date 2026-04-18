@@ -228,16 +228,32 @@ def filter_accountant_forums(url: str, cfg: dict) -> bool:
 
 
 def extract_links_icaew(url: str, html_text: str, base_url: str) -> list[str]:
-    """Extract links from ICAEW, staying under /technical/by-country/europe/ireland."""
-    links = extract_links_generic(url, html_text, base_url)
-    stay_under = "/technical/by-country/europe/ireland"
-    return [link for link in links if stay_under in urlparse(link).path]
+    """Extract links from ICAEW. Scope is enforced by filter_icaew, which reads
+    `stay_under` and `ireland_keywords` from site config — we pass everything
+    through here and let the filter reject unrelated pages."""
+    return extract_links_generic(url, html_text, base_url)
 
 
 def filter_icaew(url: str, cfg: dict) -> bool:
-    """Stay within Ireland section."""
+    """Stay within Ireland-related content on icaew.com.
+
+    Prefer `ireland_keywords` (matched against URL path) when configured —
+    lets the crawler follow Ireland-relevant pages that live outside the
+    small /technical/by-country/europe/ireland subsection. Fall back to
+    `stay_under` (legacy behaviour) otherwise.
+    """
+    path = urlparse(url).path.lower()
+    # Global skip — avoid obvious junk
+    skip_patterns = ["/login", "/register", "/search", "/media/", "/assets/", "/my-account"]
+    if any(p in path for p in skip_patterns):
+        return False
+
+    ireland_keywords = cfg.get("ireland_keywords")
+    if ireland_keywords:
+        return any(kw in path for kw in ireland_keywords)
+
     stay_under = cfg.get("stay_under", "/technical/by-country/europe/ireland")
-    return stay_under in urlparse(url).path
+    return stay_under in path
 
 
 def filter_professional_site(url: str, cfg: dict) -> bool:
