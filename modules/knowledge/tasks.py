@@ -86,7 +86,7 @@ async def sync_vector_search(wiki_rag: WikiRAGService, vs_client: VectorSearchCl
         text = f"{section.title}\n{section.body}"
         await vs_client.upsert(
             text=text,
-            doc_id=section.source_file,
+            doc_id=wiki_rag._section_id(section),
             group="default",
             metadata={"title": section.title, "source_file": section.source_file},
         )
@@ -110,9 +110,14 @@ async def sync_collection_to_vector_search(
     count = 0
     for section in idx.sections:
         text = f"{section.title}\n{section.body}"
+        # `doc_id` must be unique per section. `source_file` collapsed many
+        # sections (e.g. all products in one WooCommerce md file) onto the
+        # same doc_id, and vector-search upsert REPLACES chunks under the
+        # same doc_id — so only the last section per file survived. Reuse
+        # the same hash WikiRAGService uses for its embedding cache.
         await vs_client.upsert(
             text=text,
-            doc_id=section.source_file,
+            doc_id=wiki_rag._section_id(section),
             group=group,
             metadata={"title": section.title, "source_file": section.source_file},
         )
