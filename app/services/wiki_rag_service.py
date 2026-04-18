@@ -132,10 +132,20 @@ def _is_cyrillic(word: str) -> bool:
 
 
 def _stem(word: str) -> str:
-    """Stem a single word using the appropriate language stemmer."""
-    if _is_cyrillic(word):
-        return _ru_stemmer.stemWord(word)
-    return _en_stemmer.stemWord(word)
+    """Stem a single word using the appropriate language stemmer.
+
+    snowballstemmer has a long-standing bug where certain token shapes trigger
+    `IndexError: string index out of range` inside `find_among_b`. We've hit
+    this on real-world forum/CMS content (mixed case/digit tokens). Falling
+    back to the raw word keeps indexing deterministic instead of crashing the
+    whole collection load.
+    """
+    try:
+        if _is_cyrillic(word):
+            return _ru_stemmer.stemWord(word)
+        return _en_stemmer.stemWord(word)
+    except IndexError:
+        return word
 
 
 @dataclass
