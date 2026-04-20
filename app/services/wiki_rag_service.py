@@ -801,6 +801,16 @@ class WikiRAGService:
             logger.warning("Vector Search query failed: %s", e)
             return []
 
+        # Tag each hit with its collection so _merge_results can enforce
+        # per-collection slot limits later. `collection_slug` is the int
+        # collection_id for per-collection calls (see callers in
+        # retrieve_multi_async); fall back to the raw slug for the legacy
+        # "default" global group.
+        try:
+            collection_id: int | None = int(collection_slug)
+        except ValueError:
+            collection_id = None
+
         output = []
         for r in results:
             meta = r.get("metadata", {})
@@ -811,6 +821,8 @@ class WikiRAGService:
                     "source_file": meta.get("doc_id", meta.get("source_file", "")),
                     "score": r.get("similarity", 0.0),
                     "engine": "vector_search",
+                    "collection_id": collection_id,
+                    "group": collection_slug,
                 }
             )
         return output
@@ -906,7 +918,7 @@ class WikiRAGService:
         if not query_tokens:
             return []
 
-        all_scored: list[tuple[float, WikiSection]] = []
+        all_scored: list[tuple[float, WikiSection, int]] = []
         for cid in collection_ids:
             if cid not in self._collection_indexes:
                 continue
@@ -916,14 +928,14 @@ class WikiRAGService:
                     query_tokens, section, cidx.doc_freqs, cidx.total_docs, cidx.avg_dl
                 )
                 if score >= MIN_SCORE:
-                    all_scored.append((score, section))
+                    all_scored.append((score, section, cid))
 
         if not all_scored:
             return []
 
         all_scored.sort(key=lambda x: x[0], reverse=True)
         results = []
-        for score, section in all_scored[:top_k]:
+        for score, section, cid in all_scored[:top_k]:
             results.append(
                 {
                     "title": section.title,
@@ -931,27 +943,85 @@ class WikiRAGService:
                     "source_file": section.source_file,
                     "score": round(score, 3),
                     "engine": "bm25",
+                    "collection_id": cid,
+                    "group": str(cid),
                 }
             )
         return results
 
     @staticmethod
     def _merge_results(local_results: list[dict], vs_results: list[dict], top_k: int) -> list[dict]:
-        """Merge and deduplicate results from multiple engines.
+        """Merge results from multiple engines with three-layer dedup and
+        per-collection diversity.
 
-        Deduplicates by (source_file, title), keeping the highest score.
+        1. Dedupe by (source_file, title) — keep the higher-scoring version
+           (same section found by both BM25 and Vector Search collapses).
+        2. Dedupe by body-hash (first 160 normalized chars) — catches the
+           byte-identical forum reposts that different source_files wrap.
+        3. Diversity-first slot allocation: pick the top hit from each
+           collection in descending score order, then fill remaining slots
+           globally. Without this the final top-k is dominated by whichever
+           collection scored highest, and a multi-collection session still
+           sees single-source output.
         """
-        seen: dict[tuple[str, str], dict] = {}
+        # (1) title-based dedup
+        by_title: dict[tuple[str, str], dict] = {}
         for r in local_results + vs_results:
             key = (r.get("source_file", ""), r.get("title", ""))
-            if key in seen:
-                if r.get("score", 0) > seen[key].get("score", 0):
-                    seen[key] = r
-            else:
-                seen[key] = r
+            if key not in by_title or r.get("score", 0) > by_title[key].get("score", 0):
+                by_title[key] = r
 
-        merged = sorted(seen.values(), key=lambda x: x.get("score", 0), reverse=True)
-        return merged[:top_k]
+        # (2) body-hash dedup: normalize whitespace/punct, take first 160 chars
+        by_body: dict[str, dict] = {}
+        for r in by_title.values():
+            body = r.get("body", "") or ""
+            norm = re.sub(r"\s+", " ", body.lower()).strip()[:160]
+            if not norm:
+                # keep untouched; can't hash empty bodies
+                by_body[r.get("source_file", "") + "::" + r.get("title", "")] = r
+                continue
+            if norm not in by_body or r.get("score", 0) > by_body[norm].get("score", 0):
+                by_body[norm] = r
+
+        all_hits = sorted(by_body.values(), key=lambda x: x.get("score", 0), reverse=True)
+        if not all_hits or top_k <= 0:
+            return all_hits[:top_k]
+
+        # (3) diversity-first: pick best hit from each collection first, then
+        # fill remaining slots by global score. Collections without a
+        # `collection_id` (e.g. legacy "default" group) group under None and
+        # are treated as a single bucket so they don't flood the output.
+        by_collection: dict[object, list[dict]] = {}
+        for r in all_hits:
+            cid = r.get("collection_id")
+            by_collection.setdefault(cid, []).append(r)
+
+        picked: list[dict] = []
+        picked_ids: set[int] = set()
+
+        # Round 1 — one hit per collection, ordered by the collection's best score
+        cols_sorted = sorted(
+            by_collection.items(),
+            key=lambda kv: kv[1][0].get("score", 0),
+            reverse=True,
+        )
+        for _cid, bucket in cols_sorted:
+            if len(picked) >= top_k:
+                break
+            top_hit = bucket[0]
+            picked.append(top_hit)
+            picked_ids.add(id(top_hit))
+
+        # Round 2 — fill remaining slots globally by score, skipping already picked
+        for r in all_hits:
+            if len(picked) >= top_k:
+                break
+            if id(r) in picked_ids:
+                continue
+            picked.append(r)
+            picked_ids.add(id(r))
+
+        return picked[:top_k]
 
     @staticmethod
     def _format_results(results: list[dict], max_chars: int) -> str:
