@@ -125,6 +125,13 @@ STOP_WORDS = frozenset(
 # Минимальная длина токена для индексации
 MIN_TOKEN_LEN = 2
 
+# Default minimum cosine similarity for Vector Search hits that feed into
+# LLM prompts. Baseline diagnostic (docs/rag-quality-baseline-2026-04-19.md)
+# showed irish-tax averages 0.71 top-1, while weak collections surface
+# 0.40-0.50 junk — injecting that dilutes the prompt. 0.55 is the cutoff
+# below which the diagnostic buckets hits as "weak".
+DEFAULT_RETRIEVE_MIN_SIMILARITY = 0.55
+
 
 def _is_cyrillic(word: str) -> bool:
     """Check if word contains Cyrillic characters."""
@@ -776,7 +783,11 @@ class WikiRAGService:
         return self._vector_search_client is not None
 
     async def _vector_search_async(
-        self, query: str, top_k: int, collection_slug: str = "default"
+        self,
+        query: str,
+        top_k: int,
+        collection_slug: str = "default",
+        min_similarity: float = DEFAULT_RETRIEVE_MIN_SIMILARITY,
     ) -> list[dict]:
         """Search via Vector Search microservice. Returns results in standard format."""
         if not self._vector_search_client:
@@ -784,7 +795,7 @@ class WikiRAGService:
 
         try:
             results = await self._vector_search_client.search(
-                text=query, group=collection_slug, limit=top_k, min_similarity=0.3
+                text=query, group=collection_slug, limit=top_k, min_similarity=min_similarity
             )
         except Exception as e:
             logger.warning("Vector Search query failed: %s", e)
@@ -805,7 +816,11 @@ class WikiRAGService:
         return output
 
     async def search_async(
-        self, query: str, top_k: int = 3, collection_id: Optional[int] = None
+        self,
+        query: str,
+        top_k: int = 3,
+        collection_id: Optional[int] = None,
+        min_similarity: float = DEFAULT_RETRIEVE_MIN_SIMILARITY,
     ) -> list[dict]:
         """Parallel search across all engines: BM25 + embeddings + vector search.
 
@@ -822,7 +837,9 @@ class WikiRAGService:
             # Use collection_id as group name
             collection_slug = str(collection_id)
 
-        vs_results = await self._vector_search_async(query, top_k, collection_slug)
+        vs_results = await self._vector_search_async(
+            query, top_k, collection_slug, min_similarity=min_similarity
+        )
 
         # Merge and deduplicate
         return self._merge_results(local_results, vs_results, top_k)
@@ -833,12 +850,15 @@ class WikiRAGService:
         top_k: int = 3,
         max_chars: int = 2500,
         collection_id: Optional[int] = None,
+        min_similarity: float = DEFAULT_RETRIEVE_MIN_SIMILARITY,
     ) -> str:
         """Like retrieve() but includes vector search results.
 
         Returns formatted markdown context string.
         """
-        results = await self.search_async(query, top_k, collection_id)
+        results = await self.search_async(
+            query, top_k, collection_id, min_similarity=min_similarity
+        )
         if not results:
             return ""
 
@@ -850,6 +870,7 @@ class WikiRAGService:
         collection_ids: list[int],
         top_k: int = 3,
         max_chars: int = 3000,
+        min_similarity: float = DEFAULT_RETRIEVE_MIN_SIMILARITY,
     ) -> str:
         """Like retrieve_multi() but includes vector search results."""
         import asyncio
@@ -863,9 +884,10 @@ class WikiRAGService:
         )
 
         # Vector Search across all collection slugs (async)
-        vs_tasks = []
-        for cid in collection_ids:
-            vs_tasks.append(self._vector_search_async(query, top_k, str(cid)))
+        vs_tasks = [
+            self._vector_search_async(query, top_k, str(cid), min_similarity=min_similarity)
+            for cid in collection_ids
+        ]
 
         vs_all = await asyncio.gather(*vs_tasks)
         vs_results = [r for batch in vs_all for r in batch]
