@@ -175,6 +175,9 @@ class CollectionIndex:
     avg_dl: float
     total_docs: int
     files_indexed: int
+    # Collection slug as stored in Vector Search `group`. When set, the
+    # retrieve_multi_async path queries VS under this slug (not str(cid)).
+    slug: str = ""
 
 
 class WikiRAGService:
@@ -304,9 +307,19 @@ class WikiRAGService:
     # ---- Collection index methods ----
 
     def load_collection(
-        self, collection_id: int, filenames: list[str], wiki_dir: Path
+        self,
+        collection_id: int,
+        filenames: list[str],
+        wiki_dir: Path,
+        slug: str | None = None,
     ) -> CollectionIndex:
-        """Build BM25 index for a specific collection's files."""
+        """Build BM25 index for a specific collection's files.
+
+        Pass ``slug`` to bind this index to its Vector Search group (Vector
+        Search stores records under the collection slug, not numeric id).
+        When omitted, Vector Search is effectively disabled for this
+        collection in retrieve_multi_async.
+        """
         sections: list[WikiSection] = []
         doc_freqs: Counter = Counter()
         total_tokens = 0
@@ -356,6 +369,7 @@ class WikiRAGService:
             avg_dl=avg_dl,
             total_docs=total_docs,
             files_indexed=files_processed,
+            slug=slug or "",
         )
         self._collection_indexes[collection_id] = idx
 
@@ -373,11 +387,22 @@ class WikiRAGService:
         return False
 
     def reload_collection(
-        self, collection_id: int, filenames: list[str], wiki_dir: Path
+        self,
+        collection_id: int,
+        filenames: list[str],
+        wiki_dir: Path,
+        slug: str | None = None,
     ) -> CollectionIndex:
-        """Re-index a specific collection."""
+        """Re-index a specific collection. See ``load_collection`` for ``slug``."""
+        # Preserve previously-bound slug if the caller didn't pass one, so
+        # callers that reload without knowing the slug (admin routers) don't
+        # accidentally disable Vector Search after startup wired it up.
+        if slug is None:
+            existing = self._collection_indexes.get(collection_id)
+            if existing and existing.slug:
+                slug = existing.slug
         self.unload_collection(collection_id)
-        return self.load_collection(collection_id, filenames, wiki_dir)
+        return self.load_collection(collection_id, filenames, wiki_dir, slug=slug)
 
     def _bm25_score_with_index(
         self,
@@ -782,6 +807,13 @@ class WikiRAGService:
         """True if vector search client is configured."""
         return self._vector_search_client is not None
 
+    def _vs_group_for(self, collection_id: int) -> str:
+        """Vector Search `group` for a collection id — slug if known, else str(cid)."""
+        idx = self._collection_indexes.get(collection_id)
+        if idx and idx.slug:
+            return idx.slug
+        return str(collection_id)
+
     async def _vector_search_async(
         self,
         query: str,
@@ -811,14 +843,21 @@ class WikiRAGService:
         except ValueError:
             collection_id = None
 
+        # VS returns flat records: {id, text, doc_id, group, chunk_index,
+        # similarity}. Extra upsert-time metadata (title, source_file) is
+        # dropped by the microservice today, so reconstruct a human-readable
+        # title from the text's first line and use doc_id as source_file
+        # (stable across searches and works with the dedup layer).
         output = []
         for r in results:
-            meta = r.get("metadata", {})
+            text = r.get("text", "") or ""
+            first_line = text.split("\n", 1)[0].strip()
+            title = first_line[:80] if first_line else "(vector)"
             output.append(
                 {
-                    "title": meta.get("title", ""),
-                    "body": r.get("text", "")[:500],
-                    "source_file": meta.get("doc_id", meta.get("source_file", "")),
+                    "title": title,
+                    "body": text[:500],
+                    "source_file": r.get("doc_id", ""),
                     "score": r.get("similarity", 0.0),
                     "engine": "vector_search",
                     "collection_id": collection_id,
@@ -843,11 +882,11 @@ class WikiRAGService:
         # BM25 + embeddings (sync, run in thread)
         local_results = await asyncio.to_thread(self.search, query, top_k, collection_id)
 
-        # Vector Search (async)
+        # Vector Search (async). Use the collection's real slug — VS stores
+        # data under slugs, not numeric ids.
         collection_slug = "default"
         if collection_id is not None and collection_id in self._collection_indexes:
-            # Use collection_id as group name
-            collection_slug = str(collection_id)
+            collection_slug = self._vs_group_for(collection_id)
 
         vs_results = await self._vector_search_async(
             query, top_k, collection_slug, min_similarity=min_similarity
@@ -895,9 +934,15 @@ class WikiRAGService:
             self._retrieve_multi_search, query, collection_ids, top_k
         )
 
-        # Vector Search across all collection slugs (async)
+        # Vector Search across all collection slugs (async). VS stores data
+        # under the collection slug (see modules/knowledge/tasks.py), so we
+        # look up the slug from the loaded index. Falling back to str(cid)
+        # preserves back-compat when the index wasn't loaded with a slug —
+        # but in practice that fallback returns zero hits for real data.
         vs_tasks = [
-            self._vector_search_async(query, top_k, str(cid), min_similarity=min_similarity)
+            self._vector_search_async(
+                query, top_k, self._vs_group_for(cid), min_similarity=min_similarity
+            )
             for cid in collection_ids
         ]
 
@@ -944,15 +989,23 @@ class WikiRAGService:
                     "score": round(score, 3),
                     "engine": "bm25",
                     "collection_id": cid,
-                    "group": str(cid),
+                    "group": self._vs_group_for(cid),
                 }
             )
         return results
 
     @staticmethod
     def _merge_results(local_results: list[dict], vs_results: list[dict], top_k: int) -> list[dict]:
-        """Merge results from multiple engines with three-layer dedup and
-        per-collection diversity.
+        """Merge results from multiple engines with score normalization,
+        three-layer dedup, and per-collection diversity.
+
+        BM25 raw scores sit in the 10–50 range while Vector Search cosine
+        similarity is 0–1. Without normalization BM25 always wins the
+        global sort, and VS hits get crowded out of the top-k even when
+        they're the better semantic match. Normalize each engine to
+        [0,1] (divide by the bucket max) and store as ``_score_norm``
+        before sorting/dedup. The original ``score`` is preserved for
+        observability.
 
         1. Dedupe by (source_file, title) — keep the higher-scoring version
            (same section found by both BM25 and Vector Search collapses).
@@ -964,11 +1017,26 @@ class WikiRAGService:
            collection scored highest, and a multi-collection session still
            sees single-source output.
         """
+
+        def _normalize(bucket: list[dict]) -> None:
+            if not bucket:
+                return
+            peak = max((r.get("score", 0.0) or 0.0) for r in bucket)
+            if peak <= 0:
+                for r in bucket:
+                    r["_score_norm"] = 0.0
+                return
+            for r in bucket:
+                r["_score_norm"] = (r.get("score", 0.0) or 0.0) / peak
+
+        _normalize(local_results)
+        _normalize(vs_results)
+
         # (1) title-based dedup
         by_title: dict[tuple[str, str], dict] = {}
         for r in local_results + vs_results:
             key = (r.get("source_file", ""), r.get("title", ""))
-            if key not in by_title or r.get("score", 0) > by_title[key].get("score", 0):
+            if key not in by_title or r.get("_score_norm", 0) > by_title[key].get("_score_norm", 0):
                 by_title[key] = r
 
         # (2) body-hash dedup: normalize whitespace/punct, take first 160 chars
@@ -980,10 +1048,10 @@ class WikiRAGService:
                 # keep untouched; can't hash empty bodies
                 by_body[r.get("source_file", "") + "::" + r.get("title", "")] = r
                 continue
-            if norm not in by_body or r.get("score", 0) > by_body[norm].get("score", 0):
+            if norm not in by_body or r.get("_score_norm", 0) > by_body[norm].get("_score_norm", 0):
                 by_body[norm] = r
 
-        all_hits = sorted(by_body.values(), key=lambda x: x.get("score", 0), reverse=True)
+        all_hits = sorted(by_body.values(), key=lambda x: x.get("_score_norm", 0), reverse=True)
         if not all_hits or top_k <= 0:
             return all_hits[:top_k]
 
@@ -1002,7 +1070,7 @@ class WikiRAGService:
         # Round 1 — one hit per collection, ordered by the collection's best score
         cols_sorted = sorted(
             by_collection.items(),
-            key=lambda kv: kv[1][0].get("score", 0),
+            key=lambda kv: kv[1][0].get("_score_norm", 0),
             reverse=True,
         )
         for _cid, bucket in cols_sorted:

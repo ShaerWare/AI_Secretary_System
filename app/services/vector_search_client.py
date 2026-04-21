@@ -132,7 +132,9 @@ class VectorSearchClient:
             body["doc_id"] = doc_id
 
         result = await self._request("POST", "/search", json=body)
-        return result.get("results", [])
+        # VS microservice returns {"items": [...], ...} — legacy "results"
+        # key was never emitted, so reading it silently disabled search.
+        return result.get("items") or result.get("results", [])
 
     async def compare(self, text: str, record_id: str) -> float:
         """Compare text with a stored record. Returns similarity score."""
