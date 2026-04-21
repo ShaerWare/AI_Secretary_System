@@ -266,9 +266,11 @@ def filter_icaew(url: str, cfg: dict) -> bool:
 
     ireland_keywords = cfg.get("ireland_keywords")
     if ireland_keywords:
-        return any(kw in path for kw in ireland_keywords)
+        return any(kw.lower() in path for kw in ireland_keywords)
 
-    stay_under = cfg.get("stay_under", "/technical/by-country/europe/ireland")
+    # `path` is already lower-cased; lower the prefix too so mixed-case
+    # document IDs (e.g. consultant.ru `/document/cons_doc_LAW_28165/`) match.
+    stay_under = cfg.get("stay_under", "/technical/by-country/europe/ireland").lower()
     return stay_under in path
 
 
