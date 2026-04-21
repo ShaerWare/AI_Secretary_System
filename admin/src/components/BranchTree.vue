@@ -195,6 +195,15 @@ async function handleRenameNode(messageId: string, name: string) {
   } catch { /* toast handled by api client */ }
 }
 
+// ── Pin/Unpin ──
+async function handlePinNode(messageId: string, pinned: boolean) {
+  if (!props.sessionId) return
+  try {
+    await chatApi.pinBranch(props.sessionId, messageId, pinned)
+    emit('refetch-branches')
+  } catch { /* toast handled by api client */ }
+}
+
 // ── Search ──
 function toggleSearch() {
   showSearch.value = !showSearch.value
@@ -406,6 +415,7 @@ onUnmounted(() => {
           @toggle-select="toggleSelect"
           @toggle-collapse="toggleCollapse"
           @rename-node="handleRenameNode"
+          @pin-node="handlePinNode"
         />
       </div>
     </div>

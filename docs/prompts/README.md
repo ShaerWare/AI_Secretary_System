@@ -10,6 +10,7 @@
 | [chat-and-rag.md](chat-and-rag.md) | Промпты чата, RAG, дефолты ботов | `app/routers/chat.py`, `telegram_bot/config.py`, `whatsapp_bot/config.py` |
 | [tz-generator.md](tz-generator.md) | Генерация ТЗ (sales + freelancer) | `telegram_bot/handlers/tz.py`, `scripts/seed_tz_generator.py` |
 | [sales-agents.md](sales-agents.md) | Агенты воронки продаж (14 промптов) | `db/models.py` (`DEFAULT_AGENT_PROMPTS`) |
+| [stalkerelectric-sales.md](stalkerelectric-sales.md) | Продавец-консультант StalkerElectric (WooCommerce + RAG) | Подключается к чат-сессии/инстансу + коллекция `stalkerelectric` |
 | [action-buttons.md](action-buttons.md) | Кнопки действий Telegram-бота | `db/models.py` (`DEFAULT_ACTION_BUTTONS`) |
 | [bridge-service.md](bridge-service.md) | CLI-OpenAI bridge (tool use, summarize) | `services/bridge/src/utils/tools.py`, `services/bridge/src/utils/summarize.py` |
 | [github-webhook.md](github-webhook.md) | PR-комментарии и рассылки | `app/routers/github_webhook.py` |

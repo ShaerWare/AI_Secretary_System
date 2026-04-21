@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { ChevronRight, ChevronDown, User, Bot, Settings, Trash2, Pencil, Check, X } from 'lucide-vue-next'
+import { ChevronRight, ChevronDown, User, Bot, Settings, Trash2, Pencil, Check, X, Pin, PinOff } from 'lucide-vue-next'
 import type { BranchNode } from '@/api/chat'
 
 const props = defineProps<{
@@ -19,6 +19,7 @@ const emit = defineEmits<{
   'toggle-select': [messageId: string]
   'toggle-collapse': [messageId: string]
   'rename-node': [messageId: string, name: string]
+  'pin-node': [messageId: string, pinned: boolean]
 }>()
 
 const collapsed = computed(() => props.collapsedNodes.has(props.node.id))
@@ -88,6 +89,12 @@ function onChildDeleteNode(messageId: string) { emit('delete-node', messageId) }
 function onChildToggleSelect(messageId: string) { emit('toggle-select', messageId) }
 function onChildToggleCollapse(messageId: string) { emit('toggle-collapse', messageId) }
 function onChildRename(messageId: string, name: string) { emit('rename-node', messageId, name) }
+function onChildPin(messageId: string, pinned: boolean) { emit('pin-node', messageId, pinned) }
+
+function onPinNode(e: Event) {
+  e.stopPropagation()
+  emit('pin-node', props.node.id, !props.node.is_pinned)
+}
 </script>
 
 <template>
@@ -191,8 +198,20 @@ function onChildRename(messageId: string, name: string) { emit('rename-node', me
           {{ node.children.length }}
         </span>
 
+        <!-- Pinned indicator -->
+        <Pin v-if="node.is_pinned" class="w-2.5 h-2.5 text-primary flex-shrink-0" />
+
         <!-- Action buttons (hover-visible, outside delete mode) -->
         <div v-if="!deleteMode" class="ml-auto flex items-center gap-0.5 opacity-0 group-hover/node:opacity-100 transition-all flex-shrink-0" :class="{ 'ml-1': hasBranches }">
+          <button
+            class="p-0.5 rounded hover:bg-primary/10 transition-colors"
+            :class="node.is_pinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'"
+            :title="node.is_pinned ? 'Открепить' : 'Закрепить'"
+            @click="onPinNode"
+          >
+            <PinOff v-if="node.is_pinned" class="w-3 h-3" />
+            <Pin v-else class="w-3 h-3" />
+          </button>
           <button
             class="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
             @click="startRename"
@@ -227,6 +246,7 @@ function onChildRename(messageId: string, name: string) { emit('rename-node', me
           @toggle-select="onChildToggleSelect"
           @toggle-collapse="onChildToggleCollapse"
           @rename-node="onChildRename"
+          @pin-node="onChildPin"
         />
       </div>
     </div>
