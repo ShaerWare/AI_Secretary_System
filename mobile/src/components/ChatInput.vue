@@ -47,7 +47,8 @@ function handleSend() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter" && !e.shiftKey) {
+  // Ctrl+Enter (or Cmd+Enter on Mac) — send; plain Enter — new line
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     handleSend();
   }
