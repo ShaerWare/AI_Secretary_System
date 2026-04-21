@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -489,37 +489,51 @@ class ChatRepository(BaseRepository[ChatSession]):
         are unaffected because they have only one element per level.
         If visible_ids is provided, only messages in the set are included.
         """
+        # Pull only the columns the tree needs — a 50-char content preview
+        # instead of the full body. For sessions with hundreds of messages
+        # and MB-sized bodies this drops the round-trip from megabytes to
+        # kilobytes and skips ORM hydration of full ChatMessage rows.
+        preview_col = func.substr(ChatMessage.content, 1, 51).label("preview")
         result = await self.session.execute(
-            select(ChatMessage)
+            select(
+                ChatMessage.id,
+                ChatMessage.parent_id,
+                ChatMessage.role,
+                ChatMessage.is_active,
+                ChatMessage.branch_name,
+                preview_col,
+                func.length(ChatMessage.content).label("content_len"),
+            )
             .where(ChatMessage.session_id == session_id)
             .order_by(ChatMessage.created.desc())
         )
-        all_messages = result.scalars().all()
+        rows = result.all()
 
-        if not all_messages:
+        if not rows:
             return []
 
-        # Build lookup maps
-        children_map: Dict[Optional[str], List[ChatMessage]] = {}
-        for m in all_messages:
-            if visible_ids is not None and m.id not in visible_ids:
+        children_map: Dict[Optional[str], List[Any]] = {}
+        for row in rows:
+            if visible_ids is not None and row.id not in visible_ids:
                 continue
-            children_map.setdefault(m.parent_id, []).append(m)
+            children_map.setdefault(row.parent_id, []).append(row)
 
-        def build_node(msg: ChatMessage) -> dict:
-            kids = children_map.get(msg.id, [])
+        def build_node(row: Any) -> dict:
+            kids = children_map.get(row.id, [])
+            preview = row.preview or ""
+            if row.content_len and row.content_len > 50:
+                preview = preview[:50] + "..."
             node: dict = {
-                "id": msg.id,
-                "role": msg.role,
-                "content_preview": msg.content[:50] + ("..." if len(msg.content) > 50 else ""),
-                "is_active": msg.is_active,
+                "id": row.id,
+                "role": row.role,
+                "content_preview": preview,
+                "is_active": row.is_active,
                 "children": [build_node(c) for c in kids],
             }
-            if msg.branch_name:
-                node["branch_name"] = msg.branch_name
+            if row.branch_name:
+                node["branch_name"] = row.branch_name
             return node
 
-        # Root nodes are messages with no parent (or whose parent is filtered out)
         roots = children_map.get(None, [])
         return [build_node(r) for r in roots]
 
@@ -569,28 +583,28 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         Returns dict mapping message_id to {index, total, siblings: [id, ...]}.
         """
+        # Only id + parent_id are needed — pulling full ChatMessage rows
+        # drags the entire content column (can be MBs on long chats).
         result = await self.session.execute(
-            select(ChatMessage)
+            select(ChatMessage.id, ChatMessage.parent_id)
             .where(ChatMessage.session_id == session_id)
             .order_by(ChatMessage.created.asc())
         )
-        all_messages = result.scalars().all()
+        rows = result.all()
 
-        # Group by parent_id
-        by_parent: Dict[Optional[str], List[ChatMessage]] = {}
-        for m in all_messages:
-            by_parent.setdefault(m.parent_id, []).append(m)
+        by_parent: Dict[Optional[str], List[str]] = {}
+        for msg_id, parent_id in rows:
+            by_parent.setdefault(parent_id, []).append(msg_id)
 
         sibling_info: Dict[str, dict] = {}
-        for parent_id, siblings in by_parent.items():
+        for siblings in by_parent.values():
             if len(siblings) <= 1:
                 continue
-            sibling_ids = [s.id for s in siblings]
-            for i, s in enumerate(siblings):
-                sibling_info[s.id] = {
+            for i, msg_id in enumerate(siblings):
+                sibling_info[msg_id] = {
                     "index": i,
                     "total": len(siblings),
-                    "siblings": sibling_ids,
+                    "siblings": siblings,
                 }
 
         return sibling_info
