@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 from typing import Optional
 
@@ -302,15 +303,106 @@ async def handle_github_webhook(
                 )
                 result["comment"] = posted
 
-        # 2. Broadcast ## NEWS to Telegram subscribers (on merged PRs)
+        # 2. Broadcast ## NEWS to Telegram subscribers + mobile push (on merged PRs)
         if cfg.get("broadcast_enabled") and pr_data.get("merged"):
             news_text = _parse_news_from_pr(pr_data.get("body") or "")
             if news_text:
                 count = await _broadcast_to_subscribers(bot_id, news_text)
                 result["broadcast"] = count
+                # Mobile push (best-effort, non-blocking on failure)
+                try:
+                    from modules.channels.mobile.push_service import fcm_push_service
+
+                    push_title = "AI-Секретарь"
+                    # Preserve first line as title if looks like a heading
+                    lines = news_text.strip().split("\n", 1)
+                    push_body = news_text if len(lines) == 1 else lines[1].strip()
+                    # FCM body is limited — truncate safely
+                    if len(push_body) > 240:
+                        push_body = push_body[:237] + "..."
+                    mobile_count = await fcm_push_service.send_to_all(
+                        title=push_title,
+                        body=push_body,
+                        data={"type": "news", "pr": str(pr_data.get("number", ""))},
+                    )
+                    result["mobile_push"] = mobile_count
+                except Exception as e:
+                    logger.error(f"Mobile push broadcast failed: {e}")
             else:
                 logger.info(f"PR #{pr_data.get('number')} has no NEWS section, skip broadcast")
 
         results.append(result)
 
     return {"status": "processed", "results": results}
+
+
+@router.post("/webhooks/github/release")
+async def handle_github_release_webhook(
+    request: Request,
+    x_hub_signature_256: Optional[str] = Header(None),
+    x_github_event: Optional[str] = Header(None),
+):
+    """Handle release events: push 'new version available' to mobile devices when
+    a release tagged `mobile-v*` is published.
+
+    Register this webhook in GitHub repo settings with event = 'Releases'.
+    Signature verification uses GITHUB_WEBHOOK_SECRET env.
+    """
+    payload = await request.body()
+
+    if x_github_event != "release":
+        return {"status": "ignored", "event": x_github_event}
+
+    secret = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+    if secret and x_hub_signature_256:
+        if not await _verify_signature(payload, x_hub_signature_256, secret):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+    try:
+        event_data = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    if event_data.get("action") != "published":
+        return {"status": "ignored", "action": event_data.get("action")}
+
+    release = event_data.get("release", {})
+    tag = release.get("tag_name", "")
+    if not tag.startswith("mobile-v"):
+        return {"status": "ignored", "tag": tag, "reason": "not a mobile release"}
+
+    version = tag[len("mobile-v") :]
+    notes = (release.get("body") or "").strip()
+    html_url = release.get("html_url", "")
+
+    # Find APK asset URL
+    apk_url = ""
+    for asset in release.get("assets", []):
+        name = asset.get("name", "")
+        if name.endswith(".apk"):
+            apk_url = asset.get("browser_download_url", "")
+            break
+
+    try:
+        from modules.channels.mobile.push_service import fcm_push_service
+
+        title = f"Доступна новая версия {version}"
+        body = (notes.split("\n", 1)[0] if notes else "Нажмите для скачивания").strip() or (
+            "Нажмите для скачивания"
+        )
+        if len(body) > 240:
+            body = body[:237] + "..."
+        count = await fcm_push_service.send_to_all(
+            title=title,
+            body=body,
+            data={
+                "type": "update",
+                "version": version,
+                "apk_url": apk_url or html_url,
+                "link": "/settings",
+            },
+        )
+        return {"status": "processed", "version": version, "delivered": count}
+    except Exception as e:
+        logger.error(f"Mobile release push failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from auth_manager import User, require_permission, user_has_level, workspace_context
 from modules.admin.service import resource_share_service
+from modules.channels.mobile.push_service import fcm_push_service
 from modules.channels.mobile.service import mobile_app_instance_service
 from modules.monitoring.service import audit_service
 
@@ -226,6 +227,80 @@ async def get_my_mobile_config(user: User = Depends(require_permission("chat", "
     if not instance:
         return {"instance": None}
     return {"instance": instance}
+
+
+# ============== Version check ==============
+
+
+class VersionInfoResponse(BaseModel):
+    version_name: str
+    version_code: int
+    apk_url: str
+    release_notes: Optional[str] = None
+
+
+@router.get("/version", response_model=VersionInfoResponse)
+async def get_latest_version():
+    """Return the latest known mobile app version.
+
+    The mobile app calls this on startup, compares with its own versionCode,
+    and shows an update banner if a newer build is available.
+
+    Values are read from env (updated on deploy), not hardcoded in code so
+    production can bump version without a release.
+    """
+    import os
+
+    return VersionInfoResponse(
+        version_name=os.getenv("MOBILE_LATEST_VERSION_NAME", "1.6"),
+        version_code=int(os.getenv("MOBILE_LATEST_VERSION_CODE", "9")),
+        apk_url=os.getenv(
+            "MOBILE_LATEST_APK_URL",
+            "https://github.com/ShaerWare/AI_Secretary_System/releases/latest",
+        ),
+        release_notes=os.getenv("MOBILE_LATEST_RELEASE_NOTES"),
+    )
+
+
+# ============== Push notifications ==============
+
+
+class PushRegisterRequest(BaseModel):
+    token: str
+    platform: str = "android"
+    app_version: Optional[str] = None
+    build_number: Optional[str] = None
+
+
+@router.post("/push/register")
+async def register_push_token(
+    request: PushRegisterRequest,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Register FCM device token for the current user.
+
+    Called by the mobile app after successful login / on app start with fresh token.
+    Same token across re-logins updates ownership and timestamps.
+    """
+    if not request.token or len(request.token) < 20:
+        raise HTTPException(status_code=400, detail="Invalid token")
+    await fcm_push_service.register_token(
+        user_id=user.id,
+        token=request.token,
+        platform=request.platform,
+        app_version=request.app_version,
+        build_number=request.build_number,
+    )
+    return {"status": "ok"}
+
+
+@router.post("/push/unregister")
+async def unregister_push_tokens(
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Delete all FCM tokens for the current user. Called on logout."""
+    await fcm_push_service.unregister_user(user.id)
+    return {"status": "ok"}
 
 
 # ============== Resource Sharing (user assignment) ==============

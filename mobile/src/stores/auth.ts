@@ -93,6 +93,13 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function logout() {
+    // Unregister push token before clearing auth (needs token for API call)
+    try {
+      const { unregisterPush } = await import("@/composables/usePush");
+      await unregisterPush();
+    } catch {
+      // Non-critical
+    }
     token.value = null;
     user.value = null;
     await Preferences.remove({ key: TOKEN_KEY });

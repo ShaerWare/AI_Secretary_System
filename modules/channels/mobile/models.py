@@ -114,3 +114,37 @@ class MobileAppInstance(Base):
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
+
+
+class MobilePushToken(Base):
+    """FCM device token registered by mobile app users.
+
+    One row per (user, device) pair. Stale tokens (FCM returns 404/INVALID) are
+    deleted by the send service. Unique on token to avoid duplicates across re-logins.
+    """
+
+    __tablename__ = "mobile_push_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    token: Mapped[str] = mapped_column(String(500), unique=True, index=True)
+    platform: Mapped[str] = mapped_column(String(20), default="android")  # android | ios
+    app_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    build_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "platform": self.platform,
+            "app_version": self.app_version,
+            "build_number": self.build_number,
+            "created": self.created.isoformat() if self.created else None,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
+        }
