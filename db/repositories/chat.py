@@ -86,10 +86,14 @@ class ChatRepository(BaseRepository[ChatSession]):
             if cached:
                 return cached
 
-        # Fetch from database
+        # Fetch from database — load only active messages. Inactive messages
+        # belong to alternate branches and are never rendered in chat; for
+        # branch navigation the UI uses the separate /branches endpoint. On
+        # long chats (hundreds of messages, MB of content) filtering at SQL
+        # level saves both I/O and ORM-hydration cost.
         query = (
             select(ChatSession)
-            .options(selectinload(ChatSession.messages))
+            .options(selectinload(ChatSession.messages.and_(ChatMessage.is_active.is_(True))))
             .where(ChatSession.id == session_id)
         )
         query = self._apply_workspace_filter(query, workspace_id)
