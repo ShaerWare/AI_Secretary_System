@@ -996,8 +996,16 @@ class WikiRAGService:
 
     @staticmethod
     def _merge_results(local_results: list[dict], vs_results: list[dict], top_k: int) -> list[dict]:
-        """Merge results from multiple engines with three-layer dedup and
-        per-collection diversity.
+        """Merge results from multiple engines with score normalization,
+        three-layer dedup, and per-collection diversity.
+
+        BM25 raw scores sit in the 10–50 range while Vector Search cosine
+        similarity is 0–1. Without normalization BM25 always wins the
+        global sort, and VS hits get crowded out of the top-k even when
+        they're the better semantic match. Normalize each engine to
+        [0,1] (divide by the bucket max) and store as ``_score_norm``
+        before sorting/dedup. The original ``score`` is preserved for
+        observability.
 
         1. Dedupe by (source_file, title) — keep the higher-scoring version
            (same section found by both BM25 and Vector Search collapses).
@@ -1009,11 +1017,26 @@ class WikiRAGService:
            collection scored highest, and a multi-collection session still
            sees single-source output.
         """
+
+        def _normalize(bucket: list[dict]) -> None:
+            if not bucket:
+                return
+            peak = max((r.get("score", 0.0) or 0.0) for r in bucket)
+            if peak <= 0:
+                for r in bucket:
+                    r["_score_norm"] = 0.0
+                return
+            for r in bucket:
+                r["_score_norm"] = (r.get("score", 0.0) or 0.0) / peak
+
+        _normalize(local_results)
+        _normalize(vs_results)
+
         # (1) title-based dedup
         by_title: dict[tuple[str, str], dict] = {}
         for r in local_results + vs_results:
             key = (r.get("source_file", ""), r.get("title", ""))
-            if key not in by_title or r.get("score", 0) > by_title[key].get("score", 0):
+            if key not in by_title or r.get("_score_norm", 0) > by_title[key].get("_score_norm", 0):
                 by_title[key] = r
 
         # (2) body-hash dedup: normalize whitespace/punct, take first 160 chars
@@ -1025,10 +1048,10 @@ class WikiRAGService:
                 # keep untouched; can't hash empty bodies
                 by_body[r.get("source_file", "") + "::" + r.get("title", "")] = r
                 continue
-            if norm not in by_body or r.get("score", 0) > by_body[norm].get("score", 0):
+            if norm not in by_body or r.get("_score_norm", 0) > by_body[norm].get("_score_norm", 0):
                 by_body[norm] = r
 
-        all_hits = sorted(by_body.values(), key=lambda x: x.get("score", 0), reverse=True)
+        all_hits = sorted(by_body.values(), key=lambda x: x.get("_score_norm", 0), reverse=True)
         if not all_hits or top_k <= 0:
             return all_hits[:top_k]
 
@@ -1047,7 +1070,7 @@ class WikiRAGService:
         # Round 1 — one hit per collection, ordered by the collection's best score
         cols_sorted = sorted(
             by_collection.items(),
-            key=lambda kv: kv[1][0].get("score", 0),
+            key=lambda kv: kv[1][0].get("_score_norm", 0),
             reverse=True,
         )
         for _cid, bucket in cols_sorted:
