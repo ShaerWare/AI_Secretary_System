@@ -358,7 +358,7 @@ async function handleSubmit() {
           <!-- Android APK download -->
           <div class="mt-4 flex justify-center">
             <a
-              href="https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v1.6/ai-secretary-1.6.apk"
+              href="https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v1.61/ai-secretary-1.61.apk"
               target="_blank"
               rel="noopener noreferrer"
               title="Скачать Android-приложение AI-Секретарь"
