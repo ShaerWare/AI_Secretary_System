@@ -37,8 +37,11 @@ async def load_collection_indexes(wiki_rag) -> None:
         filenames = await async_knowledge_collection_manager.get_document_filenames(col["id"])
         if filenames:
             base_dir = Path(col.get("base_dir", "wiki-pages"))
+            slug = col.get("slug") or None
             # Run sync load_collection in a thread to avoid blocking the event loop
-            await asyncio.to_thread(wiki_rag.load_collection, col["id"], filenames, base_dir)
+            await asyncio.to_thread(
+                wiki_rag.load_collection, col["id"], filenames, base_dir, slug
+            )
             loaded += 1
     if loaded:
         logger.info(f"📚 Wiki RAG: загружено {loaded} коллекционных индексов")
@@ -70,7 +73,10 @@ async def sync_vector_search(wiki_rag: WikiRAGService, vs_client: VectorSearchCl
             if not filenames:
                 continue
             base_dir = Path(col.get("base_dir", "wiki-pages"))
-            await asyncio.to_thread(wiki_rag.load_collection, col["id"], filenames, base_dir)
+            slug = col.get("slug") or None
+            await asyncio.to_thread(
+                wiki_rag.load_collection, col["id"], filenames, base_dir, slug
+            )
 
     total_upserted = 0
 

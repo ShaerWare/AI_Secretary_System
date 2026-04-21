@@ -64,7 +64,9 @@ async def _handle_dataset_sync(event, collection_svc, doc_svc) -> None:
     wiki_rag = container.wiki_rag_service
     if wiki_rag:
         filenames = [d["filename"] for d in event.documents]
-        wiki_rag.reload_collection(collection_id, filenames, Path(event.base_dir))
+        wiki_rag.reload_collection(
+            collection_id, filenames, Path(event.base_dir), slug=event.collection_slug
+        )
 
     # Sync to Vector Search if available
     vs_client = container.vector_search_client
@@ -108,7 +110,9 @@ async def _handle_dataset_clear(event, collection_svc, doc_svc) -> None:
         if event.delete_collection:
             wiki_rag.unload_collection(collection_id)
         else:
-            wiki_rag.reload_collection(collection_id, [], Path(event.base_dir))
+            wiki_rag.reload_collection(
+                collection_id, [], Path(event.base_dir), slug=event.collection_slug
+            )
 
     # Clean up Vector Search
     vs_client = container.vector_search_client
