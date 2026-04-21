@@ -66,3 +66,6 @@ pytesseract>=0.3.10
 # Docker management (for starting vLLM from container)
 docker>=7.0.0
 ddgs>=6.0
+
+# FCM push notifications (mobile app)
+google-auth>=2.0.0

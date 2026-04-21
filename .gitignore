@@ -152,3 +152,8 @@ wiki-pages/cpa-ireland/
 wiki-pages/accounting-technicians-ie/
 wiki-pages/accountant-forums-ireland/
 wiki-pages/icaew-ireland/
+
+# Firebase secrets (FCM push notifications)
+google-services.json
+*firebase-adminsdk*.json
+mobile/android/app/google-services.json

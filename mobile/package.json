@@ -16,6 +16,7 @@
     "@capacitor/haptics": "^8.0.1",
     "@capacitor/keyboard": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/status-bar": "^8.0.1",
     "dompurify": "^3.3.2",
     "marked": "^17.0.4",
