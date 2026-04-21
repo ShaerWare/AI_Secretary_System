@@ -80,7 +80,10 @@ import {
   Globe,
   Server,
   Search,
-  LogOut
+  LogOut,
+  Sun,
+  Moon,
+  Palette
 } from 'lucide-vue-next'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
@@ -90,14 +93,24 @@ import { useResizablePanel } from '@/composables/useResizablePanel'
 import { getChatEmoji } from '@/utils/chatEmoji'
 import { shouldTreatAsPaste, createPastedBlock, buildMessageContent, type PastedBlock } from '@/utils/pasteDetect'
 import { useChatFullscreenStore } from '@/stores/chatFullscreen'
+import { useThemeStore } from '@/stores/theme'
 
 const { t } = useI18n()
 const confirmStore = useConfirmStore()
 const toastStore = useToastStore()
 const authStore = useAuthStore()
 const fullscreenStore = useChatFullscreenStore()
+const themeStore = useThemeStore()
 const chatRouter = useRouter()
 const isChatOnly = computed(() => authStore.isChatOnlyUser)
+
+const CHAT_THEME_CYCLE = ['light', 'dark', 'night-eyes'] as const
+function cycleChatTheme() {
+  const current = (themeStore.resolvedTheme as typeof CHAT_THEME_CYCLE[number]) || 'light'
+  const idx = CHAT_THEME_CYCLE.indexOf(current)
+  const next = CHAT_THEME_CYCLE[(idx + 1) % CHAT_THEME_CYCLE.length]
+  themeStore.setTheme(next)
+}
 const welcomeInput = ref('')
 const welcomeSending = ref(false)
 
@@ -2454,6 +2467,20 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           <Loader2 v-if="forkSessionMutation.isPending.value" class="w-4 h-4 animate-spin" />
           <GitFork v-else class="w-4 h-4" />
         </button>
+
+      <!-- Theme toggle (chat-only users, zen mode) — cycles light → dark → night-eyes -->
+      <button
+        v-if="isChatOnly"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+        :title="t('chatView.themeToggle', 'Сменить тему')"
+        @click="cycleChatTheme"
+      >
+        <Sun v-if="themeStore.resolvedTheme === 'light'" class="w-4 h-4" />
+        <Moon v-else-if="themeStore.resolvedTheme === 'dark'" class="w-4 h-4" />
+        <Palette v-else class="w-4 h-4" />
+      </button>
+
+      <div v-if="isChatOnly" class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
       <!-- Export dropdown (non-CC) -->
       <div v-if="!cc.isActive.value" class="relative shrink-0">
