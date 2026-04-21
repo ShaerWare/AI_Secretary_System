@@ -303,6 +303,69 @@ async def unregister_push_tokens(
     return {"status": "ok"}
 
 
+class PushTestRequest(BaseModel):
+    title: str = "Test push"
+    body: str = "Hello from AI-Секретарь"
+    to_all: bool = False
+    user_id: Optional[int] = None
+
+
+@router.post("/push/test")
+async def send_test_push(
+    request: PushTestRequest,
+    user: User = Depends(require_permission("channels", "manage")),
+):
+    """Send a test push notification.
+
+    Admin-only. If `to_all=true` — broadcast to every registered device.
+    If `user_id` is given — send only to that user's devices.
+    Otherwise — send to the requesting admin's devices.
+    """
+    if not fcm_push_service.enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="FCM not configured (FCM_PROJECT_ID + FCM_SERVICE_ACCOUNT_FILE env vars)",
+        )
+    target_user_id = request.user_id if request.user_id else user.id
+    if request.to_all:
+        delivered = await fcm_push_service.send_to_all(
+            title=request.title,
+            body=request.body,
+            data={"type": "test"},
+        )
+    else:
+        delivered = await fcm_push_service.send_to_user(
+            user_id=target_user_id,
+            title=request.title,
+            body=request.body,
+            data={"type": "test"},
+        )
+    return {"status": "ok", "delivered": delivered, "fcm_enabled": fcm_push_service.enabled}
+
+
+@router.get("/push/status")
+async def get_push_status(
+    user: User = Depends(require_permission("channels", "manage")),
+):
+    """Check FCM configuration status. Admin-only."""
+    from sqlalchemy import func, select
+
+    from db.database import get_async_session
+    from modules.channels.mobile.models import MobilePushToken
+
+    total = 0
+    async for session in get_async_session():
+        result = await session.execute(select(func.count()).select_from(MobilePushToken))
+        total = result.scalar() or 0
+
+    return {
+        "fcm_enabled": fcm_push_service.enabled,
+        "project_id": fcm_push_service.project_id,
+        "service_account_file": fcm_push_service.service_account_file,
+        "total_tokens": total,
+    }
+
+
 # ============== Resource Sharing (user assignment) ==============
 
 
