@@ -103,6 +103,60 @@ SITES = {
         ],
         "description": ("International accountancy forum — Ireland-related threads only."),
     },
+    # ------------------------------------------------------------------
+    # Russian accountant assistant — USN (6% / 15%) for legal entities
+    # ------------------------------------------------------------------
+    "ru-fns-usn": {
+        "name": "ФНС России — УСН",
+        "base_url": "https://www.nalog.gov.ru",
+        "seed_paths": [
+            "/rn77/taxation/taxes/usn/",
+            "/rn77/taxation/taxes/nds_usn/",
+            "/rn77/taxation/taxes/usn/all_about/",
+        ],
+        "stay_under": "/rn77/taxation/",
+        "max_pages": 300,
+        "type": "official",
+        "description": (
+            "Федеральная налоговая служба — официальный раздел УСН. "
+            "Ставки, льготы, переход/отказ, декларация, КУДиР, разъяснения. "
+            "Включает НДС при УСН (актуально с 2025)."
+        ),
+    },
+    "ru-nk-rf-glava-26-2": {
+        "name": "НК РФ — Глава 26.2 (УСН)",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": [
+            "/document/cons_doc_LAW_28165/d29da7b903e5cc351ee08a2f10414ccee3c12bad/",
+        ],
+        # Whole Part 2 of Taxcode lives under this document id. Stay inside it
+        # to avoid drifting onto unrelated КонсультантПлюс content.
+        "stay_under": "/document/cons_doc_LAW_28165/",
+        "max_pages": 60,
+        "type": "legal",
+        "description": (
+            "Налоговый кодекс РФ — Глава 26.2 «Упрощенная система "
+            "налогообложения». Первоисточник: ст. 346.11 — 346.25.1."
+        ),
+    },
+    "ru-moedelo-usn": {
+        "name": "МоеДело — клуб",
+        "base_url": "https://www.moedelo.org",
+        "seed_paths": [
+            "/club/nalogovyj-uchet",
+            "/club/buhgalterskij-uchet",
+            "/club/registratsiya-biznesa",
+            "/club/likvidaciya-biznesa",
+        ],
+        "stay_under": "/club/",
+        "max_pages": 400,
+        "type": "practical",
+        "description": (
+            "МоеДело (Моё Дело) — клуб, практические статьи по бухгалтерскому "
+            "и налоговому учёту. Не весь контент про УСН — на пост-парсинге "
+            "отфильтруем не-USN статьи по ключевым словам."
+        ),
+    },
     "icaew-ireland": {
         "name": "ICAEW Ireland Standards",
         "base_url": "https://www.icaew.com",
