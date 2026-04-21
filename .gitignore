@@ -127,6 +127,10 @@ admin/vite.config.js
 docs/tz/tz_tg_bot.md
 docs/tz/
 
+# Отчёты (генерируемые, не коммитим)
+docs/*-report-*.md
+docs/*-report-*/
+
 # Tax data scraping (scripts tracked, data not)
 tax_data/raw_html/
 tax_data/raw_pdf/
