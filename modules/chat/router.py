@@ -354,7 +354,7 @@ async def admin_list_chat_sessions(
         for s in sessions_list:
             sid = s.get("id", "")
             s_owner = s.get("owner_id")
-            if sid in shared_perms and s_owner != user.id and s_owner is not None:
+            if sid in shared_perms and s_owner != user.id:
                 s["is_shared_with_me"] = True
                 s["share_permission"] = shared_perms[sid]
             else:
@@ -447,11 +447,7 @@ async def admin_get_chat_session(
 
     # Share info
     session_owner_id = session.get("owner_id")
-    is_owner = (
-        user_has_level(user, "chat", "manage")
-        or session_owner_id == user.id
-        or session_owner_id is None
-    )
+    is_owner = user_has_level(user, "chat", "manage") or session_owner_id == user.id
     if is_owner:
         session["is_shared_with_me"] = False
         session["share_permission"] = "owner"
