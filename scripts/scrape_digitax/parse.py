@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import re
 from datetime import date
@@ -686,7 +687,15 @@ def parse_site(slug: str, site_cfg: dict) -> dict:
     log.info("[%s] Parsing %d HTML files...", slug, len(html_files))
 
     manifest = []
-    stats = {"parsed": 0, "skipped": 0, "errors": 0}
+    stats = {"parsed": 0, "skipped": 0, "errors": 0, "duplicates": 0}
+
+    # Content-hash dedup within the site. Forums in particular emit the same
+    # post under both a canonical thread URL and a per-post permalink URL,
+    # which produces byte-identical .md files under different filenames. Those
+    # then get indexed twice into BM25 and Vector Search, bloating retrieval
+    # noise and distorting relevance. Normalize whitespace before hashing so
+    # minor formatting differences still collapse.
+    seen_hashes: dict[str, str] = {}
 
     for i, filepath in enumerate(html_files):
         # Skip garbage filenames (listing pages, search, cdn)
@@ -704,6 +713,13 @@ def parse_site(slug: str, site_cfg: dict) -> dict:
         if result is None:
             stats["skipped"] += 1
             continue
+
+        content_norm = re.sub(r"\s+", " ", result["content"]).strip()
+        content_hash = hashlib.sha1(content_norm.encode("utf-8")).hexdigest()
+        if content_hash in seen_hashes:
+            stats["duplicates"] += 1
+            continue
+        seen_hashes[content_hash] = filepath.name
 
         # Write markdown
         out_name = filepath.stem + ".md"
@@ -737,10 +753,11 @@ def parse_site(slug: str, site_cfg: dict) -> dict:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     log.info(
-        "[%s] Done: %d parsed, %d skipped, %d errors",
+        "[%s] Done: %d parsed, %d skipped, %d duplicates, %d errors",
         slug,
         stats["parsed"],
         stats["skipped"],
+        stats.get("duplicates", 0),
         stats["errors"],
     )
     return stats
