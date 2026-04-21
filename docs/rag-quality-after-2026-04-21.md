@@ -42,7 +42,8 @@ The "before" numbers are the surprise. Vector Search was effectively offline in 
 3. ~~Flat global top-k without per-collection weighting~~ — #715 (diversity round) ✅
 3a. ~~Vector Search dark in retrieve pipeline (slug mismatch)~~ — #727 ✅ (was the invisible root cause behind why #714/#715 looked muted)
 4. Cross-collection leakage on proper nouns — largely absorbed by #714/#715/#727; revisit only if observed in live chat.
-5. **Residual duplicates in `accountant-forums-ireland`** — still pending. "I'm selling my PPR in Ireland…" still shows up twice byte-identical at different `doc_id`s. Needs scraper-level dedup in `external/ai-agents/digitax/scripts/scrape_digitax/parse.py` plus a re-scrape + re-upload + re-sync for that collection.
+5. ~~Residual duplicates in `accountant-forums-ireland`~~ — [#729](https://github.com/ShaerWare/AI_Secretary_System/pull/729) ✅. `parse.py` now hashes normalized content per site and skips byte-identical rewrites. On the 3 in-repo corpuses this dropped 34 (43%) files from `accountant-forums-ireland`, 26 (8%) from `cpa-ireland`, 0 from `icaew-ireland`. After deploy (re-parse → rsync `wiki-pages/` → restart → VS group delete + re-sync) the baseline case ("I'm selling my PPR…") is now a single hit. `raw_count → chunks` for the two affected VS groups: `accountant-forums-ireland` 884 → 517 (−42%), `cpa-ireland` 611 → 523 (−14%).
+6. **Residual sidebar leakage in forums** (new, discovered during #729 verification). Forum pages include a "latest threads" sidebar, so every thread .md ends up containing the recent-thread block. VS still returns near-identical 130-char chunks for the sidebar snippet under many `doc_id`s (e.g. "UK Sale of a Subsidiary company"). Requires tightening `strip_boilerplate()` for the forum sites (`accountantforums.com`, boards.ie if observed). Lower priority than 1–5 — those chunks are short and below similarity threshold for most real queries.
 
 ## Reproducing
 
