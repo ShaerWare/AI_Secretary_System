@@ -122,9 +122,25 @@ def crawl_site(
 
 
 def _normalize_url(url: str) -> str:
-    """Strip fragment, trailing slash for consistency."""
+    """Drop the fragment, preserve a trailing slash on directory-looking paths.
+
+    Some servers (e.g. nalog.gov.ru) return 404 without the trailing slash on
+    directory URLs. Others (e.g. GitHub) return a redirect. Stripping the
+    slash blindly (as the older implementation did) broke the former. The
+    heuristic used here: keep the trailing slash if the last path segment
+    does not look like a file (no dot) and the URL originally had one;
+    strip it otherwise so `/foo.html/` and `/foo.html` don't diverge.
+    """
     parsed = urlparse(url)
-    path = parsed.path.rstrip("/") or "/"
+    path = parsed.path or "/"
+    had_trailing = path.endswith("/") and path != "/"
+    stripped = path.rstrip("/") or "/"
+    last_seg = stripped.rsplit("/", 1)[-1]
+    looks_like_file = "." in last_seg
+    if had_trailing and not looks_like_file:
+        path = stripped + "/"
+    else:
+        path = stripped
     query = parsed.query
     normalized = f"{parsed.scheme}://{parsed.netloc}{path}"
     if query:
@@ -250,9 +266,11 @@ def filter_icaew(url: str, cfg: dict) -> bool:
 
     ireland_keywords = cfg.get("ireland_keywords")
     if ireland_keywords:
-        return any(kw in path for kw in ireland_keywords)
+        return any(kw.lower() in path for kw in ireland_keywords)
 
-    stay_under = cfg.get("stay_under", "/technical/by-country/europe/ireland")
+    # `path` is already lower-cased; lower the prefix too so mixed-case
+    # document IDs (e.g. consultant.ru `/document/cons_doc_LAW_28165/`) match.
+    stay_under = cfg.get("stay_under", "/technical/by-country/europe/ireland").lower()
     return stay_under in path
 
 
@@ -298,6 +316,13 @@ LINK_FILTERS: dict[str, callable] = {
     "cpa-ireland": filter_professional_site,
     "accounting-technicians-ie": filter_professional_site,
     "iafa": filter_professional_site,
+    # Russian accountant assistant sites — all three rely on the `stay_under`
+    # path prefix to keep the crawler inside the relevant section.
+    # filter_icaew reads `stay_under` from cfg, so it works as a generic
+    # stay-under filter when `ireland_keywords` is absent.
+    "ru-fns-usn": filter_icaew,
+    "ru-nk-rf-glava-26-2": filter_icaew,
+    "ru-moedelo-usn": filter_icaew,
 }
 
 

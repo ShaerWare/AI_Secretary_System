@@ -210,7 +210,14 @@ class WikiRAGService:
         return [_stem(t) for t in tokens if len(t) >= MIN_TOKEN_LEN and t not in STOP_WORDS]
 
     def _split_md_by_headers(self, content: str) -> list[tuple[str, str]]:
-        """Split markdown by ## and ### headers. Returns (header, body) pairs."""
+        """Split markdown by ## and ### headers. Returns (header, body) pairs.
+
+        Fallback when the file has no ##/### subheaders: treat the whole body
+        as a single section titled by the top-level H1 (`# Title`). Legal
+        texts scraped from consultant.ru (НК РФ, etc.) come as one flat H1 +
+        paragraphs — without this fallback they'd contribute zero BM25
+        sections to the index.
+        """
         sections = []
         pattern = r"^(#{2,3})\s+(.+?)$"
         current_header = ""
@@ -229,7 +236,16 @@ class WikiRAGService:
         if current_header and current_body:
             sections.append((current_header, "\n".join(current_body)))
 
-        return sections
+        if sections:
+            return sections
+
+        # No ##/### seen — emit one section from H1 + body.
+        h1_match = re.search(r"^#\s+(.+?)$", content, re.MULTILINE)
+        title = h1_match.group(1).strip() if h1_match else "(untitled)"
+        body = content.strip()
+        if body:
+            return [(title, body)]
+        return []
 
     def _load_and_index(self, wiki_dir: Path) -> None:
         """Parse all .md files in wiki_dir, build BM25 index."""
