@@ -85,6 +85,7 @@ export interface ChatSessionSummary {
   is_shared_with_me?: boolean;
   share_permission?: string;
   share_count?: number;
+  is_default_mobile?: boolean;
 }
 
 export interface StreamChunk {
