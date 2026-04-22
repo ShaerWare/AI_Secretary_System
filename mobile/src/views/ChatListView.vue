@@ -49,10 +49,13 @@ const sessionRagIds = ref<number[]>([]);
 // Mobile instance attached to session
 const sessionMobileInstanceId = ref<string | null>(null);
 
-// For non-admins: only shared chats
+// For non-admins: only the chat that admin explicitly assigned as
+// "default mobile" for this user. Regular shares (via the Share menu)
+// are not surfaced on mobile — the mobile app is a single-assistant
+// surface, not a general chat browser.
 const visibleSessions = computed(() => {
   if (isAdmin.value) return sessions.value;
-  return sessions.value.filter((s) => s.is_shared_with_me);
+  return sessions.value.filter((s) => s.is_default_mobile);
 });
 
 async function loadSessions() {
