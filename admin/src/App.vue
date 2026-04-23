@@ -20,6 +20,7 @@ import { useAuthStore } from './stores/auth'
 import { useSearchStore } from './stores/search'
 import { useThemeStore } from './stores/theme'
 import { useChatFullscreenStore } from './stores/chatFullscreen'
+import { IS_LITE } from './config/variant'
 import { useResizablePanel } from './composables/useResizablePanel'
 import { setLocale, getLocale } from './plugins/i18n'
 import ToastContainer from './components/ToastContainer.vue'
@@ -198,7 +199,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <span class="flex-1 text-left">{{ t('nav.chat') }}</span>
             </router-link>
             <router-link
-              v-if="authStore.canView('kanban')"
+              v-if="!IS_LITE && authStore.canView('kanban')"
               to="/kanban"
               class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors"
               :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground bg-secondary/50 hover:bg-secondary'"
@@ -217,7 +218,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <MessageCircle class="w-5 h-5" />
             </router-link>
             <router-link
-              v-if="authStore.canView('kanban')"
+              v-if="!IS_LITE && authStore.canView('kanban')"
               to="/kanban"
               class="flex items-center justify-center w-full p-2 rounded-lg transition-colors"
               :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50'"

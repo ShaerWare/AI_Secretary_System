@@ -26,6 +26,12 @@ DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "full").lower()
 if DEPLOYMENT_MODE not in ("full", "cloud", "local"):
     DEPLOYMENT_MODE = "full"
 
+# Product variant: "full" (default) or "lite" (DigiTax — trimmed router set)
+DEPLOYMENT_VARIANT = os.getenv("DEPLOYMENT_VARIANT", "full").lower()
+if DEPLOYMENT_VARIANT not in ("full", "lite"):
+    DEPLOYMENT_VARIANT = "full"
+IS_LITE = DEPLOYMENT_VARIANT == "lite"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -84,45 +90,52 @@ from modules.knowledge.router_google_drive import router as google_drive_rag_rou
 from modules.monitoring.router_logs import router as logs_router  # noqa: E402
 
 
-# Always-available routers (all deployment modes)
+# Always-available routers (all deployment modes + variants)
 _ALWAYS_ROUTERS = [
     auth,
-    audit,
     faq,
     llm,
     chat,
     telegram,
     whatsapp,
-    usage,
     widget,
     mobile,
-    bot_sales,
     github_webhook,
-    yoomoney_webhook,
     legal,
     backup,
     wiki_rag,
-    woocommerce,
     github_repos,
     claude_code,
-    kanban,
     roles,
     workspace,
 ]
+# Full-variant-only routers (disabled when DEPLOYMENT_VARIANT=lite)
+_FULL_VARIANT_ROUTERS = [
+    audit,
+    usage,
+    bot_sales,
+    yoomoney_webhook,
+    woocommerce,
+    kanban,
+]
 for _r in _ALWAYS_ROUTERS:
     app.include_router(_r.router)
-app.include_router(amocrm.router)
-app.include_router(amocrm.webhook_router)
+if not IS_LITE:
+    for _r in _FULL_VARIANT_ROUTERS:
+        app.include_router(_r.router)
+    app.include_router(amocrm.router)
+    app.include_router(amocrm.webhook_router)
 app.include_router(google.callback_router)  # Must be before static mount
 app.include_router(google.router)
 app.include_router(google_drive_rag_router)
 app.include_router(health_router)
 app.include_router(compat_router)
-app.include_router(logs_router)
+if not IS_LITE:
+    app.include_router(logs_router)
 app.include_router(widget_public_router)
 
-# Hardware/GPU routers — skip in cloud mode
-if DEPLOYMENT_MODE != "cloud":
+# Hardware/GPU routers — skip in cloud OR lite mode
+if DEPLOYMENT_MODE != "cloud" and not IS_LITE:
     app.include_router(services.router)
     app.include_router(monitor.router)
     app.include_router(gsm.router)
@@ -154,7 +167,10 @@ Path("./calls_log").mkdir(exist_ok=True)
 @app.on_event("startup")
 async def startup_event():
     """Initialize all services via domain startup modules."""
-    logger.info(f"🚀 Запуск AI Secretary Orchestrator (mode={DEPLOYMENT_MODE})")
+    logger.info(
+        f"🚀 Запуск AI Secretary Orchestrator "
+        f"(mode={DEPLOYMENT_MODE}, variant={DEPLOYMENT_VARIANT})"
+    )
 
     from app.dependencies import get_container
     from db.integration import init_database

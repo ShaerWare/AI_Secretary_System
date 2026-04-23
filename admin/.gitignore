@@ -28,6 +28,7 @@ dist-ssr
 .env.*
 !.env.demo
 !.env.demo-*
+!.env.lite
 
 # OS
 .DS_Store

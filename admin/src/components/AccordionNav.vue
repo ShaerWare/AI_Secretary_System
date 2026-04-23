@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
+import { IS_LITE, LITE_HIDDEN_PATHS } from '../config/variant'
 import { ChevronDown } from 'lucide-vue-next'
 import {
   LayoutDashboard,
@@ -40,8 +41,9 @@ const authStore = useAuthStore()
 
 const LVL: Record<string, number> = { view: 1, edit: 2, manage: 3 }
 
-function isVisible(item: { module?: string; minLevel?: string; localOnly?: boolean }): boolean {
+function isVisible(item: { path?: string; module?: string; minLevel?: string; localOnly?: boolean }): boolean {
   if (item.localOnly && authStore.isCloudMode) return false
+  if (IS_LITE && item.path && LITE_HIDDEN_PATHS.has(item.path)) return false
   if (!item.module) return true
   const min = item.minLevel || 'view'
   return (LVL[authStore.permissions[item.module]] ?? 0) >= (LVL[min] ?? 1)

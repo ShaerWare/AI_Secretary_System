@@ -39,6 +39,19 @@ if not _LEGACY_PASSWORD_HASH:
 _DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "full").lower()
 _CLOUD_EXCLUDED_MODULES = ("speech", "gsm")
 
+# Product variant — lite build excludes business/monitoring/hardware modules
+_DEPLOYMENT_VARIANT = os.getenv("DEPLOYMENT_VARIANT", "full").lower()
+_LITE_EXCLUDED_MODULES = (
+    "dashboard",
+    "system",
+    "audit",
+    "usage",
+    "sales",
+    "kanban",
+    "speech",
+    "gsm",
+)
+
 
 # ============== Pydantic Models ==============
 
@@ -485,6 +498,11 @@ async def get_user_permissions(user: User) -> Dict[str, str]:
     # Filter out hardware-only modules in cloud deployment mode
     if _DEPLOYMENT_MODE == "cloud":
         for module in _CLOUD_EXCLUDED_MODULES:
+            perms.pop(module, None)
+
+    # Filter out full-variant-only modules in lite product variant
+    if _DEPLOYMENT_VARIANT == "lite":
+        for module in _LITE_EXCLUDED_MODULES:
             perms.pop(module, None)
 
     return perms
