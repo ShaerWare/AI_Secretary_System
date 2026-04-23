@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lite": "VITE_PRODUCT_VARIANT=lite vite",
     "build": "vue-tsc -b && vite build",
+    "build:lite": "VITE_PRODUCT_VARIANT=lite vue-tsc -b && VITE_PRODUCT_VARIANT=lite vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --ignore-path .gitignore",

@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import { useAuthStore } from "./stores/auth";
+import { isPathAllowed } from "./config/productVariant";
 import DashboardView from "./views/DashboardView.vue";
 import ChatView from "./views/ChatView.vue";
 import ServicesView from "./views/ServicesView.vue";
@@ -234,6 +235,12 @@ router.beforeEach((to, from, next) => {
 
   // Check deployment mode (localOnly routes hidden in cloud mode)
   if (to.meta.localOnly && authStore.isCloudMode) {
+    next({ name: "chat" });
+    return;
+  }
+
+  // Product variant gate — `lite` build exposes only whitelisted paths.
+  if (!isPublicRoute && !isPathAllowed(to.path)) {
     next({ name: "chat" });
     return;
   }
