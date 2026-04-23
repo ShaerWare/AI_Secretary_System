@@ -343,6 +343,7 @@ New routers import domain services directly (`from modules.monitoring.service im
 LLM_BACKEND=vllm                    # "vllm" or "cloud:{provider_id}" (legacy "gemini" auto-migrates)
 VLLM_API_URL=http://localhost:11434 # Auto-normalized: trailing /v1 stripped
 DEPLOYMENT_MODE=full                # "full", "cloud", or "local"
+DEPLOYMENT_VARIANT=full             # "full" (default) or "lite" (DigiTax trimmed build)
 ORCHESTRATOR_PORT=8002
 ADMIN_JWT_SECRET=...                # Auto-generated if empty
 REDIS_URL=redis://localhost:6379/0  # Optional, graceful fallback
@@ -356,6 +357,25 @@ PLATFORM_AGENT_PROMPT_FILE=         # Override path to platform-agent fallback p
 BRIDGE_ISOLATE_HOME=                # "1" to spawn Claude CLI with isolated HOME so host's CLAUDE.md/memory files don't leak into user chats
 BRIDGE_ISOLATED_HOME=               # Override isolated HOME path (default: /var/lib/ai-secretary-bridge)
 ```
+
+## Lite variant (DigiTax)
+
+Separate product based on the same codebase, delivered on a dedicated VPS. UI trims business/monitoring/hardware modules; backend skips registering their routers.
+
+**Activate**: set `DEPLOYMENT_VARIANT=lite` in `.env` (backend), build admin with `npm run build:lite` (frontend). Default `full` on both sides preserves current server/local behaviour — these changes are **opt-in**.
+
+**What lite keeps**: chat, llm, wiki/RAG, widget, telegram, whatsapp, mobile-app, users, settings, about.
+
+**What lite drops** (both routes and backend endpoints): dashboard, services, monitoring, models, audit, usage, tts, finetune, gsm, crm (amocrm), kanban, sales (bot_sales + yoomoney_webhook), woocommerce, logs.
+
+**Key files**:
+- [admin/src/config/variant.ts](admin/src/config/variant.ts) — `IS_LITE`, `LITE_HIDDEN_PATHS`
+- [admin/.env.lite](admin/.env.lite) — `VITE_PRODUCT_VARIANT=lite` (auto-loaded by `--mode lite`)
+- [admin/src/router.ts](admin/src/router.ts) — `baseRoutes` always + `fullOnlyRoutes` gated by `IS_LITE` (dynamic imports → tree-shaken from lite bundle)
+- [orchestrator.py](orchestrator.py) — `DEPLOYMENT_VARIANT`, `_FULL_VARIANT_ROUTERS` list
+- [auth_manager.py](auth_manager.py) — `_LITE_EXCLUDED_MODULES`
+
+**Verify a lite build**: `cd admin && npm run build:lite` then `grep -l "CrmView\|KanbanView\|SalesView" admin/dist/assets/*.js` — should return nothing.
 
 ## Deployment
 
