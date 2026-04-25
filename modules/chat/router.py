@@ -1000,12 +1000,10 @@ async def admin_switch_branch(
     if not success:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # Return updated session
-    session = await chat_service.get_session(session_id, workspace_id=user.workspace_id)
-    if session:
-        sibling_info = await chat_service.get_sibling_info(session_id)
-        session["sibling_info"] = sibling_info
-    return {"status": "ok", "session": session}
+    # Frontend refetches the session + branches in parallel right after this
+    # call, so re-querying them here just doubles the work and keeps the
+    # connection open longer.
+    return {"status": "ok"}
 
 
 @router.post("/sessions/{session_id}/branches/new")
