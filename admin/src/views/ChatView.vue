@@ -3219,18 +3219,6 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             <Volume2 v-if="voiceMode" class="w-4 h-4" />
             <VolumeX v-else class="w-4 h-4" />
           </button>
-          <!-- Branch tree toggle -->
-          <button
-            v-if="!cc.isActive.value"
-            :class="[
-              'p-2 rounded-lg transition-colors',
-              showBranchTree ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
-            ]"
-            :title="t('chatView.branchTree')"
-            @click="showBranchTree = !showBranchTree"
-          >
-            <GitBranch class="w-4 h-4" />
-          </button>
           <button
             v-if="!cc.isActive.value && !isReadOnly"
             :class="[
@@ -3581,6 +3569,18 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
           ]"
         >
+          <!-- Branch tree toggle -->
+          <button
+            v-if="!cc.isActive.value"
+            :class="[
+              'p-3 rounded-lg transition-colors shrink-0',
+              showBranchTree ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+            ]"
+            :title="t('chatView.branchTree')"
+            @click="showBranchTree = !showBranchTree"
+          >
+            <GitBranch class="w-5 h-5" />
+          </button>
           <!-- Web search toggle -->
           <button
             v-if="currentSessionId && !isReadOnly"
