@@ -11,7 +11,7 @@ import asyncio
 import functools
 import logging
 import sqlite3
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from sqlalchemy.exc import OperationalError
 
@@ -51,7 +51,7 @@ def retry_on_busy(max_retries: int = 3, base_delay: float = 0.1) -> Callable[[F]
 
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             global _busy_retry_count
             last_exc: BaseException | None = None
             for attempt in range(max_retries + 1):
