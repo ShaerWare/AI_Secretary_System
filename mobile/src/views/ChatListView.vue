@@ -707,7 +707,9 @@ onMounted(() => {
               <h1 class="text-2xl font-bold text-white mb-2">
                 Привет, {{ auth.user?.username }}
               </h1>
-              <p class="text-stone-400 text-sm">Чем могу помочь?</p>
+              <p class="text-stone-400 text-sm leading-relaxed max-w-sm mx-auto">
+                Я — ваш AI-ассистент. Помогу настроить чат под себя: от написания системного промпта до работы с массивами контекста. Просто опишите задачу — и я проведу вас по шагам.
+              </p>
             </div>
             <div class="w-full max-w-sm mx-auto mb-6">
               <div class="flex items-end gap-2">
