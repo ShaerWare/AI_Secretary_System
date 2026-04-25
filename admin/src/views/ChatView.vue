@@ -24,7 +24,7 @@ import 'prismjs/components/prism-diff'
 import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-jsx'
 import 'prismjs/components/prism-tsx'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage, type ShareableUser } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatSessionPrompt, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage, type ShareableUser } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
@@ -174,6 +174,11 @@ const editingContent = ref('')
 const showSettings = ref(false)
 const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
+const sessionPrompts = ref<ChatSessionPrompt[]>([])
+const selectedPromptId = ref<number | null>(null)
+const renamingPromptId = ref<number | null>(null)
+const renamingPromptValue = ref('')
+const promptActionPending = ref(false)
 const contextFiles = ref<{ name: string; content: string }[]>([])
 const contextFilesSessionId = ref<string | null>(null) // tracks which session files belong to
 const editingFileIndex = ref<number | null>(null)
@@ -764,6 +769,10 @@ watch(currentSession, (session) => {
     if (session.id !== contextFilesSessionId.value) {
       contextFiles.value = session.context_files ? [...session.context_files] : []
       contextFilesSessionId.value = session.id
+      sessionPrompts.value = []
+      selectedPromptId.value = null
+      renamingPromptId.value = null
+      loadSessionPrompts(session.id)
     }
     // Load per-session RAG settings
     selectedRagMode.value = session.rag_mode || ''
@@ -771,6 +780,173 @@ watch(currentSession, (session) => {
     webSearchEnabled.value = !!session.web_search_enabled
   }
   attachedFiles.value = []
+})
+
+const activePromptId = computed(() => {
+  return sessionPrompts.value.find(p => p.is_active)?.id ?? null
+})
+
+const selectedPrompt = computed<ChatSessionPrompt | null>(() => {
+  if (selectedPromptId.value == null) return null
+  return sessionPrompts.value.find(p => p.id === selectedPromptId.value) || null
+})
+
+async function loadSessionPrompts(sid: string) {
+  try {
+    const res = await chatApi.listPrompts(sid)
+    sessionPrompts.value = res.prompts || []
+    if (sessionPrompts.value.length === 0) {
+      selectedPromptId.value = null
+    } else {
+      const active = sessionPrompts.value.find(p => p.is_active)
+      selectedPromptId.value = active?.id ?? sessionPrompts.value[0].id
+    }
+  } catch {
+    sessionPrompts.value = []
+    selectedPromptId.value = null
+  }
+}
+
+function selectPrompt(promptId: number) {
+  if (renamingPromptId.value === promptId) return
+  selectedPromptId.value = promptId
+}
+
+async function addNewPrompt() {
+  if (!currentSessionId.value || promptActionPending.value) return
+  promptActionPending.value = true
+  try {
+    const { prompt } = await chatApi.createPrompt(currentSessionId.value, { content: '' })
+    sessionPrompts.value = [...sessionPrompts.value, prompt]
+    selectedPromptId.value = prompt.id
+    if (prompt.is_active) {
+      customPrompt.value = prompt.content || ''
+      refetchSession()
+    }
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    promptActionPending.value = false
+  }
+}
+
+function startRenamePrompt(prompt: ChatSessionPrompt) {
+  renamingPromptId.value = prompt.id
+  renamingPromptValue.value = prompt.name || ''
+  nextTick(() => {
+    const el = document.querySelector<HTMLInputElement>(`[data-prompt-rename="${prompt.id}"]`)
+    el?.focus()
+    el?.select()
+  })
+}
+
+function cancelRenamePrompt() {
+  renamingPromptId.value = null
+  renamingPromptValue.value = ''
+}
+
+async function commitRenamePrompt() {
+  const id = renamingPromptId.value
+  if (id == null || !currentSessionId.value) {
+    cancelRenamePrompt()
+    return
+  }
+  const newName = renamingPromptValue.value.trim().slice(0, 100)
+  const current = sessionPrompts.value.find(p => p.id === id)
+  if (!current || (current.name || '') === newName) {
+    cancelRenamePrompt()
+    return
+  }
+  try {
+    const { prompt } = await chatApi.updatePrompt(currentSessionId.value, id, { name: newName || null })
+    const idx = sessionPrompts.value.findIndex(p => p.id === id)
+    if (idx >= 0) sessionPrompts.value[idx] = prompt
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    cancelRenamePrompt()
+  }
+}
+
+async function saveSelectedPromptContent() {
+  const id = selectedPromptId.value
+  if (id == null || !currentSessionId.value) return
+  const prompt = sessionPrompts.value.find(p => p.id === id)
+  if (!prompt) return
+  const content = customPrompt.value || ''
+  if (prompt.content === content) return
+  promptActionPending.value = true
+  try {
+    const { prompt: updated } = await chatApi.updatePrompt(currentSessionId.value, id, { content })
+    const idx = sessionPrompts.value.findIndex(p => p.id === id)
+    if (idx >= 0) sessionPrompts.value[idx] = updated
+    if (updated.is_active) refetchSession()
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    promptActionPending.value = false
+  }
+}
+
+async function activateSelectedPrompt() {
+  const id = selectedPromptId.value
+  if (id == null || !currentSessionId.value) return
+  const prompt = sessionPrompts.value.find(p => p.id === id)
+  if (!prompt || prompt.is_active) return
+  // Persist any edits to the selected prompt before switching.
+  if (prompt.content !== (customPrompt.value || '')) {
+    await saveSelectedPromptContent()
+  }
+  promptActionPending.value = true
+  try {
+    const { prompt: updated } = await chatApi.activatePrompt(currentSessionId.value, id)
+    sessionPrompts.value = sessionPrompts.value.map(p => ({ ...p, is_active: p.id === updated.id }))
+    customPrompt.value = updated.content || ''
+    refetchSession()
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    promptActionPending.value = false
+  }
+}
+
+async function deleteSelectedPrompt() {
+  const id = selectedPromptId.value
+  if (id == null || !currentSessionId.value) return
+  if (sessionPrompts.value.length <= 1) {
+    toastStore.warning(t('chatView.promptCannotDeleteLast'))
+    return
+  }
+  const ok = await confirmStore.confirm({
+    title: t('chatView.promptDelete'),
+    message: t('chatView.promptConfirmDelete'),
+    confirmText: t('chatView.promptDelete'),
+    type: 'warning',
+  })
+  if (!ok) return
+  promptActionPending.value = true
+  try {
+    await chatApi.deletePrompt(currentSessionId.value, id)
+    await loadSessionPrompts(currentSessionId.value)
+    const active = sessionPrompts.value.find(p => p.is_active)
+    if (active) {
+      customPrompt.value = active.content || ''
+      refetchSession()
+    }
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    promptActionPending.value = false
+  }
+}
+
+// When the user clicks a prompt chip, mirror its content into the textarea.
+watch(selectedPromptId, (id) => {
+  if (id == null) return
+  const prompt = sessionPrompts.value.find(p => p.id === id)
+  if (prompt) {
+    customPrompt.value = prompt.content || ''
+  }
 })
 
 // Mutations
@@ -1509,15 +1685,6 @@ function handleFileUpload(event: Event) {
 
 function removeAttachedFile(index: number) {
   attachedFiles.value.splice(index, 1)
-}
-
-function saveSettings() {
-  if (!currentSessionId.value) return
-  updateSessionMutation.mutate({
-    sessionId: currentSessionId.value,
-    data: { system_prompt: customPrompt.value || undefined },
-  })
-  showSettings.value = false
 }
 
 function triggerContextFileUpload() {
@@ -2521,20 +2688,6 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       </div>
 
       <div class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
-
-      <!-- Voice mode toggle (non-CC) -->
-      <button
-        v-if="!cc.isActive.value"
-        :class="[
-          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0',
-          voiceMode ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'
-        ]"
-        :title="voiceMode ? 'Voice mode ON' : 'Voice mode OFF'"
-        @click="voiceMode = !voiceMode"
-      >
-        <Volume2 v-if="voiceMode" class="w-4 h-4" />
-        <VolumeX v-else class="w-4 h-4" />
-      </button>
 
       <!-- Branch tree toggle (non-CC) -->
       <button
@@ -4023,11 +4176,90 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
               {{ t('chatView.promptHint') }}
             </p>
 
+            <!-- Prompt chips row -->
+            <div class="flex flex-wrap gap-1.5 items-center">
+              <template v-for="p in sessionPrompts" :key="p.id">
+                <button
+                  v-if="renamingPromptId !== p.id"
+                  :class="[
+                    'group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors max-w-[200px]',
+                    selectedPromptId === p.id
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-border text-foreground hover:bg-secondary',
+                    p.is_active ? 'font-semibold' : ''
+                  ]"
+                  :title="p.is_active ? t('chatView.promptActive') : (p.name || t('chatView.promptNoName'))"
+                  @click="selectPrompt(p.id)"
+                  @dblclick="startRenamePrompt(p)"
+                >
+                  <span v-if="p.is_active" class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                  <span class="truncate">{{ p.name || t('chatView.promptNoName') }}</span>
+                </button>
+                <input
+                  v-else
+                  v-model="renamingPromptValue"
+                  :data-prompt-rename="p.id"
+                  class="px-2 py-0.5 text-xs border border-primary rounded-full bg-background outline-none w-[160px]"
+                  :placeholder="t('chatView.promptNamePlaceholder')"
+                  :maxlength="100"
+                  @keydown.enter.prevent="commitRenamePrompt"
+                  @keydown.escape.prevent="cancelRenamePrompt"
+                  @blur="commitRenamePrompt"
+                />
+              </template>
+              <button
+                class="inline-flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+                :disabled="promptActionPending || !currentSessionId"
+                :title="t('chatView.promptNew')"
+                @click="addNewPrompt"
+              >
+                <Plus class="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <!-- Selected prompt actions -->
+            <div v-if="selectedPrompt" class="flex flex-wrap gap-2 items-center text-xs">
+              <button
+                class="px-2 py-1 rounded-md border border-border hover:bg-secondary transition-colors"
+                :disabled="promptActionPending"
+                @click="startRenamePrompt(selectedPrompt)"
+              >
+                <Edit3 class="w-3 h-3 inline mr-1" />
+                {{ t('chatView.promptRename') }}
+              </button>
+              <button
+                v-if="!selectedPrompt.is_active"
+                class="px-2 py-1 rounded-md border border-primary text-primary hover:bg-primary/10 transition-colors"
+                :disabled="promptActionPending"
+                @click="activateSelectedPrompt"
+              >
+                <Check class="w-3 h-3 inline mr-1" />
+                {{ t('chatView.promptActivate') }}
+              </button>
+              <span
+                v-else
+                class="px-2 py-1 rounded-md bg-primary/10 text-primary text-xs"
+              >
+                {{ t('chatView.promptActive') }}
+              </span>
+              <span class="flex-1" />
+              <button
+                class="px-2 py-1 rounded-md border border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                :disabled="promptActionPending || sessionPrompts.length <= 1"
+                :title="sessionPrompts.length <= 1 ? t('chatView.promptCannotDeleteLast') : ''"
+                @click="deleteSelectedPrompt"
+              >
+                <Trash2 class="w-3 h-3 inline mr-1" />
+                {{ t('chatView.promptDelete') }}
+              </button>
+            </div>
+
             <!-- Textarea fills remaining space -->
             <textarea
               v-model="customPrompt"
               class="flex-1 min-h-[120px] w-full p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm font-mono"
               :placeholder="t('chatView.promptPlaceholder')"
+              :disabled="selectedPromptId === null"
             />
 
             <div class="flex justify-end gap-2">
@@ -4035,12 +4267,12 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
                 class="px-3 py-1.5 text-sm bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                 @click="showSettings = false"
               >
-                {{ t('chatView.cancel') }}
+                {{ t('chatView.close') }}
               </button>
               <button
-                :disabled="updateSessionMutation.isPending.value"
+                :disabled="promptActionPending || selectedPromptId === null"
                 class="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                @click="saveSettings"
+                @click="saveSelectedPromptContent"
               >
                 {{ t('chatView.save') }}
               </button>

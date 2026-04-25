@@ -116,6 +116,17 @@ export interface ShareableUser {
   role: string
 }
 
+export interface ChatSessionPrompt {
+  id: number
+  session_id: string
+  name: string | null
+  content: string
+  is_active: boolean
+  position: number
+  created?: string
+  updated?: string
+}
+
 export interface GroupedSessions {
   admin: ChatSessionSummary[]
   telegram: ChatSessionSummary[]
@@ -350,4 +361,30 @@ export const chatApi = {
   // Image upload
   uploadImage: (sessionId: string, file: File) =>
     api.upload<{ image: ChatImage }>(`/admin/chat/sessions/${sessionId}/upload-image`, file),
+
+  // Session prompts (named "roles")
+  listPrompts: (sessionId: string) =>
+    api.get<{ prompts: ChatSessionPrompt[] }>(`/admin/chat/sessions/${sessionId}/prompts`),
+
+  createPrompt: (sessionId: string, data: { name?: string | null; content?: string }) =>
+    api.post<{ prompt: ChatSessionPrompt }>(`/admin/chat/sessions/${sessionId}/prompts`, data),
+
+  updatePrompt: (
+    sessionId: string,
+    promptId: number,
+    data: { name?: string | null; content?: string },
+  ) =>
+    api.patch<{ prompt: ChatSessionPrompt }>(
+      `/admin/chat/sessions/${sessionId}/prompts/${promptId}`,
+      data,
+    ),
+
+  activatePrompt: (sessionId: string, promptId: number) =>
+    api.post<{ prompt: ChatSessionPrompt }>(
+      `/admin/chat/sessions/${sessionId}/prompts/${promptId}/activate`,
+      {},
+    ),
+
+  deletePrompt: (sessionId: string, promptId: number) =>
+    api.delete<{ status: string }>(`/admin/chat/sessions/${sessionId}/prompts/${promptId}`),
 }
