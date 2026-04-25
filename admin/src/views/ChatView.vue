@@ -3206,9 +3206,9 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
             <ArrowUpToLine v-else class="w-4 h-4" />
           </button>
-          <!-- Voice mode toggle -->
+          <!-- Voice mode toggle (TTS only available in non-cloud deployments) -->
           <button
-            v-if="!cc.isActive.value"
+            v-if="!cc.isActive.value && !authStore.isCloudMode"
             :class="[
               'p-2 rounded-lg transition-colors',
               voiceMode ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
@@ -3905,9 +3905,9 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
 
                 <!-- Actions — below content, in normal flow -->
                 <div class="flex flex-wrap gap-1 mt-1 -mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <!-- TTS button for assistant messages -->
+                  <!-- TTS button for assistant messages (hidden in cloud mode — no TTS service) -->
                   <button
-                    v-if="message.role === 'assistant'"
+                    v-if="message.role === 'assistant' && !authStore.isCloudMode"
                     :disabled="ttsLoading === message.id"
                     class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     :title="speakingMessageId === message.id && isSpeaking ? 'Stop' : 'Listen'"
