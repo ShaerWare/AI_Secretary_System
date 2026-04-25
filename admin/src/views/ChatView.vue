@@ -1051,8 +1051,7 @@ const switchBranchMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
     chatApi.switchBranch(sessionId, messageId),
   onSuccess: async () => {
-    await refetchSession()
-    await refetchBranches()
+    await Promise.all([refetchSession(), refetchBranches()])
     if (pendingScrollMessageId.value) {
       scrollToMessage(pendingScrollMessageId.value)
       pendingScrollMessageId.value = null
@@ -1064,8 +1063,7 @@ const newBranchMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
   onSuccess: async () => {
     showBranchTree.value = true
-    await refetchSession()
-    await refetchBranches()
+    await Promise.all([refetchSession(), refetchBranches()])
   },
 })
 

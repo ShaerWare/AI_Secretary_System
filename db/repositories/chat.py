@@ -628,52 +628,99 @@ class ChatRepository(BaseRepository[ChatSession]):
     async def switch_branch(self, session_id: str, message_id: str) -> bool:
         """Switch active branch to the given message.
 
-        Deactivates siblings and their descendants, activates this message
-        and its ancestors up to root.
-        """
-        result = await self.session.execute(
-            select(ChatMessage)
-            .where(ChatMessage.id == message_id)
-            .where(ChatMessage.session_id == session_id)
-        )
-        message = result.scalar_one_or_none()
+        Activates the path: ancestors → message → most-recent-child chain.
+        Deactivates currently-active siblings (and their active descendants)
+        of every message on the activated path.
 
-        if not message:
+        Implementation: load the whole session graph once (id, parent_id,
+        is_active, created — small columns, no message bodies), compute the
+        full activate/deactivate id sets in Python, then issue at most two
+        bulk UPDATEs. Replaces the previous recursive walk that did O(N)
+        round-trips and dominated branch-switch latency on long chats.
+        """
+        rows = (
+            await self.session.execute(
+                select(
+                    ChatMessage.id,
+                    ChatMessage.parent_id,
+                    ChatMessage.is_active,
+                    ChatMessage.created,
+                ).where(ChatMessage.session_id == session_id)
+            )
+        ).all()
+
+        if not rows:
             return False
 
-        # Find siblings (messages with same parent_id in same session)
-        siblings_result = await self.session.execute(
-            select(ChatMessage)
-            .where(ChatMessage.session_id == session_id)
-            .where(ChatMessage.parent_id == message.parent_id)
-            .where(ChatMessage.id != message_id)
-        )
-        siblings = siblings_result.scalars().all()
+        parent_of: Dict[str, Optional[str]] = {}
+        is_active_now: Dict[str, bool] = {}
+        children_by_parent: Dict[Optional[str], List[tuple[str, Any]]] = {}
+        for mid, pid, act, created in rows:
+            parent_of[mid] = pid
+            is_active_now[mid] = bool(act)
+            children_by_parent.setdefault(pid, []).append((mid, created))
 
-        # Deactivate siblings and their descendants
-        for sibling in siblings:
-            if sibling.is_active:
-                await self._deactivate_branch(session_id, sibling.id)
+        if message_id not in parent_of:
+            return False
 
-        # Activate this message
-        message.is_active = True
+        # Match historical "most recent first" tie-breaking from
+        # _activate_default_path (order_by created.desc()).
+        for kids in children_by_parent.values():
+            kids.sort(key=lambda x: x[1] or datetime.min, reverse=True)
 
-        # Activate the active path from this message downward (first active child chain)
-        await self._activate_default_path(session_id, message_id)
+        to_activate: set[str] = set()
+        to_deactivate: set[str] = set()
 
-        # Activate all ancestors up to root
-        current_parent_id = message.parent_id
-        while current_parent_id:
-            parent_result = await self.session.execute(
-                select(ChatMessage).where(ChatMessage.id == current_parent_id)
-            )
-            parent = parent_result.scalar_one_or_none()
-            if not parent:
+        def _collect_active_subtree(root_id: str, sink: set[str]) -> None:
+            stack = [root_id]
+            while stack:
+                nid = stack.pop()
+                if not is_active_now.get(nid):
+                    continue
+                sink.add(nid)
+                for cid, _ in children_by_parent.get(nid, []):
+                    stack.append(cid)
+
+        # Ancestors + the target itself.
+        cur: Optional[str] = message_id
+        while cur is not None:
+            to_activate.add(cur)
+            cur = parent_of.get(cur)
+
+        # Default path forward: pick most-recent child at each step,
+        # deactivate any currently-active sibling subtrees along the way.
+        cur = message_id
+        while True:
+            kids = children_by_parent.get(cur)
+            if not kids:
                 break
-            parent.is_active = True
-            current_parent_id = parent.parent_id
+            chosen_id = kids[0][0]
+            to_activate.add(chosen_id)
+            for other_id, _ in kids[1:]:
+                _collect_active_subtree(other_id, to_deactivate)
+            cur = chosen_id
 
-        # Update session timestamp
+        # Sibling branches of the target (other children of same parent).
+        target_parent = parent_of[message_id]
+        for sib_id, _ in children_by_parent.get(target_parent, []):
+            if sib_id != message_id:
+                _collect_active_subtree(sib_id, to_deactivate)
+
+        # Bulk-flip only what actually changes.
+        activate_ids = [mid for mid in to_activate if not is_active_now.get(mid)]
+        deactivate_ids = [mid for mid in to_deactivate if mid not in to_activate]
+
+        if activate_ids:
+            await self.session.execute(
+                update(ChatMessage).where(ChatMessage.id.in_(activate_ids)).values(is_active=True)
+            )
+        if deactivate_ids:
+            await self.session.execute(
+                update(ChatMessage)
+                .where(ChatMessage.id.in_(deactivate_ids))
+                .values(is_active=False)
+            )
+
         session = await self.session.get(ChatSession, session_id)
         if session:
             session.updated = datetime.utcnow()
@@ -682,31 +729,6 @@ class ChatRepository(BaseRepository[ChatSession]):
         await invalidate_session_cache(session_id)
 
         return True
-
-    async def _activate_default_path(self, session_id: str, message_id: str) -> None:
-        """Activate the first child chain from a message (default path forward)."""
-        children_result = await self.session.execute(
-            select(ChatMessage)
-            .where(ChatMessage.parent_id == message_id)
-            .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created.desc())
-        )
-        children = children_result.scalars().all()
-
-        if not children:
-            return
-
-        # Pick the most recent child as the active one
-        active_child = children[0]
-        active_child.is_active = True
-
-        # Deactivate other children
-        for child in children[1:]:
-            if child.is_active:
-                await self._deactivate_branch(session_id, child.id)
-
-        # Continue down the chain
-        await self._activate_default_path(session_id, active_child.id)
 
     async def _collect_descendant_ids(self, session_id: str, message_id: str) -> list[str]:
         """Collect all descendant message IDs recursively (children, grandchildren, etc.)."""
