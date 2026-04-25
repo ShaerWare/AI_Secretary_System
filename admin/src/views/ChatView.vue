@@ -3569,17 +3569,15 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
           ]"
         >
-          <!-- Branch tree toggle -->
+          <!-- New branch button (yellow) -->
           <button
-            v-if="!cc.isActive.value"
-            :class="[
-              'p-3 rounded-lg transition-colors shrink-0',
-              showBranchTree ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-            ]"
-            :title="t('chatView.branchTree')"
-            @click="showBranchTree = !showBranchTree"
+            v-if="currentSessionId"
+            :disabled="newBranchMutation.isPending.value"
+            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 shrink-0"
+            :title="t('chatView.newBranch')"
+            @click="startNewBranchAndShowTree"
           >
-            <GitBranch class="w-5 h-5" />
+            <Plus class="w-5 h-5" />
           </button>
           <!-- Web search toggle -->
           <button
@@ -3649,16 +3647,6 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             <Loader2 v-else class="w-5 h-5 animate-spin" />
           </button>
         </div>
-        <!-- New branch button (yellow, pinned to right edge) -->
-        <button
-          v-if="currentSessionId"
-          :disabled="newBranchMutation.isPending.value"
-          class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
-          :title="t('chatView.newBranch')"
-          @click="startNewBranchAndShowTree"
-        >
-          <Plus class="w-5 h-5" />
-        </button>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
           <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
