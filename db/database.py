@@ -8,7 +8,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
@@ -45,7 +45,7 @@ engine = create_async_engine(
 # Set SQLite PRAGMAs on every new physical connection.
 # With StaticPool this fires exactly once (single persistent connection).
 @event.listens_for(engine.sync_engine, "connect")
-def _set_sqlite_pragmas(dbapi_conn, connection_record):
+def _set_sqlite_pragmas(dbapi_conn: Any, connection_record: Any) -> None:
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")

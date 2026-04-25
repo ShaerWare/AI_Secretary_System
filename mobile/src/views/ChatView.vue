@@ -6,6 +6,7 @@ import {
   chatApi,
   type ChatMessage,
   type ChatSession,
+  type ChatSessionPrompt,
   type StreamChunk,
   type BranchNode,
   type ContextFile,
@@ -37,6 +38,9 @@ const showContextFiles = ref(false);
 const showSettings = ref(false);
 const settingsTab = ref<"files" | "prompt">("files");
 const customPrompt = ref("");
+const sessionPrompts = ref<ChatSessionPrompt[]>([]);
+const selectedPromptId = ref<number | null>(null);
+const promptActionPending = ref(false);
 const branches = ref<BranchNode[]>([]);
 const contextFiles = ref<ContextFile[]>([]);
 const branchesLoading = ref(false);
@@ -138,6 +142,7 @@ async function loadSession() {
     customPrompt.value = data.session.system_prompt || "";
     webSearchEnabled.value = !!data.session.web_search_enabled;
     tokenUsage.value = data.session.token_usage || null;
+    await loadSessionPrompts();
     await scrollToBottom();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось загрузить";
@@ -568,13 +573,123 @@ function toggleSettings() {
   showSettings.value = !showSettings.value;
 }
 
-async function saveSystemPrompt() {
+async function loadSessionPrompts() {
+  if (!sessionId.value) return;
   try {
-    await chatApi.updateSession(sessionId.value, {
-      system_prompt: customPrompt.value,
+    const res = await chatApi.listPrompts(sessionId.value);
+    sessionPrompts.value = res.prompts || [];
+    if (sessionPrompts.value.length === 0) {
+      selectedPromptId.value = null;
+    } else {
+      const active = sessionPrompts.value.find((p) => p.is_active);
+      selectedPromptId.value = active?.id ?? sessionPrompts.value[0]!.id;
+      customPrompt.value =
+        sessionPrompts.value.find((p) => p.id === selectedPromptId.value)?.content || "";
+    }
+  } catch {
+    sessionPrompts.value = [];
+    selectedPromptId.value = null;
+  }
+}
+
+function selectPrompt(promptId: number) {
+  selectedPromptId.value = promptId;
+  const prompt = sessionPrompts.value.find((p) => p.id === promptId);
+  if (prompt) customPrompt.value = prompt.content || "";
+}
+
+async function addNewPrompt() {
+  if (!sessionId.value || promptActionPending.value) return;
+  promptActionPending.value = true;
+  try {
+    const { prompt } = await chatApi.createPrompt(sessionId.value, { content: "" });
+    sessionPrompts.value = [...sessionPrompts.value, prompt];
+    selectedPromptId.value = prompt.id;
+    customPrompt.value = prompt.content || "";
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось создать промпт";
+  } finally {
+    promptActionPending.value = false;
+  }
+}
+
+async function renameSelectedPrompt() {
+  const id = selectedPromptId.value;
+  if (id == null || !sessionId.value) return;
+  const current = sessionPrompts.value.find((p) => p.id === id);
+  if (!current) return;
+  const raw = window.prompt("Название промпта", current.name || "");
+  if (raw === null) return;
+  const newName = raw.trim().slice(0, 100);
+  if ((current.name || "") === newName) return;
+  try {
+    const { prompt } = await chatApi.updatePrompt(sessionId.value, id, {
+      name: newName || null,
     });
+    const idx = sessionPrompts.value.findIndex((p) => p.id === id);
+    if (idx >= 0) sessionPrompts.value[idx] = prompt;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось переименовать";
+  }
+}
+
+async function saveSelectedPromptContent() {
+  const id = selectedPromptId.value;
+  if (id == null || !sessionId.value) return;
+  const prompt = sessionPrompts.value.find((p) => p.id === id);
+  if (!prompt || prompt.content === (customPrompt.value || "")) return;
+  promptActionPending.value = true;
+  try {
+    const { prompt: updated } = await chatApi.updatePrompt(sessionId.value, id, {
+      content: customPrompt.value || "",
+    });
+    const idx = sessionPrompts.value.findIndex((p) => p.id === id);
+    if (idx >= 0) sessionPrompts.value[idx] = updated;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось сохранить промпт";
+  } finally {
+    promptActionPending.value = false;
+  }
+}
+
+async function activateSelectedPrompt() {
+  const id = selectedPromptId.value;
+  if (id == null || !sessionId.value) return;
+  const prompt = sessionPrompts.value.find((p) => p.id === id);
+  if (!prompt || prompt.is_active) return;
+  if (prompt.content !== (customPrompt.value || "")) {
+    await saveSelectedPromptContent();
+  }
+  promptActionPending.value = true;
+  try {
+    const { prompt: updated } = await chatApi.activatePrompt(sessionId.value, id);
+    sessionPrompts.value = sessionPrompts.value.map((p) => ({
+      ...p,
+      is_active: p.id === updated.id,
+    }));
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось активировать";
+  } finally {
+    promptActionPending.value = false;
+  }
+}
+
+async function deleteSelectedPrompt() {
+  const id = selectedPromptId.value;
+  if (id == null || !sessionId.value) return;
+  if (sessionPrompts.value.length <= 1) {
+    error.value = "Нельзя удалить единственный промпт";
+    return;
+  }
+  if (!confirm("Удалить этот промпт?")) return;
+  promptActionPending.value = true;
+  try {
+    await chatApi.deletePrompt(sessionId.value, id);
+    await loadSessionPrompts();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось удалить";
+  } finally {
+    promptActionPending.value = false;
   }
 }
 
@@ -933,16 +1048,70 @@ onUnmounted(() => {
               />
             </template>
             <template v-if="settingsTab === 'prompt'">
-              <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
-                <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
+              <div class="flex-1 flex flex-col min-h-0 px-3 py-2 gap-2">
+                <!-- Prompt chips -->
+                <div class="flex flex-wrap gap-1.5 items-center">
+                  <button
+                    v-for="p in sessionPrompts"
+                    :key="p.id"
+                    :class="[
+                      'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] border transition-colors max-w-[160px]',
+                      selectedPromptId === p.id
+                        ? 'border-amber-500 text-amber-400 bg-amber-500/10'
+                        : 'border-stone-700 text-stone-300 hover:bg-stone-800',
+                      p.is_active ? 'font-semibold' : ''
+                    ]"
+                    @click="selectPrompt(p.id)"
+                  >
+                    <span v-if="p.is_active" class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                    <span class="truncate">{{ p.name || "(без имени)" }}</span>
+                  </button>
+                  <button
+                    class="inline-flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-stone-700 text-stone-400 hover:text-amber-400 hover:border-amber-500 transition-colors"
+                    :disabled="promptActionPending"
+                    title="Добавить промпт"
+                    @click="addNewPrompt"
+                  >+</button>
+                </div>
+
+                <!-- Actions -->
+                <div v-if="selectedPromptId !== null" class="flex flex-wrap gap-1.5 text-[11px]">
+                  <button
+                    class="px-2 py-1 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
+                    :disabled="promptActionPending"
+                    @click="renameSelectedPrompt"
+                  >Переименовать</button>
+                  <button
+                    v-if="!sessionPrompts.find(p => p.id === selectedPromptId)?.is_active"
+                    class="px-2 py-1 rounded-md border border-amber-500 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    :disabled="promptActionPending"
+                    @click="activateSelectedPrompt"
+                  >Сделать активным</button>
+                  <span
+                    v-else
+                    class="px-2 py-1 rounded-md bg-amber-500/10 text-amber-400"
+                  >Активный</span>
+                  <span class="flex-1" />
+                  <button
+                    class="px-2 py-1 rounded-md border border-red-600/60 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                    :disabled="promptActionPending || sessionPrompts.length <= 1"
+                    @click="deleteSelectedPrompt"
+                  >Удалить</button>
+                </div>
+
                 <textarea
                   v-model="customPrompt"
                   class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
                   placeholder="Пользовательский промпт для этой сессии..."
+                  :disabled="selectedPromptId === null"
                 />
               </div>
               <div class="shrink-0 px-3 pb-1">
-                <button class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors" @click="saveSystemPrompt">Сохранить</button>
+                <button
+                  class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+                  :disabled="promptActionPending || selectedPromptId === null"
+                  @click="saveSelectedPromptContent"
+                >Сохранить</button>
               </div>
             </template>
           </template>
@@ -1261,16 +1430,66 @@ onUnmounted(() => {
             />
           </template>
           <template v-if="settingsTab === 'prompt'">
-            <div class="flex-1 flex flex-col min-h-0 px-3 py-2">
-              <label class="block text-xs text-stone-400 mb-1">Системный промпт</label>
+            <div class="flex-1 flex flex-col min-h-0 px-3 py-2 gap-2">
+              <div class="flex flex-wrap gap-1.5 items-center">
+                <button
+                  v-for="p in sessionPrompts"
+                  :key="p.id"
+                  :class="[
+                    'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] border transition-colors max-w-[160px]',
+                    selectedPromptId === p.id
+                      ? 'border-amber-500 text-amber-400 bg-amber-500/10'
+                      : 'border-stone-700 text-stone-300 hover:bg-stone-800',
+                    p.is_active ? 'font-semibold' : ''
+                  ]"
+                  @click="selectPrompt(p.id)"
+                >
+                  <span v-if="p.is_active" class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span class="truncate">{{ p.name || "(без имени)" }}</span>
+                </button>
+                <button
+                  class="inline-flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-stone-700 text-stone-400 hover:text-amber-400 hover:border-amber-500 transition-colors"
+                  :disabled="promptActionPending"
+                  title="Добавить промпт"
+                  @click="addNewPrompt"
+                >+</button>
+              </div>
+              <div v-if="selectedPromptId !== null" class="flex flex-wrap gap-1.5 text-[11px]">
+                <button
+                  class="px-2 py-1 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
+                  :disabled="promptActionPending"
+                  @click="renameSelectedPrompt"
+                >Переименовать</button>
+                <button
+                  v-if="!sessionPrompts.find(p => p.id === selectedPromptId)?.is_active"
+                  class="px-2 py-1 rounded-md border border-amber-500 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  :disabled="promptActionPending"
+                  @click="activateSelectedPrompt"
+                >Сделать активным</button>
+                <span
+                  v-else
+                  class="px-2 py-1 rounded-md bg-amber-500/10 text-amber-400"
+                >Активный</span>
+                <span class="flex-1" />
+                <button
+                  class="px-2 py-1 rounded-md border border-red-600/60 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                  :disabled="promptActionPending || sessionPrompts.length <= 1"
+                  @click="deleteSelectedPrompt"
+                >Удалить</button>
+              </div>
               <textarea
                 v-model="customPrompt"
                 class="flex-1 w-full bg-stone-950 text-stone-200 text-xs rounded-lg p-2 border border-stone-700 focus:border-amber-500 focus:outline-none resize-none min-h-[60px]"
                 placeholder="Пользовательский промпт для этой сессии..."
+                :disabled="selectedPromptId === null"
               />
             </div>
             <div class="shrink-0 px-3 pb-2">
-              <button class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors" @click="saveSystemPrompt">Сохранить</button>
+              <button
+                class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+                :disabled="promptActionPending || selectedPromptId === null"
+                @click="saveSelectedPromptContent"
+              >Сохранить</button>
             </div>
           </template>
         </template>

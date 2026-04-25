@@ -36,7 +36,13 @@ from modules.channels.telegram.models import (
 )
 from modules.channels.whatsapp.models import WhatsAppInstance
 from modules.channels.widget.models import WidgetInstance
-from modules.chat.models import ChatMessage, ChatSession, ChatSessionShare, ResourceShare
+from modules.chat.models import (
+    ChatMessage,
+    ChatSession,
+    ChatSessionPrompt,
+    ChatSessionShare,
+    ResourceShare,
+)
 from modules.claude_code.models import ClaudeCodeProject, ClaudeCodeSession
 from modules.core.models import (
     Role,
@@ -93,6 +99,7 @@ __all__ = [
     # chat
     "ChatSession",
     "ChatMessage",
+    "ChatSessionPrompt",
     "ChatSessionShare",
     "ResourceShare",
     # channels

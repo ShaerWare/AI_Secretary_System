@@ -6,6 +6,8 @@ Provides:
 - Redis for caching and realtime data (sessions, metrics, rate limiting)
 """
 
+from typing import Any
+
 from db.database import (
     AsyncSessionLocal,
     Base,
@@ -23,7 +25,7 @@ from db.redis_client import (
 from db.retry import get_busy_retry_count, retry_on_busy
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazy import models from db.models to avoid circular imports."""
     import db.models as _models
 

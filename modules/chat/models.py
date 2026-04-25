@@ -190,6 +190,46 @@ class ChatMessage(Base):
         return result
 
 
+class ChatSessionPrompt(Base):
+    """Named system prompt ("role") attached to a chat session.
+
+    Each session can have multiple prompts; exactly one is marked is_active=True,
+    and its content is mirrored into ``ChatSession.system_prompt`` so the existing
+    fallback chain in ``modules.chat.facade`` keeps working unchanged.
+    """
+
+    __tablename__ = "chat_session_prompts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    content: Mapped[str] = mapped_column(Text, default="", server_default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    __table_args__ = (Index("ix_chat_session_prompts_session_position", "session_id", "position"),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "name": self.name,
+            "content": self.content or "",
+            "is_active": bool(self.is_active),
+            "position": self.position,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
 class ChatSessionShare(Base):
     """Sharing access for chat sessions between users."""
 

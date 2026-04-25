@@ -527,6 +527,226 @@ class ChatShareService:
             return row
 
 
+class ChatPromptService:
+    """Named system prompts ("roles") attached to a chat session.
+
+    Exactly one prompt per session is ``is_active=True``; its ``content`` is
+    mirrored into ``ChatSession.system_prompt`` so the existing prompt fallback
+    chain in ``modules.chat.facade`` picks it up without changes.
+    """
+
+    async def list_prompts(self, session_id: str) -> List[dict]:
+        from sqlalchemy import select
+
+        from modules.chat.models import ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ChatSessionPrompt)
+                .where(ChatSessionPrompt.session_id == session_id)
+                .order_by(ChatSessionPrompt.position, ChatSessionPrompt.id)
+            )
+            return [p.to_dict() for p in result.scalars().all()]
+
+    async def get_active_prompt(self, session_id: str) -> Optional[dict]:
+        from sqlalchemy import select
+
+        from modules.chat.models import ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ChatSessionPrompt)
+                .where(
+                    ChatSessionPrompt.session_id == session_id,
+                    ChatSessionPrompt.is_active.is_(True),
+                )
+                .limit(1)
+            )
+            row = result.scalar_one_or_none()
+            return row.to_dict() if row else None
+
+    @retry_on_busy()
+    async def create_prompt(
+        self,
+        session_id: str,
+        name: Optional[str] = None,
+        content: str = "",
+    ) -> Optional[dict]:
+        from sqlalchemy import func, select
+
+        from modules.chat.models import ChatSession, ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            sess = await session.get(ChatSession, session_id)
+            if sess is None:
+                return None
+
+            max_pos = await session.execute(
+                select(func.coalesce(func.max(ChatSessionPrompt.position), -1)).where(
+                    ChatSessionPrompt.session_id == session_id
+                )
+            )
+            position = int(max_pos.scalar() or -1) + 1
+
+            count_stmt = select(func.count(ChatSessionPrompt.id)).where(
+                ChatSessionPrompt.session_id == session_id
+            )
+            existing = (await session.execute(count_stmt)).scalar() or 0
+            is_active = existing == 0  # first prompt becomes active
+
+            prompt = ChatSessionPrompt(
+                session_id=session_id,
+                name=(name or None),
+                content=content or "",
+                is_active=is_active,
+                position=position,
+            )
+            session.add(prompt)
+            await session.flush()
+
+            if is_active:
+                sess.system_prompt = prompt.content or None
+
+            await session.commit()
+            return prompt.to_dict()
+
+    @retry_on_busy()
+    async def update_prompt(
+        self,
+        session_id: str,
+        prompt_id: int,
+        name: Optional[str] = None,
+        content: Optional[str] = None,
+    ) -> Optional[dict]:
+        from sqlalchemy import select
+
+        from modules.chat.models import ChatSession, ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+            prompt = result.scalar_one_or_none()
+            if prompt is None:
+                return None
+
+            if name is not None:
+                prompt.name = name or None
+            if content is not None:
+                prompt.content = content or ""
+
+            if prompt.is_active and content is not None:
+                sess = await session.get(ChatSession, session_id)
+                if sess is not None:
+                    sess.system_prompt = prompt.content or None
+
+            await session.flush()
+            await session.commit()
+            return prompt.to_dict()
+
+    @retry_on_busy()
+    async def activate_prompt(
+        self,
+        session_id: str,
+        prompt_id: int,
+    ) -> Optional[dict]:
+        from sqlalchemy import select
+        from sqlalchemy import update as sa_update
+
+        from modules.chat.models import ChatSession, ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+            prompt = result.scalar_one_or_none()
+            if prompt is None:
+                return None
+
+            await session.execute(
+                sa_update(ChatSessionPrompt)
+                .where(
+                    ChatSessionPrompt.session_id == session_id,
+                    ChatSessionPrompt.id != prompt_id,
+                    ChatSessionPrompt.is_active.is_(True),
+                )
+                .values(is_active=False)
+            )
+            prompt.is_active = True
+
+            sess = await session.get(ChatSession, session_id)
+            if sess is not None:
+                sess.system_prompt = prompt.content or None
+
+            await session.flush()
+            await session.commit()
+            return prompt.to_dict()
+
+    @retry_on_busy()
+    async def delete_prompt(
+        self,
+        session_id: str,
+        prompt_id: int,
+    ) -> tuple[bool, Optional[str]]:
+        """Delete a prompt. Returns (success, error_code).
+
+        error_code ``"last"`` means the request tried to delete the only
+        remaining prompt; ``"not_found"`` means the prompt is absent.
+        """
+        from sqlalchemy import func, select
+
+        from modules.chat.models import ChatSession, ChatSessionPrompt
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+            prompt = result.scalar_one_or_none()
+            if prompt is None:
+                return False, "not_found"
+
+            total = await session.execute(
+                select(func.count(ChatSessionPrompt.id)).where(
+                    ChatSessionPrompt.session_id == session_id
+                )
+            )
+            if int(total.scalar() or 0) <= 1:
+                return False, "last"
+
+            was_active = prompt.is_active
+            await session.delete(prompt)
+            await session.flush()
+
+            if was_active:
+                # Promote next prompt (lowest position / oldest id) to active
+                next_result = await session.execute(
+                    select(ChatSessionPrompt)
+                    .where(ChatSessionPrompt.session_id == session_id)
+                    .order_by(ChatSessionPrompt.position, ChatSessionPrompt.id)
+                    .limit(1)
+                )
+                next_prompt = next_result.scalar_one_or_none()
+                if next_prompt is not None:
+                    next_prompt.is_active = True
+                    sess = await session.get(ChatSession, session_id)
+                    if sess is not None:
+                        sess.system_prompt = next_prompt.content or None
+                    await session.flush()
+
+            await session.commit()
+            return True, None
+
+
 # Singletons
 chat_service = ChatService()
 chat_share_service = ChatShareService()
+chat_prompt_service = ChatPromptService()

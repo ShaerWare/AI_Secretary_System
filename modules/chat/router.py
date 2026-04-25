@@ -20,7 +20,7 @@ from modules.channels.telegram.service import bot_instance_service
 from modules.channels.whatsapp.service import whatsapp_instance_service
 from modules.channels.widget.service import widget_instance_service
 from modules.chat.facade import ChatServiceImpl, chat_service_facade
-from modules.chat.service import chat_service, chat_share_service
+from modules.chat.service import chat_prompt_service, chat_service, chat_share_service
 from modules.knowledge.service import knowledge_collection_service
 from modules.llm.service import cloud_provider_service
 
@@ -286,6 +286,16 @@ class UpdateShareRequest(BaseModel):
 
 class ForkSessionRequest(BaseModel):
     title: Optional[str] = None
+
+
+class CreateSessionPromptRequest(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+
+
+class UpdateSessionPromptRequest(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
 
 
 # ============== Share Helpers ==============
@@ -1220,6 +1230,105 @@ async def get_my_default_mobile_session(
     """Get the default mobile session for the current user."""
     session_id = await chat_share_service.get_user_default_mobile_session(user.id)
     return {"session_id": session_id}
+
+
+# ============== Session Prompts Endpoints ==============
+
+
+@router.get("/sessions/{session_id}/prompts")
+async def admin_list_session_prompts(
+    session_id: str,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Список именованных промптов сессии (ровно один активный)."""
+    owner_id, ws_id = workspace_context(user, "chat")
+    session_data = await chat_service.get_session(session_id, owner_id=owner_id, workspace_id=ws_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    prompts = await chat_prompt_service.list_prompts(session_id)
+
+    # Backfill: if table is empty but session has a system_prompt, create the first entry.
+    if not prompts:
+        legacy = (session_data.get("system_prompt") or "").strip()
+        if legacy:
+            created = await chat_prompt_service.create_prompt(session_id, name=None, content=legacy)
+            if created:
+                prompts = [created]
+    return {"prompts": prompts}
+
+
+@router.post("/sessions/{session_id}/prompts")
+async def admin_create_session_prompt(
+    session_id: str,
+    request: CreateSessionPromptRequest,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Создать новый промпт для сессии (первый созданный становится активным).
+
+    Любой пользователь с write-доступом к сессии (владелец либо share
+    с permission="write") может создавать промпты, независимо от глобальной
+    chat-роли. _check_write_access отдаёт 403 для read-only-шаров.
+    """
+    await _check_write_access(session_id, user)
+    name = (request.name or "").strip()[:100] or None
+    content = request.content or ""
+    prompt = await chat_prompt_service.create_prompt(session_id, name=name, content=content)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"prompt": prompt}
+
+
+@router.patch("/sessions/{session_id}/prompts/{prompt_id}")
+async def admin_update_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    request: UpdateSessionPromptRequest,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Переименовать промпт или обновить его содержимое."""
+    await _check_write_access(session_id, user)
+    name: Optional[str] = None
+    if request.name is not None:
+        name = request.name.strip()[:100]
+    prompt = await chat_prompt_service.update_prompt(
+        session_id,
+        prompt_id,
+        name=name,
+        content=request.content,
+    )
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"prompt": prompt}
+
+
+@router.post("/sessions/{session_id}/prompts/{prompt_id}/activate")
+async def admin_activate_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Сделать промпт активным — его текст подменяет роль ассистента, контекст диалога сохраняется."""
+    await _check_write_access(session_id, user)
+    prompt = await chat_prompt_service.activate_prompt(session_id, prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"prompt": prompt}
+
+
+@router.delete("/sessions/{session_id}/prompts/{prompt_id}")
+async def admin_delete_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Удалить промпт. Нельзя удалить единственный промпт; при удалении активного активируется соседний."""
+    await _check_write_access(session_id, user)
+    ok, error = await chat_prompt_service.delete_prompt(session_id, prompt_id)
+    if not ok:
+        if error == "last":
+            raise HTTPException(status_code=400, detail="Cannot delete the last prompt")
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"status": "ok"}
 
 
 # ============== Image Endpoints ==============
