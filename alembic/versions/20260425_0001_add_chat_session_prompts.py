@@ -57,8 +57,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_chat_session_prompts_session_active", table_name="chat_session_prompts"
-    )
+    op.drop_index("ix_chat_session_prompts_session_active", table_name="chat_session_prompts")
     op.drop_index("ix_chat_session_prompts_session_id", table_name="chat_session_prompts")
     op.drop_table("chat_session_prompts")

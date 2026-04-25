@@ -152,9 +152,7 @@ class ChatSessionPrompt(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    __table_args__ = (
-        Index("ix_chat_session_prompts_session_active", "session_id", "is_active"),
-    )
+    __table_args__ = (Index("ix_chat_session_prompts_session_active", "session_id", "is_active"),)
 
     def to_dict(self) -> dict:
         return {

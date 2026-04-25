@@ -1334,20 +1334,22 @@ async def admin_list_session_prompts(
     from modules.chat.models import ChatSessionPrompt
 
     owner_id, ws_id = workspace_context(user, "chat")
-    session_data = await chat_service.get_session(
-        session_id, owner_id=owner_id, workspace_id=ws_id
-    )
+    session_data = await chat_service.get_session(session_id, owner_id=owner_id, workspace_id=ws_id)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
 
     async with get_session_context() as db:
         rows = (
-            await db.execute(
-                select(ChatSessionPrompt)
-                .where(ChatSessionPrompt.session_id == session_id)
-                .order_by(ChatSessionPrompt.created.asc())
+            (
+                await db.execute(
+                    select(ChatSessionPrompt)
+                    .where(ChatSessionPrompt.session_id == session_id)
+                    .order_by(ChatSessionPrompt.created.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {"prompts": [p.to_dict() for p in rows]}
 
 
@@ -1379,10 +1381,14 @@ async def admin_create_session_prompt(
             raise HTTPException(status_code=404, detail="Session not found")
 
         existing = (
-            await db.execute(
-                select(ChatSessionPrompt).where(ChatSessionPrompt.session_id == session_id)
+            (
+                await db.execute(
+                    select(ChatSessionPrompt).where(ChatSessionPrompt.session_id == session_id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         is_first = len(existing) == 0
 
         content = request.content
