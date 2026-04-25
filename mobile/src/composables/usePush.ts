@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { App as CapApp } from "@capacitor/app";
 import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
@@ -56,9 +57,26 @@ export async function initPush(): Promise<void> {
       console.error("[push] registration error", err);
     });
 
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      // Foreground: just log, system tray shows nothing while app open
+    PushNotifications.addListener("pushNotificationReceived", async (notification) => {
+      // Foreground: FCM does NOT show system tray while app is open, so we manually
+      // schedule a local notification so the user still sees it in the tray.
       console.log("[push] received", notification);
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: Date.now() % 2147483647,
+              title: notification.title || "AI-Секретарь",
+              body: notification.body || "",
+              extra: notification.data || {},
+              smallIcon: "ic_stat_icon_config_sample",
+              channelId: "default",
+            },
+          ],
+        });
+      } catch (e) {
+        console.error("[push] local notify failed", e);
+      }
     });
 
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
