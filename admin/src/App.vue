@@ -17,6 +17,7 @@ import {
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
+import { isPathAllowed } from './config/productVariant'
 import { useSearchStore } from './stores/search'
 import { useThemeStore } from './stores/theme'
 import { useChatFullscreenStore } from './stores/chatFullscreen'
@@ -198,7 +199,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <span class="flex-1 text-left">{{ t('nav.chat') }}</span>
             </router-link>
             <router-link
-              v-if="authStore.canView('kanban')"
+              v-if="authStore.canView('kanban') && isPathAllowed('/kanban')"
               to="/kanban"
               class="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors"
               :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground bg-secondary/50 hover:bg-secondary'"
@@ -217,7 +218,7 @@ const localeTitle: Record<string, string> = { ru: 'Переключить язы
               <MessageCircle class="w-5 h-5" />
             </router-link>
             <router-link
-              v-if="authStore.canView('kanban')"
+              v-if="authStore.canView('kanban') && isPathAllowed('/kanban')"
               to="/kanban"
               class="flex items-center justify-center w-full p-2 rounded-lg transition-colors"
               :class="route.path === '/kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50'"

@@ -264,6 +264,8 @@ New routers import domain services directly (`from modules.monitoring.service im
 
 **Demo mode**: `VITE_DEMO_MODE=true` monkey-patches `window.fetch` to intercept API calls with mock data from 23 domain files in `admin/src/api/demo/`.
 
+**Product variant** (`VITE_PRODUCT_VARIANT` env var, defaults to `full`): Set to `lite` to ship a stripped admin panel. Lite variant whitelists `/chat`, `/llm`, `/wiki`, `/finetune` (collections CRUD), `/widget`, `/telegram`, `/whatsapp`, `/mobile-app`, `/settings`, `/users`, `/about`, `/login`, `/invite/*` — everything else is blocked by the router guard and hidden from nav. Scripts: `npm run dev:lite` and `npm run build:lite`. Central helper: `admin/src/config/productVariant.ts` (`IS_LITE`, `isPathAllowed()`).
+
 **Vite base path**: Production `/admin/` (served by FastAPI). Demo/standalone: `/` (via `VITE_BASE_PATH` or `.env.production.local`).
 
 ### Mobile App (`mobile/`)
@@ -285,6 +287,8 @@ New routers import domain services directly (`from modules.monitoring.service im
 **API layer** (`mobile/src/api/`): `client.ts` (base fetch + `upload` for multipart FormData), `chat.ts` (sessions/streaming/branches/`uploadImage`), `admin.ts` (admin-only APIs, used only by admin panel).
 
 **File upload in chat**: Same backend as admin (`POST /admin/chat/sessions/{id}/upload-image`). `ChatInput.vue` has paperclip button between input and send. Files uploaded → `image_ids` passed to `streamMessage` → backend injects extracted text (OCR/PDF/DOCX/XLSX) into LLM context. Accepts: JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX, TXT, CSV, MD, JSON, XML, HTML, YAML. Max 10MB.
+
+**Per-session named system prompts** (`ChatSessionPrompt` model, table `chat_session_prompts`): each chat session can hold multiple named prompts; exactly one is active. Endpoints `GET/POST /admin/chat/sessions/{id}/prompts`, `PATCH /admin/chat/sessions/{id}/prompts/{pid}`, `POST /admin/chat/sessions/{id}/prompts/{pid}/activate`, `DELETE …/{pid}`. The active prompt's content is mirrored into `ChatSession.system_prompt`, so the existing streaming pipeline picks it up unchanged — switching prompt swaps the assistant's role while preserving conversation history. Creating the first prompt while the session already has a `system_prompt` preserves it as the initial content. Deleting the active prompt promotes the most recent remaining one.
 
 **Key differences from admin panel**:
 - Hardcoded server URL (`https://ai-sekretar24.ru`), no user configuration

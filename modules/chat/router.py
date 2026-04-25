@@ -1297,3 +1297,273 @@ async def serve_chat_image(
     media_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
 
     return FileResponse(path, media_type=media_type)
+
+
+# ============== Session-scoped System Prompts ==============
+#
+# Each chat session can have several named system prompts; exactly one is
+# active. Activation copies the prompt's content into ChatSession.system_prompt
+# so the existing streaming pipeline picks it up — switching prompt changes
+# the assistant's role while keeping conversation history intact.
+
+
+class _SessionPromptCreate(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class _SessionPromptUpdate(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+
+
+async def _sync_session_system_prompt(session, content: Optional[str]) -> None:
+    session.system_prompt = content
+    session.updated = datetime.utcnow()
+
+
+@router.get("/sessions/{session_id}/prompts")
+async def admin_list_session_prompts(
+    session_id: str, user: User = Depends(require_permission("chat", "view"))
+):
+    """List named system prompts for a chat session."""
+    from sqlalchemy import select
+
+    from db.database import get_session_context
+    from modules.chat.models import ChatSessionPrompt
+
+    owner_id, ws_id = workspace_context(user, "chat")
+    session_data = await chat_service.get_session(session_id, owner_id=owner_id, workspace_id=ws_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    async with get_session_context() as db:
+        rows = (
+            (
+                await db.execute(
+                    select(ChatSessionPrompt)
+                    .where(ChatSessionPrompt.session_id == session_id)
+                    .order_by(ChatSessionPrompt.created.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {"prompts": [p.to_dict() for p in rows]}
+
+
+@router.post("/sessions/{session_id}/prompts")
+async def admin_create_session_prompt(
+    session_id: str,
+    request: _SessionPromptCreate,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Create a new named prompt for a chat session.
+
+    The first prompt is automatically activated; if the session already has a
+    `system_prompt` and the request omits content, it is preserved as the
+    initial content of that first prompt (so the user does not lose their
+    existing prompt by clicking "+ new prompt").
+    """
+    from sqlalchemy import select
+
+    from db.database import get_session_context
+    from modules.chat.models import ChatSession, ChatSessionPrompt
+
+    await _check_write_access(session_id, user)
+
+    async with get_session_context() as db:
+        session_obj = (
+            await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+        ).scalar_one_or_none()
+        if session_obj is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        existing = (
+            (
+                await db.execute(
+                    select(ChatSessionPrompt).where(ChatSessionPrompt.session_id == session_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        is_first = len(existing) == 0
+
+        content = request.content
+        if is_first and not content and session_obj.system_prompt:
+            content = session_obj.system_prompt
+        if content is None:
+            content = ""
+
+        make_active = bool(request.is_active) if request.is_active is not None else is_first
+        if make_active:
+            for p in existing:
+                p.is_active = False
+
+        prompt = ChatSessionPrompt(
+            session_id=session_id,
+            name=(request.name or None),
+            content=content,
+            is_active=make_active,
+        )
+        db.add(prompt)
+        await db.flush()
+
+        if make_active:
+            await _sync_session_system_prompt(session_obj, content)
+
+        await db.commit()
+        await db.refresh(prompt)
+        return {"prompt": prompt.to_dict()}
+
+
+@router.patch("/sessions/{session_id}/prompts/{prompt_id}")
+async def admin_update_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    request: _SessionPromptUpdate,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Update name and/or content of a session prompt. Syncs session.system_prompt if active."""
+    from sqlalchemy import select
+
+    from db.database import get_session_context
+    from modules.chat.models import ChatSession, ChatSessionPrompt
+
+    await _check_write_access(session_id, user)
+
+    payload = request.model_dump(exclude_unset=True)
+
+    async with get_session_context() as db:
+        prompt = (
+            await db.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if prompt is None:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+
+        if "name" in payload:
+            value = payload["name"]
+            prompt.name = value if value else None
+        content_changed = False
+        if "content" in payload:
+            new_content = payload["content"] or ""
+            content_changed = new_content != (prompt.content or "")
+            prompt.content = new_content
+
+        if prompt.is_active and content_changed:
+            session_obj = (
+                await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+            ).scalar_one_or_none()
+            if session_obj is not None:
+                await _sync_session_system_prompt(session_obj, prompt.content)
+
+        await db.commit()
+        await db.refresh(prompt)
+        return {"prompt": prompt.to_dict()}
+
+
+@router.post("/sessions/{session_id}/prompts/{prompt_id}/activate")
+async def admin_activate_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Activate a prompt — makes it the session's system prompt."""
+    from sqlalchemy import select, update
+
+    from db.database import get_session_context
+    from modules.chat.models import ChatSession, ChatSessionPrompt
+
+    await _check_write_access(session_id, user)
+
+    async with get_session_context() as db:
+        prompt = (
+            await db.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if prompt is None:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+
+        await db.execute(
+            update(ChatSessionPrompt)
+            .where(
+                ChatSessionPrompt.session_id == session_id,
+                ChatSessionPrompt.id != prompt_id,
+            )
+            .values(is_active=False)
+        )
+        prompt.is_active = True
+
+        session_obj = (
+            await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+        ).scalar_one_or_none()
+        if session_obj is not None:
+            await _sync_session_system_prompt(session_obj, prompt.content or "")
+
+        await db.commit()
+        await db.refresh(prompt)
+        return {"prompt": prompt.to_dict()}
+
+
+@router.delete("/sessions/{session_id}/prompts/{prompt_id}")
+async def admin_delete_session_prompt(
+    session_id: str,
+    prompt_id: int,
+    user: User = Depends(require_permission("chat", "edit")),
+):
+    """Delete a prompt. If it was active, promote the most recent remaining one."""
+    from sqlalchemy import select
+
+    from db.database import get_session_context
+    from modules.chat.models import ChatSession, ChatSessionPrompt
+
+    await _check_write_access(session_id, user)
+
+    async with get_session_context() as db:
+        prompt = (
+            await db.execute(
+                select(ChatSessionPrompt).where(
+                    ChatSessionPrompt.id == prompt_id,
+                    ChatSessionPrompt.session_id == session_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if prompt is None:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+
+        was_active = prompt.is_active
+        await db.delete(prompt)
+        await db.flush()
+
+        if was_active:
+            replacement = (
+                await db.execute(
+                    select(ChatSessionPrompt)
+                    .where(ChatSessionPrompt.session_id == session_id)
+                    .order_by(ChatSessionPrompt.created.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            session_obj = (
+                await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+            ).scalar_one_or_none()
+            if replacement is not None:
+                replacement.is_active = True
+                if session_obj is not None:
+                    await _sync_session_system_prompt(session_obj, replacement.content or "")
+            elif session_obj is not None:
+                await _sync_session_system_prompt(session_obj, None)
+
+        await db.commit()
+        return {"status": "deleted"}
