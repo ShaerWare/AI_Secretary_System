@@ -71,16 +71,13 @@ def upgrade() -> None:
         ),
         sa.Column("pub_date", sa.DateTime(), nullable=True),
         sa.Column("created", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.UniqueConstraint("feed_id", "guid", name="uq_rss_feed_items_feed_guid"),
     )
     op.create_index("ix_rss_feed_items_feed_id", "rss_feed_items", ["feed_id"])
     op.create_index("ix_rss_feed_items_guid", "rss_feed_items", ["guid"])
-    op.create_unique_constraint(
-        "uq_rss_feed_items_feed_guid", "rss_feed_items", ["feed_id", "guid"]
-    )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_rss_feed_items_feed_guid", "rss_feed_items", type_="unique")
     op.drop_index("ix_rss_feed_items_guid", table_name="rss_feed_items")
     op.drop_index("ix_rss_feed_items_feed_id", table_name="rss_feed_items")
     op.drop_table("rss_feed_items")
