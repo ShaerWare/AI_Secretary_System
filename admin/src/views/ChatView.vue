@@ -81,10 +81,12 @@ import {
   Server,
   Search,
   LogOut,
+  UserCog,
   Sun,
   Moon,
   Palette
 } from 'lucide-vue-next'
+import UserProfileModal from '@/components/UserProfileModal.vue'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
 import { claudeCodeApi, type CcProject, type CcProjectInput } from '@/api/claudeCode'
@@ -172,6 +174,7 @@ const summarizingMessageId = ref<string | null>(null)
 const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const showSettings = ref(false)
+const showUserProfile = ref(false)
 const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
 const sessionPrompts = ref<ChatSessionPrompt[]>([])
@@ -2878,7 +2881,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
       </template>
 
-      <!-- Chat-only user: input position + logout -->
+      <!-- Chat-only user: input position + user profile + logout -->
       <template v-if="isChatOnly">
         <button
           class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 transition-colors shrink-0"
@@ -2887,6 +2890,14 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         >
           <ArrowDownToLine v-if="inputPosition === 'top'" class="w-4 h-4" />
           <ArrowUpToLine v-else class="w-4 h-4" />
+        </button>
+
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+          :title="t('profile.title')"
+          @click="showUserProfile = true"
+        >
+          <UserCog class="w-4 h-4" />
         </button>
 
         <button
@@ -4481,6 +4492,9 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       <X class="w-6 h-6" />
     </button>
   </div>
+
+  <!-- User Profile modal (chat-only users open it from the focus-mode toolbar) -->
+  <UserProfileModal v-model="showUserProfile" />
 </template>
 
 <style scoped>
