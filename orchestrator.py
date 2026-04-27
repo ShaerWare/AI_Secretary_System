@@ -81,6 +81,7 @@ from modules.channels.widget.router_public import router as widget_public_router
 from modules.compat.router import router as compat_router  # noqa: E402
 from modules.core.router_health import router as health_router  # noqa: E402
 from modules.knowledge.router_google_drive import router as google_drive_rag_router  # noqa: E402
+from modules.knowledge.router_rss import router as rss_router  # noqa: E402
 from modules.monitoring.router_logs import router as logs_router  # noqa: E402
 
 
@@ -116,6 +117,7 @@ app.include_router(amocrm.webhook_router)
 app.include_router(google.callback_router)  # Must be before static mount
 app.include_router(google.router)
 app.include_router(google_drive_rag_router)
+app.include_router(rss_router)
 app.include_router(health_router)
 app.include_router(compat_router)
 app.include_router(logs_router)
@@ -258,6 +260,7 @@ async def startup_event():
         from modules.core.maintenance import cleanup_expired_sessions, periodic_vacuum
         from modules.ecommerce.tasks import woocommerce_daily_sync
         from modules.kanban.tasks import sync_kanban_issues
+        from modules.knowledge.rss_service import sync_all_feeds as rss_sync_all
 
         task_registry.register("session-cleanup", cleanup_expired_sessions, interval=3600)
         task_registry.register(
@@ -270,6 +273,7 @@ async def startup_event():
             "kanban-sync", sync_kanban_issues, interval=15 * 60, initial_delay=60
         )
         task_registry.register("woocommerce-sync", woocommerce_daily_sync)
+        task_registry.register("rss-sync", rss_sync_all, interval=60 * 60, initial_delay=120)
         task_registry.register(
             "bot-process-watcher", watch_bot_processes, interval=30, initial_delay=15
         )

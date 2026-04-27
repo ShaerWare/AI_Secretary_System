@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { finetuneApi, ttsFinetune, wikiRagApi, githubReposApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult, type KnowledgeCollection, type GitHubRepoProject, type GitHubProjectCreateData } from '@/api'
+import { finetuneApi, ttsFinetune, wikiRagApi, githubReposApi, rssFeedsApi, type TrainingConfig, type DatasetConfig, type VoiceSample, type WikiSearchResult, type KnowledgeCollection, type GitHubRepoProject, type GitHubProjectCreateData, type RSSFeed, type RSSFeedCreate } from '@/api'
 import {
   Sparkles,
   Upload,
@@ -35,7 +35,9 @@ import {
   FileUp,
   BookOpenCheck,
   Plus,
-  FolderClosed
+  FolderClosed,
+  Rss,
+  RefreshCcw,
 } from 'lucide-vue-next'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
@@ -385,6 +387,88 @@ const deleteGitHubRepoMutation = useMutation({
     toast.success(t('githubRepos.deleteSuccess'))
   },
 })
+
+// ============== RSS Feeds Queries & Mutations ==============
+const showRssFeedForm = ref(false)
+const rssFeedFormData = ref<RSSFeedCreate>({
+  name: '',
+  url: '',
+  collection_id: 0,
+  fetch_full_text: true,
+  verify_ssl: true,
+  enabled: true,
+})
+
+const { data: rssFeedsData, refetch: refetchRssFeeds } = useQuery({
+  queryKey: ['rss-feeds'],
+  queryFn: () => rssFeedsApi.list(),
+  enabled: computed(() => activeTab.value === 'llm' && llmMode.value === 'cloud'),
+})
+
+const rssFeeds = computed<RSSFeed[]>(() => rssFeedsData.value?.feeds || [])
+
+const collectionNameById = computed(() => {
+  const map: Record<number, string> = {}
+  for (const c of collections.value) map[c.id] = c.name
+  return map
+})
+
+const createRssFeedMutation = useMutation({
+  mutationFn: (data: RSSFeedCreate) => rssFeedsApi.create(data),
+  onSuccess: () => {
+    refetchRssFeeds()
+    showRssFeedForm.value = false
+    rssFeedFormData.value = { name: '', url: '', collection_id: 0, fetch_full_text: true, verify_ssl: true, enabled: true }
+    toast.success(t('rss.createSuccess'))
+  },
+  onError: (error: Error) => toast.error(error.message || t('rss.createFail')),
+})
+
+const syncRssFeedMutation = useMutation({
+  mutationFn: (id: number) => rssFeedsApi.syncOne(id),
+  onSuccess: () => {
+    toast.info(t('rss.syncStarted'))
+    setTimeout(() => { refetchRssFeeds(); refetchCollections() }, 4000)
+  },
+  onError: () => toast.error(t('rss.syncFail')),
+})
+
+const syncAllRssMutation = useMutation({
+  mutationFn: () => rssFeedsApi.syncAll(),
+  onSuccess: () => {
+    toast.info(t('rss.syncAllStarted'))
+    setTimeout(() => { refetchRssFeeds(); refetchCollections() }, 6000)
+  },
+})
+
+const deleteRssFeedMutation = useMutation({
+  mutationFn: (id: number) => rssFeedsApi.remove(id),
+  onSuccess: () => {
+    refetchRssFeeds()
+    toast.success(t('rss.deleteSuccess'))
+  },
+})
+
+const toggleRssFeedMutation = useMutation({
+  mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+    rssFeedsApi.update(id, { enabled }),
+  onSuccess: () => refetchRssFeeds(),
+})
+
+async function confirmDeleteRssFeed(feed: RSSFeed) {
+  const ok = await confirmStore.confirm({
+    title: t('rss.deleteConfirmTitle'),
+    message: t('rss.deleteConfirmMessage', { name: feed.name }),
+    confirmText: t('common.delete'),
+    type: 'danger',
+  })
+  if (ok) deleteRssFeedMutation.mutate(feed.id)
+}
+
+function submitCreateRssFeed() {
+  if (!rssFeedFormData.value.name.trim() || !rssFeedFormData.value.url.trim() || !rssFeedFormData.value.collection_id) return
+  createRssFeedMutation.mutate({ ...rssFeedFormData.value })
+}
 
 // ============== TTS Mutations ==============
 const uploadTtsSampleMutation = useMutation({
@@ -1271,6 +1355,185 @@ v-if="!adapter.active" :disabled="deleteAdapterMutation.isPending.value" class="
               </div>
               <div v-if="createCollectionMutation.error.value" class="mt-2 text-red-500 text-xs">
                 {{ createCollectionMutation.error.value }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RSS Feeds -->
+        <div class="bg-card rounded-lg border border-border">
+          <div class="p-4 border-b border-border flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <Rss class="w-5 h-5" />
+                {{ t('rss.title') }}
+              </h2>
+              <p class="text-sm text-muted-foreground mt-1">{{ t('rss.description') }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                :disabled="syncAllRssMutation.isPending.value || rssFeeds.length === 0"
+                class="flex items-center gap-2 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors text-sm disabled:opacity-50"
+                @click="syncAllRssMutation.mutate()"
+              >
+                <Loader2 v-if="syncAllRssMutation.isPending.value" class="w-4 h-4 animate-spin" />
+                <RefreshCcw v-else class="w-4 h-4" />
+                {{ t('rss.syncAll') }}
+              </button>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
+                @click="showRssFeedForm = !showRssFeedForm"
+              >
+                <Plus class="w-4 h-4" />
+                {{ t('rss.add') }}
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 space-y-3">
+            <!-- Add feed form -->
+            <div v-if="showRssFeedForm" class="p-3 bg-secondary/50 rounded-lg border border-border space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('rss.name') }}</label>
+                  <input
+                    v-model="rssFeedFormData.name"
+                    type="text"
+                    :placeholder="t('rss.namePlaceholder')"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('rss.url') }}</label>
+                  <input
+                    v-model="rssFeedFormData.url"
+                    type="text"
+                    placeholder="https://example.com/rss.xml"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs text-muted-foreground mb-1 block">{{ t('rss.collection') }}</label>
+                  <select
+                    v-model="rssFeedFormData.collection_id"
+                    class="w-full px-3 py-1.5 bg-background rounded-lg text-sm border border-border"
+                  >
+                    <option :value="0">{{ t('rss.collectionPlaceholder') }}</option>
+                    <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 pt-5">
+                  <label class="flex items-center gap-2 text-xs">
+                    <input v-model="rssFeedFormData.fetch_full_text" type="checkbox" />
+                    {{ t('rss.fetchFullText') }}
+                  </label>
+                  <label class="flex items-center gap-2 text-xs">
+                    <input v-model="rssFeedFormData.verify_ssl" type="checkbox" />
+                    {{ t('rss.verifySsl') }}
+                  </label>
+                </div>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button
+                  class="px-3 py-1.5 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors text-sm"
+                  @click="showRssFeedForm = false"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+                <button
+                  :disabled="!rssFeedFormData.name.trim() || !rssFeedFormData.url.trim() || !rssFeedFormData.collection_id || createRssFeedMutation.isPending.value"
+                  class="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors text-sm flex items-center gap-1"
+                  @click="submitCreateRssFeed"
+                >
+                  <Loader2 v-if="createRssFeedMutation.isPending.value" class="w-3.5 h-3.5 animate-spin" />
+                  {{ t('common.create') }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="rssFeeds.length === 0" class="text-sm text-muted-foreground text-center py-6">
+              {{ t('rss.empty') }}
+            </div>
+
+            <!-- Feed cards -->
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="feed in rssFeeds"
+                :key="feed.id"
+                class="p-3 bg-secondary/30 rounded-lg border border-border space-y-2"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-medium text-sm truncate">{{ feed.name }}</span>
+                      <span
+                        v-if="feed.sync_status === 'syncing'"
+                        class="text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500"
+                      >
+                        {{ t('rss.statusSyncing') }}
+                      </span>
+                      <span
+                        v-else-if="feed.sync_status === 'error'"
+                        class="text-xs px-1.5 py-0.5 rounded bg-red-500/15 text-red-500"
+                      >
+                        {{ t('rss.statusError') }}
+                      </span>
+                      <span
+                        v-else
+                        class="text-xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500"
+                      >
+                        {{ t('rss.statusIdle') }}
+                      </span>
+                    </div>
+                    <a
+                      :href="feed.url"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-xs text-muted-foreground hover:text-primary truncate block"
+                    >{{ feed.url }}</a>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button
+                      class="p-1 rounded hover:bg-secondary transition-colors"
+                      :title="t('rss.sync')"
+                      :disabled="syncRssFeedMutation.isPending.value"
+                      @click="syncRssFeedMutation.mutate(feed.id)"
+                    >
+                      <Loader2
+                        v-if="syncRssFeedMutation.isPending.value && syncRssFeedMutation.variables.value === feed.id"
+                        class="w-4 h-4 animate-spin"
+                      />
+                      <RefreshCcw v-else class="w-4 h-4" />
+                    </button>
+                    <button
+                      class="p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                      :title="t('common.delete')"
+                      @click="confirmDeleteRssFeed(feed)"
+                    >
+                      <Trash2 class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  <span class="flex items-center gap-1">
+                    <FolderClosed class="w-3 h-3" />
+                    {{ feed.collection_id ? collectionNameById[feed.collection_id] || `#${feed.collection_id}` : '—' }}
+                  </span>
+                  <span>{{ t('rss.itemsCount', { n: feed.item_count }) }}</span>
+                  <span v-if="feed.last_synced">{{ t('rss.lastSync') }}: {{ new Date(feed.last_synced).toLocaleString() }}</span>
+                  <span v-else>{{ t('rss.neverSynced') }}</span>
+                  <label class="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      :checked="feed.enabled"
+                      @change="toggleRssFeedMutation.mutate({ id: feed.id, enabled: ($event.target as HTMLInputElement).checked })"
+                    />
+                    {{ t('rss.enabled') }}
+                  </label>
+                </div>
+                <div v-if="feed.last_error" class="text-xs text-red-500 truncate" :title="feed.last_error">
+                  {{ feed.last_error }}
+                </div>
               </div>
             </div>
           </div>

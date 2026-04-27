@@ -257,6 +257,98 @@ class GitHubRepoProject(Base):
         }
 
 
+class RSSFeed(Base):
+    """RSS/Atom feed subscription wired to a knowledge collection.
+
+    Each item from the feed becomes one KnowledgeDocument under the linked
+    collection. Items are deduplicated by `guid`. The full-article path is
+    optional — if `fetch_full_text` is True, the sync task fetches the item
+    URL and converts HTML to markdown; otherwise only `title + summary` from
+    the RSS entry is stored.
+    """
+
+    __tablename__ = "rss_feeds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    url: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_collections.id"), nullable=True, index=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    fetch_full_text: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    verify_ssl: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    last_etag: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    last_modified: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(20), default="idle", server_default="idle")
+    item_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    workspace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
+    )
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "url": self.url,
+            "collection_id": self.collection_id,
+            "enabled": self.enabled,
+            "fetch_full_text": self.fetch_full_text,
+            "verify_ssl": self.verify_ssl,
+            "last_synced": self.last_synced.isoformat() if self.last_synced else None,
+            "last_error": self.last_error,
+            "sync_status": self.sync_status,
+            "item_count": self.item_count,
+            "workspace_id": self.workspace_id,
+            "created": self.created.isoformat() if self.created else None,
+            "updated": self.updated.isoformat() if self.updated else None,
+        }
+
+
+class RSSFeedItem(Base):
+    """Persistent record of a single RSS item — used for dedup across syncs."""
+
+    __tablename__ = "rss_feed_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    feed_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("rss_feeds.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    guid: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    link: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    document_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True
+    )
+    pub_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "feed_id": self.feed_id,
+            "guid": self.guid,
+            "title": self.title,
+            "link": self.link,
+            "document_id": self.document_id,
+            "pub_date": self.pub_date.isoformat() if self.pub_date else None,
+            "created": self.created.isoformat() if self.created else None,
+        }
+
+
 class GoogleDriveProject(Base):
     """Google Drive folder connected as a knowledge base collection."""
 

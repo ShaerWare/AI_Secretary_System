@@ -40,6 +40,7 @@ from db.repositories.payment import PaymentRepository
 from db.repositories.preset import PresetRepository
 from db.repositories.resource_share import ResourceShareRepository
 from db.repositories.role import RoleRepository
+from db.repositories.rss_feed import RSSFeedItemRepository, RSSFeedRepository
 from db.repositories.telegram import TelegramRepository
 from db.repositories.usage import UsageLimitsRepository, UsageRepository
 from db.repositories.user import UserRepository
@@ -90,6 +91,8 @@ __all__ = [
     "PresetRepository",
     "ResourceShareRepository",
     "RoleRepository",
+    "RSSFeedItemRepository",
+    "RSSFeedRepository",
     "TelegramRepository",
     "UsageLimitsRepository",
     "UserIdentityRepository",

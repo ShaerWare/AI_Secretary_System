@@ -71,6 +71,8 @@ from modules.knowledge.models import (
     GitHubRepoProject,
     KnowledgeCollection,
     KnowledgeDocument,
+    RSSFeed,
+    RSSFeedItem,
 )
 from modules.llm.models import (
     DEFAULT_LLM_PRESETS,
@@ -132,6 +134,8 @@ __all__ = [
     "KnowledgeCollection",
     "KnowledgeDocument",
     "GitHubRepoProject",
+    "RSSFeed",
+    "RSSFeedItem",
     "GITHUB_DEFAULT_INCLUDE",
     "GITHUB_DEFAULT_EXCLUDE",
     # speech
