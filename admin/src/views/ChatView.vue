@@ -3195,6 +3195,18 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
               </button>
             </div>
           </div>
+          <!-- Branch tree toggle (non-CC) -->
+          <button
+            v-if="!cc.isActive.value"
+            :class="[
+              'p-2 rounded-lg transition-colors',
+              showBranchTree ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            ]"
+            :title="t('chatView.branchTree')"
+            @click="showBranchTree = !showBranchTree"
+          >
+            <GitBranch class="w-4 h-4" />
+          </button>
           <!-- Input position toggle (hidden on small screens) -->
           <button
             class="hidden sm:inline-flex p-2 rounded-lg hover:bg-secondary transition-colors"
