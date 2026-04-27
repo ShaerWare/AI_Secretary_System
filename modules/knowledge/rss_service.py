@@ -153,25 +153,43 @@ def _entry_summary(entry: Any) -> str:
 def _fetch_feed_sync(
     url: str, etag: Optional[str], modified: Optional[str], verify_ssl: bool
 ) -> Any:
-    """Sync feedparser call — must run in a thread pool."""
+    """Sync feedparser call — must run in a thread pool.
+
+    For verify_ssl=False (e.g. adilet.zan.kz with non-standard CA) we fetch
+    the feed bytes via `requests` first, since feedparser.parse() doesn't
+    expose an SSL-context kwarg in current versions.
+    """
     import feedparser
 
     request_headers = {"User-Agent": USER_AGENT}
-    if not verify_ssl:
-        # feedparser passes through to urllib; pre-disable certifi verification
-        import ssl
+    if etag:
+        request_headers["If-None-Match"] = etag
+    if modified:
+        request_headers["If-Modified-Since"] = modified
 
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return feedparser.parse(
-            url,
-            etag=etag,
-            modified=modified,
-            request_headers=request_headers,
-            handlers=[],
-            ssl_context=ctx,
-        )
+    if not verify_ssl:
+        import requests
+        import urllib3
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        try:
+            resp = requests.get(url, headers=request_headers, timeout=REQUEST_TIMEOUT, verify=False)
+            if resp.status_code == 304:
+                parsed = feedparser.FeedParserDict()
+                parsed["status"] = 304
+                parsed["entries"] = []
+                return parsed
+            parsed = feedparser.parse(resp.content)
+            parsed["status"] = resp.status_code
+            parsed["etag"] = resp.headers.get("etag")
+            parsed["modified"] = resp.headers.get("last-modified")
+            return parsed
+        except Exception as e:
+            parsed = feedparser.FeedParserDict()
+            parsed["entries"] = []
+            parsed["bozo_exception"] = e
+            return parsed
+
     return feedparser.parse(
         url,
         etag=etag,
