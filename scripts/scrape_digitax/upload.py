@@ -184,9 +184,13 @@ async def upload_site(slug: str, cfg: dict, dry_run: bool = False) -> dict:
             sections = count_sections(content)
             file_size = filepath.stat().st_size
 
-            # Copy file to collection directory
+            # Copy file to collection directory. Skip if source and target
+            # already point to the same file — happens when the source dir
+            # IS the target dir (e.g. server-side runs that read directly
+            # from wiki-pages/ when parsed/ is absent).
             target = target_dir / filepath.name
-            shutil.copy2(filepath, target)
+            if filepath.resolve() != target.resolve():
+                shutil.copy2(filepath, target)
 
             # Create DB record
             await create_document_record(
