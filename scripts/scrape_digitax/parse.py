@@ -99,6 +99,7 @@ def strip_boilerplate(tree, slug: str = ""):
         '| .//*[contains(@class, "share-")]'
         '| .//*[contains(@id, "cookie")]'
         '| .//*[contains(@id, "gdpr")]'
+        '| .//*[contains(@class, "seo-links")]'
     ):
         parent = bad.getparent()
         if parent is not None:
@@ -326,7 +327,61 @@ CONTENT_SELECTORS = {
         '//div[@id="content"]',
         "//body",
     ],
+    # consultant.ru — Russian legal portal. Document body lives inside
+    # `<div class="content document-page">`. Falling back to <body> drags in
+    # the global "popular codes" sidebar (`div.seo-links`) — that strip is
+    # handled universally above, but pinning the content root here also keeps
+    # the cookie banner, top nav, and "buy КонсультантПлюс" promos out.
+    "_consultant_ru": [
+        '//div[contains(@class, "document-page") and contains(@class, "content")]',
+        '//div[contains(@class, "document-page")]',
+        "//main",
+        "//body",
+    ],
+    # adilet.zan.kz — Kazakhstan legal portal. Each Kazakh code is a single
+    # monolithic page. The actual law text sits inside
+    # `div.container_gamma.text.text_upd` (verified on УК РК / НК РК HTML —
+    # immediate parent of <article> wrapping each статья). All header chrome
+    # (shared mega-menu, language switcher, accessibility toolbar) lives
+    # outside this container, so anchoring here gives clean output.
+    "_adilet_zan_kz": [
+        '//div[contains(@class, "container_gamma") and contains(@class, "text")]',
+        "//article",
+        "//main",
+        "//body",
+    ],
 }
+
+# Map each slug to the right content-selector profile. Avoids duplicating the
+# selector list per code — all consultant.ru codes share `_consultant_ru`,
+# all adilet.zan.kz codes share `_adilet_zan_kz`.
+_CONSULTANT_RU_SLUGS = {
+    "ru-uk-rf",
+    "ru-koap-rf",
+    "ru-gk-rf-1",
+    "ru-gk-rf-2",
+    "ru-gk-rf-3",
+    "ru-gk-rf-4",
+    "ru-tk-rf",
+    "ru-upk-rf",
+    "ru-sk-rf",
+    "ru-zhk-rf",
+    "ru-nk-rf-glava-26-2",
+    "ru-fns-usn",
+}
+_ADILET_SLUGS = {
+    "kz-nk-rk",
+    "kz-uk-rk",
+    "kz-koap-rk",
+    "kz-upk-rk",
+    "kz-tk-rk",
+    "kz-gk-rk-general",
+    "kz-gk-rk-special",
+}
+for _slug in _CONSULTANT_RU_SLUGS:
+    CONTENT_SELECTORS.setdefault(_slug, CONTENT_SELECTORS["_consultant_ru"])
+for _slug in _ADILET_SLUGS:
+    CONTENT_SELECTORS.setdefault(_slug, CONTENT_SELECTORS["_adilet_zan_kz"])
 
 # Per-site title selectors
 TITLE_SELECTORS = {
