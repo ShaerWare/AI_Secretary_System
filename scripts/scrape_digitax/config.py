@@ -157,6 +157,185 @@ SITES = {
             "отфильтруем не-USN статьи по ключевым словам."
         ),
     },
+    # ------------------------------------------------------------------
+    # Russian lawyer assistant — federal codes (consultant.ru)
+    # ------------------------------------------------------------------
+    "ru-uk-rf": {
+        "name": "УК РФ — Уголовный кодекс",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_10699/"],
+        "stay_under": "/document/cons_doc_law_10699/",
+        "max_pages": 800,
+        "type": "legal",
+        "description": (
+            "Уголовный кодекс Российской Федерации, полный текст. "
+            "Первоисточник — КонсультантПлюс."
+        ),
+    },
+    "ru-koap-rf": {
+        "name": "КоАП РФ — Кодекс об административных правонарушениях",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_34661/"],
+        "stay_under": "/document/cons_doc_law_34661/",
+        "max_pages": 1500,
+        "type": "legal",
+        "description": (
+            "Кодекс Российской Федерации об административных правонарушениях. "
+            "Один из самых объёмных кодексов РФ (~600 статей)."
+        ),
+    },
+    "ru-gk-rf-1": {
+        "name": "ГК РФ часть 1",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_5142/"],
+        "stay_under": "/document/cons_doc_law_5142/",
+        "max_pages": 700,
+        "type": "legal",
+        "description": "Гражданский кодекс РФ — Часть первая (общие положения, юр.лица, сделки, обязательства).",
+    },
+    "ru-gk-rf-2": {
+        "name": "ГК РФ часть 2",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_9027/"],
+        "stay_under": "/document/cons_doc_law_9027/",
+        "max_pages": 800,
+        "type": "legal",
+        "description": "Гражданский кодекс РФ — Часть вторая (отдельные виды обязательств, договоры).",
+    },
+    "ru-gk-rf-3": {
+        "name": "ГК РФ часть 3",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_34154/"],
+        "stay_under": "/document/cons_doc_law_34154/",
+        "max_pages": 250,
+        "type": "legal",
+        "description": "Гражданский кодекс РФ — Часть третья (наследственное и международное частное право).",
+    },
+    "ru-gk-rf-4": {
+        "name": "ГК РФ часть 4",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_64629/"],
+        "stay_under": "/document/cons_doc_law_64629/",
+        "max_pages": 500,
+        "type": "legal",
+        "description": "Гражданский кодекс РФ — Часть четвёртая (интеллектуальная собственность).",
+    },
+    "ru-tk-rf": {
+        "name": "ТК РФ — Трудовой кодекс",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_34683/"],
+        "stay_under": "/document/cons_doc_law_34683/",
+        "max_pages": 700,
+        "type": "legal",
+        "description": "Трудовой кодекс Российской Федерации.",
+    },
+    "ru-upk-rf": {
+        "name": "УПК РФ — Уголовно-процессуальный кодекс",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_34481/"],
+        "stay_under": "/document/cons_doc_law_34481/",
+        "max_pages": 800,
+        "type": "legal",
+        "description": "Уголовно-процессуальный кодекс Российской Федерации.",
+    },
+    "ru-sk-rf": {
+        "name": "СК РФ — Семейный кодекс",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_8982/"],
+        "stay_under": "/document/cons_doc_law_8982/",
+        "max_pages": 250,
+        "type": "legal",
+        "description": "Семейный кодекс Российской Федерации.",
+    },
+    "ru-zhk-rf": {
+        "name": "ЖК РФ — Жилищный кодекс",
+        "base_url": "https://www.consultant.ru",
+        "seed_paths": ["/document/cons_doc_LAW_51057/"],
+        "stay_under": "/document/cons_doc_law_51057/",
+        "max_pages": 400,
+        "type": "legal",
+        "description": "Жилищный кодекс Российской Федерации.",
+    },
+    # ------------------------------------------------------------------
+    # Kazakhstan — codes via adilet.zan.kz
+    # adilet.zan.kz uses a Kazakh root CA not in the standard bundle, so
+    # `verify_ssl: False` is required. Each Kazakh code lives at a single
+    # monolithic URL — no BFS needed, just fetch the seed page.
+    # ------------------------------------------------------------------
+    "kz-nk-rk": {
+        "name": "НК РК — Налоговый кодекс",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K1700000120"],
+        "stay_under": "/rus/docs/k1700000120",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": (
+            "Кодекс Республики Казахстан о налогах и других обязательных "
+            "платежах в бюджет (Налоговый кодекс) от 25.12.2017 № 120-VI. "
+            "Источник: adilet.zan.kz."
+        ),
+    },
+    "kz-uk-rk": {
+        "name": "УК РК — Уголовный кодекс",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K1400000226"],
+        "stay_under": "/rus/docs/k1400000226",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Уголовный кодекс Республики Казахстан от 03.07.2014 № 226-V.",
+    },
+    "kz-koap-rk": {
+        "name": "КоАП РК — Кодекс об административных правонарушениях",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K1400000235"],
+        "stay_under": "/rus/docs/k1400000235",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Кодекс Республики Казахстан об административных правонарушениях от 05.07.2014 № 235-V.",
+    },
+    "kz-upk-rk": {
+        "name": "УПК РК — Уголовно-процессуальный кодекс",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K1400000231"],
+        "stay_under": "/rus/docs/k1400000231",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Уголовно-процессуальный кодекс Республики Казахстан от 04.07.2014 № 231-V.",
+    },
+    "kz-tk-rk": {
+        "name": "ТК РК — Трудовой кодекс",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K1500000414"],
+        "stay_under": "/rus/docs/k1500000414",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Трудовой кодекс Республики Казахстан от 23.11.2015 № 414-V.",
+    },
+    "kz-gk-rk-general": {
+        "name": "ГК РК — общая часть",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K940001000_"],
+        "stay_under": "/rus/docs/k940001000_",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Гражданский кодекс Республики Казахстан (общая часть) от 27.12.1994 № 268-XIII.",
+    },
+    "kz-gk-rk-special": {
+        "name": "ГК РК — особенная часть",
+        "base_url": "https://adilet.zan.kz",
+        "seed_paths": ["/rus/docs/K990000409_"],
+        "stay_under": "/rus/docs/k990000409_",
+        "verify_ssl": False,
+        "max_pages": 5,
+        "type": "legal",
+        "description": "Гражданский кодекс Республики Казахстан (особенная часть) от 01.07.1999 № 409-I.",
+    },
     "icaew-ireland": {
         "name": "ICAEW Ireland Standards",
         "base_url": "https://www.icaew.com",
@@ -255,11 +434,22 @@ def fetch_page(
     session: requests.Session,
     url: str,
     delay: float = REQUEST_DELAY,
+    verify: bool = True,
 ) -> str | None:
-    """Fetch a URL with retries and rate limiting. Returns HTML or None."""
+    """Fetch a URL with retries and rate limiting. Returns HTML or None.
+
+    Set ``verify=False`` for sites whose root CA is not in the system trust
+    store (e.g. adilet.zan.kz uses a Kazakh root CA not bundled with certifi).
+    """
+    if not verify:
+        # Suppress per-request InsecureRequestWarning spam — we already noted
+        # the trade-off in the SITES config that opts out of verification.
+        import urllib3
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     for attempt in range(MAX_RETRIES):
         try:
-            resp = session.get(url, timeout=TIMEOUT)
+            resp = session.get(url, timeout=TIMEOUT, verify=verify)
             if resp.status_code == 429:
                 wait = 2 ** (attempt + 2)
                 log.warning("Rate limited on %s, waiting %ds", url, wait)

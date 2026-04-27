@@ -28,7 +28,10 @@ repos:
         exclude: ^(admin/node_modules/|package-lock\.json)
       - id: check-toml
       - id: check-added-large-files
-        args: ['--maxkb=1000']
+        # 5000 KB allows monolithic legal-code dumps (НК РК ~4.8 MB, КоАП РК ~3 MB)
+        # — adilet.zan.kz publishes each code as a single page, so the parsed MD
+        # is unavoidably large.
+        args: ['--maxkb=5000']
       - id: check-merge-conflict
       - id: detect-private-key
 

@@ -46,6 +46,7 @@ def crawl_site(
     raw_dir = get_site_raw_dir(slug)
     limit = max_pages or site_cfg["max_pages"]
     base_url = site_cfg["base_url"]
+    verify_ssl = site_cfg.get("verify_ssl", True)
 
     # Build seed URLs
     seeds = [base_url.rstrip("/") + p for p in site_cfg["seed_paths"]]
@@ -82,7 +83,7 @@ def crawl_site(
             continue
 
         # Fetch
-        html_text = fetch_page(session, url)
+        html_text = fetch_page(session, url, verify=verify_ssl)
         if html_text is None:
             stats["errors"] += 1
             stats["pages_visited"] += 1
@@ -323,6 +324,25 @@ LINK_FILTERS: dict[str, callable] = {
     "ru-fns-usn": filter_icaew,
     "ru-nk-rf-glava-26-2": filter_icaew,
     "ru-moedelo-usn": filter_icaew,
+    # Russian codes (consultant.ru) — all use stay_under filter via filter_icaew
+    "ru-uk-rf": filter_icaew,
+    "ru-koap-rf": filter_icaew,
+    "ru-gk-rf-1": filter_icaew,
+    "ru-gk-rf-2": filter_icaew,
+    "ru-gk-rf-3": filter_icaew,
+    "ru-gk-rf-4": filter_icaew,
+    "ru-tk-rf": filter_icaew,
+    "ru-upk-rf": filter_icaew,
+    "ru-sk-rf": filter_icaew,
+    "ru-zhk-rf": filter_icaew,
+    # Kazakhstan codes (adilet.zan.kz) — single-page docs, stay_under filter ok
+    "kz-nk-rk": filter_icaew,
+    "kz-uk-rk": filter_icaew,
+    "kz-koap-rk": filter_icaew,
+    "kz-upk-rk": filter_icaew,
+    "kz-tk-rk": filter_icaew,
+    "kz-gk-rk-general": filter_icaew,
+    "kz-gk-rk-special": filter_icaew,
 }
 
 
