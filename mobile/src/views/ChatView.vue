@@ -32,6 +32,16 @@ const streamingContent = ref("");
 const error = ref<string | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
 
+// Assistant switcher: list of chats accessible to user (own + shared)
+type AvailableAssistant = {
+  id: string;
+  title: string;
+  is_shared_with_me?: boolean;
+  is_default_mobile?: boolean;
+};
+const availableAssistants = ref<AvailableAssistant[]>([]);
+const showAssistantSwitcher = ref(false);
+
 // Panels
 const showBranches = ref(false);
 const showContextFiles = ref(false);
@@ -149,6 +159,48 @@ async function loadSession() {
   } finally {
     isLoading.value = false;
   }
+}
+
+async function loadAvailableAssistants() {
+  try {
+    const data = await chatApi.listSessions();
+    if (isAdmin.value) {
+      // Admins see all their sessions
+      availableAssistants.value = data.sessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        is_shared_with_me: s.is_shared_with_me,
+        is_default_mobile: s.is_default_mobile,
+      }));
+    } else {
+      // Non-admins: only chats shared with them by admin (the assistants)
+      availableAssistants.value = data.sessions
+        .filter((s) => s.is_shared_with_me || s.is_default_mobile)
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          is_shared_with_me: s.is_shared_with_me,
+          is_default_mobile: s.is_default_mobile,
+        }));
+    }
+  } catch {
+    // Non-critical — switcher just won't show
+    availableAssistants.value = [];
+  }
+}
+
+function toggleAssistantSwitcher() {
+  if (!showAssistantSwitcher.value) {
+    loadAvailableAssistants();
+  }
+  showAssistantSwitcher.value = !showAssistantSwitcher.value;
+}
+
+function switchToAssistant(id: string) {
+  showAssistantSwitcher.value = false;
+  if (id === sessionId.value) return;
+  closePanel();
+  router.replace(`/chat/${id}`);
 }
 
 function toggleWebSearch() {
@@ -810,8 +862,23 @@ watch(streamingContent, () => {
   scrollToBottom();
 });
 
+// Reload session data when route id changes (assistant switcher)
+watch(sessionId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return;
+  // Reset state so old chat doesn't flash
+  messages.value = [];
+  branches.value = [];
+  contextFiles.value = [];
+  sessionPrompts.value = [];
+  selectedPromptId.value = null;
+  streamingContent.value = "";
+  await loadSession();
+  if (showBranches.value) await loadBranches();
+});
+
 onMounted(async () => {
   await loadSession();
+  loadAvailableAssistants();
   const msg = route.query.msg as string | undefined;
   if (msg) {
     router.replace({ path: route.path, query: {} });
@@ -854,9 +921,64 @@ onUnmounted(() => {
           <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F0A830"/><stop offset="100%" stop-color="#C27010"/></linearGradient></defs>
           <path fill="url(#hg)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"/>
         </svg>
-        <h1 class="text-sm font-medium text-white truncate flex-1">
-          {{ title }}
-        </h1>
+        <!-- Title + assistant switcher -->
+        <div class="relative flex-1 min-w-0">
+          <button
+            class="w-full flex items-center gap-1.5 text-left group"
+            :disabled="availableAssistants.length <= 1"
+            @click="toggleAssistantSwitcher"
+          >
+            <h1 class="text-sm font-medium text-white truncate flex-1">
+              {{ title }}
+            </h1>
+            <svg
+              v-if="availableAssistants.length > 1"
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="shrink-0 text-stone-400 group-hover:text-amber-400 transition-colors"
+              :class="showAssistantSwitcher ? 'text-amber-400 rotate-180' : ''"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <!-- Dropdown -->
+          <div
+            v-if="showAssistantSwitcher && availableAssistants.length > 1"
+            class="absolute left-0 right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-lg shadow-2xl z-50 max-h-[60vh] overflow-y-auto"
+          >
+            <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-800 sticky top-0 bg-stone-900">
+              Переключить ассистента
+            </div>
+            <button
+              v-for="a in availableAssistants"
+              :key="a.id"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
+              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
+              @click="switchToAssistant(a.id)"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
+              />
+              <span
+                class="text-sm flex-1 truncate"
+                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
+              >{{ a.title }}</span>
+              <span
+                v-if="a.is_default_mobile"
+                class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
+              >по умолч.</span>
+            </button>
+          </div>
+        </div>
 
         <!-- Toolbar buttons -->
         <button
