@@ -24,7 +24,7 @@ import 'prismjs/components/prism-diff'
 import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-jsx'
 import 'prismjs/components/prism-tsx'
-import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, type ChatSession, type ChatSessionPrompt, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage, type ShareableUser } from '@/api'
+import { chatApi, ttsApi, llmApi, sttApi, wikiRagApi, api, type ChatSession, type ChatSessionPrompt, type ChatMessage, type ChatImage, type ChatSessionSummary, type CloudProvider, type BranchNode, type SiblingInfo, type TokenUsage, type ShareableUser } from '@/api'
 import BranchTree from '@/components/BranchTree.vue'
 import ChatShareDialog from '@/components/ChatShareDialog.vue'
 import ArtifactPanel, { type Artifact } from '@/components/ArtifactPanel.vue'
@@ -175,6 +175,73 @@ const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const showSettings = ref(false)
 const showUserProfile = ref(false)
+
+// Assistant switcher (mobile-app instances shared with the user via admin).
+// Each instance maps to a per-user ChatSession with source="mobile" +
+// source_id=instance_id, so dialog history is private per (user, assistant).
+type AvailableAssistant = {
+  id: string
+  title: string
+  sessionId: string | null
+}
+const availableAssistants = ref<AvailableAssistant[]>([])
+const showAssistantSwitcher = ref(false)
+const switchingToAssistantId = ref<string | null>(null)
+let assistantsLoaded = false
+
+async function loadAvailableAssistants() {
+  try {
+    const data = await api.get<{ instances: Array<{ id: string; name: string; enabled?: boolean }> }>('/admin/mobile/my-instances')
+    const instances = (data.instances || []).filter(i => i.enabled !== false)
+    if (instances.length === 0) {
+      availableAssistants.value = []
+      return
+    }
+    // Map existing mobile-source sessions to their instance for fast lookup
+    const sessionsRes = await chatApi.listSessions('mobile')
+    const sessionByInstance = new Map<string, string>()
+    for (const s of sessionsRes.sessions || []) {
+      const sid = (s as ChatSessionSummary & { source_id?: string }).source_id
+      if (sid && !sessionByInstance.has(sid)) sessionByInstance.set(sid, s.id)
+    }
+    availableAssistants.value = instances.map(i => ({
+      id: i.id,
+      title: i.name,
+      sessionId: sessionByInstance.get(i.id) || null,
+    }))
+  } catch {
+    availableAssistants.value = []
+  }
+}
+
+function toggleAssistantSwitcher() {
+  showAssistantSwitcher.value = !showAssistantSwitcher.value
+  if (showAssistantSwitcher.value && !assistantsLoaded) {
+    loadAvailableAssistants()
+    assistantsLoaded = true
+  }
+}
+
+async function switchToAssistant(a: AvailableAssistant) {
+  showAssistantSwitcher.value = false
+  if (a.sessionId && a.sessionId === currentSessionId.value) return
+  switchingToAssistantId.value = a.id
+  try {
+    let targetId = a.sessionId
+    if (!targetId) {
+      const created = await chatApi.createSession(undefined, undefined, 'mobile', a.id)
+      targetId = created.session.id
+    }
+    chatRouter.push(`/chat/${targetId}`)
+  } finally {
+    switchingToAssistantId.value = null
+  }
+}
+
+// Refresh assistant list once on mount so badge appears for users who have any.
+onMounted(() => {
+  loadAvailableAssistants().then(() => { assistantsLoaded = true })
+})
 const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
 const sessionPrompts = ref<ChatSessionPrompt[]>([])
@@ -2647,6 +2714,54 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         <Moon v-else-if="themeStore.resolvedTheme === 'dark'" class="w-4 h-4" />
         <Palette v-else class="w-4 h-4" />
       </button>
+
+      <!-- Assistant switcher (visible when any pre-configured assistant is shared) -->
+      <div v-if="availableAssistants.length > 0" class="relative shrink-0">
+        <button
+          :class="[
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+            showAssistantSwitcher
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+          ]"
+          :title="t('chatView.switchAssistant', 'Сменить ассистента')"
+          @click="toggleAssistantSwitcher"
+        >
+          <Bot class="w-4 h-4" />
+        </button>
+        <div
+          v-if="showAssistantSwitcher"
+          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[220px] max-w-[280px] animate-scale-in"
+          @click.stop
+        >
+          <div class="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border/50">
+            {{ t('chatView.switchAssistant', 'Сменить ассистента') }}
+          </div>
+          <button
+            v-for="a in availableAssistants"
+            :key="a.id"
+            :disabled="switchingToAssistantId === a.id"
+            class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2 disabled:opacity-50"
+            :class="(a.sessionId && a.sessionId === currentSessionId) ? 'bg-primary/10' : ''"
+            @click="switchToAssistant(a)"
+          >
+            <span
+              class="w-1.5 h-1.5 rounded-full shrink-0"
+              :class="(a.sessionId && a.sessionId === currentSessionId) ? 'bg-primary' : 'bg-muted-foreground/40'"
+            />
+            <span
+              class="flex-1 truncate"
+              :class="(a.sessionId && a.sessionId === currentSessionId) ? 'text-primary font-medium' : ''"
+            >{{ a.title }}</span>
+            <Loader2 v-if="switchingToAssistantId === a.id" class="w-3 h-3 animate-spin shrink-0" />
+            <span
+              v-else-if="!a.sessionId"
+              class="text-[10px] uppercase tracking-wide text-muted-foreground/70 shrink-0"
+              :title="t('chatView.assistantNew', 'Сессия будет создана при открытии')"
+            >{{ t('chatView.assistantNewBadge', 'new') }}</span>
+          </button>
+        </div>
+      </div>
 
       <div v-if="isChatOnly" class="w-6 h-px bg-border/50 my-1 shrink-0"></div>
 
