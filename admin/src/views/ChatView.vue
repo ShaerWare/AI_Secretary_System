@@ -176,31 +176,30 @@ const editingContent = ref('')
 const showSettings = ref(false)
 const showUserProfile = ref(false)
 
-// Assistant switcher (mobile-app instances shared with the user via admin).
+// Assistant switcher: lists everything the user can talk to —
+// (a) mobile-app instances shared via admin (lawyer/accountant/etc),
+// (b) the user's "default mobile" session (admin-pinned),
+// (c) chat sessions admin shared with the user (read-only or write).
 // Each instance maps to a per-user ChatSession with source="mobile" +
-// source_id=instance_id, so dialog history is private per (user, assistant).
+// source_id=<instance_id> so dialog history is private per (user, assistant).
 type AvailableAssistant = {
-  id: string
+  id: string                       // instance_id (instance) or session_id (chat)
   title: string
-  sessionId: string | null
+  sessionId: string | null         // existing session to open (null = create on click)
+  kind: 'instance' | 'session'     // 'instance' = create-on-click, 'session' = direct route
+  shared?: boolean                 // shared-with-me chat session (read-only or write)
 }
 const availableAssistants = ref<AvailableAssistant[]>([])
 const showAssistantSwitcher = ref(false)
 const switchingToAssistantId = ref<string | null>(null)
-let assistantsLoaded = false
 
 async function loadAvailableAssistants() {
+  const result: AvailableAssistant[] = []
   try {
+    // (a) Mobile-app instance personas shared with the user
     const data = await api.get<{ instances: Array<{ id: string; name: string; enabled?: boolean }> }>('/admin/mobile/my-instances')
     const instances = (data.instances || []).filter(i => i.enabled !== false)
-    if (instances.length === 0) {
-      availableAssistants.value = []
-      return
-    }
-    // Map mobile-source sessions to their instance. Only consider sessions
-    // the current user can edit — chat-only / non-owner shared sessions
-    // would open in read-only mode, which is wrong for "switch to my
-    // private dialog with this assistant".
+
     const sessionsRes = await chatApi.listSessions('mobile')
     const sessionByInstance = new Map<string, string>()
     for (const s of sessionsRes.sessions || []) {
@@ -210,22 +209,44 @@ async function loadAvailableAssistants() {
         sessionByInstance.set(ext.source_id, s.id)
       }
     }
-    availableAssistants.value = instances.map(i => ({
-      id: i.id,
-      title: i.name,
-      sessionId: sessionByInstance.get(i.id) || null,
-    }))
+    for (const i of instances) {
+      result.push({
+        id: i.id,
+        title: i.name,
+        sessionId: sessionByInstance.get(i.id) || null,
+        kind: 'instance',
+      })
+    }
+
+    // (b)+(c) Chat sessions shared with this user (admin-pinned default + ad-hoc shares)
+    const allSessions = await chatApi.listSessions()
+    for (const s of allSessions.sessions || []) {
+      const ext = s as ChatSessionSummary & {
+        is_shared_with_me?: boolean
+        is_default_mobile?: boolean
+        share_permission?: string
+      }
+      if (ext.is_shared_with_me || ext.is_default_mobile) {
+        result.push({
+          id: s.id,
+          title: s.title || (ext.is_default_mobile ? 'Основной чат' : 'Общий чат'),
+          sessionId: s.id,
+          kind: 'session',
+          shared: true,
+        })
+      }
+    }
+
+    availableAssistants.value = result
   } catch {
-    availableAssistants.value = []
+    availableAssistants.value = result
   }
 }
 
 function toggleAssistantSwitcher() {
   showAssistantSwitcher.value = !showAssistantSwitcher.value
-  if (showAssistantSwitcher.value && !assistantsLoaded) {
-    loadAvailableAssistants()
-    assistantsLoaded = true
-  }
+  // Always refresh on open so list reflects newly created sessions / shares
+  if (showAssistantSwitcher.value) loadAvailableAssistants()
 }
 
 async function switchToAssistant(a: AvailableAssistant) {
@@ -238,15 +259,21 @@ async function switchToAssistant(a: AvailableAssistant) {
       const created = await chatApi.createSession(undefined, undefined, 'mobile', a.id)
       targetId = created.session.id
     }
+    if (!targetId) return
+    // Set the active session FIRST — ChatView keys most things on
+    // currentSessionId, not on the route params (no useRoute watcher).
+    // Without this, router.push alone doesn't actually swap the visible chat.
+    currentSessionId.value = targetId
+    refetchSessions()
     chatRouter.push(`/chat/${targetId}`)
   } finally {
     switchingToAssistantId.value = null
   }
 }
 
-// Refresh assistant list once on mount so badge appears for users who have any.
+// Refresh assistant list once on mount so the badge appears immediately.
 onMounted(() => {
-  loadAvailableAssistants().then(() => { assistantsLoaded = true })
+  loadAvailableAssistants()
 })
 const settingsTab = ref<'session' | 'files'>('session')
 const customPrompt = ref('')
