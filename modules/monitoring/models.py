@@ -62,6 +62,7 @@ class UsageLog(Base):
         String(20), nullable=True, index=True
     )  # "admin", "telegram", "widget"
     source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
     # Usage metrics (tokens for LLM, characters for TTS, seconds for STT)
     units_consumed: Mapped[int] = mapped_column(Integer, default=1)
@@ -74,6 +75,7 @@ class UsageLog(Base):
     __table_args__ = (
         Index("ix_usage_log_service_timestamp", "service_type", "timestamp"),
         Index("ix_usage_log_source_timestamp", "source", "timestamp"),
+        Index("ix_usage_log_user_timestamp", "user_id", "timestamp"),
     )
 
     def to_dict(self) -> dict:
@@ -84,6 +86,7 @@ class UsageLog(Base):
             "action": self.action,
             "source": self.source,
             "source_id": self.source_id,
+            "user_id": self.user_id,
             "units_consumed": self.units_consumed,
             "cost_usd": self.cost_usd,
             "details": json.loads(self.details) if self.details else None,

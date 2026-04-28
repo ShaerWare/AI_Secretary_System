@@ -325,6 +325,55 @@ def _get_model_name(llm_service) -> str:
     return "claude"
 
 
+def _is_claude_provider(llm_service) -> bool:
+    """True if llm_service is a Claude provider (claude / claude_bridge)."""
+    ptype = getattr(llm_service, "provider_type", None)
+    if ptype in ("claude", "claude_bridge"):
+        return True
+    cfg = getattr(llm_service, "config", None)
+    return isinstance(cfg, dict) and cfg.get("provider_type") in ("claude", "claude_bridge")
+
+
+async def _log_llm_usage(
+    llm_service,
+    *,
+    user_id: int | None,
+    source: str | None,
+    source_id: str | None,
+    action: str = "chat",
+) -> None:
+    """Persist last_usage from llm_service to UsageLog. Best-effort, never raises."""
+    try:
+        usage = getattr(llm_service, "last_usage", None)
+        if not usage or not _is_claude_provider(llm_service):
+            return
+        total = int(usage.get("total_tokens") or 0)
+        if total <= 0:
+            return
+        from db.database import AsyncSessionLocal
+        from db.repositories.usage import UsageRepository
+
+        async with AsyncSessionLocal() as session:
+            repo = UsageRepository(session)
+            await repo.log_usage(
+                service_type="llm",
+                action=action,
+                units_consumed=total,
+                source=source,
+                source_id=source_id,
+                user_id=user_id,
+                details={
+                    "input_tokens": int(usage.get("input_tokens") or 0),
+                    "output_tokens": int(usage.get("output_tokens") or 0),
+                    "model": usage.get("model"),
+                    "estimated": bool(usage.get("estimated")),
+                },
+            )
+            await session.commit()
+    except Exception as e:  # pragma: no cover — never break chat on logging failure
+        logger.debug(f"_log_llm_usage failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Facade
 # ---------------------------------------------------------------------------
@@ -502,6 +551,12 @@ class ChatServiceImpl:
         assistant_msg = await self._crud.add_message(
             session_id, "assistant", response_text, parent_id=parent_id
         )
+        await _log_llm_usage(
+            llm,
+            user_id=session.get("owner_id"),
+            source=session.get("source") or "admin",
+            source_id=session_id,
+        )
         return assistant_msg
 
     async def stream_message(
@@ -643,6 +698,14 @@ class ChatServiceImpl:
             # Save full response
             response_text = "".join(full_response)
             assistant_msg = await self._crud.add_message(session_id, "assistant", response_text)
+
+            # Per-user LLM token accounting (Claude only — see _is_claude_provider)
+            await _log_llm_usage(
+                llm,
+                user_id=session.get("owner_id"),
+                source=session.get("source") or "admin",
+                source_id=session_id,
+            )
 
             # Token usage
             all_msgs = messages + [{"role": "assistant", "content": response_text}]

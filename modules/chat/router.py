@@ -387,16 +387,30 @@ async def admin_create_chat_session(
     """Создать новую чат-сессию"""
     owner_id, ws_id = workspace_context(user, "chat")
 
-    # Auto-apply instance system_prompt if not explicitly provided
+    # Auto-apply instance system_prompt + RAG config when not explicitly
+    # provided. Lets the frontend create a session with just `source` +
+    # `source_id` (e.g. assistant switcher) and inherit the persona.
     system_prompt = request.system_prompt
-    if request.source == "widget" and request.source_id and not system_prompt:
+    rag_mode = request.rag_mode
+    inherited_collection_ids: list[int] | None = None
+    if request.source == "widget" and request.source_id:
         widget = await widget_instance_service.get_instance(request.source_id)
-        if widget and widget.get("system_prompt"):
-            system_prompt = widget["system_prompt"]
-    elif request.source == "mobile" and request.source_id and not system_prompt:
+        if widget:
+            if not system_prompt and widget.get("system_prompt"):
+                system_prompt = widget["system_prompt"]
+            if not rag_mode and widget.get("rag_mode"):
+                rag_mode = widget["rag_mode"]
+            if not request.knowledge_collection_id and widget.get("knowledge_collection_ids"):
+                inherited_collection_ids = widget["knowledge_collection_ids"]
+    elif request.source == "mobile" and request.source_id:
         mobile_inst = await mobile_app_instance_service.get_instance(request.source_id)
-        if mobile_inst and mobile_inst.get("system_prompt"):
-            system_prompt = mobile_inst["system_prompt"]
+        if mobile_inst:
+            if not system_prompt and mobile_inst.get("system_prompt"):
+                system_prompt = mobile_inst["system_prompt"]
+            if not rag_mode and mobile_inst.get("rag_mode"):
+                rag_mode = mobile_inst["rag_mode"]
+            if not request.knowledge_collection_id and mobile_inst.get("knowledge_collection_ids"):
+                inherited_collection_ids = mobile_inst["knowledge_collection_ids"]
 
     session = await chat_service.create_session(
         request.title,
@@ -404,10 +418,21 @@ async def admin_create_chat_session(
         request.source,
         request.source_id,
         owner_id=owner_id,
-        rag_mode=request.rag_mode,
+        rag_mode=rag_mode,
         knowledge_collection_id=request.knowledge_collection_id,
         workspace_id=ws_id,
     )
+
+    # Persist inherited multi-collection RAG selection in a follow-up update
+    # (create_session takes a single legacy id; update_session takes the list).
+    if inherited_collection_ids:
+        updated = await chat_service.update_session(
+            session["id"],
+            knowledge_collection_ids=inherited_collection_ids,
+        )
+        if updated:
+            session = updated
+
     return {"session": session}
 
 

@@ -24,6 +24,7 @@ class UsageRepository(BaseRepository[UsageLog]):
         units_consumed: int = 1,
         source: Optional[str] = None,
         source_id: Optional[str] = None,
+        user_id: Optional[int] = None,
         cost_usd: Optional[float] = None,
         details: Optional[dict] = None,
     ) -> dict:
@@ -34,6 +35,7 @@ class UsageRepository(BaseRepository[UsageLog]):
             action=action,
             source=source,
             source_id=source_id,
+            user_id=user_id,
             units_consumed=units_consumed,
             cost_usd=cost_usd,
             details=json.dumps(details, ensure_ascii=False) if details else None,
@@ -41,6 +43,54 @@ class UsageRepository(BaseRepository[UsageLog]):
         self.session.add(entry)
         await self.session.flush()
         return entry.to_dict()
+
+    async def get_user_period_total(
+        self,
+        user_id: int,
+        period_start: datetime,
+        period_end: datetime,
+        service_type: str = "llm",
+    ) -> int:
+        """Return total units_consumed for a single user over the period."""
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(UsageLog.units_consumed), 0)).where(
+                and_(
+                    UsageLog.user_id == user_id,
+                    UsageLog.service_type == service_type,
+                    UsageLog.timestamp >= period_start,
+                    UsageLog.timestamp < period_end,
+                )
+            )
+        )
+        return int(result.scalar() or 0)
+
+    async def get_period_totals_by_user(
+        self,
+        period_start: datetime,
+        period_end: datetime,
+        service_type: str = "llm",
+    ) -> List[dict]:
+        """Return [{user_id, total_units, request_count}, ...] for the period."""
+        result = await self.session.execute(
+            select(
+                UsageLog.user_id,
+                func.coalesce(func.sum(UsageLog.units_consumed), 0),
+                func.count(UsageLog.id),
+            )
+            .where(
+                and_(
+                    UsageLog.service_type == service_type,
+                    UsageLog.timestamp >= period_start,
+                    UsageLog.timestamp < period_end,
+                    UsageLog.user_id.isnot(None),
+                )
+            )
+            .group_by(UsageLog.user_id)
+        )
+        return [
+            {"user_id": int(uid), "tokens": int(total or 0), "requests": int(count)}
+            for uid, total, count in result.all()
+        ]
 
     async def get_usage(
         self,

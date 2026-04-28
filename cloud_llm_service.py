@@ -233,6 +233,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             m for m in self.fallback_models if m != self.model_name
         ]
 
+        # Token usage from the most recent generation (for per-user accounting).
+        # Shape: {"input_tokens": int, "output_tokens": int, "total_tokens": int,
+        #         "model": str, "estimated": bool} or None.
+        self.last_usage: Optional[dict] = None
+
         logger.info(
             f"[{self.provider_id}] Initialized OpenAI-compatible provider: {self.base_url}"
             + (
@@ -245,6 +250,39 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     # HTTP status codes that trigger model fallback
     # 402 = Payment Required (OpenRouter: model too expensive for account tier)
     _RETRIABLE_STATUSES = {402, 404, 429, 500, 502, 503}
+
+    def _capture_usage(self, usage: Optional[dict], model: str, *, estimated: bool) -> None:
+        """Normalize provider usage payload into self.last_usage."""
+        if not usage:
+            self.last_usage = None
+            return
+        prompt = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
+        completion = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
+        self.last_usage = {
+            "input_tokens": prompt,
+            "output_tokens": completion,
+            "total_tokens": prompt + completion,
+            "model": model,
+            "estimated": estimated,
+        }
+
+    def _estimate_usage(self, messages: List[Dict], output_text: str, model: str) -> None:
+        """Fallback when provider doesn't return usage (streaming Claude bridge)."""
+        try:
+            from app.utils.tokens import count_message_tokens, count_tokens
+
+            prompt = int(count_message_tokens(messages, model))
+            completion = int(count_tokens(output_text, model)) if output_text else 0
+            self.last_usage = {
+                "input_tokens": prompt,
+                "output_tokens": completion,
+                "total_tokens": prompt + completion,
+                "model": model,
+                "estimated": True,
+            }
+        except Exception as e:  # pragma: no cover — defensive
+            logger.debug(f"[{self.provider_id}] usage estimate failed: {e}")
+            self.last_usage = None
 
     @staticmethod
     def _ensure_no_proxy_for_localhost():
@@ -507,6 +545,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["choices"][0]["message"]["content"].strip()
+                self._capture_usage(result.get("usage"), model, estimated=False)
                 if model != self._model_chain[0]:
                     logger.info(f"[{self.provider_id}] Fallback succeeded with model: {model}")
                 return content
@@ -555,6 +594,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                         logger.info(
                             f"[{self.provider_id}] Fallback stream opened with model: {model}"
                         )
+                    accumulated: list[str] = []
+                    final_usage: Optional[dict] = None
                     for line in response.iter_lines():
                         if line.startswith("data: "):
                             data = line[6:]
@@ -562,12 +603,22 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                                 break
                             try:
                                 chunk = json.loads(data)
-                                delta = chunk["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    yield content
+                                # OpenAI-compat: final chunk may carry `usage`
+                                if chunk.get("usage"):
+                                    final_usage = chunk["usage"]
+                                choices = chunk.get("choices") or []
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        accumulated.append(content)
+                                        yield content
                             except json.JSONDecodeError:
                                 continue
+                    if final_usage:
+                        self._capture_usage(final_usage, model, estimated=False)
+                    else:
+                        self._estimate_usage(messages, "".join(accumulated), model)
                     return  # Stream completed successfully
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
@@ -863,6 +914,11 @@ class CloudLLMService:
         self.system_prompt = provider_config.get("system_prompt", "")
 
         logger.info(f"CloudLLMService initialized: {self.provider_id} ({self.provider_type})")
+
+    @property
+    def last_usage(self) -> Optional[dict]:
+        """Token usage from the most recent LLM call (proxied from provider)."""
+        return getattr(self.provider, "last_usage", None)
 
     def _normalize_faq(self, faq_dict: Dict[str, str]) -> Dict[str, str]:
         """Нормализует ключи FAQ (lowercase, strip)"""
