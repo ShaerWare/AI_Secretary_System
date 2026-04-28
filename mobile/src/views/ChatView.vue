@@ -208,11 +208,22 @@ function toggleAssistantSwitcher() {
   showAssistantSwitcher.value = !showAssistantSwitcher.value;
 }
 
-function switchToAssistant(id: string) {
+async function switchToAssistant(id: string) {
   showAssistantSwitcher.value = false;
   if (id === sessionId.value) return;
   closePanel();
-  router.replace(`/chat/${id}`);
+  // Reset visible state immediately so old chat doesn't flash during navigation
+  messages.value = [];
+  branches.value = [];
+  contextFiles.value = [];
+  sessionPrompts.value = [];
+  selectedPromptId.value = null;
+  streamingContent.value = "";
+  await router.replace(`/chat/${id}`);
+  // Defensive: explicitly reload in case the sessionId watcher didn't fire
+  // (Vue Router reuses the same component instance for same-named routes)
+  await loadSession();
+  if (showBranches.value) await loadBranches();
 }
 
 function toggleWebSearch() {
@@ -921,7 +932,7 @@ onUnmounted(() => {
     <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Header -->
       <div
-        class="shrink-0 flex items-center gap-1.5 px-2 py-2.5 border-b border-stone-800 bg-stone-950/95 backdrop-blur"
+        class="shrink-0 flex items-center gap-1.5 px-2 py-2.5 border-b border-stone-800 bg-stone-950/95 backdrop-blur relative z-30"
       >
         <button
           class="text-stone-400 hover:text-amber-400 transition-colors p-1"
