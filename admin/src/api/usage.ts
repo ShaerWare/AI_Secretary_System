@@ -95,8 +95,24 @@ export interface UsageCheckResult {
   }>
 }
 
+export interface UsageByUserEntry {
+  user_id: number
+  username: string
+  tokens: number
+  requests: number
+}
+
+export interface UsageByUserResponse {
+  period_start: string
+  period_end: string
+  users: UsageByUserEntry[]
+}
+
 // Usage API
 export const usageApi = {
+  // Per-user Claude period totals (current billing period only)
+  getByUser: () => api.get<UsageByUserResponse>('/admin/usage/by-user'),
+
   // Logs
   getLogs: (params?: UsageQueryParams) => {
     const query = new URLSearchParams()

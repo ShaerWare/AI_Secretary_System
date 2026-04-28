@@ -7,6 +7,7 @@ import {
   type WorkspaceInvite,
   type RoleInfo,
 } from "@/api/workspace";
+import { usageApi, type UsageByUserResponse } from "@/api/usage";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
@@ -60,6 +61,29 @@ const { data: invites, isLoading: invitesLoading } = useQuery({
   queryFn: () => workspaceApi.listInvites(),
   enabled: computed(() => authStore.canManage("users")),
 });
+
+// Per-user Claude token totals for the current billing period (admin only)
+const { data: usageByUser } = useQuery({
+  queryKey: ["usage-by-user"],
+  queryFn: () => usageApi.getByUser(),
+  enabled: computed(() => authStore.canManage("users")),
+});
+
+const tokensByUserId = computed<Record<number, number>>(() => {
+  const result: Record<number, number> = {};
+  const data = usageByUser.value as UsageByUserResponse | undefined;
+  if (!data?.users) return result;
+  for (const u of data.users) {
+    result[u.user_id] = u.tokens;
+  }
+  return result;
+});
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
+}
 
 // Mutations
 const updateRoleMutation = useMutation({
@@ -281,6 +305,9 @@ function roleBadgeClass(roleName: string): string {
               <th class="text-left px-4 py-3 font-medium text-muted-foreground">
                 {{ t("users.lastLogin") }}
               </th>
+              <th class="text-right px-4 py-3 font-medium text-muted-foreground" :title="'Claude tokens this billing period'">
+                Токены
+              </th>
               <th class="text-left px-4 py-3 font-medium text-muted-foreground">
                 {{ t("users.status") }}
               </th>
@@ -336,6 +363,14 @@ function roleBadgeClass(roleName: string): string {
               </td>
               <td class="px-4 py-3 text-muted-foreground">
                 {{ formatDateTime(member.last_login) }}
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums">
+                <span
+                  v-if="tokensByUserId[member.user_id]"
+                  class="text-xs text-orange-400"
+                  :title="`${tokensByUserId[member.user_id].toLocaleString()} токенов в текущем периоде Claude`"
+                >{{ formatTokens(tokensByUserId[member.user_id]) }}</span>
+                <span v-else class="text-xs text-muted-foreground/50">—</span>
               </td>
               <td class="px-4 py-3">
                 <span
