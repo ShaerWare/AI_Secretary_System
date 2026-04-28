@@ -218,10 +218,11 @@ async function loadAvailableAssistants() {
       })
     }
 
-    // (b)+(c) Chat sessions shared with this user (admin-pinned default + write-shares).
-    // Read-only shares are intentionally excluded — they appeared as "fake assistants"
-    // (lawyer/accountant reference chats admins shared for browsing). Switching to a
-    // read-only chat just dead-ends the user — they can't reply.
+    // (b)+(c) Chat sessions shared with this user (admin-pinned default + ad-hoc shares).
+    // For non-admin users, read-only shares are excluded — they appeared as "fake
+    // assistants" (lawyer/accountant reference chats admins shared for browsing) and
+    // switching to one dead-ends the user since they can't reply. Admins keep the full
+    // list since they legitimately need to browse all shares.
     const allSessions = await chatApi.listSessions()
     for (const s of allSessions.sessions || []) {
       const ext = s as ChatSessionSummary & {
@@ -229,9 +230,10 @@ async function loadAvailableAssistants() {
         is_default_mobile?: boolean
         share_permission?: string
       }
-      const isWriteShare =
-        ext.is_shared_with_me && ext.share_permission !== 'read'
-      if (isWriteShare || ext.is_default_mobile) {
+      if (ext.is_shared_with_me || ext.is_default_mobile) {
+        const isReadOnlyShare =
+          ext.is_shared_with_me && ext.share_permission === 'read'
+        if (isReadOnlyShare && !authStore.isAdmin) continue
         result.push({
           id: s.id,
           title: s.title || (ext.is_default_mobile ? 'Основной чат' : 'Общий чат'),
