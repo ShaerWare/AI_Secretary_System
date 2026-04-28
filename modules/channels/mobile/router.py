@@ -229,6 +229,19 @@ async def get_my_mobile_config(user: User = Depends(require_permission("chat", "
     return {"instance": instance}
 
 
+@router.get("/my-instances")
+async def get_my_mobile_instances(user: User = Depends(require_permission("chat", "view"))):
+    """List all mobile app instances assigned to current user.
+
+    Used by the assistant switcher in admin web + mobile app: each instance
+    is a separate persona (system_prompt + RAG collections). Frontend
+    find-or-creates a per-user ChatSession with source="mobile" +
+    source_id=<instance_id> for each.
+    """
+    instances = await mobile_app_instance_service.list_user_instances(user.id)
+    return {"instances": instances}
+
+
 # ============== Version check ==============
 
 

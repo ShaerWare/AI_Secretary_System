@@ -93,6 +93,12 @@ class MobileAppInstanceService:
             repo = MobileAppInstanceRepository(session)
             return await repo.get_user_instance(user_id)
 
+    async def list_user_instances(self, user_id: int) -> List[dict]:
+        """List all enabled mobile instances shared with a user."""
+        async with AsyncSessionLocal() as session:
+            repo = MobileAppInstanceRepository(session)
+            return await repo.list_user_instances(user_id)
+
 
 # Singleton
 mobile_app_instance_service = MobileAppInstanceService()

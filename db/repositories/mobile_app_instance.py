@@ -251,3 +251,21 @@ class MobileAppInstanceRepository(BaseRepository[MobileAppInstance]):
         if not instance or not instance.enabled:
             return None
         return instance.to_dict()
+
+    async def list_user_instances(self, user_id: int) -> List[dict]:
+        """List all enabled mobile instances shared with a user via ResourceShare."""
+        query = (
+            select(MobileAppInstance)
+            .join(
+                ResourceShare,
+                ResourceShare.resource_id == MobileAppInstance.id,
+            )
+            .where(
+                ResourceShare.resource_type == "mobile_app_instance",
+                ResourceShare.user_id == user_id,
+                MobileAppInstance.enabled.is_(True),
+            )
+            .order_by(ResourceShare.shared_at.asc())
+        )
+        result = await self.session.execute(query)
+        return [i.to_dict() for i in result.scalars().all()]
