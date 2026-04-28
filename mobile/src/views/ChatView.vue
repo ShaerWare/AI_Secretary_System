@@ -62,6 +62,18 @@ const webSearchEnabled = ref(false);
 // Token usage
 const tokenUsage = ref<{ tokens: number; context_window: number; percent: number } | null>(null);
 
+// Per-user token total for the current Claude billing period (from /admin/usage/me)
+const periodUsage = ref<{ tokens: number; period_end: string } | null>(null);
+
+async function refreshPeriodUsage() {
+  try {
+    const data = await chatApi.getMyUsage();
+    periodUsage.value = { tokens: data.tokens, period_end: data.period_end };
+  } catch {
+    // best-effort — never break chat on usage fetch failure
+  }
+}
+
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
@@ -284,6 +296,7 @@ async function sendMessage(content: string) {
         case "done":
           isStreaming.value = false;
           streamingContent.value = "";
+          refreshPeriodUsage();
           break;
         case "error":
           isStreaming.value = false;
@@ -879,6 +892,7 @@ watch(sessionId, async (newId, oldId) => {
 onMounted(async () => {
   await loadSession();
   loadAvailableAssistants();
+  refreshPeriodUsage();
   const msg = route.query.msg as string | undefined;
   if (msg) {
     router.replace({ path: route.path, query: {} });
@@ -1418,6 +1432,13 @@ onUnmounted(() => {
           >{{ tick.label }}</span>
           <!-- Right: total -->
           <span class="absolute right-0 text-[9px] text-stone-500 leading-none">{{ formatTokens(tokenUsage.context_window) }}</span>
+        </div>
+        <!-- Per-user Claude period usage (informational, no limit) -->
+        <div v-if="periodUsage" class="mt-0.5">
+          <div class="relative h-0.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 opacity-90" />
+          <div class="text-[9px] text-orange-400/80 leading-none mt-0.5">
+            Период: {{ formatTokens(periodUsage.tokens) }} токенов
+          </div>
         </div>
       </div>
     </div>

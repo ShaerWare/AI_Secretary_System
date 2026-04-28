@@ -109,7 +109,17 @@ export interface StreamChunk {
   found?: boolean;
 }
 
+export interface MyUsage {
+  user_id: number;
+  username: string;
+  tokens: number;
+  period_start: string;
+  period_end: string;
+}
+
 export const chatApi = {
+  getMyUsage: () => api.get<MyUsage>("/admin/usage/me"),
+
   listSessions: () =>
     api.get<{ sessions: ChatSessionSummary[] }>(
       "/admin/chat/sessions",
