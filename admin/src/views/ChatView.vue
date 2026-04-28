@@ -3163,6 +3163,52 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </div>
         </div>
         <div class="flex items-center flex-wrap gap-1 sm:gap-2 shrink-0">
+          <!-- Assistant switcher (also in non-zen header so non-fullscreen users see it) -->
+          <div v-if="availableAssistants.length > 0" class="relative" @click.stop>
+            <button
+              :class="[
+                'p-2 rounded-lg border transition-colors flex items-center gap-1.5',
+                showAssistantSwitcher
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-secondary/50'
+              ]"
+              :title="t('chatView.switchAssistant', 'Сменить ассистента')"
+              @click="toggleAssistantSwitcher"
+            >
+              <Bot class="w-4 h-4" />
+            </button>
+            <div
+              v-if="showAssistantSwitcher"
+              class="absolute right-0 top-full mt-1 bg-popover border border-border rounded-xl shadow-xl py-1 z-50 min-w-[220px] max-w-[280px]"
+            >
+              <div class="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border/50">
+                {{ t('chatView.switchAssistant', 'Сменить ассистента') }}
+              </div>
+              <button
+                v-for="a in availableAssistants"
+                :key="a.id"
+                :disabled="switchingToAssistantId === a.id"
+                class="w-full px-3 py-1.5 text-sm text-left hover:bg-secondary/30 transition-colors flex items-center gap-2 disabled:opacity-50"
+                :class="(a.sessionId && a.sessionId === currentSessionId) ? 'bg-primary/10' : ''"
+                @click="switchToAssistant(a)"
+              >
+                <span
+                  class="w-1.5 h-1.5 rounded-full shrink-0"
+                  :class="(a.sessionId && a.sessionId === currentSessionId) ? 'bg-primary' : 'bg-muted-foreground/40'"
+                />
+                <span
+                  class="flex-1 truncate"
+                  :class="(a.sessionId && a.sessionId === currentSessionId) ? 'text-primary font-medium' : ''"
+                >{{ a.title }}</span>
+                <Loader2 v-if="switchingToAssistantId === a.id" class="w-3 h-3 animate-spin shrink-0" />
+                <span
+                  v-else-if="!a.sessionId"
+                  class="text-[10px] uppercase tracking-wide text-muted-foreground/70 shrink-0"
+                >{{ t('chatView.assistantNewBadge', 'new') }}</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Default Mobile Chat (admin only) -->
           <div v-if="!cc.isActive.value && !isChatOnly && currentSessionId" class="relative" @click.stop>
             <button
