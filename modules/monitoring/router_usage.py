@@ -7,9 +7,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_manager import User, require_permission
+from sqlalchemy import select
+
+from auth_manager import User, get_current_user, require_permission
 from db.database import AsyncSessionLocal
+from db.models import User as UserModel
 from db.repositories.usage import UsageLimitsRepository, UsageRepository
+from modules.monitoring.period import current_period_bounds
 
 
 router = APIRouter(prefix="/admin/usage", tags=["usage"])
@@ -298,3 +302,68 @@ async def admin_get_usage_summary(
             }
 
         return {"summary": summary}
+
+
+# =============================================================================
+# Per-user LLM token tracking (Claude $100 plan, see modules/monitoring/period.py)
+# =============================================================================
+
+
+@router.get("/me")
+async def get_my_usage(user: User = Depends(get_current_user)):
+    """Current user's LLM token total for the active billing period."""
+    period_start, period_end = current_period_bounds()
+    async with AsyncSessionLocal() as session:
+        repo = UsageRepository(session)
+        tokens = await repo.get_user_period_total(
+            user_id=user.id,
+            period_start=period_start,
+            period_end=period_end,
+            service_type="llm",
+        )
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "tokens": tokens,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+    }
+
+
+@router.get("/by-user")
+async def admin_get_usage_by_user(
+    user: User = Depends(require_permission("usage", "view")),
+):
+    """Per-user LLM token totals for the active billing period (admin)."""
+    period_start, period_end = current_period_bounds()
+    async with AsyncSessionLocal() as session:
+        repo = UsageRepository(session)
+        rows = await repo.get_period_totals_by_user(
+            period_start=period_start,
+            period_end=period_end,
+            service_type="llm",
+        )
+        # Resolve user_id -> username in one query
+        user_ids = [r["user_id"] for r in rows]
+        username_by_id: dict[int, str] = {}
+        if user_ids:
+            result = await session.execute(
+                select(UserModel.id, UserModel.username).where(UserModel.id.in_(user_ids))
+            )
+            username_by_id = {uid: name for uid, name in result.all()}
+
+    users = [
+        {
+            "user_id": r["user_id"],
+            "username": username_by_id.get(r["user_id"], f"user#{r['user_id']}"),
+            "tokens": r["tokens"],
+            "requests": r["requests"],
+        }
+        for r in rows
+    ]
+    users.sort(key=lambda u: u["tokens"], reverse=True)
+    return {
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "users": users,
+    }
