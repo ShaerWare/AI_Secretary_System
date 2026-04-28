@@ -197,12 +197,18 @@ async function loadAvailableAssistants() {
       availableAssistants.value = []
       return
     }
-    // Map existing mobile-source sessions to their instance for fast lookup
+    // Map mobile-source sessions to their instance. Only consider sessions
+    // the current user can edit — chat-only / non-owner shared sessions
+    // would open in read-only mode, which is wrong for "switch to my
+    // private dialog with this assistant".
     const sessionsRes = await chatApi.listSessions('mobile')
     const sessionByInstance = new Map<string, string>()
     for (const s of sessionsRes.sessions || []) {
-      const sid = (s as ChatSessionSummary & { source_id?: string }).source_id
-      if (sid && !sessionByInstance.has(sid)) sessionByInstance.set(sid, s.id)
+      const ext = s as ChatSessionSummary & { source_id?: string; is_shared_with_me?: boolean }
+      if (ext.is_shared_with_me) continue
+      if (ext.source_id && !sessionByInstance.has(ext.source_id)) {
+        sessionByInstance.set(ext.source_id, s.id)
+      }
     }
     availableAssistants.value = instances.map(i => ({
       id: i.id,
