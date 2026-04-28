@@ -449,7 +449,7 @@ onActivated(refreshAll);
           О приложении
         </h2>
         <div class="bg-stone-800/50 rounded-xl p-4">
-          <p class="text-stone-400 text-sm">AI Секретарь v1.0.0</p>
+          <p class="text-stone-400 text-sm">AI Секретарь v1.7</p>
         </div>
       </section>
 
