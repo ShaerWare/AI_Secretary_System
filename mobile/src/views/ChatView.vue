@@ -932,17 +932,8 @@ onUnmounted(() => {
     <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Header -->
       <div
-        class="shrink-0 flex items-center gap-1.5 px-2 py-2.5 border-b border-stone-800 bg-stone-950/95 backdrop-blur relative z-30"
+        class="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-stone-800 bg-stone-950/95 backdrop-blur relative z-30"
       >
-        <button
-          class="text-stone-400 hover:text-amber-400 transition-colors p-1"
-          title="Переключить ассистента"
-          @click="toggleAssistantSwitcher"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
         <button
           class="shrink-0 hover:opacity-80 transition-opacity"
           title="Переключить ассистента"
@@ -956,29 +947,14 @@ onUnmounted(() => {
         <!-- Title + assistant switcher -->
         <div class="relative flex-1 min-w-0">
           <button
-            class="w-full flex items-center gap-1.5 text-left group"
+            class="w-full text-left"
             :disabled="availableAssistants.length <= 1"
+            title="Переключить ассистента"
             @click="toggleAssistantSwitcher"
           >
-            <h1 class="text-sm font-medium text-white truncate flex-1">
+            <h1 class="text-sm font-medium text-white truncate">
               {{ title }}
             </h1>
-            <svg
-              v-if="availableAssistants.length > 1"
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="shrink-0 text-stone-400 group-hover:text-amber-400 transition-colors"
-              :class="showAssistantSwitcher ? 'text-amber-400 rotate-180' : ''"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
           </button>
 
           <!-- Dropdown -->
