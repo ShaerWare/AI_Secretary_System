@@ -331,9 +331,7 @@ def _is_claude_provider(llm_service) -> bool:
     if ptype in ("claude", "claude_bridge"):
         return True
     cfg = getattr(llm_service, "config", None)
-    if isinstance(cfg, dict) and cfg.get("provider_type") in ("claude", "claude_bridge"):
-        return True
-    return False
+    return isinstance(cfg, dict) and cfg.get("provider_type") in ("claude", "claude_bridge")
 
 
 async def _log_llm_usage(

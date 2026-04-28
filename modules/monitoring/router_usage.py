@@ -6,7 +6,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-
 from sqlalchemy import select
 
 from auth_manager import User, get_current_user, require_permission
@@ -350,7 +349,7 @@ async def admin_get_usage_by_user(
             result = await session.execute(
                 select(UserModel.id, UserModel.username).where(UserModel.id.in_(user_ids))
             )
-            username_by_id = {uid: name for uid, name in result.all()}
+            username_by_id = dict(result.all())
 
     users = [
         {
