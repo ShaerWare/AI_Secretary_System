@@ -117,6 +117,23 @@ PROVIDER_TYPES = {
 }
 
 
+def _safe_resp_text(response) -> str:
+    """Safely extract response body for logging.
+
+    httpx raises 'Attempted to access streaming response content, without
+    having called read()' when `.text` is read inside a streaming context
+    manager before the body is consumed. This helper calls `.read()` first
+    when needed and never crashes — returns "" on failure.
+    """
+    try:
+        return response.text
+    except Exception:
+        try:
+            return response.read().decode("utf-8", errors="replace")
+        except Exception:
+            return ""
+
+
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
@@ -195,6 +212,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         # one-shot RAG injection instead of agentic loop.
         if self.provider_type == "claude_bridge":
             self.supports_tools = False
+
+        # Per-provider override via config (DB column `config` json blob).
+        # Useful for OpenRouter free chains where most models reject the
+        # `tools` payload with HTTP 404 — set "supports_tools": false to
+        # force one-shot RAG injection instead of agentic tool-loop.
+        if "supports_tools" in self.runtime_params:
+            self.supports_tools = bool(self.runtime_params["supports_tools"])
 
         # Bridge runs on localhost — must bypass global VLESS/HTTP proxy.
         # GeminiProvider sets HTTP_PROXY globally for xray; httpx picks it up
@@ -386,7 +410,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 status = e.response.status_code
                 logger.warning(
                     f"[{self.provider_id}] Model '{model}' tools failed: "
-                    f"HTTP {status} - {e.response.text[:200]}"
+                    f"HTTP {status} - {_safe_resp_text(e.response)[:200]}"
                 )
                 if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
                     continue
@@ -495,7 +519,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 status = e.response.status_code
                 logger.warning(
                     f"[{self.provider_id}] Stream tools model '{model}' failed: "
-                    f"HTTP {status} - {e.response.text[:200]}"
+                    f"HTTP {status} - {_safe_resp_text(e.response)[:200]}"
                 )
                 if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
                     continue
@@ -553,7 +577,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 status = e.response.status_code
                 logger.warning(
                     f"[{self.provider_id}] Model '{model}' failed: "
-                    f"HTTP {status} - {e.response.text[:200]}"
+                    f"HTTP {status} - {_safe_resp_text(e.response)[:200]}"
                 )
                 if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
                     continue
@@ -624,7 +648,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 status = e.response.status_code
                 logger.warning(
                     f"[{self.provider_id}] Stream model '{model}' failed: "
-                    f"HTTP {status} - {e.response.text[:200]}"
+                    f"HTTP {status} - {_safe_resp_text(e.response)[:200]}"
                 )
                 if status in self._RETRIABLE_STATUSES and model != self._model_chain[-1]:
                     continue
