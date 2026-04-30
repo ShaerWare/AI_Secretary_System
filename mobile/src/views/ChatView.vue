@@ -16,6 +16,7 @@ import { useAuthStore } from "@/stores/auth";
 import MessageBubble from "@/components/MessageBubble.vue";
 import ChatInput from "@/components/ChatInput.vue";
 import ContextFilesPanel from "@/components/ContextFilesPanel.vue";
+import AccountPanel from "@/components/AccountPanel.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -47,6 +48,7 @@ const isCreatingAssistant = ref(false);
 const showBranches = ref(false);
 const showContextFiles = ref(false);
 const showSettings = ref(false);
+const showAccount = ref(false);
 const settingsTab = ref<"files" | "prompt">("files");
 const customPrompt = ref("");
 const sessionPrompts = ref<ChatSessionPrompt[]>([]);
@@ -210,6 +212,7 @@ function toggleAssistantSwitcher() {
   showBranches.value = false;
   showContextFiles.value = false;
   showSettings.value = false;
+  showAccount.value = false;
   showAssistantSwitcher.value = true;
   loadAvailableAssistants();
 }
@@ -454,6 +457,7 @@ function toggleBranches() {
   showContextFiles.value = false;
   showSettings.value = false;
   showAssistantSwitcher.value = false;
+  showAccount.value = false;
   showBranches.value = !showBranches.value;
   if (showBranches.value) loadBranches();
 }
@@ -676,6 +680,7 @@ function toggleSettings() {
   showBranches.value = false;
   showContextFiles.value = false;
   showAssistantSwitcher.value = false;
+  showAccount.value = false;
   showSettings.value = !showSettings.value;
 }
 
@@ -855,6 +860,7 @@ function handleSaveToContext(_messageId: string, content: string) {
   showBranches.value = false;
   showSettings.value = false;
   showAssistantSwitcher.value = false;
+  showAccount.value = false;
 }
 
 async function handleSummarizeBranch(messageId: string) {
@@ -867,6 +873,7 @@ async function handleSummarizeBranch(messageId: string) {
     showBranches.value = false;
     showSettings.value = false;
     showAssistantSwitcher.value = false;
+    showAccount.value = false;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось суммаризировать";
   }
@@ -901,10 +908,16 @@ async function handleDeleteFromMessage(messageId: string) {
 }
 
 const anyPanelOpen = computed(
-  () => showBranches.value || showContextFiles.value || showSettings.value || showAssistantSwitcher.value,
+  () =>
+    showBranches.value ||
+    showContextFiles.value ||
+    showSettings.value ||
+    showAssistantSwitcher.value ||
+    showAccount.value,
 );
 const activePanelName = computed(() => {
   if (showAssistantSwitcher.value) return "Ассистенты";
+  if (showAccount.value) return "Аккаунт";
   if (showBranches.value) return "Дерево веток";
   if (showContextFiles.value) return "Файлы контекста";
   if (showSettings.value) return "Настройки";
@@ -916,6 +929,24 @@ function closePanel() {
   showContextFiles.value = false;
   showSettings.value = false;
   showAssistantSwitcher.value = false;
+  showAccount.value = false;
+}
+
+function toggleAccount() {
+  if (showAccount.value) {
+    showAccount.value = false;
+    return;
+  }
+  showBranches.value = false;
+  showContextFiles.value = false;
+  showSettings.value = false;
+  showAssistantSwitcher.value = false;
+  showAccount.value = true;
+}
+
+async function handleAccountLogout() {
+  await auth.logout();
+  router.replace("/login");
 }
 
 watch(streamingContent, () => {
@@ -1033,6 +1064,18 @@ onUnmounted(() => {
         </button>
 
         <button
+          class="p-1.5 rounded-lg transition-colors"
+          :class="showAccount ? 'bg-amber-600/20 text-amber-400' : 'text-stone-400 hover:text-white'"
+          title="Настройки аккаунта"
+          @click="toggleAccount"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </button>
+
+        <button
           class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 transition-colors"
           title="Удалить ветку"
           @click="deleteBranch"
@@ -1106,6 +1149,19 @@ onUnmounted(() => {
                 class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
               >по умолч.</span>
             </button>
+          </template>
+
+          <!-- Account -->
+          <template v-if="showAccount">
+            <div class="px-3 py-2 flex items-center gap-2 border-b border-stone-800 sticky top-0 bg-stone-900/95 backdrop-blur z-10">
+              <span class="text-xs font-medium text-stone-400 uppercase tracking-wide flex-1">Аккаунт</span>
+              <button class="text-stone-500 hover:text-white transition-colors" @click="closePanel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <AccountPanel :active="showAccount" @logout="handleAccountLogout" />
           </template>
 
           <!-- Branch Tree -->
@@ -1554,6 +1610,13 @@ onUnmounted(() => {
                 class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
               >по умолч.</span>
             </button>
+          </div>
+        </template>
+
+        <!-- Account (landscape) -->
+        <template v-if="showAccount">
+          <div class="flex-1 overflow-y-auto">
+            <AccountPanel :active="showAccount" @logout="handleAccountLogout" />
           </div>
         </template>
 
