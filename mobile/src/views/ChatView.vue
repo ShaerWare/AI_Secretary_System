@@ -203,10 +203,15 @@ async function loadAvailableAssistants() {
 }
 
 function toggleAssistantSwitcher() {
-  if (!showAssistantSwitcher.value) {
-    loadAvailableAssistants();
+  if (showAssistantSwitcher.value) {
+    showAssistantSwitcher.value = false;
+    return;
   }
-  showAssistantSwitcher.value = !showAssistantSwitcher.value;
+  showBranches.value = false;
+  showContextFiles.value = false;
+  showSettings.value = false;
+  showAssistantSwitcher.value = true;
+  loadAvailableAssistants();
 }
 
 async function switchToAssistant(id: string) {
@@ -448,6 +453,7 @@ async function loadBranches() {
 function toggleBranches() {
   showContextFiles.value = false;
   showSettings.value = false;
+  showAssistantSwitcher.value = false;
   showBranches.value = !showBranches.value;
   if (showBranches.value) loadBranches();
 }
@@ -669,6 +675,7 @@ async function deleteBranchNode(nodeId: string) {
 function toggleSettings() {
   showBranches.value = false;
   showContextFiles.value = false;
+  showAssistantSwitcher.value = false;
   showSettings.value = !showSettings.value;
 }
 
@@ -847,6 +854,7 @@ function handleSaveToContext(_messageId: string, content: string) {
   showContextFiles.value = true;
   showBranches.value = false;
   showSettings.value = false;
+  showAssistantSwitcher.value = false;
 }
 
 async function handleSummarizeBranch(messageId: string) {
@@ -858,6 +866,7 @@ async function handleSummarizeBranch(messageId: string) {
     showContextFiles.value = true;
     showBranches.value = false;
     showSettings.value = false;
+    showAssistantSwitcher.value = false;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось суммаризировать";
   }
@@ -891,8 +900,11 @@ async function handleDeleteFromMessage(messageId: string) {
   }
 }
 
-const anyPanelOpen = computed(() => showBranches.value || showContextFiles.value || showSettings.value);
+const anyPanelOpen = computed(
+  () => showBranches.value || showContextFiles.value || showSettings.value || showAssistantSwitcher.value,
+);
 const activePanelName = computed(() => {
+  if (showAssistantSwitcher.value) return "Ассистенты";
   if (showBranches.value) return "Дерево веток";
   if (showContextFiles.value) return "Файлы контекста";
   if (showSettings.value) return "Настройки";
@@ -903,6 +915,7 @@ function closePanel() {
   showBranches.value = false;
   showContextFiles.value = false;
   showSettings.value = false;
+  showAssistantSwitcher.value = false;
 }
 
 watch(streamingContent, () => {
@@ -966,62 +979,33 @@ onUnmounted(() => {
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
-        <!-- Title + assistant switcher -->
-        <div class="relative flex-1 min-w-0">
-          <button
-            class="w-full text-left"
-            title="Переключить ассистента"
-            @click="toggleAssistantSwitcher"
+        <!-- Title + chevron (both open assistant panel) -->
+        <button
+          class="flex-1 min-w-0 text-left flex items-center gap-1"
+          title="Переключить ассистента"
+          @click="toggleAssistantSwitcher"
+        >
+          <h1 class="text-sm font-medium text-white truncate">
+            {{ title }}
+          </h1>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="shrink-0 transition-transform"
+            :class="[
+              showAssistantSwitcher ? 'rotate-180 text-amber-400' : 'text-stone-400',
+            ]"
           >
-            <h1 class="text-sm font-medium text-white truncate">
-              {{ title }}
-            </h1>
-          </button>
-
-          <!-- Dropdown -->
-          <div
-            v-if="showAssistantSwitcher"
-            class="absolute left-0 right-0 top-full mt-1 bg-stone-900 border border-stone-700 rounded-lg shadow-2xl z-50 max-h-[60vh] overflow-y-auto"
-          >
-            <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-800 sticky top-0 bg-stone-900">
-              Переключить ассистента
-            </div>
-            <button
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors border-b border-stone-800"
-              :disabled="isCreatingAssistant"
-              @click="createNewAssistant"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-400 shrink-0">
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span class="text-sm flex-1 truncate text-amber-300 font-medium">Создать нового ассистента</span>
-              <span
-                v-if="isCreatingAssistant"
-                class="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0"
-              />
-            </button>
-            <button
-              v-for="a in availableAssistants"
-              :key="a.id"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
-              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
-              @click="switchToAssistant(a.id)"
-            >
-              <span
-                class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
-              />
-              <span
-                class="text-sm flex-1 truncate"
-                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
-              >{{ a.title }}</span>
-              <span
-                v-if="a.is_default_mobile"
-                class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
-              >по умолч.</span>
-            </button>
-          </div>
-        </div>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
 
         <button
           class="p-1.5 rounded-lg transition-colors"
@@ -1077,6 +1061,53 @@ onUnmounted(() => {
           class="shrink-0 bg-stone-900/95 border-b border-stone-700 overflow-y-auto flex flex-col"
           :style="{ height: panelSize + 'px' }"
         >
+          <!-- Assistants -->
+          <template v-if="showAssistantSwitcher">
+            <div class="px-3 py-2 flex items-center gap-2 border-b border-stone-800 sticky top-0 bg-stone-900/95 backdrop-blur z-10">
+              <span class="text-xs font-medium text-stone-400 uppercase tracking-wide flex-1">Ассистенты</span>
+              <button class="text-stone-500 hover:text-white transition-colors" @click="closePanel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <button
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors border-b border-stone-800"
+              :disabled="isCreatingAssistant"
+              @click="createNewAssistant"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-400 shrink-0">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span class="text-sm flex-1 truncate text-amber-300 font-medium">Создать нового ассистента</span>
+              <span
+                v-if="isCreatingAssistant"
+                class="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0"
+              />
+            </button>
+            <div v-if="!availableAssistants.length" class="px-3 py-3 text-sm text-stone-500">Других ассистентов пока нет</div>
+            <button
+              v-for="a in availableAssistants"
+              :key="a.id"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
+              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
+              @click="switchToAssistant(a.id)"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
+              />
+              <span
+                class="text-sm flex-1 truncate"
+                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
+              >{{ a.title }}</span>
+              <span
+                v-if="a.is_default_mobile"
+                class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
+              >по умолч.</span>
+            </button>
+          </template>
+
           <!-- Branch Tree -->
           <template v-if="showBranches">
             <div class="px-3 py-2 flex items-center gap-2">
@@ -1484,6 +1515,47 @@ onUnmounted(() => {
             </svg>
           </button>
         </div>
+
+        <!-- Assistants (landscape) -->
+        <template v-if="showAssistantSwitcher">
+          <button
+            class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors border-b border-stone-800"
+            :disabled="isCreatingAssistant"
+            @click="createNewAssistant"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-400 shrink-0">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span class="text-sm flex-1 truncate text-amber-300 font-medium">Создать нового ассистента</span>
+            <span
+              v-if="isCreatingAssistant"
+              class="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0"
+            />
+          </button>
+          <div v-if="!availableAssistants.length" class="px-3 py-3 text-sm text-stone-500">Других ассистентов пока нет</div>
+          <div v-else class="flex-1 overflow-y-auto">
+            <button
+              v-for="a in availableAssistants"
+              :key="a.id"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
+              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
+              @click="switchToAssistant(a.id)"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
+              />
+              <span
+                class="text-sm flex-1 truncate"
+                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
+              >{{ a.title }}</span>
+              <span
+                v-if="a.is_default_mobile"
+                class="text-[10px] uppercase tracking-wide text-stone-500 shrink-0"
+              >по умолч.</span>
+            </button>
+          </div>
+        </template>
 
         <!-- Branch Tree (landscape) -->
         <template v-if="showBranches">
