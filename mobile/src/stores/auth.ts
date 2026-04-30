@@ -84,8 +84,10 @@ export const useAuthStore = defineStore("auth", () => {
       };
 
       return true;
-    } catch {
-      error.value = "Connection error";
+    } catch (e) {
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      console.error("[login] failed", e);
+      error.value = `Connection error — ${msg}`;
       return false;
     } finally {
       isLoading.value = false;

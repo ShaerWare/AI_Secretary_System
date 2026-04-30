@@ -130,14 +130,16 @@ export const chatApi = {
       `/admin/chat/sessions/${id}`,
     ),
 
-  createSession: (title?: string) => {
+  createSession: (title?: string, options?: { skipInstancePrompt?: boolean }) => {
     const config = useMobileConfigStore();
     const instanceId = config.instance?.id;
     return api.post<{ session: ChatSession }>("/admin/chat/sessions", {
       title,
       source: "mobile",
       source_id: instanceId || undefined,
-      system_prompt: config.instance?.system_prompt || undefined,
+      system_prompt: options?.skipInstancePrompt
+        ? undefined
+        : config.instance?.system_prompt || undefined,
     });
   },
 
