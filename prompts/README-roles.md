@@ -7,6 +7,7 @@
 | `lawyer-ru.md` | Юрист РФ | `ru-uk-rf`, `ru-koap-rf`, `ru-upk-rf`, `ru-gk-rf-1..4`, `ru-tk-rf`, `ru-sk-rf`, `ru-zhk-rf`, `ru-nk-rf-glava-26-2` |
 | `lawyer-kz.md` | Юрист РК | `kz-uk-rk`, `kz-koap-rk`, `kz-upk-rk`, `kz-gk-rk-general`, `kz-gk-rk-special`, `kz-tk-rk`, `kz-nk-rk` |
 | `accountant-kz.md` | Бухгалтер РК | `kz-nk-rk`, `kz-tk-rk` (и в будущем — `kz-kgd`, `kz-mybuh` после второго захода) |
+| `seo-ru.md` | SEO-ассистент (RU) | `ru-sbup-seo` (учебник «SEO от А до Я» + SEO-вики + статьи + архив форума sbup.com) |
 
 Бухгалтер РФ уже частично работает на коллекциях `ru-fns-usn`, `ru-nk-rf-glava-26-2`, `ru-moedelo-usn` — отдельный системный промпт для него можно будет дописать после того, как добавим практические разъяснения по ОСНО / НДС / зарплате (сейчас покрыто только УСН).
 

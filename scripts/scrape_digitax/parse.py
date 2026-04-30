@@ -899,6 +899,13 @@ def parse_file(filepath: Path, slug: str, site_cfg: dict) -> dict | None:
             slug,
             site_cfg.get("ireland_keywords", []),
         )
+    elif site_cfg.get("engine") == "smf":
+        # Try SMF thread parser first (returns None for non-thread pages),
+        # then fall back to generic parser for boards, wiki and articles.
+        result = parse_forum_smf(filepath, slug)
+        if result is not None:
+            return result
+        return parse_generic_page(filepath, slug)
     else:
         return parse_generic_page(filepath, slug)
 

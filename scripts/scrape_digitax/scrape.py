@@ -352,13 +352,10 @@ def filter_smf_forum(url: str, cfg: dict) -> bool:
 
     # Reject asset extensions just in case (already handled in extract,
     # belt-and-braces).
-    if re.search(
+    return not re.search(
         r"\.(pdf|jpe?g|png|gif|svg|css|js|zip|rar|doc|docx|xls|xlsx|mp[34]|webp|ico)$",
         path,
-    ):
-        return False
-
-    return True
+    )
 
 
 def extract_links_smf(url: str, html_text: str, base_url: str) -> list[str]:
