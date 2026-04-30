@@ -24,9 +24,14 @@ onMounted(async () => {
 
 async function handleLogin() {
   const ok = await auth.login(username.value, password.value);
-  if (ok) {
+  if (!ok) return;
+  try {
     await mobileConfig.load();
-    router.replace("/chats");
+    await router.replace("/chats");
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.error("[login] post-login step failed", e);
+    auth.error = `После логина: ${msg}`;
   }
 }
 </script>
