@@ -275,6 +275,118 @@ def filter_icaew(url: str, cfg: dict) -> bool:
     return stay_under in path
 
 
+def filter_smf_forum(url: str, cfg: dict) -> bool:
+    """Filter for Simple Machines Forum (SMF 2.x) sites.
+
+    SMF generates a lot of non-content URLs (action handlers, profile pages,
+    print views, attachments, smileys, themes assets). We keep:
+      * forum threads / category indices
+      * wiki pages
+      * articles
+      * static info pages
+    and reject the rest. Pagination in SMF uses `topic.<offset>` query OR
+    rewritten `/<page>/` suffixes — both pass the filter.
+    """
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    query = (parsed.query or "").lower()
+
+    # Reject SMF action handlers (login, register, profile, admin, search,
+    # PM, attachments, etc.). Both `?action=` and rewritten `/action/<x>/`.
+    if "action=" in query:
+        return False
+    bad_query_keys = (
+        "action=login",
+        "action=register",
+        "action=profile",
+        "action=admin",
+        "action=search",
+        "action=pm",
+        "action=help",
+        "action=credits",
+        "action=mlist",
+        "action=stats",
+        "action=who",
+        "action=printpage",
+        "action=verificationcode",
+        "action=unread",
+        "action=recent",
+    )
+    if any(k in query for k in bad_query_keys):
+        return False
+
+    # Reject path-style action handlers and SMF asset dirs.
+    bad_path_segments = (
+        "/login",
+        "/register",
+        "/logout",
+        "/profile/",
+        "/profile.",
+        "/admin/",
+        "/search/",
+        "/search.",
+        "/messageindex",
+        "/printpage",
+        "/recent",
+        "/unread",
+        "/credits",
+        "/mlist",
+        "/who/",
+        "/help/",
+        "/themes/",
+        "/sources/",
+        "/avatars/",
+        "/smileys/",
+        "/attachments/",
+        "/cgi-bin/",
+        # sbup.com specific noise
+        "/seo-tools/",
+        "/seo-rating/",
+        "/seo-comparison/",
+        "/seo-audit/",
+        "/podderzhka",
+        "/donate",
+    )
+    if any(seg in path for seg in bad_path_segments):
+        return False
+
+    # Reject asset extensions just in case (already handled in extract,
+    # belt-and-braces).
+    if re.search(
+        r"\.(pdf|jpe?g|png|gif|svg|css|js|zip|rar|doc|docx|xls|xlsx|mp[34]|webp|ico)$",
+        path,
+    ):
+        return False
+
+    return True
+
+
+def extract_links_smf(url: str, html_text: str, base_url: str) -> list[str]:
+    """SMF link extractor — generic + drop SMF session ids from URLs.
+
+    SMF injects `PHPSESSID=` into URLs for visitors without cookies. Two
+    visits to the same page produce different URLs; if we don't strip the
+    parameter, the BFS treats them as distinct and explodes. The crawler's
+    own `_normalize_url` doesn't touch query strings, so we strip here.
+    """
+    raw = extract_links_generic(url, html_text, base_url)
+    cleaned = []
+    for link in raw:
+        parsed = urlparse(link)
+        if parsed.query:
+            # Drop volatile session/anchor keys, keep semantic ones (topic, board, etc.).
+            kept = [
+                kv
+                for kv in parsed.query.split("&")
+                if not kv.lower().startswith(("phpsessid=", "sa=", "msg=", "all"))
+                and not kv.lower().startswith("prev_next=")
+            ]
+            new_query = "&".join(kept)
+            link = parsed._replace(query=new_query).geturl()
+        cleaned.append(link)
+    return cleaned
+
+
 def filter_professional_site(url: str, cfg: dict) -> bool:
     """Filter for professional body sites — skip login, search, media."""
     path = urlparse(url).path.lower()
@@ -307,6 +419,7 @@ LINK_EXTRACTORS: dict[str, callable] = {
     "boards-ie-accountancy": extract_links_boards_ie,
     "accountant-forums-ireland": extract_links_accountant_forums,
     "icaew-ireland": extract_links_icaew,
+    "ru-sbup-seo": extract_links_smf,
 }
 
 LINK_FILTERS: dict[str, callable] = {
@@ -343,6 +456,9 @@ LINK_FILTERS: dict[str, callable] = {
     "kz-tk-rk": filter_icaew,
     "kz-gk-rk-general": filter_icaew,
     "kz-gk-rk-special": filter_icaew,
+    # SMF forum + wiki + articles — uses dedicated SMF filter that drops
+    # action handlers, profile/admin pages, and sbup.com tools sections.
+    "ru-sbup-seo": filter_smf_forum,
 }
 
 

@@ -327,6 +327,26 @@ CONTENT_SELECTORS = {
         '//div[@id="content"]',
         "//body",
     ],
+    # sbup.com — Russian SEO portal. Three engines on one domain:
+    # - SMF 2.1 forum: posts wrapped in <div id="forumposts"> (handled by
+    #   the dedicated SMF post parser, these selectors are the fallback
+    #   for category/board index pages).
+    # - MediaWiki wiki under /wiki/: real article body lives in
+    #   #mw-content-text (MediaWiki standard).
+    # - Custom CMS under /seo-articales/ and root-level info pages: no
+    #   semantic <main>; the central column is wrapped in #main_content_section
+    #   (SMF skin shared across the site) which also covers most static pages.
+    "ru-sbup-seo": [
+        '//div[@id="mw-content-text"]',
+        '//div[@id="bodyContent"]',
+        '//div[@id="forumposts"]',
+        '//div[@id="main_content_section"]',
+        '//div[@id="content_section"]',
+        '//div[@id="content"]',
+        "//main",
+        "//article",
+        "//body",
+    ],
     # consultant.ru — Russian legal portal. Document body lives inside
     # `<div class="content document-page">`. Falling back to <body> drags in
     # the global "popular codes" sidebar (`div.seo-links`) — that strip is
@@ -642,6 +662,166 @@ def parse_forum_accountant_forums(
         parts.append("")
 
     content = "\n\n".join(parts)
+
+    return {
+        "title": title,
+        "content": content,
+        "post_count": len(posts),
+    }
+
+
+def _clean_smf_post(text: str) -> str:
+    """Remove SMF-specific noise from post body text.
+
+    SMF wraps each post with attribution chrome ("« Ответ #5 : ...", "Записан",
+    quote/edit links, signatures separated by '--'). We strip the obvious
+    boilerplate and let _clean_forum_post do the universal whitespace pass.
+    """
+    text = text.replace("\t", " ")
+    # SMF post header: "« Ответ #N : дата »"
+    text = re.sub(r"«\s*Ответ\s*#\d+\s*:.*?»", "", text)
+    text = re.sub(r"«\s*Reply\s*#\d+\s*:.*?»", "", text, flags=re.IGNORECASE)
+    # SMF "Записан" / "Logged" footer under each post
+    text = re.sub(r"^\s*(Записан|Logged)\s*$", "", text, flags=re.MULTILINE)
+    # SMF action links
+    text = re.sub(
+        r"^\s*(Цитировать|Quote|Изменить|Edit|Удалить|Delete|Модерировать|Moderate)\s*$",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    # SMF signature separator '--' on its own line splits sig from body
+    parts = re.split(r"\n\s*--\s*\n", text)
+    if len(parts) > 1 and len(parts[0]) > len(parts[-1]):
+        # Keep the largest leading section, drop trailing signature(s)
+        text = parts[0]
+    # Karma / reputation lines under poster
+    text = re.sub(
+        r"^\s*(Карма|Karma|Сообщений|Posts|Репутация|Reputation):\s*[+\-\d ]+\s*$",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    # User group / online status lines
+    text = re.sub(r"^\s*(Online|Offline|В сети|Не в сети)\s*$", "", text, flags=re.MULTILINE)
+    return _clean_forum_post(text)
+
+
+def parse_forum_smf(filepath: Path, slug: str) -> dict | None:
+    """Parse a Simple Machines Forum (SMF 2.x) thread into one markdown doc.
+
+    Detects #forumposts; if absent, the page is not a thread (board index,
+    info page, etc.) and we fall back to the generic parser. Each post in
+    SMF is wrapped in `.post_wrapper` (with `.poster` for author block and
+    `.inner` for body text). All replies on the page are merged into a
+    single doc with per-post sub-headers, identical to boards.ie output.
+    """
+    try:
+        raw = filepath.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+
+    if not raw.strip():
+        return None
+
+    try:
+        tree = lxml_html.fromstring(raw)
+    except Exception:
+        return None
+
+    # If there's no #forumposts root, this isn't a thread — let the generic
+    # parser handle it (board index, wiki, article, etc.).
+    forumposts = tree.xpath('//div[@id="forumposts"]')
+    if not forumposts:
+        return None
+
+    title = extract_title(tree, slug) or filepath.stem
+    # SMF prefixes thread titles with "Тема: " / "Topic: " — strip.
+    title = re.sub(r"^(Тема|Topic):\s*", "", title, flags=re.IGNORECASE).strip()
+
+    posts = []
+    for post_el in forumposts[0].xpath(
+        './/div[contains(@class, "post_wrapper")]'
+        '| .//div[contains(@class, "windowbg") and .//div[contains(@class, "inner")]]'
+    ):
+        # Author — SMF puts <h4 class="poster_info"> with <a> inside .poster.
+        author_els = post_el.xpath(
+            ".//h4//a/text()"
+            '| .//*[contains(@class, "poster")]//a/text()'
+            '| .//*[contains(@class, "name")]//a/text()'
+            '| .//*[contains(@class, "name")]/text()'
+        )
+        author = ""
+        for a in author_els:
+            a = (a or "").strip()
+            if a:
+                author = a
+                break
+        if not author:
+            author = "Anonymous"
+
+        # Date — usually in .keyinfo .smalltext (text like "« Сегодня в 12:34 »"
+        # or a parseable date).
+        date_els = post_el.xpath(
+            './/*[contains(@class, "keyinfo")]//*[contains(@class, "smalltext")]/text()'
+            '| .//*[contains(@class, "keyinfo")]//time/@datetime'
+            "| .//time/@datetime"
+        )
+        post_date = ""
+        for d in date_els:
+            d = (d or "").strip()
+            if d:
+                # Keep a reasonable preview; SMF dates can be verbose
+                post_date = d[:60]
+                break
+
+        # Body — .inner is the SMF standard for the message text container.
+        body_els = post_el.xpath(
+            './/*[contains(@class, "inner") and not(contains(@class, "topslice"))]'
+            '| .//*[contains(@class, "post") and not(contains(@class, "post_wrapper"))]'
+        )
+        if body_els:
+            strip_boilerplate(body_els[0])
+            # Drop quoted blocks — they duplicate previous posts and inflate
+            # the doc with redundant text. Keep the original poster's words.
+            for quote in body_els[0].xpath(
+                ".//blockquote"
+                '| .//*[contains(@class, "quote")]'
+                '| .//*[contains(@class, "quoteheader")]'
+            ):
+                parent = quote.getparent()
+                if parent is not None:
+                    parent.remove(quote)
+            # Signatures
+            for sig in body_els[0].xpath('.//*[contains(@class, "signature")]'):
+                parent = sig.getparent()
+                if parent is not None:
+                    parent.remove(sig)
+            body = (body_els[0].text_content() or "").strip()
+        else:
+            body = ""
+
+        body = _clean_smf_post(body)
+
+        if body and len(body) > 30:
+            posts.append({"author": author, "date": post_date, "body": body})
+
+    if not posts:
+        return None
+
+    parts = []
+    for post in posts:
+        header = f"### Сообщение от {post['author']}"
+        if post["date"]:
+            header += f" ({post['date']})"
+        parts.append(header)
+        parts.append(post["body"])
+        parts.append("")
+
+    content = "\n\n".join(parts)
+
+    if len(content) < MIN_CONTENT_LENGTH:
+        return None
 
     return {
         "title": title,
