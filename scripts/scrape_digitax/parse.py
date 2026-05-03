@@ -19,6 +19,7 @@ from pathlib import Path
 
 from config import (
     MIN_CONTENT_LENGTH,
+    RU_FEDERAL_LAWS,
     SITES,
     get_site_parsed_dir,
     get_site_raw_dir,
@@ -368,6 +369,8 @@ _CONSULTANT_RU_SLUGS = {
     "ru-zhk-rf",
     "ru-nk-rf-glava-26-2",
     "ru-fns-usn",
+    # Constitution + federal laws + remaining codes added via RU_FEDERAL_LAWS.
+    *(slug for slug, *_ in RU_FEDERAL_LAWS),
 }
 _ADILET_SLUGS = {
     "kz-nk-rk",

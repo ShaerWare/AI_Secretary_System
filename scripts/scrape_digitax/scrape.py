@@ -17,6 +17,7 @@ from collections import deque
 from urllib.parse import urlparse
 
 from config import (
+    RU_FEDERAL_LAWS,
     SITES,
     fetch_page,
     get_site_raw_dir,
@@ -344,6 +345,10 @@ LINK_FILTERS: dict[str, callable] = {
     "kz-gk-rk-general": filter_icaew,
     "kz-gk-rk-special": filter_icaew,
 }
+# Russian Constitution + federal laws + remaining codes (consultant.ru) all
+# share the same stay_under filter shape; pick them up from the central list.
+for _slug, *_ in RU_FEDERAL_LAWS:
+    LINK_FILTERS[_slug] = filter_icaew
 
 
 # ---------------------------------------------------------------------------
