@@ -15,7 +15,7 @@
 
 [![Сайт и демо админки](https://img.shields.io/badge/Сайт_и_демо_админки-ai--sekretar24.ru-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ai-sekretar24.ru/)
 [![Telegram поддержка](https://img.shields.io/badge/Поддержка_и_ассистент-@ai__sekretar24bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/ai_sekretar24bot)
-[![Android APK](https://img.shields.io/badge/Android_APK-v2.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v2.0/ai-secretary-2.0.apk)
+[![Android APK](https://img.shields.io/badge/Android_APK-v2.1-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v2.1/ai-secretary-2.1.apk)
 
 [Сайт проекта и демо админки](https://ai-sekretar24.ru/) (логин/пароль: `admin` / `admin`) | [Telegram поддержки и ассистент проекта](https://t.me/ai_sekretar24bot) | [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) | [Issues](https://github.com/ShaerWare/AI_Secretary_System/issues) | [Android APK](https://github.com/ShaerWare/AI_Secretary_System/releases/latest)
 
@@ -563,13 +563,13 @@ curl -X POST http://localhost:8002/admin/telegram/instances/{id}/start
 
 **Скачать APK:**
 
-📱 [**ai-secretary-2.0.apk**](https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v2.0/ai-secretary-2.0.apk) — последняя сборка (debug, не подписана для Play Store)
+📱 [**ai-secretary-2.1.apk**](https://github.com/ShaerWare/AI_Secretary_System/releases/download/mobile-v2.1/ai-secretary-2.1.apk) — последняя сборка (debug, не подписана для Play Store)
 
 Все релизы: [github.com/ShaerWare/AI_Secretary_System/releases](https://github.com/ShaerWare/AI_Secretary_System/releases)
 
 **Установка через adb:**
 ```bash
-adb install -r ai-secretary-2.0.apk
+adb install -r ai-secretary-2.1.apk
 ```
 
 Или скопируйте APK на телефон и откройте в файловом менеджере (разрешите «Установка из неизвестных источников»). При ошибке `INSTALL_FAILED_UPDATE_INCOMPATIBLE` сначала удалите старую версию: `adb uninstall com.shaerware.aisecretary`.
