@@ -37,6 +37,24 @@ export async function initPush(): Promise<void> {
       return;
     }
 
+    // Android 8+ requires an explicit notification channel — without it the
+    // system silently drops FCM messages that target channel_id="default".
+    // Server sends with channel_id="default", so we create it here.
+    try {
+      await PushNotifications.createChannel({
+        id: "default",
+        name: "Уведомления",
+        description: "Новости и обновления AI-Секретаря",
+        importance: 5,
+        visibility: 1,
+        lights: true,
+        vibration: true,
+        sound: "default",
+      });
+    } catch (e) {
+      console.warn("[push] createChannel failed (may already exist)", e);
+    }
+
     // Listeners must be registered before register()
     PushNotifications.addListener("registration", async (token) => {
       try {

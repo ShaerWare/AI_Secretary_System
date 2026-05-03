@@ -22,9 +22,9 @@ const showAbout = ref(false)
 const activeTab = ref<'ai' | 'privacy' | 'features' | 'channels' | 'cases'>('cases')
 
 // Mobile app version — fetched from /admin/mobile/version (driven by MOBILE_LATEST_* env on server)
-const mobileVersion = ref('2.1')
+const mobileVersion = ref('2.2')
 const mobileApkUrl = ref(
-  'https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.1.apk',
+  'https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk',
 )
 
 async function fetchMobileVersion() {
