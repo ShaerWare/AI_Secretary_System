@@ -20,6 +20,7 @@ from modules.channels.telegram.service import bot_instance_service
 from modules.channels.whatsapp.service import whatsapp_instance_service
 from modules.channels.widget.service import widget_instance_service
 from modules.chat.facade import ChatServiceImpl, chat_service_facade
+from modules.chat.presets import resolve_presets
 from modules.chat.service import chat_service, chat_share_service
 from modules.knowledge.service import knowledge_collection_service
 from modules.llm.service import cloud_provider_service
@@ -227,6 +228,11 @@ class CreateSessionRequest(BaseModel):
     source_id: Optional[str] = None  # identifier (e.g., "bot_id:user_id")
     rag_mode: Optional[str] = None  # "all", "collection", "none"
     knowledge_collection_id: Optional[int] = None
+    # Multi-collection RAG selection (used by assistant-preset picker —
+    # frontend sends the full list resolved from preset). Applied via a
+    # follow-up update_session call after create_session, which only takes
+    # the legacy single-id field.
+    knowledge_collection_ids: Optional[list[int]] = None
 
 
 class BulkDeleteRequest(BaseModel):
@@ -380,6 +386,21 @@ async def admin_list_chat_sessions(
     return {"sessions": sessions}
 
 
+@router.get("/assistant-presets")
+async def admin_list_assistant_presets(
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Список темплейтов «нового ассистента» для picker-а в чате.
+
+    Каждый темплейт = тематический промпт + набор коллекций. Slug-и
+    коллекций резолвятся против live DB; отсутствующие тихо пропускаются,
+    промпт-файл подгружается из `prompts/` (None → fallback на
+    platform-agent во время разговора). См. `modules/chat/presets.py`.
+    """
+    presets = await resolve_presets(knowledge_collection_service)
+    return {"presets": presets}
+
+
 @router.post("/sessions")
 async def admin_create_chat_session(
     request: CreateSessionRequest, user: User = Depends(require_permission("chat", "edit"))
@@ -423,12 +444,14 @@ async def admin_create_chat_session(
         workspace_id=ws_id,
     )
 
-    # Persist inherited multi-collection RAG selection in a follow-up update
-    # (create_session takes a single legacy id; update_session takes the list).
-    if inherited_collection_ids:
+    # Multi-collection RAG selection. Explicit request.knowledge_collection_ids
+    # (e.g. assistant-preset picker) wins over instance-inherited list.
+    explicit_ids = request.knowledge_collection_ids
+    final_ids = explicit_ids if explicit_ids is not None else inherited_collection_ids
+    if final_ids:
         updated = await chat_service.update_session(
             session["id"],
-            knowledge_collection_ids=inherited_collection_ids,
+            knowledge_collection_ids=final_ids,
         )
         if updated:
             session = updated

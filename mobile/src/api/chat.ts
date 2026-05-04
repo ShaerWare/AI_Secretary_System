@@ -130,16 +130,31 @@ export const chatApi = {
       `/admin/chat/sessions/${id}`,
     ),
 
-  createSession: (title?: string, options?: { skipInstancePrompt?: boolean }) => {
+  createSession: (
+    title?: string,
+    options?: {
+      skipInstancePrompt?: boolean;
+      systemPrompt?: string | null;
+      knowledgeCollectionIds?: number[];
+      ragMode?: string | null;
+    },
+  ) => {
     const config = useMobileConfigStore();
     const instanceId = config.instance?.id;
+    // Explicit systemPrompt (from preset picker) wins over instance default.
+    const systemPrompt =
+      options?.systemPrompt !== undefined
+        ? options.systemPrompt
+        : options?.skipInstancePrompt
+          ? undefined
+          : config.instance?.system_prompt || undefined;
     return api.post<{ session: ChatSession }>("/admin/chat/sessions", {
       title,
       source: "mobile",
       source_id: instanceId || undefined,
-      system_prompt: options?.skipInstancePrompt
-        ? undefined
-        : config.instance?.system_prompt || undefined,
+      system_prompt: systemPrompt,
+      knowledge_collection_ids: options?.knowledgeCollectionIds,
+      rag_mode: options?.ragMode,
     });
   },
 
