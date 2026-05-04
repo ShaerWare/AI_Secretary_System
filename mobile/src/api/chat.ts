@@ -132,7 +132,13 @@ export const chatApi = {
 
   createSession: (
     title?: string,
-    options?: { skipInstancePrompt?: boolean; instanceId?: string | null },
+    options?: {
+      skipInstancePrompt?: boolean;
+      instanceId?: string | null;
+      systemPrompt?: string | null;
+      knowledgeCollectionIds?: number[];
+      ragMode?: string | null;
+    },
   ) => {
     const config = useMobileConfigStore();
     // Explicit instanceId wins; else fall back to the active assistant.
@@ -141,13 +147,20 @@ export const chatApi = {
         ? options.instanceId
         : config.instance?.id;
     const inst = config.getById(instanceId);
+    // Explicit systemPrompt (from preset picker) wins over instance default.
+    const systemPrompt =
+      options?.systemPrompt !== undefined
+        ? options.systemPrompt
+        : options?.skipInstancePrompt
+          ? undefined
+          : inst?.system_prompt || undefined;
     return api.post<{ session: ChatSession }>("/admin/chat/sessions", {
       title,
       source: instanceId ? "mobile" : "admin",
       source_id: instanceId || undefined,
-      system_prompt: options?.skipInstancePrompt
-        ? undefined
-        : inst?.system_prompt || undefined,
+      system_prompt: systemPrompt,
+      knowledge_collection_ids: options?.knowledgeCollectionIds,
+      rag_mode: options?.ragMode,
     });
   },
 
