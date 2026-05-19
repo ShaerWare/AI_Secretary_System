@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /$
+Allow: /index.html
+Allow: /styles.css
+Allow: /main.js
+Allow: /favicon.svg
+Allow: /og-image.png
+Disallow: /admin/
+
+Sitemap: https://ai-sekretar24.ru/sitemap.xml
