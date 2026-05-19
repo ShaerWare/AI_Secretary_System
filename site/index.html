@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#09090b" />
+
+  <title>Секретарь24 — AI-секретарь для бизнеса: звонки, чаты и заявки 24/7</title>
+  <meta name="description" content="Секретарь24 — виртуальный AI-ассистент для бизнеса. Отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону, работает по вашей базе знаний и передаёт горячие лиды в CRM. Бесплатный триал 14 дней." />
+  <meta name="keywords" content="ИИ секретарь, AI-секретарь, виртуальный ассистент для бизнеса, чат-бот для Telegram, чат-бот WhatsApp, голосовой робот, автоматизация колл-центра, AI ассистент юрист, AI ассистент бухгалтер" />
+  <link rel="canonical" href="https://ai-sekretar24.ru/" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Секретарь24" />
+  <meta property="og:title" content="Секретарь24 — AI-секретарь для бизнеса 24/7" />
+  <meta property="og:description" content="Виртуальный AI-ассистент: отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону. Бесплатный триал 14 дней." />
+  <meta property="og:url" content="https://ai-sekretar24.ru/" />
+  <meta property="og:image" content="https://ai-sekretar24.ru/og-image.png" />
+  <meta property="og:locale" content="ru_RU" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Секретарь24 — AI-секретарь для бизнеса 24/7" />
+  <meta name="twitter:description" content="Виртуальный AI-ассистент: Telegram, WhatsApp, сайт, телефония. Триал 14 дней." />
+  <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.png" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- SEO: структурированные данные -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Секретарь24",
+    "url": "https://ai-sekretar24.ru/",
+    "logo": "https://ai-sekretar24.ru/favicon.svg",
+    "description": "Платформа виртуальных AI-ассистентов для бизнеса.",
+    "sameAs": ["https://t.me/ai_sekretar24bot", "https://github.com/ShaerWare/AI_Secretary_System"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Секретарь24",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web, Android",
+    "description": "Виртуальный AI-ассистент для бизнеса: Telegram, WhatsApp, виджет сайта, телефония, база знаний и интеграции с CRM.",
+    "offers": [
+      { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB" },
+      { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB" },
+      { "@type": "Offer", "name": "Команда", "price": "29900", "priceCurrency": "RUB" }
+    ],
+    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Чем это отличается от обычного чат-бота?", "acceptedAnswer": { "@type": "Answer", "text": "Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту." } },
+      { "@type": "Question", "name": "Безопасны ли мои данные?", "acceptedAnswer": { "@type": "Answer", "text": "Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр." } },
+      { "@type": "Question", "name": "Нужен ли свой сервер?", "acceptedAnswer": { "@type": "Answer", "text": "Нет. На тарифах Старт, Бизнес и Команда всё работает в облаке. Свой сервер нужен только для on-premise развёртывания с локальным ИИ (Enterprise)." } },
+      { "@type": "Question", "name": "С какими каналами работает ассистент?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно." } },
+      { "@type": "Question", "name": "Можно ли подключить телефонию?", "acceptedAnswer": { "@type": "Answer", "text": "Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом." } },
+      { "@type": "Question", "name": "Что будет после триала?", "acceptedAnswer": { "@type": "Answer", "text": "14 дней бесплатно без привязки карты. После — выберите подходящий тариф. Данные и настройки сохранятся." } }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ============ ШАПКА ============ -->
+  <header class="header" id="header">
+    <div class="container header__inner">
+      <a href="#" class="logo" aria-label="Секретарь24">
+        <svg class="logo__mark" viewBox="0 0 512 512" aria-hidden="true">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#F0A830" />
+              <stop offset="100%" stop-color="#C27010" />
+            </linearGradient>
+          </defs>
+          <path fill="url(#g)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z" />
+        </svg>
+        <span class="logo__text">Секретарь<span class="logo__accent">24</span></span>
+      </a>
+
+      <nav class="nav" id="nav">
+        <a href="#features">Возможности</a>
+        <a href="#roles">Роли</a>
+        <a href="#pricing">Тарифы</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <div class="header__actions">
+        <a href="/admin/" class="btn btn--ghost">Войти</a>
+        <a href="#start" class="btn btn--primary">Попробовать бесплатно</a>
+      </div>
+
+      <button class="burger" id="burger" aria-label="Меню" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="hero__glow" aria-hidden="true"></div>
+      <div class="container hero__inner">
+        <div class="hero__badge">⚡ Запуск за 5 минут · без программистов</div>
+        <h1 class="hero__title">
+          AI-секретарь для бизнеса:<br />
+          <span class="accent">звонки, чаты и заявки</span> — 24/7
+        </h1>
+        <p class="hero__subtitle">
+          Секретарь24 — виртуальный ассистент на базе искусственного интеллекта.
+          Отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону,
+          работает по вашей базе знаний и передаёт горячие лиды в CRM.
+        </p>
+        <div class="hero__cta">
+          <a href="#start" class="btn btn--primary btn--lg">Попробовать бесплатно 14 дней</a>
+          <a href="#pricing" class="btn btn--outline btn--lg">Смотреть тарифы</a>
+        </div>
+        <p class="hero__trust">Без привязки карты · Триал на полном функционале · Отмена в один клик</p>
+
+        <div class="hero__channels">
+          <span>Работает в каналах:</span>
+          <div class="hero__channels-list">
+            <span class="chip">Telegram</span>
+            <span class="chip">WhatsApp</span>
+            <span class="chip">Виджет на сайт</span>
+            <span class="chip">Телефония</span>
+            <span class="chip">Android</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ПРОБЛЕМА ============ -->
+    <section class="section problem">
+      <div class="container">
+        <h2 class="section__title">Каждый необработанный диалог — это упущенные деньги</h2>
+        <div class="grid grid-3">
+          <article class="pain">
+            <div class="pain__icon">📵</div>
+            <h3>Пропущенный звонок = потерянный клиент</h3>
+            <p>Ночью, в выходные, в обеденный перерыв — обращения остаются без ответа, а клиент уходит к конкуренту.</p>
+          </article>
+          <article class="pain">
+            <div class="pain__icon">🐌</div>
+            <h3>Менеджер отвечает через час</h3>
+            <p>Пока сотрудник освободится, клиент уже остыл или купил в другом месте. Скорость ответа решает сделку.</p>
+          </article>
+          <article class="pain">
+            <div class="pain__icon">🔁</div>
+            <h3>Половина дня уходит на рутину</h3>
+            <p>Одни и те же вопросы, ручная квалификация, копирование данных в CRM — вместо продаж и развития.</p>
+          </article>
+        </div>
+        <p class="problem__solution">
+          <strong>Секретарь24</strong> отвечает мгновенно и круглосуточно во всех каналах,
+          сам квалифицирует клиента и заводит сделку в CRM — пока ваша команда занимается важным.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ РОЛИ ============ -->
+    <section class="section roles" id="roles">
+      <div class="container">
+        <p class="eyebrow">AI-сотрудники</p>
+        <h2 class="section__title">Один движок — любая профессия</h2>
+        <p class="section__lead">
+          Из одной платформы собирается AI-сотрудник под любую задачу: со своим промптом,
+          базой знаний, голосом и интеграциями. Вот проверенные сценарии.
+        </p>
+        <div class="grid grid-4">
+          <article class="role-card"><div class="role-card__icon">📞</div><h3>Колл-центр</h3><p>Входящие и исходящие звонки, распознавание речи, голосовые ответы, квалификация лидов, передача сложных диалогов оператору.</p></article>
+          <article class="role-card"><div class="role-card__icon">🛠️</div><h3>Техподдержка</h3><p>L1-линия 24/7 в Telegram, WhatsApp и чате сайта. Ответы по базе знаний, тикеты, эскалация инженерам, аналитика качества.</p></article>
+          <article class="role-card"><div class="role-card__icon">📇</div><h3>Секретарь</h3><p>Приём звонков, запись на встречи в Google Calendar, фильтр спама, напоминания, краткие сводки переписки и почты.</p></article>
+          <article class="role-card"><div class="role-card__icon">⚖️</div><h3>Юрист</h3><p>Консультации по законодательству с опорой на актуальную базу (кодексы и судебная практика РФ и РК), анализ договоров.</p></article>
+          <article class="role-card"><div class="role-card__icon">📊</div><h3>Бухгалтер</h3><p>Ответы по налогам и отчётности, расчёт УСН/НДС, напоминания о сроках, первичная обработка документов.</p></article>
+          <article class="role-card"><div class="role-card__icon">💼</div><h3>Менеджер продаж</h3><p>Воронка продаж в Telegram, WhatsApp и виджете, квалификация, допродажи, приём платежей, интеграция с amoCRM.</p></article>
+          <article class="role-card"><div class="role-card__icon">🎨</div><h3>Веб-студия</h3><p>AI-бриф, генерация ТЗ, подбор стека, прототипирование landing-страниц, поддержка сайтов клиентов.</p></article>
+          <article class="role-card"><div class="role-card__icon">👨‍💻</div><h3>Команда разработки</h3><p>Мост с Claude Code: написание и ревью кода, работа с git, запуск тестов и деплой прямо из чата.</p></article>
+        </div>
+        <p class="roles__note">
+          Нужна роль, которой нет в списке? <a href="#start">Напишите нам</a> — соберём под вашу задачу.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ КАК РАБОТАЕТ ============ -->
+    <section class="section how" id="how">
+      <div class="container">
+        <p class="eyebrow">Как это работает</p>
+        <h2 class="section__title">От регистрации до работающего ассистента — за один вечер</h2>
+        <div class="grid grid-4 steps">
+          <article class="step"><div class="step__num">1</div><h3>Регистрация</h3><p>Создайте аккаунт — сразу активируется бесплатный триал на 14 дней.</p></article>
+          <article class="step"><div class="step__num">2</div><h3>Настройте ассистента</h3><p>Выберите готовую роль, загрузите базу знаний, задайте промпт и голос.</p></article>
+          <article class="step"><div class="step__num">3</div><h3>Подключите каналы</h3><p>Telegram, WhatsApp, виджет на сайт, телефония — подключаются в пару кликов.</p></article>
+          <article class="step"><div class="step__num">4</div><h3>Работает 24/7</h3><p>Ассистент отвечает клиентам круглосуточно, а горячие лиды улетают в CRM.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ВОЗМОЖНОСТИ ============ -->
+    <section class="section features" id="features">
+      <div class="container">
+        <p class="eyebrow">Возможности</p>
+        <h2 class="section__title">Не скриптовый бот, а настоящий ИИ</h2>
+        <div class="grid grid-3">
+          <article class="feature"><div class="feature__icon">🧠</div><h3>База знаний (RAG)</h3><p>Загрузите документы, сайты или RSS — ассистент отвечает строго по вашим данным, а не выдумывает.</p></article>
+          <article class="feature"><div class="feature__icon">🎙️</div><h3>Голос</h3><p>Синтез речи и клонирование голоса — ассистент звучит как живой сотрудник вашей компании.</p></article>
+          <article class="feature"><div class="feature__icon">🔒</div><h3>Локальный и облачный ИИ</h3><p>Работайте на облачных моделях или разверните ИИ на своём сервере — данные не покидают периметр.</p></article>
+          <article class="feature"><div class="feature__icon">🔗</div><h3>Интеграции</h3><p>amoCRM, WooCommerce, Google Calendar, Drive и Gmail — ассистент встроен в ваши рабочие инструменты.</p></article>
+          <article class="feature"><div class="feature__icon">🌍</div><h3>Мультиязычность</h3><p>Русский, английский, казахский — ассистент общается с клиентами на их языке.</p></article>
+          <article class="feature"><div class="feature__icon">🎯</div><h3>Дообучение</h3><p>LoRA-дообучение на ваших данных — ассистент перенимает тон и экспертизу вашей компании.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ДЕМО-ЧАТ ============ -->
+    <section class="section demo">
+      <div class="container demo__inner">
+        <div class="demo__text">
+          <p class="eyebrow">Живой пример</p>
+          <h2 class="section__title section__title--left">Так выглядит диалог с ассистентом</h2>
+          <p class="section__lead section__lead--left">
+            Ассистент понимает суть вопроса, уточняет детали и доводит клиента до целевого действия —
+            записи, заявки или оплаты. Без «не понял команду» и деревьев меню.
+          </p>
+          <a href="#start" class="btn btn--primary btn--lg">Попробовать на своих вопросах</a>
+        </div>
+        <div class="chat-mock" aria-hidden="true">
+          <div class="chat-mock__head"><span class="dot"></span> Ассистент · Секретарь24</div>
+          <div class="chat-mock__body">
+            <div class="msg msg--in">Здравствуйте! Хочу записаться на консультацию</div>
+            <div class="msg msg--out">Здравствуйте! С удовольствием запишу. Подскажите, вам удобнее завтра в первой или второй половине дня?</div>
+            <div class="msg msg--in">Во второй, ближе к 16:00</div>
+            <div class="msg msg--out">Отлично — записал вас на завтра, 16:00. Отправлю напоминание в Telegram за час. Как вас зовут и по какому номеру связаться?</div>
+            <div class="msg msg--in">Алексей, +7 900 123-45-67</div>
+            <div class="msg msg--out">Спасибо, Алексей! Запись подтверждена ✅ Передал данные менеджеру.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ТАРИФЫ ============ -->
+    <section class="section pricing" id="pricing">
+      <div class="container">
+        <p class="eyebrow">Тарифы</p>
+        <h2 class="section__title">Чат, WhatsApp и голосовой робот — в одной подписке</h2>
+        <p class="section__lead">У конкурентов чат и звонки — это две разные подписки. У нас всё включено.</p>
+
+        <div class="billing-toggle">
+          <span class="billing-toggle__label is-active" id="lblMonthly">Помесячно</span>
+          <button class="billing-toggle__switch" id="billingSwitch" role="switch" aria-checked="false" aria-label="Переключить период оплаты">
+            <span class="billing-toggle__knob"></span>
+          </button>
+          <span class="billing-toggle__label" id="lblYearly">За год <em>−20%</em></span>
+        </div>
+
+        <div class="grid grid-3 pricing__grid">
+          <!-- Старт -->
+          <article class="plan">
+            <h3 class="plan__name">Старт</h3>
+            <p class="plan__for">Для соло и микробизнеса</p>
+            <div class="plan__price"><span class="plan__amount" data-monthly="2 900" data-yearly="2 320">2 900</span> <span class="plan__per">₽/мес</span></div>
+            <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
+            <a href="#start" class="btn btn--outline btn--block">Попробовать бесплатно</a>
+            <ul class="plan__list">
+              <li>1 AI-ассистент</li>
+              <li>Каналы: Telegram + виджет на сайт</li>
+              <li>1 500 AI-ответов в месяц</li>
+              <li>База знаний: 1 коллекция, 50 документов</li>
+              <li>Облачный ИИ — базовые модели</li>
+              <li>1 пользователь</li>
+              <li>Поддержка в чате (рабочие часы)</li>
+            </ul>
+          </article>
+
+          <!-- Бизнес -->
+          <article class="plan plan--featured">
+            <div class="plan__badge">Хит продаж</div>
+            <h3 class="plan__name">Бизнес</h3>
+            <p class="plan__for">Полный омниканал + телефония</p>
+            <div class="plan__price"><span class="plan__amount" data-monthly="12 900" data-yearly="10 320">12 900</span> <span class="plan__per">₽/мес</span></div>
+            <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
+            <a href="#start" class="btn btn--primary btn--block">Попробовать бесплатно</a>
+            <ul class="plan__list">
+              <li>До 3 AI-ассистентов</li>
+              <li>Все каналы + <strong>голос и телефония</strong></li>
+              <li>10 000 AI-ответов + 300 минут голоса</li>
+              <li>База знаний: 5 коллекций + авто-обновление</li>
+              <li>Интеграции: amoCRM, Google, WooCommerce</li>
+              <li>Любая модель ИИ + резервная</li>
+              <li>До 5 пользователей · приоритетная поддержка</li>
+            </ul>
+          </article>
+
+          <!-- Команда -->
+          <article class="plan">
+            <h3 class="plan__name">Команда</h3>
+            <p class="plan__for">Для агентств и больших команд</p>
+            <div class="plan__price"><span class="plan__amount" data-monthly="29 900" data-yearly="23 920">29 900</span> <span class="plan__per">₽/мес</span></div>
+            <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
+            <a href="#start" class="btn btn--outline btn--block">Попробовать бесплатно</a>
+            <ul class="plan__list">
+              <li>До 10 AI-ассистентов</li>
+              <li>Все каналы без лимита инстансов</li>
+              <li>40 000 AI-ответов + 1 500 минут голоса</li>
+              <li>База знаний без лимита</li>
+              <li>Клонирование голоса + дообучение LoRA</li>
+              <li>White-label · до 20 пользователей</li>
+              <li>Выделенный менеджер + SLA</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="plan-enterprise">
+          <div>
+            <h3>Enterprise / On-premise</h3>
+            <p>Развёртывание на вашем сервере — данные не покидают периметр. Локальный ИИ, кастомные роли и интеграции (1С, собственные API), обучение моделей под отрасль, SLA 24/7 и команда внедрения.</p>
+          </div>
+          <a href="#start" class="btn btn--outline btn--lg">Обсудить внедрение</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="section faq" id="faq">
+      <div class="container container--narrow">
+        <p class="eyebrow">Вопросы</p>
+        <h2 class="section__title">Частые вопросы</h2>
+        <div class="faq__list">
+          <details class="faq-item"><summary>Чем это отличается от обычного чат-бота?</summary><p>Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту.</p></details>
+          <details class="faq-item"><summary>Безопасны ли мои данные?</summary><p>Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр.</p></details>
+          <details class="faq-item"><summary>Нужен ли свой сервер?</summary><p>Нет. На тарифах Старт, Бизнес и Команда всё работает в облаке. Свой сервер нужен только для on-premise развёртывания с локальным ИИ (Enterprise).</p></details>
+          <details class="faq-item"><summary>С какими каналами работает ассистент?</summary><p>Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно.</p></details>
+          <details class="faq-item"><summary>Можно ли подключить телефонию?</summary><p>Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом.</p></details>
+          <details class="faq-item"><summary>Что будет после триала?</summary><p>14 дней бесплатно без привязки карты. После — выберите подходящий тариф. Данные и настройки сохранятся.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ФИНАЛЬНЫЙ CTA / ЗАЯВКА ============ -->
+    <section class="section cta-final" id="start">
+      <div class="container container--narrow">
+        <div class="cta-card">
+          <h2 class="section__title">Запустите AI-сотрудника сегодня</h2>
+          <p class="section__lead">
+            Оставьте заявку — подключим, поможем с настройкой и активируем бесплатный триал на 14 дней.
+          </p>
+          <!-- TODO (Фаза 2): заменить лид-форму на саморегистрацию POST /admin/auth/register.
+               Сейчас форма отправляет заявку (лид → amoCRM). action нужно прописать на backend. -->
+          <form class="lead-form" id="leadForm" novalidate>
+            <div class="lead-form__row">
+              <input type="text" name="name" placeholder="Ваше имя" required autocomplete="name" />
+              <input type="text" name="contact" placeholder="Телефон или @Telegram" required autocomplete="tel" />
+            </div>
+            <select name="role" aria-label="Какой ассистент нужен">
+              <option value="">Какой ассистент нужен? (необязательно)</option>
+              <option>Колл-центр</option>
+              <option>Техподдержка</option>
+              <option>Секретарь</option>
+              <option>Юрист</option>
+              <option>Бухгалтер</option>
+              <option>Менеджер продаж</option>
+              <option>Другое</option>
+            </select>
+            <button type="submit" class="btn btn--primary btn--lg btn--block">Получить доступ</button>
+            <p class="lead-form__hint">Свяжемся в течение рабочего дня. Нажимая кнопку, вы соглашаетесь с политикой конфиденциальности.</p>
+          </form>
+          <div class="lead-form__success" id="leadSuccess" hidden>
+            ✅ Заявка принята! Мы свяжемся с вами в ближайшее время.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ ПОДВАЛ ============ -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__col footer__col--brand">
+        <a href="#" class="logo">
+          <svg class="logo__mark" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="gf" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F0A830" /><stop offset="100%" stop-color="#C27010" /></linearGradient></defs><path fill="url(#gf)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z" /></svg>
+          <span class="logo__text">Секретарь<span class="logo__accent">24</span></span>
+        </a>
+        <p>Виртуальные AI-ассистенты для бизнеса. Звонки, чаты и заявки — 24/7.</p>
+      </div>
+      <nav class="footer__col">
+        <h4>Продукт</h4>
+        <a href="#features">Возможности</a>
+        <a href="#roles">Роли</a>
+        <a href="#pricing">Тарифы</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <nav class="footer__col">
+        <h4>Контакты</h4>
+        <a href="https://t.me/ai_sekretar24bot" target="_blank" rel="noopener">Поддержка в Telegram</a>
+        <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub проекта</a>
+        <a href="/admin/">Вход в кабинет</a>
+      </nav>
+      <nav class="footer__col">
+        <h4>Правовое</h4>
+        <a href="#">Политика конфиденциальности</a>
+        <a href="#">Публичная оферта</a>
+      </nav>
+    </div>
+    <div class="container footer__bottom">
+      <span>© 2026 Секретарь24. Все права защищены.</span>
+      <span>Сделано на платформе AI Secretary System</span>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
