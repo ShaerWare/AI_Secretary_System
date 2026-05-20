@@ -5,6 +5,14 @@
   var header = document.getElementById('header');
   var burger = document.getElementById('burger');
 
+  /* --- Переключатель языков: запоминаем выбор пользователя, чтобы авто-редирект
+         с корня по browser-language больше не срабатывал --- */
+  document.querySelectorAll('.lang-switcher a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try { localStorage.setItem('s24_lang', a.getAttribute('hreflang') || ''); } catch (e) {}
+    });
+  });
+
   /* --- Шапка: фон при скролле --- */
   function onScroll() {
     header.classList.toggle('scrolled', window.scrollY > 8);
