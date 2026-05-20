@@ -114,6 +114,29 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
 .nav a:hover { color: var(--text); }
 .header__actions { display: flex; gap: 10px; margin-left: auto; align-items: center; }
 
+/* Переключатель языков */
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.lang-switcher a {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  transition: color .15s, background .15s;
+}
+.lang-switcher a:hover { color: var(--text); }
+.lang-switcher a.is-active { color: #1a1205; background: var(--grad); }
+
 .burger {
   display: none;
   margin-left: auto;

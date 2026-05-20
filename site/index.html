@@ -9,7 +9,27 @@
   <meta name="description" content="Секретарь24 — виртуальный AI-ассистент для бизнеса. Отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону, работает по вашей базе знаний и передаёт горячие лиды в CRM. Бесплатный триал 14 дней." />
   <meta name="keywords" content="ИИ секретарь, AI-секретарь, виртуальный ассистент для бизнеса, чат-бот для Telegram, чат-бот WhatsApp, голосовой робот, автоматизация колл-центра, AI ассистент юрист, AI ассистент бухгалтер" />
   <link rel="canonical" href="https://ai-sekretar24.ru/" />
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <link rel="alternate" hreflang="ru" href="https://ai-sekretar24.ru/" />
+  <link rel="alternate" hreflang="en" href="https://ai-sekretar24.ru/en/" />
+  <link rel="alternate" hreflang="kk" href="https://ai-sekretar24.ru/kk/" />
+  <link rel="alternate" hreflang="x-default" href="https://ai-sekretar24.ru/" />
+
+  <!-- Auto-detect browser language and redirect (only on first visit, on the root URL) -->
+  <script>
+    (function () {
+      try {
+        if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+        if (localStorage.getItem('s24_lang')) return;
+        var lang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+        var target = null;
+        if (lang.indexOf('en') === 0) target = '/en/';
+        else if (lang.indexOf('kk') === 0 || lang.indexOf('kz') === 0) target = '/kk/';
+        if (target) location.replace(target);
+      } catch (e) { /* no-op */ }
+    })();
+  </script>
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -19,6 +39,8 @@
   <meta property="og:url" content="https://ai-sekretar24.ru/" />
   <meta property="og:image" content="https://ai-sekretar24.ru/og-image.png" />
   <meta property="og:locale" content="ru_RU" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:locale:alternate" content="kk_KZ" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
@@ -26,7 +48,7 @@
   <meta name="twitter:description" content="Виртуальный AI-ассистент: Telegram, WhatsApp, сайт, телефония. Триал 14 дней." />
   <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.png" />
 
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/styles.css" />
 
   <!-- SEO: структурированные данные -->
   <script type="application/ld+json">
@@ -94,6 +116,12 @@
         <a href="#roles">Роли</a>
         <a href="#pricing">Тарифы</a>
         <a href="#faq">FAQ</a>
+      </nav>
+
+      <nav class="lang-switcher" aria-label="Язык / Language">
+        <a href="/" hreflang="ru" lang="ru" class="is-active" aria-current="page">RU</a>
+        <a href="/en/" hreflang="en" lang="en">EN</a>
+        <a href="/kk/" hreflang="kk" lang="kk">KK</a>
       </nav>
 
       <div class="header__actions">
@@ -421,6 +449,6 @@
     </div>
   </footer>
 
-  <script src="main.js" defer></script>
+  <script src="/main.js" defer></script>
 </body>
 </html>
