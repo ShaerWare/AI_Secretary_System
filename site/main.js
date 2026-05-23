@@ -21,11 +21,28 @@
   onScroll();
 
   /* --- Мобильное меню --- */
+  var nav = document.getElementById('nav');
+
+  function syncMobileNavHeight() {
+    /* CSS использует --mobile-nav-h для позиционирования actions под пунктами nav,
+       чтобы не зависеть от magic numbers и количества ссылок. */
+    if (!nav) return;
+    var h = nav.getBoundingClientRect().height || 0;
+    if (h > 0) header.style.setProperty('--mobile-nav-h', h + 'px');
+  }
+
   burger.addEventListener('click', function () {
     var open = header.classList.toggle('nav-open');
     burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      /* Меряем после применения класса, чтобы nav уже был развёрнут. */
+      requestAnimationFrame(syncMobileNavHeight);
+    }
   });
-  document.querySelectorAll('#nav a, .header__actions a').forEach(function (link) {
+  window.addEventListener('resize', function () {
+    if (header.classList.contains('nav-open')) syncMobileNavHeight();
+  });
+  document.querySelectorAll('#nav a, .header__actions a, .lang-switcher a').forEach(function (link) {
     link.addEventListener('click', function () {
       header.classList.remove('nav-open');
       burger.setAttribute('aria-expanded', 'false');

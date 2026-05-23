@@ -22,7 +22,7 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 html { scroll-behavior: smooth; scroll-padding-top: 88px; }
 
@@ -33,6 +33,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 a { color: inherit; text-decoration: none; }
@@ -66,6 +67,7 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
   font-weight: 600;
   font-size: 15px;
   padding: 11px 20px;
+  min-height: 44px;
   border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -94,6 +96,7 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
   z-index: 100;
   transition: background .25s ease, border-color .25s ease, backdrop-filter .25s ease;
   border-bottom: 1px solid transparent;
+  padding-top: env(safe-area-inset-top);
 }
 .header.scrolled {
   background: rgba(9, 9, 11, .85);
@@ -182,7 +185,7 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
 }
 .hero__title { font-size: clamp(32px, 6vw, 56px); font-weight: 800; letter-spacing: -.02em; }
 .hero__subtitle {
-  font-size: clamp(16px, 2.3vw, 19px);
+  font-size: clamp(17px, 2.3vw, 19px);
   color: var(--muted);
   max-width: 680px;
   margin: 22px auto 0;
@@ -515,35 +518,92 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
 @media (max-width: 720px) {
   .nav, .header__actions { display: none; }
   .burger { display: flex; }
-  .header.nav-open .nav {
-    display: flex;
-    position: absolute;
-    top: 72px; left: 0; right: 0;
-    flex-direction: column;
-    background: rgba(9, 9, 11, .98);
+
+  /* Мобильное меню: drawer для nav и actions; lang-switcher и бургер остаются
+     в верхней строке рядом с логотипом. */
+  .header.nav-open {
+    background: rgba(9, 9, 11, .96);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 20px;
-    gap: 4px;
-    margin: 0;
+    border-bottom-color: var(--border);
   }
-  .header.nav-open .nav a { padding: 12px 0; font-size: 16px; }
+  .header.nav-open .nav,
   .header.nav-open .header__actions {
     display: flex;
     position: absolute;
-    top: calc(72px + 220px); left: 0; right: 0;
+    left: 0; right: 0;
     flex-direction: column;
     background: rgba(9, 9, 11, .98);
-    padding: 0 20px 20px;
+    backdrop-filter: blur(12px);
+    padding: 0 20px;
+    margin: 0;
+    border-radius: 0;
+  }
+  .header.nav-open .nav {
+    top: calc(72px + env(safe-area-inset-top));
+    padding-top: 12px;
+    gap: 4px;
+  }
+  .header.nav-open .nav a {
+    padding: 14px 0;
+    font-size: 17px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .header.nav-open .nav a:last-child { border-bottom: 0; }
+  .header.nav-open .header__actions {
+    /* Стек прямо под nav. Расчёт через CSS-vars из JS (см. main.js: --mobile-nav-h). */
+    top: calc(72px + env(safe-area-inset-top) + var(--mobile-nav-h, 240px));
+    gap: 10px;
+    padding-bottom: 16px;
   }
   .header.nav-open .header__actions .btn { width: 100%; }
+
+  /* В закрытом виде lang-switcher скрыт, чтобы не конкурировал с бургером за место. */
+  .lang-switcher { display: none; }
+  /* В открытом — встаёт в верхнюю строку: лого слева, lang-switcher по центру, бургер справа. */
+  .header.nav-open .lang-switcher {
+    display: flex;
+    margin-left: auto;
+    margin-right: 8px;
+  }
+  /* В открытом меню auto-margin у lang-switcher уже растягивает пробел; auto у бургера
+     лишний и съест место. В закрытом — оставляем auto, чтобы бургер был справа. */
+  .header.nav-open .burger { margin-left: 0; }
+
   .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .section { padding: 60px 0; }
   .hero { padding: 56px 0 64px; }
-  .plan-enterprise { flex-direction: column; align-items: flex-start; }
+  .hero__cta { flex-direction: column; align-items: stretch; }
+  .hero__cta .btn { width: 100%; }
+  .plan { padding: 26px 20px; }
+  .plan-enterprise { flex-direction: column; align-items: flex-start; padding: 26px 22px; }
+  .pain, .feature, .role-card, .step { padding: 22px 20px; }
+  .faq-item summary { padding: 18px 0; min-height: 52px; }
+  .cta-card { padding: 36px 22px; }
   .lead-form__row { flex-direction: column; }
   .footer__inner { grid-template-columns: 1fr; }
   .footer__bottom { flex-direction: column; }
+}
+
+/* Узкие экраны (iPhone SE, базовый Android) */
+@media (max-width: 480px) {
+  .container { padding: 0 16px; }
+  .header__inner { gap: 12px; height: 64px; }
+  html { scroll-padding-top: 80px; }
+  .logo__text { font-size: 17px; }
+  .logo__mark { width: 28px; height: 28px; }
+  .hero { padding: 44px 0 52px; }
+  .hero__badge { font-size: 12px; padding: 6px 14px; margin-bottom: 20px; }
+  .hero__title { font-size: clamp(28px, 8vw, 36px); }
+  .hero__channels-list { gap: 8px; }
+  .chip { font-size: 13px; padding: 7px 13px; }
+  .section { padding: 48px 0; }
+  .section__title { font-size: clamp(24px, 6.5vw, 30px); }
+  .plan__amount { font-size: 32px; }
+  .header.nav-open .nav { top: calc(64px + env(safe-area-inset-top)); }
+  .header.nav-open .header__actions { top: calc(64px + env(safe-area-inset-top) + var(--mobile-nav-h, 240px)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
