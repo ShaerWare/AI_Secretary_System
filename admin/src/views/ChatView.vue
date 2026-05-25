@@ -67,6 +67,8 @@ import {
   Download,
   ArrowDownToLine,
   ArrowUpToLine,
+  ArrowUp,
+  ArrowDown,
   Share2,
   GitFork,
   Users,
@@ -167,6 +169,9 @@ const currentSessionId = ref<string | null>(null)
 const inputMessage = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
+// Abort handle for the active sendMessage stream — set when streaming starts,
+// cleared on done/error/stop. Used by the in-chat Stop button.
+const streamAbort = ref<(() => void) | null>(null)
 const searchingQuery = ref<string | null>(null)
 const searchingTool = ref<string>('knowledge_search')
 const pendingUserContent = ref<string | null>(null)
@@ -1273,6 +1278,49 @@ function scrollToBottom() {
   })
 }
 
+// Pick the message currently closest to the vertical middle of the viewport.
+function getVisibleMessageEl(): HTMLElement | null {
+  const container = messagesContainer.value
+  if (!container) return null
+  const nodes = container.querySelectorAll<HTMLElement>('.claude-message')
+  if (!nodes.length) return null
+  const cRect = container.getBoundingClientRect()
+  const viewMid = cRect.top + cRect.height / 2
+  let best: HTMLElement | null = null
+  let bestDist = Infinity
+  nodes.forEach((el) => {
+    const r = el.getBoundingClientRect()
+    if (r.bottom < cRect.top || r.top > cRect.bottom) return
+    const mid = r.top + r.height / 2
+    const dist = Math.abs(mid - viewMid)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = el
+    }
+  })
+  return best
+}
+
+function scrollToMessageTop() {
+  const container = messagesContainer.value
+  const el = getVisibleMessageEl()
+  if (!container || !el) return
+  const cRect = container.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  const target = container.scrollTop + (eRect.top - cRect.top) - 8
+  container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+}
+
+function scrollToMessageBottom() {
+  const container = messagesContainer.value
+  const el = getVisibleMessageEl()
+  if (!container || !el) return
+  const cRect = container.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  const target = container.scrollTop + (eRect.bottom - cRect.top) - container.clientHeight + 8
+  container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+}
+
 function scrollToMessage(messageId: string) {
   nextTick(() => {
     const el = document.getElementById(`msg-${messageId}`)
@@ -1497,6 +1545,7 @@ function sendMessage() {
       if (isNearBottom()) scrollToBottom()
     } else if (data.type === 'done' || data.type === 'assistant_message') {
       isStreaming.value = false
+      streamAbort.value = null
       pendingUserContent.value = null
       searchingQuery.value = null
       const responseText = fullContent || streamingContent.value
@@ -1527,6 +1576,7 @@ function sendMessage() {
       }
     } else if (data.type === 'error') {
       isStreaming.value = false
+      streamAbort.value = null
       pendingUserContent.value = null
       searchingQuery.value = null
       streamingContent.value = ''
@@ -1537,6 +1587,24 @@ function sendMessage() {
       nextTick(() => messageInputRef.value?.focus())
     }
   }, llmOverride, undefined, imageIds.length ? imageIds : undefined)
+  streamAbort.value = stream.abort
+}
+
+function stopStreaming() {
+  // Abort the active fetch — the chat router persists the partial response
+  // (best-effort), so we just reset UI state and let the next refetch surface
+  // whatever made it to the DB. If nothing was saved server-side, the partial
+  // text in streamingContent is kept visible until the next refetch.
+  if (streamAbort.value) {
+    streamAbort.value()
+    streamAbort.value = null
+  }
+  isStreaming.value = false
+  pendingUserContent.value = null
+  searchingQuery.value = null
+  streamingContent.value = ''
+  refetchSession()
+  refetchSessions()
 }
 
 function ccSendMessage() {
@@ -4215,6 +4283,15 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
                 <span>{{ searchingTool === 'web_search' ? t('chatView.searchingWeb', { query: searchingQuery }) : t('chatView.searchingKnowledge', { query: searchingQuery }) }}</span>
               </div>
             </div>
+            <button
+              v-if="streamAbort"
+              class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
+              :title="t('chatView.stopGeneration')"
+              @click="stopStreaming"
+            >
+              <StopCircle class="w-3.5 h-3.5" />
+              <span class="hidden sm:inline">{{ t('chatView.stopGeneration') }}</span>
+            </button>
           </div>
 
           <!-- Thinking indicator (waiting for first chunk) -->
@@ -4233,30 +4310,52 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
                 <span class="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:300ms]"></span>
               </div>
             </div>
+            <button
+              v-if="streamAbort"
+              class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
+              :title="t('chatView.stopGeneration')"
+              @click="stopStreaming"
+            >
+              <StopCircle class="w-3.5 h-3.5" />
+              <span class="hidden sm:inline">{{ t('chatView.stopGeneration') }}</span>
+            </button>
           </div>
         </template>
       </div>
 
-      <!-- Floating scroll buttons -->
-      <div
-        v-if="currentSession && !cc.isActive.value"
-        class="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1"
-      >
+      <!-- Floating scroll buttons: top = dialog start, middle = within-response, bottom = dialog end -->
+      <template v-if="currentSession && !cc.isActive.value">
         <button
-          class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          title="Scroll to top"
+          class="absolute right-1 sm:right-3 top-2 z-30 p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          :title="t('chatView.scrollDialogTop')"
           @click="scrollToTop"
         >
           <ArrowUpToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
+        <div class="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1">
+          <button
+            class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            :title="t('chatView.scrollResponseTop')"
+            @click="scrollToMessageTop"
+          >
+            <ArrowUp class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+          <button
+            class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            :title="t('chatView.scrollResponseBottom')"
+            @click="scrollToMessageBottom"
+          >
+            <ArrowDown class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+        </div>
         <button
-          class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          title="Scroll to bottom"
+          class="absolute right-1 sm:right-3 bottom-2 z-30 p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          :title="t('chatView.scrollDialogBottom')"
           @click="scrollToBottom"
         >
           <ArrowDownToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
-      </div>
+      </template>
       </div> <!-- /messages wrapper -->
 
       <!-- CC Orchestra Panel -->

@@ -146,7 +146,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 
 ### Modular Infrastructure (`modules/`)
 
-Foundation layer for modular decomposition (issue #489). Phase 4 complete: all 28 routers migrated (Phase 3), all inline endpoints extracted (Phase 4.1–4.5), all background tasks via `TaskRegistry` (Phase 4.6), all startup helpers + service init extracted to domain `startup.py` modules, global service variables removed (Phase 4.7a/b). Phase 5.1–5.4 complete (EventBus infrastructure, first events, DatasetSynced, Widget→CRM events). Phase 6 complete (Protocol interfaces for AuthService, KnowledgeService, LLMService, ChatService in `modules/*/protocols.py`). Phase 7.1 complete (AuthService facade in `modules/core/auth_service.py`). Phase 7.2 complete (KnowledgeService facade in `modules/knowledge/facade.py`). Phase 7.3 complete (LLMService facade in `modules/llm/facade.py`). Phase 7.4 complete (ChatService facade in `modules/chat/facade.py`).
+Foundation layer for the modular decomposition. All 28 routers live under `modules/*/router*.py`; inline endpoints and global service variables are gone from `orchestrator.py`; background tasks run through `TaskRegistry`; service initialization lives in per-domain `startup.py` modules; Protocol interfaces (`modules/*/protocols.py`) and facades (`modules/{core,knowledge,llm,chat}/{auth_service,facade}.py`) front the underlying services. History of the migration lives in `CHANGELOG.md` and issue #489.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp. Singleton in `ServiceContainer.event_bus`. Domain events: `InternetStatusChanged`, `UserRoleChanged`, `SessionRevoked`, `DatasetSynced` (in `modules/core/events.py`), `KnowledgeUpdated` (in `modules/knowledge/events.py`), `WidgetSessionCreated`, `WidgetMessageSent`, `WidgetContactSubmitted` (in `modules/channels/widget/events.py`). Subscriptions registered via `setup_event_subscriptions()` in `modules/core/startup.py`, which delegates to domain-specific setup functions (`setup_llm_event_subscriptions()` in `modules/llm/startup.py`, `setup_knowledge_event_subscriptions()` in `modules/knowledge/startup.py`, `setup_crm_event_subscriptions()` in `modules/crm/startup.py`). `DatasetSynced` decouples CRM/ecommerce/kanban from knowledge. Widget events decouple widget router from amoCRM: widget publishes events, CRM domain handles lead/contact/note creation reactively.
 - **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error. 7 tasks registered in `startup_event()`: `session-cleanup` (1h), `periodic-vacuum` (7d), `kanban-sync` (15min), `woocommerce-sync` (daily 23:00 UTC), `rss-sync` (1h), `wiki-embeddings` (one-shot), `wiki-collection-indexes` (one-shot). Task functions in `modules/core/maintenance.py`, `modules/knowledge/tasks.py`, `modules/knowledge/rss_service.py`, `modules/kanban/tasks.py`, `modules/ecommerce/tasks.py`.
@@ -158,15 +158,15 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Services (`modules/*/service.py`)
 
-32 service classes extracted from the former monolithic `db/integration.py` into 16 domain files (Phase 2, issue #492):
+Service classes extracted from the former monolithic `db/integration.py` into per-domain `service.py` / `facade.py` files (issue #492):
 
 | Module | File | Service Classes |
 |--------|------|-----------------|
 | `modules/core/` | `service.py` | `DatabaseService`, `UserService`, `UserSessionService`, `RoleService`, `WorkspaceService`, `ConfigService`, `UserIdentityService` |
-| `modules/core/` | `auth_service.py` | `AuthService` (Phase 7.1 facade — wraps `auth_manager.py` functions, implements Protocol from `protocols.py`) |
-| `modules/knowledge/` | `facade.py` | `KnowledgeServiceImpl` (Phase 7.2 facade — wraps `wiki_rag_service` + knowledge services, implements Protocol from `protocols.py`) |
-| `modules/llm/` | `facade.py` | `LLMServiceImpl` (Phase 7.3 facade — wraps `CloudLLMService`/`VLLMLLMService` + `CloudProviderService`, implements Protocol from `protocols.py`) |
-| `modules/chat/` | `facade.py` | `ChatServiceImpl` (Phase 7.4 facade — wraps `ChatService` CRUD + LLM generation + `ChatShareService`, implements Protocol from `protocols.py`) |
+| `modules/core/` | `auth_service.py` | `AuthService` — facade wrapping `auth_manager.py`, implements `protocols.py` interface |
+| `modules/knowledge/` | `facade.py` | `KnowledgeServiceImpl` — wraps `wiki_rag_service` + knowledge services, implements `protocols.py` interface |
+| `modules/llm/` | `facade.py` | `LLMServiceImpl` — wraps `CloudLLMService`/`VLLMLLMService` + `CloudProviderService`, implements `protocols.py` interface |
+| `modules/chat/` | `facade.py` | `ChatServiceImpl` — wraps `ChatService` CRUD + LLM generation + `ChatShareService`, implements `protocols.py` interface |
 | `modules/chat/` | `service.py` | `ChatService`, `ChatShareService` |
 | `modules/knowledge/` | `service.py` | `FAQService`, `KnowledgeDocService`, `KnowledgeCollectionService`, `GitHubRepoProjectService` |
 | `modules/channels/telegram/` | `service.py` | `BotInstanceService`, `TelegramSessionService` |
@@ -188,7 +188,7 @@ Import from `modules.core`: `EventBus`, `BaseEvent`, `TaskRegistry`, `TaskInfo`,
 
 ### Domain Routers (`modules/*/router.py`)
 
-Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain modules. Original files are 1-3 line facade re-exports.
+All 28 routers live in domain modules. Files under `app/routers/` are 1–3 line facade re-exports kept for backward compatibility.
 
 | Domain | Router file | Facade |
 |--------|------------|--------|
@@ -212,23 +212,23 @@ Phase 3 migration complete: all 28 routers moved from `app/routers/` to domain m
 | `modules/google/` | `router.py` (+ `callback_router`) | `app/routers/google.py` |
 | `modules/knowledge/` | `router_google_drive.py` | Google Drive RAG sync (`/admin/google-drive/*`) |
 
-**Phase 4 routers** (extracted from `orchestrator.py`, not from `app/routers/`):
+**Routers extracted from `orchestrator.py`** (not from `app/routers/`):
 
-| Domain | Router file | Endpoints | Phase |
-|--------|------------|-----------|-------|
-| `modules/compat/` | `router.py` | Legacy telephony (`/tts`, `/stt`, `/chat`, `/process_call`, `/reset_conversation`) + OpenAI-compat (`/v1/*`) | 4.3 |
-| `modules/core/` | `router_health.py` | `/`, `/health`, `/admin/deployment-mode` | 4.3 |
-| `modules/llm/` | `router_finetune.py` | LLM finetune: dataset, training, LoRA adapters (`/admin/finetune/*`) | 4.4 |
-| `modules/speech/` | `router_finetune.py` | TTS finetune: samples, training, models (`/admin/tts-finetune/*`) | 4.4 |
-| `modules/speech/` | `router_voices.py` | Voice selection + test (`/admin/voices`, `/admin/voice`, `/admin/voice/test`) | 4.5 |
-| `modules/llm/` | `router_models.py` | HuggingFace model management (`/admin/models/*`) | 4.5 |
-| `modules/monitoring/` | `router_logs.py` | Log viewing + streaming (`/admin/logs/*`) | 4.5 |
+| Domain | Router file | Endpoints |
+|--------|------------|-----------|
+| `modules/compat/` | `router.py` | Legacy telephony (`/tts`, `/stt`, `/chat`, `/process_call`, `/reset_conversation`) + OpenAI-compat (`/v1/*`) |
+| `modules/core/` | `router_health.py` | `/`, `/health`, `/admin/deployment-mode` |
+| `modules/llm/` | `router_finetune.py` | LLM finetune: dataset, training, LoRA adapters (`/admin/finetune/*`) |
+| `modules/speech/` | `router_finetune.py` | TTS finetune: samples, training, models (`/admin/tts-finetune/*`) |
+| `modules/speech/` | `router_voices.py` | Voice selection + test (`/admin/voices`, `/admin/voice`, `/admin/voice/test`) |
+| `modules/llm/` | `router_models.py` | HuggingFace model management (`/admin/models/*`) |
+| `modules/monitoring/` | `router_logs.py` | Log viewing + streaming (`/admin/logs/*`) |
 
-New routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade. GPU-only routers (`router_voices.py`, `router_models.py`, `router_finetune.py`) are conditionally registered when `DEPLOYMENT_MODE != "cloud"`.
+These routers import domain services directly (`from modules.monitoring.service import audit_service`) instead of through the facade. GPU-only routers (`router_voices.py`, `router_models.py`, `router_finetune.py`) are conditionally registered when `DEPLOYMENT_MODE != "cloud"`.
 
 ### Key Components
 
-**`orchestrator.py`** (~320 lines): FastAPI entry point — **pure wiring**, zero domain logic. No inline endpoints (Phase 4.1–4.5), no raw `asyncio.create_task()` (Phase 4.6), no helper functions (Phase 4.7a), no global service variables (Phase 4.7b). Contains only: imports, CORS/middleware, declarative router registration (~28 routers), `startup_event()` (calls domain init functions + registers tasks), `shutdown_event()` (delegates to `graceful_shutdown()`), static file serving, Vite dev proxy. All service initialization in domain `startup.py` modules: `modules/speech/startup.py` (TTS/STT), `modules/llm/startup.py` (LLM + fallback chain + InternetMonitor callback), `modules/knowledge/startup.py` (Wiki RAG + embeddings), `modules/core/startup.py` (seed, monitor, shutdown), `modules/telephony/startup.py` (GSM), `modules/channels/{telegram,whatsapp}/startup.py` (bot auto-start).
+**`orchestrator.py`** (~320 lines): FastAPI entry point — **pure wiring**, zero domain logic. No inline endpoints, no raw `asyncio.create_task()`, no helper functions, no global service variables. Contains only: imports, CORS/middleware, declarative router registration (~28 routers), `startup_event()` (calls domain init functions + registers tasks), `shutdown_event()` (delegates to `graceful_shutdown()`), static file serving, Vite dev proxy. All service initialization in domain `startup.py` modules: `modules/speech/startup.py` (TTS/STT), `modules/llm/startup.py` (LLM + fallback chain + InternetMonitor callback), `modules/knowledge/startup.py` (Wiki RAG + embeddings), `modules/core/startup.py` (seed, monitor, shutdown), `modules/telephony/startup.py` (GSM), `modules/channels/{telegram,whatsapp}/startup.py` (bot auto-start).
 
 **`ServiceContainer` (`app/dependencies.py`)**: Singleton holding references to all initialized services — the **single source of truth** for service state (no global variables). Includes `event_bus: EventBus` singleton for inter-module events. Routers get services via FastAPI `Depends`. Populated during app startup by domain `init_*()` functions. Runtime mutations (LLM backend switch) write directly to container.
 
