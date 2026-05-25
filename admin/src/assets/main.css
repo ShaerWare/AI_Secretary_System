@@ -375,6 +375,12 @@
   align-items: flex-start;
 }
 
+@media (max-width: 640px) {
+  .claude-message {
+    gap: 0.5rem;
+  }
+}
+
 .claude-avatar {
   width: 1.75rem;
   height: 1.75rem;
@@ -645,6 +651,36 @@
 .zen-activity-bar {
   width: 3rem; /* 48px */
   flex-shrink: 0;
+}
+
+/* On narrow screens the Zen bar shrinks so dropdowns and chat have more room. */
+@media (max-width: 640px) {
+  .zen-activity-bar {
+    width: 2.5rem; /* 40px */
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+  .zen-activity-bar button,
+  .zen-activity-bar > div > button {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+  }
+  .zen-activity-bar button svg {
+    width: 0.875rem !important;
+    height: 0.875rem !important;
+  }
+}
+
+/* Floating dropdowns spawned from the Zen Activity Bar must never spill off
+   the viewport, regardless of their own min-width. The bar lives at the left,
+   so we clamp by viewport minus the bar's footprint. */
+.zen-dropdown {
+  max-width: calc(100vw - 4rem);
+}
+@media (max-width: 640px) {
+  .zen-dropdown {
+    max-width: calc(100vw - 3.5rem);
+  }
 }
 
 .zen-glass {

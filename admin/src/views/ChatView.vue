@@ -2667,7 +2667,7 @@ watch(() => cc.isProcessing.value, (processing, wasProcesing) => {
           </button>
           <div
             v-if="showDefaultMobileMenu"
-            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[220px] animate-scale-in"
+            class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-2 z-50 min-w-[220px] animate-scale-in"
             @click.stop
           >
             <div class="px-3 pb-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -2724,7 +2724,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </button>
           <div
             v-if="showZenLlmMenu"
-            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[180px] animate-scale-in"
+            class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-1 z-50 min-w-[180px] animate-scale-in"
             @click.stop
           >
             <button
@@ -2770,7 +2770,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           </button>
           <div
             v-if="showRagMenu"
-            class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-2 z-50 min-w-[200px] animate-scale-in"
+            class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-2 z-50 min-w-[200px] animate-scale-in"
             @click.stop
           >
             <label
@@ -2839,7 +2839,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
         <div
           v-if="showAssistantSwitcher"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[220px] max-w-[280px] animate-scale-in"
+          class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-1 z-50 min-w-[220px] max-w-[280px] animate-scale-in"
           @click.stop
         >
           <div class="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border/50">
@@ -2884,7 +2884,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
         <div
           v-if="showExportMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[160px] animate-scale-in"
+          class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-1 z-50 min-w-[160px] animate-scale-in"
           @click.stop
         >
           <button
@@ -2940,7 +2940,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
         <div
           v-if="showCcDirMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[260px] animate-scale-in"
+          class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-1 z-50 min-w-[260px] animate-scale-in"
           @click.stop
         >
           <button
@@ -3023,7 +3023,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         </button>
         <div
           v-if="showCcFilesMenu"
-          class="absolute left-full ml-2 top-0 zen-glass rounded-xl shadow-2xl py-1 z-50 min-w-[200px] max-w-[300px] animate-scale-in"
+          class="absolute left-full ml-2 top-0 zen-glass zen-dropdown rounded-xl shadow-2xl py-1 z-50 min-w-[200px] max-w-[300px] animate-scale-in"
           @click.stop
         >
           <label
@@ -3714,7 +3714,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       <div
         v-if="cc.isActive.value"
         :class="[
-          'relative p-4 shrink-0',
+          'relative p-2 sm:p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -3793,7 +3793,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       <div
         v-else-if="currentSession && !isReadOnly"
         :class="[
-          'relative p-4 shrink-0',
+          'relative p-2 sm:p-4 shrink-0',
           fullscreenStore.isFullscreen ? 'zen-glass' : 'bg-card',
           inputPosition === 'bottom' ? 'border-t border-border order-last' + (fullscreenStore.isFullscreen ? '' : ' pb-24') : 'border-b border-border'
         ]"
@@ -3853,89 +3853,98 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             </button>
           </div>
         </div>
+        <!-- Mobile: 2 rows — (1) textarea + send, (2) new/web/file/mic.
+             Desktop (sm:): single row via sm:contents + sm:order — same look as before. -->
         <div
           :class="[
-            'flex gap-3 max-w-3xl mx-auto',
-            inputPosition === 'bottom' ? 'items-stretch' : 'items-end',
+            'flex flex-col gap-2 sm:flex-row sm:gap-3 max-w-3xl mx-auto',
+            inputPosition === 'bottom' ? 'sm:items-stretch' : 'sm:items-end',
           ]"
         >
-          <!-- New branch button (yellow) -->
-          <button
-            v-if="currentSessionId"
-            :disabled="newBranchMutation.isPending.value"
-            class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 shrink-0"
-            :title="t('chatView.newBranch')"
-            @click="startNewBranchAndShowTree"
-          >
-            <Plus class="w-5 h-5" />
-          </button>
-          <!-- Web search toggle -->
-          <button
-            v-if="currentSessionId && !isReadOnly"
-            :class="[
-              'p-3 rounded-lg transition-colors shrink-0',
-              webSearchEnabled ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-            ]"
-            :title="webSearchEnabled ? t('chatView.webSearchOn') : t('chatView.webSearchOff')"
-            @click="webSearchEnabled = !webSearchEnabled"
-          >
-            <Globe class="w-5 h-5" />
-          </button>
-          <textarea
-            ref="messageInputRef"
-            v-model="inputMessage"
-            :placeholder="isReadOnly ? t('chatView.readOnlyHint') : 'Type a message...'"
-            rows="1"
-            class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none max-h-[288px] overflow-y-auto"
-            :disabled="isStreaming || isRecording || isReadOnly"
-            @keydown.ctrl.enter.prevent="sendMessage"
-            @keydown.meta.enter.prevent="sendMessage"
-            @input="onInputAutoResize"
-            @paste="onPaste"
-          />
-          <!-- File upload button (images + documents) -->
-          <button
-            :disabled="isStreaming || isUploadingImage || !currentSessionId"
-            class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            :title="t('chatView.attachFile')"
-            @click="imageInputRef?.click()"
-          >
-            <Loader2 v-if="isUploadingImage" class="w-5 h-5 animate-spin" />
-            <Paperclip v-else class="w-5 h-5" />
-          </button>
-          <input
-            ref="imageInputRef"
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
-            multiple
-            class="hidden"
-            @change="handleImageUpload"
-          />
-          <!-- Microphone button -->
-          <button
-            :disabled="isStreaming || isTranscribing"
-            :class="[
-              'p-3 rounded-lg transition-colors',
-              isRecording
-                ? 'bg-red-500 text-white animate-pulse'
-                : 'bg-secondary hover:bg-secondary/80'
-            ]"
-            :title="isRecording ? 'Stop recording' : (isTranscribing ? 'Transcribing...' : 'Start voice input')"
-            @click="toggleRecording"
-          >
-            <Loader2 v-if="isTranscribing" class="w-5 h-5 animate-spin" />
-            <MicOff v-else-if="isRecording" class="w-5 h-5" />
-            <Mic v-else class="w-5 h-5" />
-          </button>
-          <!-- Send button -->
-          <button
-            :disabled="(!inputMessage.trim() && !pastedBlocks.length && !pendingImages.length) || isStreaming || isRecording"
-            class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            @click="sendMessage"
-          >
-            <Send v-if="!isStreaming" class="w-5 h-5" />
-            <Loader2 v-else class="w-5 h-5 animate-spin" />
-          </button>
+          <!-- Row 1 on mobile: textarea + send. Children flatten on desktop. -->
+          <div class="flex gap-2 items-end sm:contents order-1">
+            <textarea
+              ref="messageInputRef"
+              v-model="inputMessage"
+              :placeholder="isReadOnly ? t('chatView.readOnlyHint') : 'Type a message...'"
+              rows="1"
+              class="flex-1 p-3 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none max-h-[288px] overflow-y-auto sm:order-3"
+              :disabled="isStreaming || isRecording || isReadOnly"
+              @keydown.ctrl.enter.prevent="sendMessage"
+              @keydown.meta.enter.prevent="sendMessage"
+              @input="onInputAutoResize"
+              @paste="onPaste"
+            />
+            <!-- Send button -->
+            <button
+              :disabled="(!inputMessage.trim() && !pastedBlocks.length && !pendingImages.length) || isStreaming || isRecording"
+              class="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0 sm:order-6"
+              @click="sendMessage"
+            >
+              <Send v-if="!isStreaming" class="w-5 h-5" />
+              <Loader2 v-else class="w-5 h-5 animate-spin" />
+            </button>
+          </div>
+
+          <!-- Row 2 on mobile: secondary actions. Children flatten on desktop. -->
+          <div class="flex gap-2 items-end justify-start sm:contents order-2">
+            <!-- New branch button (yellow) -->
+            <button
+              v-if="currentSessionId"
+              :disabled="newBranchMutation.isPending.value"
+              class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 shrink-0 sm:order-1"
+              :title="t('chatView.newBranch')"
+              @click="startNewBranchAndShowTree"
+            >
+              <Plus class="w-5 h-5" />
+            </button>
+            <!-- Web search toggle -->
+            <button
+              v-if="currentSessionId && !isReadOnly"
+              :class="[
+                'p-3 rounded-lg transition-colors shrink-0 sm:order-2',
+                webSearchEnabled ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+              ]"
+              :title="webSearchEnabled ? t('chatView.webSearchOn') : t('chatView.webSearchOff')"
+              @click="webSearchEnabled = !webSearchEnabled"
+            >
+              <Globe class="w-5 h-5" />
+            </button>
+            <!-- File upload button (images + documents) -->
+            <button
+              :disabled="isStreaming || isUploadingImage || !currentSessionId"
+              class="p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50 shrink-0 sm:order-4"
+              :title="t('chatView.attachFile')"
+              @click="imageInputRef?.click()"
+            >
+              <Loader2 v-if="isUploadingImage" class="w-5 h-5 animate-spin" />
+              <Paperclip v-else class="w-5 h-5" />
+            </button>
+            <input
+              ref="imageInputRef"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
+              multiple
+              class="hidden"
+              @change="handleImageUpload"
+            />
+            <!-- Microphone button -->
+            <button
+              :disabled="isStreaming || isTranscribing"
+              :class="[
+                'p-3 rounded-lg transition-colors shrink-0 sm:order-5',
+                isRecording
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'bg-secondary hover:bg-secondary/80'
+              ]"
+              :title="isRecording ? 'Stop recording' : (isTranscribing ? 'Transcribing...' : 'Start voice input')"
+              @click="toggleRecording"
+            >
+              <Loader2 v-if="isTranscribing" class="w-5 h-5 animate-spin" />
+              <MicOff v-else-if="isRecording" class="w-5 h-5" />
+              <Mic v-else class="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <!-- Recording indicator -->
         <div v-if="isRecording" class="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -3952,7 +3961,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       <div
         ref="messagesContainer"
         :class="[
-          'h-full overflow-y-auto overflow-x-hidden p-4 space-y-4 claude-messages-container',
+          'h-full overflow-y-auto overflow-x-hidden p-2 pr-10 sm:p-4 sm:pr-14 space-y-3 sm:space-y-4 claude-messages-container',
           fullscreenStore.isFullscreen ? 'zen-messages' : ''
         ]"
         @click="handleMessagesClick"
@@ -4285,7 +4294,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             </div>
             <button
               v-if="streamAbort"
-              class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
+              class="shrink-0 flex items-center sm:gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
               :title="t('chatView.stopGeneration')"
               @click="stopStreaming"
             >
@@ -4312,7 +4321,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             </div>
             <button
               v-if="streamAbort"
-              class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
+              class="shrink-0 flex items-center sm:gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-500 border border-red-500/30 text-xs font-medium transition-colors"
               :title="t('chatView.stopGeneration')"
               @click="stopStreaming"
             >
@@ -4326,34 +4335,34 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
       <!-- Floating scroll buttons: top = dialog start, middle = within-response, bottom = dialog end -->
       <template v-if="currentSession && !cc.isActive.value">
         <button
-          class="absolute right-1 sm:right-3 top-2 z-30 p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          class="absolute right-1.5 sm:right-3 top-2 z-30 p-1 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           :title="t('chatView.scrollDialogTop')"
           @click="scrollToTop"
         >
-          <ArrowUpToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <ArrowUpToLine class="w-3 h-3 sm:w-4 sm:h-4" />
         </button>
-        <div class="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1">
+        <div class="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1">
           <button
-            class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            class="p-1 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             :title="t('chatView.scrollResponseTop')"
             @click="scrollToMessageTop"
           >
-            <ArrowUp class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <ArrowUp class="w-3 h-3 sm:w-4 sm:h-4" />
           </button>
           <button
-            class="p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            class="p-1 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             :title="t('chatView.scrollResponseBottom')"
             @click="scrollToMessageBottom"
           >
-            <ArrowDown class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <ArrowDown class="w-3 h-3 sm:w-4 sm:h-4" />
           </button>
         </div>
         <button
-          class="absolute right-1 sm:right-3 bottom-2 z-30 p-1.5 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          class="absolute right-1.5 sm:right-3 bottom-2 z-30 p-1 sm:p-2 rounded-full bg-card/80 backdrop-blur border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           :title="t('chatView.scrollDialogBottom')"
           @click="scrollToBottom"
         >
-          <ArrowDownToLine class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <ArrowDownToLine class="w-3 h-3 sm:w-4 sm:h-4" />
         </button>
       </template>
       </div> <!-- /messages wrapper -->
