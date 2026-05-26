@@ -1,0 +1,49 @@
+# Секретарь24 — AI-секретарь для бизнеса
+
+> Виртуальный AI-ассистент для бизнеса на базе **Claude от Anthropic** и других LLM (GPT-4, Gemini, DeepSeek, Llama, Qwen). Отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону 24/7, работает по вашей базе знаний (RAG) и передаёт горячие лиды в CRM. Open-source (MIT) — можно скачать с GitHub и развернуть на своём сервере, либо использовать в облаке.
+
+Секретарь24 — это полноценная замена колл-центра, секретаря, техподдержки, AI-юриста или AI-бухгалтера. Один движок, любая профессия — настраивается промптом и базой знаний.
+
+## Ключевые факты
+
+- ИИ по умолчанию — **Claude (Anthropic)**, самая умная и обучаемая модель на рынке
+- После триала возможен переход на бесплатные мощные модели OpenRouter (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B) с автоматическим fallback от мощных к слабым
+- Open-source, лицензия MIT, доступен на [GitHub](https://github.com/ShaerWare/AI_Secretary_System)
+- Поддерживает русский, английский, казахский
+- Бесплатный триал 14 дней без привязки карты
+- Установка под ключ — 5 000 ₽ (Docker + root SSH достаточно)
+- Тарифы: Старт 2 900 ₽ / Бизнес 12 900 ₽ / Команда 29 900 ₽ / Enterprise (on-premise)
+
+## Каналы
+
+- Telegram-боты (множество инстансов)
+- WhatsApp Cloud API
+- Чат-виджет для сайта
+- Телефония (SIM7600E-H, голос: распознавание + синтез + клонирование)
+- Android-приложение
+
+## Возможности
+
+- [Возможности](https://ai-sekretar24.ru/#features): RAG, голос, мультиязычность, дообучение LoRA, локальный/облачный ИИ
+- [Роли AI-сотрудников](https://ai-sekretar24.ru/#roles): колл-центр, техподдержка, секретарь, юрист, бухгалтер, менеджер продаж, веб-студия, команда разработки
+- [Тарифы](https://ai-sekretar24.ru/#pricing)
+- [FAQ](https://ai-sekretar24.ru/#faq)
+
+## Open-source
+
+- [Репозиторий на GitHub](https://github.com/ShaerWare/AI_Secretary_System): полный исходный код под лицензией MIT
+- [Wiki / Документация](https://github.com/ShaerWare/AI_Secretary_System/wiki): установка, развёртывание, настройка LLM и каналов
+- [Installation Guide](https://github.com/ShaerWare/AI_Secretary_System/wiki/Installation)
+- [Deployment Profiles](https://github.com/ShaerWare/AI_Secretary_System/wiki/Deployment-Profiles)
+
+## Языковые версии лендинга
+
+- [Русский (основной)](https://ai-sekretar24.ru/)
+- [English](https://ai-sekretar24.ru/en/)
+- [Қазақша](https://ai-sekretar24.ru/kk/)
+
+## Контакты
+
+- [Поддержка в Telegram](https://t.me/ai_sekretar24bot)
+- [GitHub проекта](https://github.com/ShaerWare/AI_Secretary_System)
+- [Вход в кабинет](https://ai-sekretar24.ru/admin/)

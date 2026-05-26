@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Временный OG-плейсхолдер 1200x630.
+  Заменить на фотореалистичный og-image.png когда будет готов (см. /site/og-image.prompt.md).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0d"/>
+      <stop offset="100%" stop-color="#1a1208"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.7" cy="0.3" r="0.6">
+      <stop offset="0%" stop-color="#f0a830" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f0a830" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0A830"/>
+      <stop offset="100%" stop-color="#C27010"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fafafa"/>
+      <stop offset="100%" stop-color="#e5e5e5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Фон -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Декоративная сетка -->
+  <g stroke="#27272a" stroke-width="1" opacity="0.4">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+  </g>
+
+  <!-- Логотип-звезда (как в шапке) -->
+  <g transform="translate(80, 80) scale(0.18)">
+    <path fill="url(#brand)" fill-rule="evenodd" d="M 431.8 217.4 L 484.1 226.3 L 484.1 285.7 L 431.8 294.6 L 407.6 353.0 L 438.3 396.3 L 396.3 438.3 L 353.0 407.6 L 294.6 431.8 L 285.7 484.1 L 226.3 484.1 L 217.4 431.8 L 159.0 407.6 L 115.7 438.3 L 73.7 396.3 L 104.4 353.0 L 80.2 294.6 L 27.9 285.7 L 27.9 226.3 L 80.2 217.4 L 104.4 159.0 L 73.7 115.7 L 115.7 73.7 L 159.0 104.4 L 217.4 80.2 L 226.3 27.9 L 285.7 27.9 L 294.6 80.2 L 353.0 104.4 L 396.3 73.7 L 438.3 115.7 L 407.6 159.0 Z M 341.0 256.0 A 85 85 0 1 0 171.0 256.0 A 85 85 0 1 0 341.0 256.0 Z"/>
+  </g>
+
+  <!-- Название бренда -->
+  <text x="190" y="135" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="42" font-weight="800" fill="#fafafa">Секретарь<tspan fill="url(#brand)">24</tspan></text>
+
+  <!-- Главный слоган -->
+  <text x="80" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="62" font-weight="800" fill="url(#textGrad)">AI-секретарь для бизнеса</text>
+  <text x="80" y="360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="62" font-weight="800" fill="url(#brand)">звонки · чаты · заявки — 24/7</text>
+
+  <!-- Подзаголовок -->
+  <text x="80" y="430" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="26" font-weight="500" fill="#a1a1aa">На базе Claude от Anthropic · Open-source (MIT) · Триал 14 дней</text>
+
+  <!-- Чипы каналов -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="600">
+    <g transform="translate(80, 500)">
+      <rect width="160" height="44" rx="22" fill="#18181b" stroke="#3f3f46"/>
+      <text x="80" y="29" text-anchor="middle" fill="#fafafa">Telegram</text>
+    </g>
+    <g transform="translate(252, 500)">
+      <rect width="170" height="44" rx="22" fill="#18181b" stroke="#3f3f46"/>
+      <text x="85" y="29" text-anchor="middle" fill="#fafafa">WhatsApp</text>
+    </g>
+    <g transform="translate(434, 500)">
+      <rect width="200" height="44" rx="22" fill="#18181b" stroke="#3f3f46"/>
+      <text x="100" y="29" text-anchor="middle" fill="#fafafa">Виджет сайта</text>
+    </g>
+    <g transform="translate(646, 500)">
+      <rect width="180" height="44" rx="22" fill="#18181b" stroke="#3f3f46"/>
+      <text x="90" y="29" text-anchor="middle" fill="#fafafa">Телефония</text>
+    </g>
+    <g transform="translate(838, 500)">
+      <rect width="140" height="44" rx="22" fill="#18181b" stroke="#3f3f46"/>
+      <text x="70" y="29" text-anchor="middle" fill="#fafafa">Android</text>
+    </g>
+  </g>
+
+  <!-- URL внизу -->
+  <text x="1120" y="595" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="700" fill="url(#brand)">ai-sekretar24.ru</text>
+</svg>

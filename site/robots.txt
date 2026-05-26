@@ -2,4 +2,27 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 
+# Явно разрешаем AI-краулерам индексировать сайт (для AEO / AI Overview в Google,
+# Perplexity, ChatGPT search и т.п.). Структура для LLM описана в /llms.txt.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
 Sitemap: https://ai-sekretar24.ru/sitemap.xml

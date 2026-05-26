@@ -7,7 +7,15 @@
 
   <title>Sekretar24 — AI Assistant for Business: Calls, Chats and Leads 24/7</title>
   <meta name="description" content="Sekretar24 — virtual AI assistant for your business. Replies to customers on Telegram, WhatsApp, your website and over the phone, works from your knowledge base and pushes hot leads into CRM. Free 14-day trial." />
-  <meta name="keywords" content="AI assistant for business, AI chatbot Telegram, AI WhatsApp bot, voice AI for calls, call center automation, AI lawyer assistant, AI accountant assistant" />
+  <meta name="keywords" content="AI assistant for business, AI chatbot Telegram, AI WhatsApp bot, voice AI for calls, call center automation, AI lawyer assistant, AI accountant assistant, AI assistant Claude, Claude Anthropic for business, OpenRouter free models, open source AI assistant, self-hosted AI, AI assistant self-install, GitHub AI assistant, free AI assistant, MIT license" />
+
+  <!-- Search Console verification (fill after registration):
+  <meta name="google-site-verification" content="GOOGLE_TOKEN_HERE" />
+  <meta name="yandex-verification" content="YANDEX_TOKEN_HERE" />
+  -->
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="yandex" content="all" />
+  <meta name="author" content="ShaerWare" />
   <link rel="canonical" href="https://ai-sekretar24.ru/en/" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
@@ -21,7 +29,12 @@
   <meta property="og:title" content="Sekretar24 — AI Assistant for Business 24/7" />
   <meta property="og:description" content="Virtual AI assistant: Telegram, WhatsApp, web widget, phone calls. Free 14-day trial." />
   <meta property="og:url" content="https://ai-sekretar24.ru/en/" />
-  <meta property="og:image" content="https://ai-sekretar24.ru/og-image.png" />
+  <!-- og:image: SVG placeholder until photo PNG is generated (see og-image.prompt.md).
+       After PNG arrives, point both og:image and twitter:image to /og-image.png. -->
+  <meta property="og:image" content="https://ai-sekretar24.ru/en/og-image.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:locale" content="en_US" />
   <meta property="og:locale:alternate" content="ru_RU" />
   <meta property="og:locale:alternate" content="kk_KZ" />
@@ -29,7 +42,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Sekretar24 — AI Assistant for Business 24/7" />
   <meta name="twitter:description" content="Virtual AI assistant: Telegram, WhatsApp, web, phone. 14-day trial." />
-  <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.png" />
+  <meta name="twitter:image" content="https://ai-sekretar24.ru/en/og-image.svg" />
 
   <link rel="stylesheet" href="/styles.css?v=3" />
 
@@ -49,10 +62,18 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Sekretar24",
+    "alternateName": "AI Secretary System",
     "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web, Android",
-    "description": "Virtual AI assistant for business: Telegram, WhatsApp, web widget, telephony, knowledge base and CRM integrations.",
+    "applicationSubCategory": "AI Assistant",
+    "operatingSystem": "Web, Android, Linux (self-hosted)",
+    "description": "Virtual AI assistant for business powered by Claude (Anthropic) and other LLMs. Telegram, WhatsApp, web widget, telephony, knowledge base (RAG) and CRM integrations. Open-source (MIT) — self-host or use in cloud.",
+    "softwareVersion": "1.0",
+    "license": "https://opensource.org/licenses/MIT",
+    "downloadUrl": "https://github.com/ShaerWare/AI_Secretary_System",
+    "codeRepository": "https://github.com/ShaerWare/AI_Secretary_System",
     "offers": [
+      { "@type": "Offer", "name": "Self-hosted (free)", "price": "0", "priceCurrency": "RUB", "description": "Open-source, MIT — download from GitHub" },
+      { "@type": "Offer", "name": "Turnkey installation", "price": "5000", "priceCurrency": "RUB", "description": "We deploy and configure on your server" },
       { "@type": "Offer", "name": "Start", "price": "2900", "priceCurrency": "RUB" },
       { "@type": "Offer", "name": "Business", "price": "12900", "priceCurrency": "RUB" },
       { "@type": "Offer", "name": "Team", "price": "29900", "priceCurrency": "RUB" }
@@ -60,17 +81,34 @@
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
   }
   </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://ai-sekretar24.ru/en/" },
+      { "@type": "ListItem", "position": 2, "name": "Features", "item": "https://ai-sekretar24.ru/en/#features" },
+      { "@type": "ListItem", "position": 3, "name": "Pricing", "item": "https://ai-sekretar24.ru/en/#pricing" }
+    ]
+  }
+  </script>
+
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      { "@type": "Question", "name": "How is this different from a regular chatbot?", "acceptedAnswer": { "@type": "Answer", "text": "Regular bots run rigid scenario trees. Sekretar24 is real AI: it understands free text, remembers conversation context and answers from your knowledge base, not from a script." } },
-      { "@type": "Question", "name": "Is my data safe?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can run on cloud models or deploy the AI entirely on your own server — your customers' data never leaves your perimeter." } },
-      { "@type": "Question", "name": "Do I need my own server?", "acceptedAnswer": { "@type": "Answer", "text": "No. The Start, Business and Team plans all run in the cloud. A dedicated server is only needed for on-premise deployment with local AI (Enterprise)." } },
+      { "@type": "Question", "name": "How is this different from a regular chatbot?", "acceptedAnswer": { "@type": "Answer", "text": "Regular bots run rigid scenario trees. Sekretar24 is real AI powered by Claude (Anthropic): it understands free text, remembers conversation context and answers from your knowledge base, not from a script." } },
+      { "@type": "Question", "name": "Which AI does Sekretar24 use?", "acceptedAnswer": { "@type": "Answer", "text": "By default it runs on Claude by Anthropic — the smartest and most steerable model on the market. On request you can plug in any other AI: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (dozens of models in one API), or local Qwen/Llama/DeepSeek via vLLM on your own server." } },
+      { "@type": "Question", "name": "What happens to the AI after the trial?", "acceptedAnswer": { "@type": "Answer", "text": "The 14-day trial runs on Claude — the market flagship. After the trial you choose: stay on Claude with the Business+ plan, or switch for free to OpenRouter's powerful models (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B etc.). The chain is configured from strongest to weakest — if a model hits a limit, the assistant automatically falls back to the next one. Free models cover most business tasks." } },
+      { "@type": "Question", "name": "Can I install Sekretar24 myself?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The source is open on GitHub (https://github.com/ShaerWare/AI_Secretary_System) under MIT. Detailed wiki helps you deploy on any Linux server — all you need is Docker and root SSH access. If you'd rather not bother — we install turnkey for 5,000 ₽." } },
+      { "@type": "Question", "name": "How much does the AI cost?", "acceptedAnswer": { "@type": "Answer", "text": "For most tasks OpenRouter's free models (DeepSeek, Llama, Qwen) are enough. Paid models (Claude, GPT-4) make sense only when you need maximum reasoning and expertise. On cloud plans the AI API is included. On self-hosted you plug in your own key or use the free OpenRouter models." } },
+      { "@type": "Question", "name": "Is my data safe?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can run on cloud models or deploy the AI entirely on your own server — your customers' data never leaves your perimeter. The open-source code can be audited." } },
+      { "@type": "Question", "name": "Do I need my own server?", "acceptedAnswer": { "@type": "Answer", "text": "No. The Start, Business and Team plans all run in the cloud. A dedicated server is only needed for on-premise or self-hosted installation — any Linux server with Docker and root SSH access works." } },
       { "@type": "Question", "name": "Which channels does the assistant work on?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, web chat widget, telephony and the Android app. One assistant — every channel at once." } },
       { "@type": "Question", "name": "Can I connect telephony?", "acceptedAnswer": { "@type": "Answer", "text": "Yes, starting with the Business plan. The assistant takes and makes calls, recognizes speech and answers in voice." } },
-      { "@type": "Question", "name": "What happens after the trial?", "acceptedAnswer": { "@type": "Answer", "text": "Two weeks free, no credit card. Then pick the plan that fits — your data and settings carry over." } }
+      { "@type": "Question", "name": "What's included in the 5,000 ₽ turnkey installation?", "acceptedAnswer": { "@type": "Answer", "text": "We deploy Sekretar24 on your server (Docker + root SSH required), configure the knowledge base (RAG), connect Telegram/WhatsApp/widget, and tune the assistant for your niche. Payment via YooMoney, Ozon Pay or Alfa-Bank card." } }
     ]
   }
   </script>
@@ -219,6 +257,7 @@
         <p class="eyebrow">Features</p>
         <h2 class="section__title">Not a scripted bot — real AI</h2>
         <div class="grid grid-3">
+          <article class="feature feature--highlight"><div class="feature__icon">🤖</div><h3>Best AI — Claude</h3><p>By default runs on <strong>Claude by Anthropic</strong> — the smartest and most steerable model on the market. On request: GPT-4, Gemini, DeepSeek, Qwen, Llama or your own local model.</p></article>
           <article class="feature"><div class="feature__icon">🧠</div><h3>Knowledge base (RAG)</h3><p>Upload documents, websites or RSS — your assistant answers strictly from your data, not hallucinations.</p></article>
           <article class="feature"><div class="feature__icon">🎙️</div><h3>Voice</h3><p>Speech synthesis and voice cloning — your assistant sounds like a real member of your team.</p></article>
           <article class="feature"><div class="feature__icon">🔒</div><h3>Local and cloud AI</h3><p>Run on cloud models or deploy the AI on your own server — data never leaves your perimeter.</p></article>
@@ -226,6 +265,55 @@
           <article class="feature"><div class="feature__icon">🌍</div><h3>Multilingual</h3><p>Russian, English and Kazakh — your assistant speaks to customers in their language.</p></article>
           <article class="feature"><div class="feature__icon">🎯</div><h3>Fine-tuning</h3><p>LoRA fine-tuning on your data — the assistant picks up your company's tone and expertise.</p></article>
         </div>
+
+        <div class="vs-block">
+          <h3 class="vs-block__title">Sekretar24 vs a regular chatbot</h3>
+          <div class="vs-block__grid">
+            <div class="vs-row vs-row--head"><span></span><span>Regular bot</span><span class="vs-row__us">Sekretar24</span></div>
+            <div class="vs-row"><span>Understands speech</span><span>rigid scenario tree</span><span class="vs-row__us">free text, Claude AI</span></div>
+            <div class="vs-row"><span>Knowledge base</span><span>preset answers</span><span class="vs-row__us">your documents (RAG)</span></div>
+            <div class="vs-row"><span>Channels</span><span>usually one</span><span class="vs-row__us">Telegram, WhatsApp, web, phone</span></div>
+            <div class="vs-row"><span>Voice</span><span>none</span><span class="vs-row__us">speech rec + synth + clone</span></div>
+            <div class="vs-row"><span>Self-hosted</span><span>no</span><span class="vs-row__us">yes, MIT, GitHub</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OPEN-SOURCE / SELF-HOST ============ -->
+    <section class="section opensource" id="opensource">
+      <div class="container">
+        <p class="eyebrow">Open-source · MIT</p>
+        <h2 class="section__title">Fully open-source. No lock-in</h2>
+        <p class="section__lead">
+          All Sekretar24 code is published on GitHub under the MIT license — download it,
+          deploy on your own server and use it for free. Any Linux server with Docker and
+          root SSH access is enough.
+        </p>
+        <div class="grid grid-3">
+          <article class="os-card">
+            <div class="os-card__icon">🆓</div>
+            <h3>Download from GitHub</h3>
+            <p>Open source, MIT license. Free forever. Modify for your niche.</p>
+            <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn--outline btn--block">Open on GitHub</a>
+          </article>
+          <article class="os-card">
+            <div class="os-card__icon">📚</div>
+            <h3>Detailed documentation</h3>
+            <p>Repo wiki: installation, deployment, LLM setup, RAG, telephony, bots and integrations.</p>
+            <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki" target="_blank" rel="noopener" class="btn btn--outline btn--block">Open Wiki</a>
+          </article>
+          <article class="os-card os-card--featured">
+            <div class="os-card__badge">If you don't want to bother</div>
+            <div class="os-card__icon">🛠️</div>
+            <h3>Turnkey install — 5,000 ₽</h3>
+            <p>We deploy on your server, configure the knowledge base, connect channels, tune the assistant for you. All you need is Docker and root SSH.</p>
+            <a href="#start" class="btn btn--primary btn--block">Order installation</a>
+          </article>
+        </div>
+        <p class="opensource__note">
+          🔒 Self-hosted means customer data stays on your server. Run on free OpenRouter models or plug in your own Claude/GPT-4 key.
+        </p>
       </div>
     </section>
 
@@ -332,28 +420,100 @@
       </div>
     </section>
 
+    <!-- ============ AFTER TRIAL: CLAUDE → OPENROUTER ============ -->
+    <section class="section after-trial" id="after-trial">
+      <div class="container container--narrow">
+        <div class="after-trial__card">
+          <p class="eyebrow">After the trial</p>
+          <h2 class="section__title section__title--left">Trial ends — your assistant keeps working</h2>
+          <p>
+            The 14-day free trial runs on <strong>Claude by Anthropic</strong> —
+            the market flagship. After the trial you pick one of two paths:
+          </p>
+          <div class="after-trial__paths">
+            <div class="after-trial__path">
+              <h3>💎 Stay on Claude</h3>
+              <p>Business+ subscription — max answer quality, best reasoning, long context.</p>
+            </div>
+            <div class="after-trial__path">
+              <h3>🆓 Free powerful models</h3>
+              <p>Switch to OpenRouter: <strong>DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B</strong> and more. The chain is configured from strongest to weakest — if the top model hits a rate limit, the assistant automatically falls back to the next one. No downtime.</p>
+            </div>
+          </div>
+          <p class="after-trial__bottom">
+            💡 Free models cover most business tasks. Paying for the top tier makes sense only when you need complex reasoning and maximum expertise.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <section class="section faq" id="faq">
       <div class="container container--narrow">
         <p class="eyebrow">Questions</p>
         <h2 class="section__title">Frequently asked questions</h2>
         <div class="faq__list">
-          <details class="faq-item"><summary>How is this different from a regular chatbot?</summary><p>Regular bots run rigid scenario trees. Sekretar24 is real AI: it understands free text, remembers conversation context and answers from your knowledge base, not from a script.</p></details>
-          <details class="faq-item"><summary>Is my data safe?</summary><p>Yes. You can run on cloud models or deploy the AI entirely on your own server — your customers' data never leaves your perimeter.</p></details>
-          <details class="faq-item"><summary>Do I need my own server?</summary><p>No. The Start, Business and Team plans all run in the cloud. A dedicated server is only needed for on-premise deployment with local AI (Enterprise).</p></details>
+          <details class="faq-item"><summary>How is this different from a regular chatbot?</summary><p>Regular bots run rigid scenario trees. Sekretar24 is real AI powered by <strong>Claude (Anthropic)</strong>: it understands free text, remembers conversation context and answers from your knowledge base, not from a script.</p></details>
+          <details class="faq-item"><summary>Which AI does Sekretar24 use?</summary><p>By default — <strong>Claude by Anthropic</strong>, the smartest and most steerable model on the market. On request we plug in any other: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (dozens of models in one API) or local Qwen/Llama/DeepSeek via vLLM on your own server.</p></details>
+          <details class="faq-item"><summary>What happens to the AI after the trial?</summary><p>The trial runs on Claude. After — two options: stay on Claude with Business+, or switch for free to OpenRouter's powerful models (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B). The chain is configured from strongest to weakest: if the top model hits a limit, the assistant automatically takes the next one. For most tasks free models are more than enough.</p></details>
+          <details class="faq-item"><summary>Can I install it myself?</summary><p>Yes. Code is open on <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub</a> under MIT, with detailed <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki" target="_blank" rel="noopener">documentation</a>. You need Docker and root SSH access on any Linux server. If you'd rather not bother — we install turnkey for 5,000 ₽.</p></details>
+          <details class="faq-item"><summary>How much does the AI cost?</summary><p>For most business tasks OpenRouter's free models (DeepSeek, Llama, Qwen) are enough. Paying for top models (Claude, GPT-4) makes sense for complex reasoning and maximum expertise. On cloud plans the API is included; on self-hosted you plug in your own key or use the free models.</p></details>
+          <details class="faq-item"><summary>What's included in the 5,000 ₽ turnkey installation?</summary><p>We deploy Sekretar24 on your server (Docker + root SSH required), configure the knowledge base (RAG), connect Telegram/WhatsApp/widget/telephony, and tune the assistant for your niche. Payment via YooMoney, Ozon Pay or Alfa-Bank.</p></details>
+          <details class="faq-item"><summary>Is my data safe?</summary><p>Yes. Cloud models or your own server — your choice. Self-hosted means customer data stays inside your perimeter, and the open-source code can be audited.</p></details>
+          <details class="faq-item"><summary>Do I need my own server?</summary><p>Not for cloud plans — everything runs at our end. For self-hosted from GitHub you need any Linux server with Docker (from 2 GB RAM for cloud mode, from 12 GB + GPU for local AI).</p></details>
           <details class="faq-item"><summary>Which channels does the assistant work on?</summary><p>Telegram, WhatsApp, web chat widget, telephony and the Android app. One assistant — every channel at once.</p></details>
           <details class="faq-item"><summary>Can I connect telephony?</summary><p>Yes, starting with the Business plan. The assistant takes and makes calls, recognizes speech and answers in voice.</p></details>
-          <details class="faq-item"><summary>What happens after the trial?</summary><p>Two weeks free, no credit card. Then pick the plan that fits — your data and settings carry over.</p></details>
         </div>
       </div>
     </section>
 
     <section class="section cta-final" id="start">
-      <div class="container container--narrow">
-        <div class="cta-card">
-          <h2 class="section__title">Launch your AI employee today</h2>
-          <p class="section__lead">
-            Leave a request — we'll get you set up and activate your 14-day free trial.
-          </p>
+      <div class="container">
+        <h2 class="section__title">Launch your AI employee today</h2>
+        <p class="section__lead">Two paths — pick the one that fits.</p>
+
+        <div class="grid grid-2 cta-paths">
+
+          <article class="cta-path cta-path--free">
+            <div class="cta-path__head">
+              <span class="cta-path__price">Free</span>
+              <h3>I'll install it myself</h3>
+            </div>
+            <p>Clone the code from GitHub and deploy on your own server. You need Docker and root SSH access.</p>
+            <ul class="cta-path__list">
+              <li>✓ MIT license, open source</li>
+              <li>✓ Detailed Wiki documentation</li>
+              <li>✓ Community support</li>
+              <li>✓ Free OpenRouter models out of the box</li>
+            </ul>
+            <div class="cta-path__actions">
+              <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn--outline btn--block">⬇️ Open on GitHub</a>
+              <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki/Installation" target="_blank" rel="noopener" class="btn btn--ghost btn--block">📚 Installation guide</a>
+            </div>
+          </article>
+
+          <article class="cta-path cta-path--paid">
+            <div class="cta-path__badge">⚡ Turnkey</div>
+            <div class="cta-path__head">
+              <span class="cta-path__price">5,000 ₽</span>
+              <h3>We'll install it for you</h3>
+            </div>
+            <p>We deploy on your server and tune it for your task. From payment to a working assistant — one business day.</p>
+            <ul class="cta-path__list">
+              <li>✓ Deployment on your Linux server</li>
+              <li>✓ Knowledge base (RAG) tuned for your niche</li>
+              <li>✓ Connect Telegram, WhatsApp, widget</li>
+              <li>✓ 14-day trial on Claude + OpenRouter fallback</li>
+            </ul>
+            <div class="cta-path__actions">
+              <a href="#order-form" class="btn btn--primary btn--block">💳 Pay and order</a>
+              <p class="cta-path__pay-methods">Payment: YooMoney · Ozon Pay · Alfa-Bank</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="cta-card cta-card--small" id="order-form">
+          <h3>Or leave a request — we'll help you decide</h3>
+          <p class="section__lead">We'll reach out, answer your questions and activate your 14-day trial.</p>
           <form class="lead-form" id="leadForm" novalidate>
             <div class="lead-form__row">
               <input type="text" name="name" placeholder="Your name" required autocomplete="name" />
@@ -367,6 +527,7 @@
               <option>Lawyer</option>
               <option>Accountant</option>
               <option>Sales manager</option>
+              <option>Turnkey installation for 5,000 ₽</option>
               <option>Other</option>
             </select>
             <button type="submit" class="btn btn--primary btn--lg btn--block">Get access</button>
