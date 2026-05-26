@@ -7,7 +7,15 @@
 
   <title>Секретарь24 — AI-секретарь для бизнеса: звонки, чаты и заявки 24/7</title>
   <meta name="description" content="Секретарь24 — виртуальный AI-ассистент для бизнеса. Отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону, работает по вашей базе знаний и передаёт горячие лиды в CRM. Бесплатный триал 14 дней." />
-  <meta name="keywords" content="ИИ секретарь, AI-секретарь, виртуальный ассистент для бизнеса, чат-бот для Telegram, чат-бот WhatsApp, голосовой робот, автоматизация колл-центра, AI ассистент юрист, AI ассистент бухгалтер" />
+  <meta name="keywords" content="ИИ секретарь, AI-секретарь, виртуальный ассистент для бизнеса, чат-бот для Telegram, чат-бот WhatsApp, голосовой робот, автоматизация колл-центра, AI ассистент юрист, AI ассистент бухгалтер, AI секретарь Claude, AI Anthropic Claude для бизнеса, OpenRouter бесплатные модели, open source AI ассистент, self-hosted AI, AI секретарь установить самому, GitHub AI секретарь, бесплатный AI секретарь, MIT лицензия" />
+
+  <!-- Search Console verification (заполнить после регистрации):
+  <meta name="google-site-verification" content="GOOGLE_TOKEN_HERE" />
+  <meta name="yandex-verification" content="YANDEX_TOKEN_HERE" />
+  -->
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="yandex" content="all" />
+  <meta name="author" content="ShaerWare" />
   <link rel="canonical" href="https://ai-sekretar24.ru/" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
@@ -46,7 +54,12 @@
   <meta property="og:title" content="Секретарь24 — AI-секретарь для бизнеса 24/7" />
   <meta property="og:description" content="Виртуальный AI-ассистент: отвечает клиентам в Telegram, WhatsApp, на сайте и по телефону. Бесплатный триал 14 дней." />
   <meta property="og:url" content="https://ai-sekretar24.ru/" />
-  <meta property="og:image" content="https://ai-sekretar24.ru/og-image.png" />
+  <!-- og:image: пока используется SVG-плейсхолдер. Когда появится фото PNG,
+       поменять оба og:image и twitter:image на /og-image.png (см. og-image.prompt.md). -->
+  <meta property="og:image" content="https://ai-sekretar24.ru/og-image.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:locale" content="ru_RU" />
   <meta property="og:locale:alternate" content="en_US" />
   <meta property="og:locale:alternate" content="kk_KZ" />
@@ -55,7 +68,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Секретарь24 — AI-секретарь для бизнеса 24/7" />
   <meta name="twitter:description" content="Виртуальный AI-ассистент: Telegram, WhatsApp, сайт, телефония. Триал 14 дней." />
-  <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.png" />
+  <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.svg" />
 
   <link rel="stylesheet" href="/styles.css?v=3" />
 
@@ -76,10 +89,18 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Секретарь24",
+    "alternateName": "AI Secretary System",
     "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web, Android",
-    "description": "Виртуальный AI-ассистент для бизнеса: Telegram, WhatsApp, виджет сайта, телефония, база знаний и интеграции с CRM.",
+    "applicationSubCategory": "AI Assistant",
+    "operatingSystem": "Web, Android, Linux (self-hosted)",
+    "description": "Виртуальный AI-ассистент для бизнеса на базе Claude (Anthropic) и других LLM. Telegram, WhatsApp, виджет сайта, телефония, база знаний (RAG) и интеграции с CRM. Open-source (MIT), можно развернуть на своём сервере.",
+    "softwareVersion": "1.0",
+    "license": "https://opensource.org/licenses/MIT",
+    "downloadUrl": "https://github.com/ShaerWare/AI_Secretary_System",
+    "codeRepository": "https://github.com/ShaerWare/AI_Secretary_System",
     "offers": [
+      { "@type": "Offer", "name": "Self-hosted (бесплатно)", "price": "0", "priceCurrency": "RUB", "description": "Open-source, MIT — скачать с GitHub" },
+      { "@type": "Offer", "name": "Установка под ключ", "price": "5000", "priceCurrency": "RUB", "description": "Развернём и настроим на вашем сервере" },
       { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB" },
       { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB" },
       { "@type": "Offer", "name": "Команда", "price": "29900", "priceCurrency": "RUB" }
@@ -87,17 +108,33 @@
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
   }
   </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Главная", "item": "https://ai-sekretar24.ru/" },
+      { "@type": "ListItem", "position": 2, "name": "Возможности", "item": "https://ai-sekretar24.ru/#features" },
+      { "@type": "ListItem", "position": 3, "name": "Тарифы", "item": "https://ai-sekretar24.ru/#pricing" }
+    ]
+  }
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      { "@type": "Question", "name": "Чем это отличается от обычного чат-бота?", "acceptedAnswer": { "@type": "Answer", "text": "Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту." } },
-      { "@type": "Question", "name": "Безопасны ли мои данные?", "acceptedAnswer": { "@type": "Answer", "text": "Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр." } },
-      { "@type": "Question", "name": "Нужен ли свой сервер?", "acceptedAnswer": { "@type": "Answer", "text": "Нет. На тарифах Старт, Бизнес и Команда всё работает в облаке. Свой сервер нужен только для on-premise развёртывания с локальным ИИ (Enterprise)." } },
+      { "@type": "Question", "name": "Чем это отличается от обычного чат-бота?", "acceptedAnswer": { "@type": "Answer", "text": "Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ на базе Claude (Anthropic): понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту." } },
+      { "@type": "Question", "name": "Какой ИИ использует Секретарь24?", "acceptedAnswer": { "@type": "Answer", "text": "По умолчанию работает на Claude от Anthropic — это самая умная и обучаемая модель на рынке. По запросу можно подключить любой другой ИИ: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (агрегатор с десятками моделей) или локальные модели Qwen/Llama/DeepSeek через vLLM на собственном сервере." } },
+      { "@type": "Question", "name": "Что будет с ИИ после триала?", "acceptedAnswer": { "@type": "Answer", "text": "На бесплатном триале работает Claude — флагман рынка. После триала вы выбираете: продолжить на Claude по подписке Бизнес+, или бесплатно переключиться на мощные модели OpenRouter (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B и др.). Цепочка настроена от мощных к слабым — если первая модель недоступна, ассистент автоматически переходит к следующей. Для большинства бизнес-задач бесплатных моделей хватает." } },
+      { "@type": "Question", "name": "Можно ли установить Секретарь24 самостоятельно?", "acceptedAnswer": { "@type": "Answer", "text": "Да, исходный код открыт на GitHub (https://github.com/ShaerWare/AI_Secretary_System) под лицензией MIT. Подробная документация поможет развернуть систему на своём сервере — нужны только Docker и root-доступ по SSH. Если не хотите возиться — мы установим под ключ за 5 000 ₽." } },
+      { "@type": "Question", "name": "Сколько стоит ИИ?", "acceptedAnswer": { "@type": "Answer", "text": "Для большинства задач хватает бесплатных моделей через OpenRouter (DeepSeek, Llama, Qwen). Платные модели (Claude от Anthropic, GPT-4) нужны только когда требуются максимальная экспертиза и сложные рассуждения. На наших облачных тарифах API ИИ уже включён. На самохостинге подключаете свой API-ключ или используете бесплатные модели OpenRouter." } },
+      { "@type": "Question", "name": "Безопасны ли мои данные?", "acceptedAnswer": { "@type": "Answer", "text": "Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр. Open-source код можно проверить на GitHub." } },
+      { "@type": "Question", "name": "Нужен ли свой сервер?", "acceptedAnswer": { "@type": "Answer", "text": "Нет. На тарифах Старт, Бизнес и Команда всё работает в нашем облаке. Свой сервер нужен только для on-premise развёртывания или самостоятельной установки с GitHub — там достаточно любого Linux-сервера с Docker и root SSH." } },
       { "@type": "Question", "name": "С какими каналами работает ассистент?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно." } },
       { "@type": "Question", "name": "Можно ли подключить телефонию?", "acceptedAnswer": { "@type": "Answer", "text": "Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом." } },
-      { "@type": "Question", "name": "Что будет после триала?", "acceptedAnswer": { "@type": "Answer", "text": "14 дней бесплатно без привязки карты. После — выберите подходящий тариф. Данные и настройки сохранятся." } }
+      { "@type": "Question", "name": "Что входит в установку под ключ за 5 000 ₽?", "acceptedAnswer": { "@type": "Answer", "text": "Развернём Секретарь24 на вашем сервере (нужен только Docker и root SSH), настроим базу знаний (RAG), подключим Telegram/WhatsApp/виджет, обучим ассистента под вашу нишу. Оплата картой через YooMoney, Ozon Pay или Альфа-Банк." } }
     ]
   }
   </script>
@@ -252,6 +289,7 @@
         <p class="eyebrow">Возможности</p>
         <h2 class="section__title">Не скриптовый бот, а настоящий ИИ</h2>
         <div class="grid grid-3">
+          <article class="feature feature--highlight"><div class="feature__icon">🤖</div><h3>Лучший ИИ — Claude</h3><p>По умолчанию работает на <strong>Claude от Anthropic</strong> — самой умной и обучаемой модели на рынке. По запросу — GPT-4, Gemini, DeepSeek, Qwen, Llama или ваша локальная модель.</p></article>
           <article class="feature"><div class="feature__icon">🧠</div><h3>База знаний (RAG)</h3><p>Загрузите документы, сайты или RSS — ассистент отвечает строго по вашим данным, а не выдумывает.</p></article>
           <article class="feature"><div class="feature__icon">🎙️</div><h3>Голос</h3><p>Синтез речи и клонирование голоса — ассистент звучит как живой сотрудник вашей компании.</p></article>
           <article class="feature"><div class="feature__icon">🔒</div><h3>Локальный и облачный ИИ</h3><p>Работайте на облачных моделях или разверните ИИ на своём сервере — данные не покидают периметр.</p></article>
@@ -259,6 +297,56 @@
           <article class="feature"><div class="feature__icon">🌍</div><h3>Мультиязычность</h3><p>Русский, английский, казахский — ассистент общается с клиентами на их языке.</p></article>
           <article class="feature"><div class="feature__icon">🎯</div><h3>Дообучение</h3><p>LoRA-дообучение на ваших данных — ассистент перенимает тон и экспертизу вашей компании.</p></article>
         </div>
+
+        <!-- AEO: цитируемый блок «vs обычный бот» — короткий и таблицей -->
+        <div class="vs-block">
+          <h3 class="vs-block__title">Секретарь24 vs обычный чат-бот</h3>
+          <div class="vs-block__grid">
+            <div class="vs-row vs-row--head"><span></span><span>Обычный бот</span><span class="vs-row__us">Секретарь24</span></div>
+            <div class="vs-row"><span>Понимание речи</span><span>жёсткий сценарий-дерево</span><span class="vs-row__us">свободная речь, Claude AI</span></div>
+            <div class="vs-row"><span>База знаний</span><span>заданные ответы</span><span class="vs-row__us">ваши документы (RAG)</span></div>
+            <div class="vs-row"><span>Каналы</span><span>обычно один</span><span class="vs-row__us">Telegram, WhatsApp, сайт, телефон</span></div>
+            <div class="vs-row"><span>Голос</span><span>нет</span><span class="vs-row__us">распознавание + синтез + клон</span></div>
+            <div class="vs-row"><span>Self-hosted</span><span>нет</span><span class="vs-row__us">да, MIT, GitHub</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OPEN-SOURCE / САМОХОСТИНГ ============ -->
+    <section class="section opensource" id="opensource">
+      <div class="container">
+        <p class="eyebrow">Open-source · MIT</p>
+        <h2 class="section__title">Полностью open-source. Никаких локов</h2>
+        <p class="section__lead">
+          Весь код Секретарь24 опубликован на GitHub под лицензией MIT — можно скачать,
+          развернуть у себя и пользоваться бесплатно. Любому Linux-серверу достаточно
+          Docker и root-доступа по SSH.
+        </p>
+        <div class="grid grid-3">
+          <article class="os-card">
+            <div class="os-card__icon">🆓</div>
+            <h3>Скачать с GitHub</h3>
+            <p>Открытый код, MIT-лицензия. Бесплатно навсегда. Любые модификации под вашу нишу.</p>
+            <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn--outline btn--block">Открыть на GitHub</a>
+          </article>
+          <article class="os-card">
+            <div class="os-card__icon">📚</div>
+            <h3>Подробная документация</h3>
+            <p>Wiki репозитория: установка, развёртывание, настройка LLM, RAG, телефонии, ботов и интеграций.</p>
+            <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki" target="_blank" rel="noopener" class="btn btn--outline btn--block">Открыть Wiki</a>
+          </article>
+          <article class="os-card os-card--featured">
+            <div class="os-card__badge">Если лень возиться</div>
+            <div class="os-card__icon">🛠️</div>
+            <h3>Установка под ключ — 5 000 ₽</h3>
+            <p>Развернём на вашем сервере, настроим базу знаний, подключим каналы, обучим под вашу задачу. Нужны только Docker и root SSH.</p>
+            <a href="#start" class="btn btn--primary btn--block">Заказать установку</a>
+          </article>
+        </div>
+        <p class="opensource__note">
+          🔒 На самохостинге данные клиентов не покидают ваш сервер. Можно работать на бесплатных моделях OpenRouter или подключить свой ключ к Claude/GPT-4.
+        </p>
       </div>
     </section>
 
@@ -370,32 +458,109 @@
       </div>
     </section>
 
+    <!-- ============ ПОСЛЕ ТРИАЛА: CLAUDE → OPENROUTER ============ -->
+    <section class="section after-trial" id="after-trial">
+      <div class="container container--narrow">
+        <div class="after-trial__card">
+          <p class="eyebrow">Что после триала</p>
+          <h2 class="section__title section__title--left">Триал закончился — ассистент работает дальше</h2>
+          <p>
+            На бесплатном триале 14 дней работает <strong>Claude от Anthropic</strong> —
+            флагман рынка. После триала выбираете один из двух вариантов:
+          </p>
+          <div class="after-trial__paths">
+            <div class="after-trial__path">
+              <h3>💎 Продолжить на Claude</h3>
+              <p>Подписка Бизнес+ — максимальное качество ответов, лучший reasoning, длинный контекст.</p>
+            </div>
+            <div class="after-trial__path">
+              <h3>🆓 Бесплатные мощные модели</h3>
+              <p>Переключение на OpenRouter: <strong>DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B</strong> и другие. Цепочка от мощных к слабым — если первая модель упёрлась в лимит, ассистент автоматически переходит к следующей. Без перерыва в работе.</p>
+            </div>
+          </div>
+          <p class="after-trial__bottom">
+            💡 Для большинства бизнес-задач бесплатных моделей хватает. Платить за топ-модель имеет смысл там, где нужны сложные рассуждения и максимальная экспертиза.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ FAQ ============ -->
     <section class="section faq" id="faq">
       <div class="container container--narrow">
         <p class="eyebrow">Вопросы</p>
         <h2 class="section__title">Частые вопросы</h2>
         <div class="faq__list">
-          <details class="faq-item"><summary>Чем это отличается от обычного чат-бота?</summary><p>Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту.</p></details>
-          <details class="faq-item"><summary>Безопасны ли мои данные?</summary><p>Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр.</p></details>
-          <details class="faq-item"><summary>Нужен ли свой сервер?</summary><p>Нет. На тарифах Старт, Бизнес и Команда всё работает в облаке. Свой сервер нужен только для on-premise развёртывания с локальным ИИ (Enterprise).</p></details>
+          <details class="faq-item"><summary>Чем это отличается от обычного чат-бота?</summary><p>Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ на базе <strong>Claude от Anthropic</strong>: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту.</p></details>
+          <details class="faq-item"><summary>Какой ИИ использует Секретарь24?</summary><p>По умолчанию — <strong>Claude от Anthropic</strong>, самая умная и обучаемая модель на рынке. По запросу подключаем любой другой: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (десятки моделей в одном API) или локальные модели Qwen/Llama/DeepSeek через vLLM на вашем сервере.</p></details>
+          <details class="faq-item"><summary>Что будет с ИИ после триала?</summary><p>На триале работает Claude. После — два варианта: продолжить на Claude по подписке Бизнес+, или бесплатно переключиться на мощные модели OpenRouter (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B). Цепочка настроена от мощных к слабым: если первая модель упёрлась в лимит — ассистент автоматически берёт следующую. Для большинства задач бесплатных моделей более чем достаточно.</p></details>
+          <details class="faq-item"><summary>Можно ли установить самому?</summary><p>Да. Код открыт на <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub</a> под лицензией MIT, есть подробная <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki" target="_blank" rel="noopener">документация</a>. Нужны только Docker и root-доступ по SSH к любому Linux-серверу. Не хочется возиться — установим под ключ за 5 000 ₽.</p></details>
+          <details class="faq-item"><summary>Сколько стоит ИИ?</summary><p>Для большинства бизнес-задач хватает бесплатных моделей OpenRouter (DeepSeek, Llama, Qwen). Платить за топ-модели (Claude, GPT-4) имеет смысл там, где нужны сложные рассуждения и максимальная экспертиза. На облачных тарифах API уже включён, на самохостинге — подключаете свой ключ или бесплатные модели.</p></details>
+          <details class="faq-item"><summary>Что входит в установку под ключ за 5 000 ₽?</summary><p>Развернём Секретарь24 на вашем сервере (нужны Docker и root SSH), настроим базу знаний (RAG), подключим Telegram/WhatsApp/виджет/телефонию, обучим ассистента под вашу нишу. Оплата картой — YooMoney, Ozon Pay или Альфа-Банк.</p></details>
+          <details class="faq-item"><summary>Безопасны ли мои данные?</summary><p>Да. Облачные модели или собственный сервер — выбор за вами. На самохостинге данные клиентов не покидают периметр, а open-source код можно проверить.</p></details>
+          <details class="faq-item"><summary>Нужен ли свой сервер?</summary><p>На облачных тарифах — нет, всё работает у нас. Для самостоятельной установки с GitHub нужен любой Linux-сервер с Docker (от 2 ГБ ОЗУ для cloud-режима, от 12 ГБ + GPU для локального ИИ).</p></details>
           <details class="faq-item"><summary>С какими каналами работает ассистент?</summary><p>Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно.</p></details>
           <details class="faq-item"><summary>Можно ли подключить телефонию?</summary><p>Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом.</p></details>
-          <details class="faq-item"><summary>Что будет после триала?</summary><p>14 дней бесплатно без привязки карты. После — выберите подходящий тариф. Данные и настройки сохранятся.</p></details>
         </div>
       </div>
     </section>
 
-    <!-- ============ ФИНАЛЬНЫЙ CTA / ЗАЯВКА ============ -->
+    <!-- ============ ФИНАЛЬНЫЙ CTA: ДВА ПУТИ ============ -->
     <section class="section cta-final" id="start">
-      <div class="container container--narrow">
-        <div class="cta-card">
-          <h2 class="section__title">Запустите AI-сотрудника сегодня</h2>
-          <p class="section__lead">
-            Оставьте заявку — подключим, поможем с настройкой и активируем бесплатный триал на 14 дней.
-          </p>
-          <!-- TODO (Фаза 2): заменить лид-форму на саморегистрацию POST /admin/auth/register.
-               Сейчас форма отправляет заявку (лид → amoCRM). action нужно прописать на backend. -->
+      <div class="container">
+        <h2 class="section__title">Запустите AI-сотрудника сегодня</h2>
+        <p class="section__lead">Два пути — выбирайте удобный.</p>
+
+        <div class="grid grid-2 cta-paths">
+
+          <!-- ЛЕВАЯ КАРТОЧКА: сам бесплатно -->
+          <article class="cta-path cta-path--free">
+            <div class="cta-path__head">
+              <span class="cta-path__price">Бесплатно</span>
+              <h3>Поставлю сам</h3>
+            </div>
+            <p>Скачайте код с GitHub, разверните на своём сервере. Нужны Docker и root-доступ по SSH.</p>
+            <ul class="cta-path__list">
+              <li>✓ MIT-лицензия, открытый код</li>
+              <li>✓ Подробная документация в Wiki</li>
+              <li>✓ Поддержка сообщества</li>
+              <li>✓ Бесплатные модели OpenRouter из коробки</li>
+            </ul>
+            <div class="cta-path__actions">
+              <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener" class="btn btn--outline btn--block">⬇️ Открыть на GitHub</a>
+              <a href="https://github.com/ShaerWare/AI_Secretary_System/wiki/Installation" target="_blank" rel="noopener" class="btn btn--ghost btn--block">📚 Инструкция по установке</a>
+            </div>
+          </article>
+
+          <!-- ПРАВАЯ КАРТОЧКА: установка за 5000 -->
+          <article class="cta-path cta-path--paid">
+            <div class="cta-path__badge">⚡ Под ключ</div>
+            <div class="cta-path__head">
+              <span class="cta-path__price">5 000 ₽</span>
+              <h3>Установим за вас</h3>
+            </div>
+            <p>Развернём на вашем сервере и настроим под вашу задачу. От оплаты до работающего ассистента — 1 рабочий день.</p>
+            <ul class="cta-path__list">
+              <li>✓ Развёртывание на вашем Linux-сервере</li>
+              <li>✓ Настройка базы знаний (RAG) под вашу нишу</li>
+              <li>✓ Подключение Telegram, WhatsApp, виджета</li>
+              <li>✓ Триал на Claude 14 дней + переход на OpenRouter</li>
+            </ul>
+            <!-- TODO: подключить реальную платёжку. Сейчас — кнопка ведёт на лид-форму ниже,
+                 пока не настроен прямой платёжный шлюз (физлицо: YooMoney/Ozon/Альфа).
+                 После настройки — заменить href на ссылку платёжной формы. -->
+            <div class="cta-path__actions">
+              <a href="#order-form" class="btn btn--primary btn--block">💳 Оплатить и заказать</a>
+              <p class="cta-path__pay-methods">Оплата: YooMoney · Ozon Pay · Альфа-Банк</p>
+            </div>
+          </article>
+        </div>
+
+        <!-- Резервная лид-форма для тех, кто не готов сразу платить -->
+        <div class="cta-card cta-card--small" id="order-form">
+          <h3>Или оставьте заявку — поможем определиться</h3>
+          <p class="section__lead">Свяжемся, ответим на вопросы и активируем бесплатный триал на 14 дней.</p>
+          <!-- TODO (Фаза 2): заменить на POST /admin/auth/register для саморегистрации. -->
           <form class="lead-form" id="leadForm" novalidate>
             <div class="lead-form__row">
               <input type="text" name="name" placeholder="Ваше имя" required autocomplete="name" />
@@ -409,6 +574,7 @@
               <option>Юрист</option>
               <option>Бухгалтер</option>
               <option>Менеджер продаж</option>
+              <option>Установка под ключ за 5 000 ₽</option>
               <option>Другое</option>
             </select>
             <button type="submit" class="btn btn--primary btn--lg btn--block">Получить доступ</button>
