@@ -84,7 +84,9 @@ async def main() -> None:
                 config=preserved_config,
             )
             await session.commit()
-            print(f"  ✓ Updated {PROVIDER_ID} — fallback chain refreshed ({len(FALLBACK_CHAIN)} models)")
+            print(
+                f"  ✓ Updated {PROVIDER_ID} — fallback chain refreshed ({len(FALLBACK_CHAIN)} models)"
+            )
             return
 
         await repo.create_provider(
