@@ -47,9 +47,34 @@
 - **WhatsApp** (Cloud API) — множественные инстансы
 - **Чат-виджет на сайте** — кастомизация, мобильная адаптация, capture лидов
 - **Телефония** (GSM SIM7600E-H) — приём и совершение звонков, распознавание речи (Vosk/Whisper), синтез голоса (XTTS v2/OpenVoice/Piper), клонирование голоса
-- **Android-приложение** — нативный чат с ассистентом
+- **Android-приложение** — нативный чат с ассистентом, текущая версия [v2.2](https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk) (Android 8.0+, ~25 МБ, бесплатно, исходники в [mobile/](https://github.com/ShaerWare/AI_Secretary_System/tree/main/mobile))
 
 Один ассистент работает во всех каналах одновременно.
+
+## Мобильное приложение для Android
+
+Нативное Android-приложение позволяет общаться с ассистентом и управлять чатами из любой точки.
+
+**Скачать**: [ai-secretary-2.2.apk](https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk) (текущая стабильная версия)
+
+**Что умеет**:
+- Все ваши AI-чаты в одном приложении
+- Голосовой ввод и озвучка ответов (TTS)
+- Push-уведомления о новых сообщениях через Firebase Cloud Messaging
+- Автоматические уведомления об обновлениях приложения (через GitHub webhook)
+- Прикрепление фото, PDF, DOCX, XLSX, TXT и других документов в контекст чата
+- Общие чаты с командой (роли admin / user)
+- Тёмная тема в тёплых тонах (warm brown / amber / gold)
+- Open-source — исходники под MIT, [mobile/](https://github.com/ShaerWare/AI_Secretary_System/tree/main/mobile)
+
+**Технические детали**:
+- Стек: Vue 3 + TypeScript + Capacitor (Android)
+- Размер: ~25 МБ
+- Системные требования: Android 8.0+
+- Сборка APK через `gradlew assembleRelease` в `mobile/android/`
+- Релизы: [https://github.com/ShaerWare/AI_Secretary_System/releases](https://github.com/ShaerWare/AI_Secretary_System/releases) (теги `mobile-vX.Y`)
+
+**iOS**: нативного приложения нет. На iPhone работает мобильный браузер (PWA) с полным функционалом ассистента — установка не требуется, просто открыть https://ai-sekretar24.ru/admin/ или ваш собственный домен.
 
 ## Возможности
 

@@ -20,7 +20,7 @@
 - WhatsApp Cloud API
 - Чат-виджет для сайта
 - Телефония (SIM7600E-H, голос: распознавание + синтез + клонирование)
-- Android-приложение
+- [Android-приложение](https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk) (нативное, текущая версия v2.2, бесплатно)
 
 ## Возможности
 
@@ -42,8 +42,17 @@
 - [English](https://ai-sekretar24.ru/en/)
 - [Қазақша](https://ai-sekretar24.ru/kk/)
 
+## Мобильное приложение
+
+- [Скачать Android APK (v2.2)](https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk) — последняя стабильная сборка
+- [Все релизы на GitHub](https://github.com/ShaerWare/AI_Secretary_System/releases) — история версий
+- Системные требования: Android 8.0+
+- Open-source ([mobile/](https://github.com/ShaerWare/AI_Secretary_System/tree/main/mobile)), Vue 3 + Capacitor
+- iOS-приложения нет — на iPhone работает мобильный браузер (PWA) с полным функционалом
+
 ## Контакты
 
 - [Поддержка в Telegram](https://t.me/ai_sekretar24bot)
 - [GitHub проекта](https://github.com/ShaerWare/AI_Secretary_System)
+- [Скачать Android APK](https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk)
 - [Вход в кабинет](https://ai-sekretar24.ru/admin/)
