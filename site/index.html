@@ -101,9 +101,8 @@
     "offers": [
       { "@type": "Offer", "name": "Self-hosted (бесплатно)", "price": "0", "priceCurrency": "RUB", "description": "Open-source, MIT — скачать с GitHub" },
       { "@type": "Offer", "name": "Установка под ключ", "price": "5000", "priceCurrency": "RUB", "description": "Развернём и настроим на вашем сервере" },
-      { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Команда", "price": "29900", "priceCurrency": "RUB" }
+      { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB", "description": "1 AI-ассистент с неограниченным числом ролей: юрист, бухгалтер. Для самозанятых и блогеров" },
+      { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB", "description": "Все облачные каналы: Telegram, WhatsApp, виджеты, интеграции с amoCRM/Google/WooCommerce" }
     ],
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
   }
@@ -131,9 +130,9 @@
       { "@type": "Question", "name": "Можно ли установить Секретарь24 самостоятельно?", "acceptedAnswer": { "@type": "Answer", "text": "Да, исходный код открыт на GitHub (https://github.com/ShaerWare/AI_Secretary_System) под лицензией MIT. Подробная документация поможет развернуть систему на своём сервере — нужны только Docker и root-доступ по SSH. Если не хотите возиться — мы установим под ключ за 5 000 ₽." } },
       { "@type": "Question", "name": "Сколько стоит ИИ?", "acceptedAnswer": { "@type": "Answer", "text": "Для большинства задач хватает бесплатных моделей через OpenRouter (DeepSeek, Llama, Qwen). Платные модели (Claude от Anthropic, GPT-4) нужны только когда требуются максимальная экспертиза и сложные рассуждения. На наших облачных тарифах API ИИ уже включён. На самохостинге подключаете свой API-ключ или используете бесплатные модели OpenRouter." } },
       { "@type": "Question", "name": "Безопасны ли мои данные?", "acceptedAnswer": { "@type": "Answer", "text": "Да. Вы можете работать на облачных моделях или развернуть ИИ полностью на своём сервере — тогда данные клиентов не покидают ваш периметр. Open-source код можно проверить на GitHub." } },
-      { "@type": "Question", "name": "Нужен ли свой сервер?", "acceptedAnswer": { "@type": "Answer", "text": "Нет. На тарифах Старт, Бизнес и Команда всё работает в нашем облаке. Свой сервер нужен только для on-premise развёртывания или самостоятельной установки с GitHub — там достаточно любого Linux-сервера с Docker и root SSH." } },
+      { "@type": "Question", "name": "Нужен ли свой сервер?", "acceptedAnswer": { "@type": "Answer", "text": "Если вы на тарифе Старт или Бизнес — нет, всё работает в нашем облаке. Свой сервер нужен только для тарифа Команда (on-premise с локальным ИИ) или самостоятельной установки с GitHub — там достаточно любого Linux-сервера с Docker и root SSH." } },
       { "@type": "Question", "name": "С какими каналами работает ассистент?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно." } },
-      { "@type": "Question", "name": "Можно ли подключить телефонию?", "acceptedAnswer": { "@type": "Answer", "text": "Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом." } },
+      { "@type": "Question", "name": "Можно ли подключить телефонию?", "acceptedAnswer": { "@type": "Answer", "text": "Да, в составе тарифа Команда (on-premise). Ассистент принимает и совершает звонки через SIM7600 или SIP, распознаёт речь и отвечает голосом." } },
       { "@type": "Question", "name": "Что входит в установку под ключ за 5 000 ₽?", "acceptedAnswer": { "@type": "Answer", "text": "Развернём Секретарь24 на вашем сервере (нужен только Docker и root SSH), настроим базу знаний (RAG), подключим Telegram/WhatsApp/виджет, обучим ассистента под вашу нишу. Оплата картой через YooMoney, Ozon Pay или Альфа-Банк." } }
     ]
   }
@@ -440,8 +439,8 @@
     <section class="section pricing" id="pricing">
       <div class="container">
         <p class="eyebrow">Тарифы</p>
-        <h2 class="section__title">Чат, WhatsApp и голосовой робот — в одной подписке</h2>
-        <p class="section__lead">У конкурентов чат и звонки — это две разные подписки. У нас всё включено.</p>
+        <h2 class="section__title">Один ассистент, все каналы — одна подписка</h2>
+        <p class="section__lead">От самозанятого до агентства: облачные боты и виджеты, локальный ИИ и on-premise — на любой бюджет.</p>
 
         <div class="billing-toggle">
           <span class="billing-toggle__label is-active" id="lblMonthly">Помесячно</span>
@@ -455,18 +454,18 @@
           <!-- Старт -->
           <article class="plan">
             <h3 class="plan__name">Старт</h3>
-            <p class="plan__for">Для соло и микробизнеса</p>
+            <p class="plan__for">Самозанятым и блогерам</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="2 900" data-yearly="2 320">2 900</span> <span class="plan__per">₽/мес</span></div>
             <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
             <a href="#start" class="btn btn--outline btn--block">Попробовать бесплатно</a>
             <ul class="plan__list">
-              <li>1 AI-ассистент</li>
+              <li>1 AI-ассистент с <strong>неограниченным числом ролей</strong></li>
+              <li>Готовые роли: ⚖️ юрист и 📊 бухгалтер</li>
+              <li>Скоро: SMM-менеджер, налоговый консультант (НПД), сценарист коротких видео, SEO/копирайтер/рекламист</li>
               <li>Каналы: Telegram + виджет на сайт</li>
-              <li>1 500 AI-ответов в месяц</li>
-              <li>База знаний: 1 коллекция, 50 документов</li>
-              <li>Облачный ИИ — базовые модели</li>
-              <li>1 пользователь</li>
-              <li>Поддержка в чате (рабочие часы)</li>
+              <li>База знаний (RAG) и память диалогов</li>
+              <li>Облачный ИИ: Claude + бесплатные модели OpenRouter</li>
+              <li>1 пользователь · поддержка в чате</li>
             </ul>
           </article>
 
@@ -474,46 +473,38 @@
           <article class="plan plan--featured">
             <div class="plan__badge">Хит продаж</div>
             <h3 class="plan__name">Бизнес</h3>
-            <p class="plan__for">Полный омниканал + телефония</p>
+            <p class="plan__for">Всё облако: боты и виджеты</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="12 900" data-yearly="10 320">12 900</span> <span class="plan__per">₽/мес</span></div>
             <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
             <a href="#start" class="btn btn--primary btn--block">Попробовать бесплатно</a>
             <ul class="plan__list">
-              <li>До 3 AI-ассистентов</li>
-              <li>Все каналы + <strong>голос и телефония</strong></li>
-              <li>10 000 AI-ответов + 300 минут голоса</li>
-              <li>База знаний: 5 коллекций + авто-обновление</li>
+              <li>Несколько AI-ассистентов с любыми ролями</li>
+              <li>Telegram-боты, WhatsApp-боты, виджеты на сайт</li>
+              <li><strong>Всё, что у нас есть в облаке</strong></li>
+              <li>База знаний без лимита: RAG + авто-синк с RSS</li>
               <li>Интеграции: amoCRM, Google, WooCommerce</li>
-              <li>Любая модель ИИ + резервная</li>
-              <li>До 5 пользователей · приоритетная поддержка</li>
+              <li>Любая модель ИИ + резервная цепочка fallback</li>
+              <li>Команда пользователей · приоритетная поддержка</li>
             </ul>
           </article>
 
           <!-- Команда -->
           <article class="plan">
             <h3 class="plan__name">Команда</h3>
-            <p class="plan__for">Для агентств и больших команд</p>
-            <div class="plan__price"><span class="plan__amount" data-monthly="29 900" data-yearly="23 920">29 900</span> <span class="plan__per">₽/мес</span></div>
-            <p class="plan__note" data-monthly="при помесячной оплате" data-yearly="при оплате за год">при помесячной оплате</p>
-            <a href="#start" class="btn btn--outline btn--block">Попробовать бесплатно</a>
+            <p class="plan__for">Локальный ИИ и on-premise</p>
+            <div class="plan__price"><span class="plan__amount">По запросу</span></div>
+            <p class="plan__note">Цена = настройка + сопровождение</p>
+            <a href="#start" class="btn btn--outline btn--block">Обсудить внедрение</a>
             <ul class="plan__list">
-              <li>До 10 AI-ассистентов</li>
-              <li>Все каналы без лимита инстансов</li>
-              <li>40 000 AI-ответов + 1 500 минут голоса</li>
-              <li>База знаний без лимита</li>
-              <li>Клонирование голоса + дообучение LoRA</li>
-              <li>White-label · до 20 пользователей</li>
-              <li>Выделенный менеджер + SLA</li>
+              <li>Локальные модели на вашем железе (Qwen, Llama, DeepSeek через vLLM)</li>
+              <li>Развёртывание на сервере заказчика или по спецзаказу</li>
+              <li>Голос и телефония (SIM7600 или SIP) — без облака</li>
+              <li>Клонирование голоса · LoRA-дообучение под отрасль</li>
+              <li>Закрытый контур: данные клиентов не покидают периметр</li>
+              <li>Интеграции с 1С и внутренними API</li>
+              <li>Внедрение, поддержка и SLA под ваш сценарий</li>
             </ul>
           </article>
-        </div>
-
-        <div class="plan-enterprise">
-          <div>
-            <h3>Enterprise / On-premise</h3>
-            <p>Развёртывание на вашем сервере — данные не покидают периметр. Локальный ИИ, кастомные роли и интеграции (1С, собственные API), обучение моделей под отрасль, SLA 24/7 и команда внедрения.</p>
-          </div>
-          <a href="#start" class="btn btn--outline btn--lg">Обсудить внедрение</a>
         </div>
       </div>
     </section>
@@ -558,9 +549,9 @@
           <details class="faq-item"><summary>Сколько стоит ИИ?</summary><p>Для большинства бизнес-задач хватает бесплатных моделей OpenRouter (DeepSeek, Llama, Qwen). Платить за топ-модели (Claude, GPT-4) имеет смысл там, где нужны сложные рассуждения и максимальная экспертиза. На облачных тарифах API уже включён, на самохостинге — подключаете свой ключ или бесплатные модели.</p></details>
           <details class="faq-item"><summary>Что входит в установку под ключ за 5 000 ₽?</summary><p>Развернём Секретарь24 на вашем сервере (нужны Docker и root SSH), настроим базу знаний (RAG), подключим Telegram/WhatsApp/виджет/телефонию, обучим ассистента под вашу нишу. Оплата картой — YooMoney, Ozon Pay или Альфа-Банк.</p></details>
           <details class="faq-item"><summary>Безопасны ли мои данные?</summary><p>Да. Облачные модели или собственный сервер — выбор за вами. На самохостинге данные клиентов не покидают периметр, а open-source код можно проверить.</p></details>
-          <details class="faq-item"><summary>Нужен ли свой сервер?</summary><p>На облачных тарифах — нет, всё работает у нас. Для самостоятельной установки с GitHub нужен любой Linux-сервер с Docker (от 2 ГБ ОЗУ для cloud-режима, от 12 ГБ + GPU для локального ИИ).</p></details>
+          <details class="faq-item"><summary>Нужен ли свой сервер?</summary><p>На тарифах Старт и Бизнес — нет, всё работает у нас в облаке. Свой сервер нужен только на тарифе Команда (on-premise с локальным ИИ) или при самостоятельной установке с GitHub: любой Linux с Docker (от 2 ГБ ОЗУ для cloud-режима, от 12 ГБ + GPU для локального ИИ).</p></details>
           <details class="faq-item"><summary>С какими каналами работает ассистент?</summary><p>Telegram, WhatsApp, чат-виджет на сайте, телефония и Android-приложение. Один ассистент — все каналы одновременно.</p></details>
-          <details class="faq-item"><summary>Можно ли подключить телефонию?</summary><p>Да, начиная с тарифа Бизнес. Ассистент принимает и совершает звонки, распознаёт речь и отвечает голосом.</p></details>
+          <details class="faq-item"><summary>Можно ли подключить телефонию?</summary><p>Да, в составе тарифа Команда (on-premise). Ассистент принимает и совершает звонки через SIM7600 или SIP, распознаёт речь и отвечает голосом — данные не уходят в облако.</p></details>
         </div>
       </div>
     </section>

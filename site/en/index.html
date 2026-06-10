@@ -74,9 +74,8 @@
     "offers": [
       { "@type": "Offer", "name": "Self-hosted (free)", "price": "0", "priceCurrency": "RUB", "description": "Open-source, MIT — download from GitHub" },
       { "@type": "Offer", "name": "Turnkey installation", "price": "5000", "priceCurrency": "RUB", "description": "We deploy and configure on your server" },
-      { "@type": "Offer", "name": "Start", "price": "2900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Business", "price": "12900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Team", "price": "29900", "priceCurrency": "RUB" }
+      { "@type": "Offer", "name": "Start", "price": "2900", "priceCurrency": "RUB", "description": "1 AI assistant with unlimited roles: lawyer, accountant. For freelancers and bloggers" },
+      { "@type": "Offer", "name": "Business", "price": "12900", "priceCurrency": "RUB", "description": "All cloud channels: Telegram, WhatsApp, web widgets, integrations with amoCRM/Google/WooCommerce" }
     ],
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
   }
@@ -105,9 +104,9 @@
       { "@type": "Question", "name": "Can I install Sekretar24 myself?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The source is open on GitHub (https://github.com/ShaerWare/AI_Secretary_System) under MIT. Detailed wiki helps you deploy on any Linux server — all you need is Docker and root SSH access. If you'd rather not bother — we install turnkey for 5,000 ₽." } },
       { "@type": "Question", "name": "How much does the AI cost?", "acceptedAnswer": { "@type": "Answer", "text": "For most tasks OpenRouter's free models (DeepSeek, Llama, Qwen) are enough. Paid models (Claude, GPT-4) make sense only when you need maximum reasoning and expertise. On cloud plans the AI API is included. On self-hosted you plug in your own key or use the free OpenRouter models." } },
       { "@type": "Question", "name": "Is my data safe?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can run on cloud models or deploy the AI entirely on your own server — your customers' data never leaves your perimeter. The open-source code can be audited." } },
-      { "@type": "Question", "name": "Do I need my own server?", "acceptedAnswer": { "@type": "Answer", "text": "No. The Start, Business and Team plans all run in the cloud. A dedicated server is only needed for on-premise or self-hosted installation — any Linux server with Docker and root SSH access works." } },
+      { "@type": "Question", "name": "Do I need my own server?", "acceptedAnswer": { "@type": "Answer", "text": "Not for Start or Business — both run in our cloud. A dedicated server is only needed for the Team plan (on-premise with local AI) or for self-hosted installation from GitHub — any Linux server with Docker and root SSH access works." } },
       { "@type": "Question", "name": "Which channels does the assistant work on?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, web chat widget, telephony and the Android app. One assistant — every channel at once." } },
-      { "@type": "Question", "name": "Can I connect telephony?", "acceptedAnswer": { "@type": "Answer", "text": "Yes, starting with the Business plan. The assistant takes and makes calls, recognizes speech and answers in voice." } },
+      { "@type": "Question", "name": "Can I connect telephony?", "acceptedAnswer": { "@type": "Answer", "text": "Yes, as part of the Team plan (on-premise). The assistant takes and makes calls via SIM7600 or SIP, recognizes speech and answers in voice — data stays on your server." } },
       { "@type": "Question", "name": "What's included in the 5,000 ₽ turnkey installation?", "acceptedAnswer": { "@type": "Answer", "text": "We deploy Sekretar24 on your server (Docker + root SSH required), configure the knowledge base (RAG), connect Telegram/WhatsApp/widget, and tune the assistant for your niche. Payment via YooMoney, Ozon Pay or Alfa-Bank card." } }
     ]
   }
@@ -405,8 +404,8 @@
     <section class="section pricing" id="pricing">
       <div class="container">
         <p class="eyebrow">Pricing</p>
-        <h2 class="section__title">Chat, WhatsApp and voice bot — in one subscription</h2>
-        <p class="section__lead">Competitors charge for chat and voice separately. We bundle them.</p>
+        <h2 class="section__title">One assistant, every channel — one subscription</h2>
+        <p class="section__lead">From freelancer to agency: cloud bots and widgets, local AI and on-premise — for any budget.</p>
 
         <div class="billing-toggle">
           <span class="billing-toggle__label is-active" id="lblMonthly">Monthly</span>
@@ -419,63 +418,55 @@
         <div class="grid grid-3 pricing__grid">
           <article class="plan">
             <h3 class="plan__name">Start</h3>
-            <p class="plan__for">For solo & micro businesses</p>
+            <p class="plan__for">For freelancers & bloggers</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="2 900" data-yearly="2 320">2 900</span> <span class="plan__per">₽/mo</span></div>
             <p class="plan__note" data-monthly="billed monthly" data-yearly="billed yearly">billed monthly</p>
             <a href="#start" class="btn btn--outline btn--block">Try free</a>
             <ul class="plan__list">
-              <li>1 AI assistant</li>
+              <li>1 AI assistant with <strong>unlimited roles</strong></li>
+              <li>Ready-made: ⚖️ lawyer and 📊 accountant</li>
+              <li>Coming soon: SMM manager, tax advisor for freelancers, short-video scriptwriter, SEO/copywriter/ad specialist</li>
               <li>Channels: Telegram + web widget</li>
-              <li>1 500 AI replies per month</li>
-              <li>Knowledge base: 1 collection, 50 docs</li>
-              <li>Cloud AI — base models</li>
-              <li>1 user</li>
-              <li>Chat support (business hours)</li>
+              <li>Knowledge base (RAG) and conversation memory</li>
+              <li>Cloud AI: Claude + free OpenRouter models</li>
+              <li>1 user · chat support</li>
             </ul>
           </article>
 
           <article class="plan plan--featured">
             <div class="plan__badge">Best seller</div>
             <h3 class="plan__name">Business</h3>
-            <p class="plan__for">Full omnichannel + telephony</p>
+            <p class="plan__for">Full cloud: bots and widgets</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="12 900" data-yearly="10 320">12 900</span> <span class="plan__per">₽/mo</span></div>
             <p class="plan__note" data-monthly="billed monthly" data-yearly="billed yearly">billed monthly</p>
             <a href="#start" class="btn btn--primary btn--block">Try free</a>
             <ul class="plan__list">
-              <li>Up to 3 AI assistants</li>
-              <li>All channels + <strong>voice & telephony</strong></li>
-              <li>10 000 AI replies + 300 voice minutes</li>
-              <li>Knowledge base: 5 collections + auto-update</li>
+              <li>Multiple AI assistants with any roles</li>
+              <li>Telegram bots, WhatsApp bots, web widgets</li>
+              <li><strong>Everything we have in the cloud</strong></li>
+              <li>Unlimited knowledge base: RAG + RSS auto-sync</li>
               <li>Integrations: amoCRM, Google, WooCommerce</li>
-              <li>Any AI model + fallback</li>
-              <li>Up to 5 users · priority support</li>
+              <li>Any AI model + fallback chain</li>
+              <li>Team of users · priority support</li>
             </ul>
           </article>
 
           <article class="plan">
             <h3 class="plan__name">Team</h3>
-            <p class="plan__for">For agencies & larger teams</p>
-            <div class="plan__price"><span class="plan__amount" data-monthly="29 900" data-yearly="23 920">29 900</span> <span class="plan__per">₽/mo</span></div>
-            <p class="plan__note" data-monthly="billed monthly" data-yearly="billed yearly">billed monthly</p>
-            <a href="#start" class="btn btn--outline btn--block">Try free</a>
+            <p class="plan__for">Local AI and on-premise</p>
+            <div class="plan__price"><span class="plan__amount">On request</span></div>
+            <p class="plan__note">Pricing = setup + ongoing support</p>
+            <a href="#start" class="btn btn--outline btn--block">Talk to sales</a>
             <ul class="plan__list">
-              <li>Up to 10 AI assistants</li>
-              <li>All channels, no instance limits</li>
-              <li>40 000 AI replies + 1 500 voice minutes</li>
-              <li>Unlimited knowledge base</li>
-              <li>Voice cloning + LoRA fine-tuning</li>
-              <li>White-label · up to 20 users</li>
-              <li>Dedicated manager + SLA</li>
+              <li>Local models on your hardware (Qwen, Llama, DeepSeek via vLLM)</li>
+              <li>Deployment on your server or by custom spec</li>
+              <li>Voice and telephony (SIM7600 or SIP) — no cloud</li>
+              <li>Voice cloning · LoRA fine-tuning for your industry</li>
+              <li>Closed perimeter: customer data never leaves your network</li>
+              <li>Integrations with 1C and your internal APIs</li>
+              <li>Onboarding, support and SLA tailored to your scenario</li>
             </ul>
           </article>
-        </div>
-
-        <div class="plan-enterprise">
-          <div>
-            <h3>Enterprise / On-premise</h3>
-            <p>Deploy on your server — data stays inside your perimeter. Local AI, custom roles and integrations (1C, your own APIs), industry-specific model training, 24/7 SLA and an onboarding team.</p>
-          </div>
-          <a href="#start" class="btn btn--outline btn--lg">Talk to sales</a>
         </div>
       </div>
     </section>
@@ -519,9 +510,9 @@
           <details class="faq-item"><summary>How much does the AI cost?</summary><p>For most business tasks OpenRouter's free models (DeepSeek, Llama, Qwen) are enough. Paying for top models (Claude, GPT-4) makes sense for complex reasoning and maximum expertise. On cloud plans the API is included; on self-hosted you plug in your own key or use the free models.</p></details>
           <details class="faq-item"><summary>What's included in the 5,000 ₽ turnkey installation?</summary><p>We deploy Sekretar24 on your server (Docker + root SSH required), configure the knowledge base (RAG), connect Telegram/WhatsApp/widget/telephony, and tune the assistant for your niche. Payment via YooMoney, Ozon Pay or Alfa-Bank.</p></details>
           <details class="faq-item"><summary>Is my data safe?</summary><p>Yes. Cloud models or your own server — your choice. Self-hosted means customer data stays inside your perimeter, and the open-source code can be audited.</p></details>
-          <details class="faq-item"><summary>Do I need my own server?</summary><p>Not for cloud plans — everything runs at our end. For self-hosted from GitHub you need any Linux server with Docker (from 2 GB RAM for cloud mode, from 12 GB + GPU for local AI).</p></details>
+          <details class="faq-item"><summary>Do I need my own server?</summary><p>Not on Start or Business — both run in our cloud. A dedicated server is only needed for the Team plan (on-premise with local AI) or for self-hosted install from GitHub: any Linux with Docker (from 2 GB RAM for cloud mode, from 12 GB + GPU for local AI).</p></details>
           <details class="faq-item"><summary>Which channels does the assistant work on?</summary><p>Telegram, WhatsApp, web chat widget, telephony and the Android app. One assistant — every channel at once.</p></details>
-          <details class="faq-item"><summary>Can I connect telephony?</summary><p>Yes, starting with the Business plan. The assistant takes and makes calls, recognizes speech and answers in voice.</p></details>
+          <details class="faq-item"><summary>Can I connect telephony?</summary><p>Yes, as part of the Team plan (on-premise). The assistant takes and makes calls via SIM7600 or SIP, recognizes speech and answers in voice — data never leaves your server.</p></details>
         </div>
       </div>
     </section>

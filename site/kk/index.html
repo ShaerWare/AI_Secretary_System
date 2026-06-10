@@ -75,9 +75,8 @@
     "offers": [
       { "@type": "Offer", "name": "Self-hosted (тегін)", "price": "0", "priceCurrency": "RUB", "description": "Open-source, MIT — GitHub-тан жүктеу" },
       { "@type": "Offer", "name": "Кілт астында орнату", "price": "5000", "priceCurrency": "RUB", "description": "Сіздің серверде орналастырып, баптап береміз" },
-      { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB" },
-      { "@type": "Offer", "name": "Команда", "price": "29900", "priceCurrency": "RUB" }
+      { "@type": "Offer", "name": "Старт", "price": "2900", "priceCurrency": "RUB", "description": "1 AI-көмекші шексіз рөлдермен: заңгер, бухгалтер. Жалғыз кәсіпкерлер мен блогерлерге" },
+      { "@type": "Offer", "name": "Бизнес", "price": "12900", "priceCurrency": "RUB", "description": "Барлық бұлттық арналар: Telegram, WhatsApp, виджеттер, amoCRM/Google/WooCommerce интеграциялары" }
     ],
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "37" }
   }
@@ -106,9 +105,9 @@
       { "@type": "Question", "name": "Хатшы24-ті өзі орнатуға бола ма?", "acceptedAnswer": { "@type": "Answer", "text": "Иә. Бастапқы код GitHub-та (https://github.com/ShaerWare/AI_Secretary_System) MIT лицензиясымен ашық. Толық құжаттама бар. Қажет нәрсе — Docker және root SSH қолжетімділігі бар кез келген Linux сервер. Әуре болғыңыз келмесе — 5 000 ₽-ге кілт астында орнатамыз." } },
       { "@type": "Question", "name": "AI қанша тұрады?", "acceptedAnswer": { "@type": "Answer", "text": "Көп тапсырмаларға OpenRouter-дің тегін модельдері (DeepSeek, Llama, Qwen) жеткілікті. Топ-модельдер (Claude, GPT-4) күрделі рассуждение мен жоғары деңгейлі сараптама керек болғанда ғана төленеді. Бұлттық тарифтерде AI API кіреді, self-hosted режимде өз кілтіңізді қосасыз немесе тегін модельдерді қолданасыз." } },
       { "@type": "Question", "name": "Менің деректерім қауіпсіз бе?", "acceptedAnswer": { "@type": "Answer", "text": "Иә. Бұлттық модельдер немесе өз сервер — таңдау сізде. Self-hosted режимде клиент деректері сіздің периметрден шықпайды, open-source кодты тексеруге болады." } },
-      { "@type": "Question", "name": "Өз серверіңіз керек пе?", "acceptedAnswer": { "@type": "Answer", "text": "Бұлттық тарифтерде керек емес — бәрі бізде жұмыс істейді. GitHub-тан өзі орнату үшін Docker және root SSH бар кез келген Linux сервер жеткілікті (cloud-режим үшін 2 ГБ жедел жады, жергілікті AI үшін 12 ГБ + GPU)." } },
+      { "@type": "Question", "name": "Өз серверіңіз керек пе?", "acceptedAnswer": { "@type": "Answer", "text": "Старт пен Бизнес тарифтерінде керек емес — бәрі біздің бұлтта жұмыс істейді. Өз сервер тек Команда тарифінде (жергілікті AI-мен on-premise) немесе GitHub-тан өзі орнату үшін қажет: Docker бар кез келген Linux сервер жеткілікті (cloud-режим үшін 2 ГБ жедел жады, жергілікті AI үшін 12 ГБ + GPU)." } },
       { "@type": "Question", "name": "Көмекші қандай арналарда жұмыс істейді?", "acceptedAnswer": { "@type": "Answer", "text": "Telegram, WhatsApp, сайт чат-виджеті, телефония және Android-қосымша. Бір көмекші — барлық арналар бір уақытта." } },
-      { "@type": "Question", "name": "Телефонияны қосуға бола ма?", "acceptedAnswer": { "@type": "Answer", "text": "Иә, Бизнес тарифінен бастап. Көмекші қоңырауларды қабылдайды және шығарады, сөзді таниды және дауыспен жауап береді." } },
+      { "@type": "Question", "name": "Телефонияны қосуға бола ма?", "acceptedAnswer": { "@type": "Answer", "text": "Иә, Команда тарифінің құрамында (on-premise). Көмекші SIM7600 немесе SIP арқылы қоңырауларды қабылдайды әрі шығарады, сөзді таниды және дауыспен жауап береді — деректер серверден шықпайды." } },
       { "@type": "Question", "name": "5 000 ₽-ге кілт астында орнатуға не кіреді?", "acceptedAnswer": { "@type": "Answer", "text": "Хатшы24-ті сіздің серверде орналастырамыз (Docker және root SSH қажет), білім қорын (RAG) баптаймыз, Telegram/WhatsApp/виджет/телефонияны қосамыз, ассистентті сіздің салаға бейімдейміз. Төлем картамен — YooMoney, Ozon Pay немесе Альфа-Банк арқылы." } }
     ]
   }
@@ -406,8 +405,8 @@
     <section class="section pricing" id="pricing">
       <div class="container">
         <p class="eyebrow">Тарифтер</p>
-        <h2 class="section__title">Чат, WhatsApp және дауыстық бот — бір жазылымда</h2>
-        <p class="section__lead">Бәсекелестерде чат пен қоңыраулар — екі бөлек жазылым. Бізде бәрі бір тарифте.</p>
+        <h2 class="section__title">Бір көмекші, барлық арналар — бір жазылым</h2>
+        <p class="section__lead">Жалғыз кәсіпкерден агенттікке дейін: бұлттық боттар мен виджеттер, жергілікті AI және on-premise — кез келген бюджетке.</p>
 
         <div class="billing-toggle">
           <span class="billing-toggle__label is-active" id="lblMonthly">Айлық</span>
@@ -420,63 +419,55 @@
         <div class="grid grid-3 pricing__grid">
           <article class="plan">
             <h3 class="plan__name">Старт</h3>
-            <p class="plan__for">Жалғыз кәсіпкер мен микробизнеске</p>
+            <p class="plan__for">Жалғыз кәсіпкерлер мен блогерлерге</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="2 900" data-yearly="2 320">2 900</span> <span class="plan__per">₽/ай</span></div>
             <p class="plan__note" data-monthly="айлық төлеммен" data-yearly="жылдық төлеммен">айлық төлеммен</p>
             <a href="#start" class="btn btn--outline btn--block">Тегін көру</a>
             <ul class="plan__list">
-              <li>1 AI-көмекшi</li>
+              <li>1 AI-көмекші <strong>шексіз рөлдермен</strong></li>
+              <li>Дайын рөлдер: ⚖️ заңгер және 📊 бухгалтер</li>
+              <li>Жақында: SMM-менеджер, жалғыз кәсіпкерге арналған салық кеңесшісі, қысқа видео сценаристі, SEO/копирайтер/жарнама маманы</li>
               <li>Арналар: Telegram + сайт виджеті</li>
-              <li>Айына 1 500 AI-жауап</li>
-              <li>Білім қоры: 1 коллекция, 50 құжат</li>
-              <li>Бұлттық AI — базалық модельдер</li>
-              <li>1 пайдаланушы</li>
-              <li>Чатта қолдау (жұмыс уақытында)</li>
+              <li>Білім қоры (RAG) және диалог жады</li>
+              <li>Бұлттық AI: Claude + OpenRouter тегін модельдері</li>
+              <li>1 пайдаланушы · чатта қолдау</li>
             </ul>
           </article>
 
           <article class="plan plan--featured">
             <div class="plan__badge">Хит</div>
             <h3 class="plan__name">Бизнес</h3>
-            <p class="plan__for">Толық омниарна + телефония</p>
+            <p class="plan__for">Бүкіл бұлт: боттар мен виджеттер</p>
             <div class="plan__price"><span class="plan__amount" data-monthly="12 900" data-yearly="10 320">12 900</span> <span class="plan__per">₽/ай</span></div>
             <p class="plan__note" data-monthly="айлық төлеммен" data-yearly="жылдық төлеммен">айлық төлеммен</p>
             <a href="#start" class="btn btn--primary btn--block">Тегін көру</a>
             <ul class="plan__list">
-              <li>3-ке дейін AI-көмекшi</li>
-              <li>Барлық арналар + <strong>дауыс және телефония</strong></li>
-              <li>10 000 AI-жауап + 300 минут дауыс</li>
-              <li>Білім қоры: 5 коллекция + автожаңарту</li>
+              <li>Кез келген рөлдермен бірнеше AI-көмекші</li>
+              <li>Telegram-боттар, WhatsApp-боттар, сайт виджеттері</li>
+              <li><strong>Бізде бұлтта бар нәрсенің барлығы</strong></li>
+              <li>Шектеусіз білім қоры: RAG + RSS авто-синк</li>
               <li>Интеграциялар: amoCRM, Google, WooCommerce</li>
-              <li>Кез келген AI-модель + резерв</li>
-              <li>5-ке дейін пайдаланушы · басымдылықпен қолдау</li>
+              <li>Кез келген AI-модель + резервтік тізбек</li>
+              <li>Пайдаланушылар тобы · басымдылықпен қолдау</li>
             </ul>
           </article>
 
           <article class="plan">
             <h3 class="plan__name">Команда</h3>
-            <p class="plan__for">Агенттіктер мен үлкен командаларға</p>
-            <div class="plan__price"><span class="plan__amount" data-monthly="29 900" data-yearly="23 920">29 900</span> <span class="plan__per">₽/ай</span></div>
-            <p class="plan__note" data-monthly="айлық төлеммен" data-yearly="жылдық төлеммен">айлық төлеммен</p>
-            <a href="#start" class="btn btn--outline btn--block">Тегін көру</a>
+            <p class="plan__for">Жергілікті AI және on-premise</p>
+            <div class="plan__price"><span class="plan__amount">Сұраныс бойынша</span></div>
+            <p class="plan__note">Бағасы = баптау + сүйемелдеу</p>
+            <a href="#start" class="btn btn--outline btn--block">Енгізуді талқылау</a>
             <ul class="plan__list">
-              <li>10-ға дейін AI-көмекшi</li>
-              <li>Инстанс лимитісіз барлық арналар</li>
-              <li>40 000 AI-жауап + 1 500 минут дауыс</li>
-              <li>Шектеусіз білім қоры</li>
-              <li>Дауыс клондау + LoRA-баптау</li>
-              <li>White-label · 20-ға дейін пайдаланушы</li>
-              <li>Бөлінген менеджер + SLA</li>
+              <li>Өз жабдығыңыздағы жергілікті модельдер (Qwen, Llama, DeepSeek — vLLM арқылы)</li>
+              <li>Тапсырыс берушінің серверінде немесе арнайы тапсырыспен орналастыру</li>
+              <li>Дауыс және телефония (SIM7600 немесе SIP) — бұлтсыз</li>
+              <li>Дауыс клондау · сала бойынша LoRA-баптау</li>
+              <li>Жабық периметр: клиент деректері периметрден шықпайды</li>
+              <li>1С және ішкі API-мен интеграциялар</li>
+              <li>Сценарийіңізге бейімделген енгізу, қолдау және SLA</li>
             </ul>
           </article>
-        </div>
-
-        <div class="plan-enterprise">
-          <div>
-            <h3>Enterprise / On-premise</h3>
-            <p>Серверіңізде орналастыру — деректер периметрден шықпайды. Жергілікті AI, кастомды рөлдер мен интеграциялар (1С, өз API), сала бойынша модельдерді оқыту, 24/7 SLA және енгізу командасы.</p>
-          </div>
-          <a href="#start" class="btn btn--outline btn--lg">Енгізуді талқылау</a>
         </div>
       </div>
     </section>
@@ -520,9 +511,9 @@
           <details class="faq-item"><summary>AI қанша тұрады?</summary><p>Көп бизнес-тапсырмаға OpenRouter-дің тегін модельдері (DeepSeek, Llama, Qwen) жеткілікті. Топ-модельдер (Claude, GPT-4) күрделі рассуждение керек болғанда ғана төленеді. Бұлттық тарифтерде API кіреді, self-hosted режимде өз кілтіңізді қосасыз.</p></details>
           <details class="faq-item"><summary>5 000 ₽-ге кілт астында орнатуға не кіреді?</summary><p>Сіздің серверде орналастырамыз (Docker және root SSH қажет), білім қорын (RAG) баптаймыз, Telegram/WhatsApp/виджет/телефонияны қосамыз, ассистентті сіздің салаға бейімдейміз. Төлем — YooMoney, Ozon Pay немесе Альфа-Банк картасымен.</p></details>
           <details class="faq-item"><summary>Менің деректерім қауіпсіз бе?</summary><p>Иә. Бұлттық модельдер немесе өз сервер — таңдау сізде. Self-hosted режимде клиент деректері периметрден шықпайды, open-source кодты тексеруге болады.</p></details>
-          <details class="faq-item"><summary>Өз серверім керек пе?</summary><p>Бұлттық тарифтерде керек емес — бәрі бізде істейді. GitHub-тан өзі орнату үшін Docker бар кез келген Linux сервер жеткілікті (cloud режим — 2 ГБ жедел жадыдан, жергілікті AI — 12 ГБ + GPU).</p></details>
+          <details class="faq-item"><summary>Өз серверім керек пе?</summary><p>Старт пен Бизнес тарифтерінде керек емес — бәрі бұлтта істейді. Өз сервер тек Команда тарифінде (жергілікті AI-мен on-premise) немесе GitHub-тан өзі орнату үшін қажет: Docker бар кез келген Linux сервер жеткілікті (cloud режим — 2 ГБ жедел жадыдан, жергілікті AI — 12 ГБ + GPU).</p></details>
           <details class="faq-item"><summary>Көмекшi қандай арналарда жұмыс істейді?</summary><p>Telegram, WhatsApp, сайт чат-виджеті, телефония және Android-қосымша. Бір көмекші — барлық арналар бір уақытта.</p></details>
-          <details class="faq-item"><summary>Телефонияны қосуға бола ма?</summary><p>Иә, Бизнес тарифінен бастап. Көмекші қоңырауларды қабылдайды және шығарады, сөзді таниды және дауыспен жауап береді.</p></details>
+          <details class="faq-item"><summary>Телефонияны қосуға бола ма?</summary><p>Иә, Команда тарифінің құрамында (on-premise). Көмекші SIM7600 немесе SIP арқылы қоңырауларды қабылдайды әрі шығарады, сөзді таниды және дауыспен жауап береді — деректер серверден шықпайды.</p></details>
         </div>
       </div>
     </section>
