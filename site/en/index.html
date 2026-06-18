@@ -44,7 +44,7 @@
   <meta name="twitter:description" content="Virtual AI assistant: Telegram, WhatsApp, web, phone. 14-day trial." />
   <meta name="twitter:image" content="https://ai-sekretar24.ru/en/og-image.svg" />
 
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 
   <script type="application/ld+json">
   {
@@ -566,6 +566,8 @@
           <h3>Or leave a request — we'll help you decide</h3>
           <p class="section__lead">We'll reach out, answer your questions and activate your 14-day trial.</p>
           <form class="lead-form" id="leadForm" novalidate>
+            <!-- honeypot: hidden from humans, filled by bots → lead is dropped -->
+            <input type="text" name="company" class="lead-form__hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
             <div class="lead-form__row">
               <input type="text" name="name" placeholder="Your name" required autocomplete="name" />
               <input type="text" name="contact" placeholder="Phone or @Telegram" required autocomplete="tel" />
@@ -615,6 +617,7 @@
         <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">Project on GitHub</a>
         <a href="https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk" download>📱 Android APK · v2.2</a>
         <a href="/admin/">Sign in</a>
+        <a href="https://shaerware.github.io/en/" target="_blank" rel="noopener">Built by ShaerWare</a>
       </nav>
       <nav class="footer__col">
         <h4>Legal</h4>
@@ -624,10 +627,10 @@
     </div>
     <div class="container footer__bottom">
       <span>© 2026 Sekretar24. All rights reserved.</span>
-      <span>Powered by AI Secretary System</span>
+      <span>Built by <a href="https://shaerware.github.io/en/" target="_blank" rel="noopener">ShaerWare</a></span>
     </div>
   </footer>
 
-  <script src="/main.js?v=4" defer></script>
+  <script src="/main.js?v=5" defer></script>
 </body>
 </html>

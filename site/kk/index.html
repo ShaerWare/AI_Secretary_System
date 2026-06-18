@@ -44,7 +44,7 @@
   <meta name="twitter:description" content="Виртуалды AI-көмекші: Telegram, WhatsApp, сайт, телефон. 14 күн триал." />
   <meta name="twitter:image" content="https://ai-sekretar24.ru/kk/og-image.svg" />
 
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 
   <script type="application/ld+json">
   {
@@ -567,6 +567,8 @@
           <h3>Немесе өтінім қалдырыңыз — шешуге көмектесеміз</h3>
           <p class="section__lead">Хабарласамыз, сұрақтарға жауап береміз және 14 күндік тегін триалды іске қосамыз.</p>
           <form class="lead-form" id="leadForm" novalidate>
+            <!-- honeypot: адамдардан жасырылған, боттар толтырады → өтінім жойылады -->
+            <input type="text" name="company" class="lead-form__hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
             <div class="lead-form__row">
               <input type="text" name="name" placeholder="Атыңыз" required autocomplete="name" />
               <input type="text" name="contact" placeholder="Телефон немесе @Telegram" required autocomplete="tel" />
@@ -616,6 +618,7 @@
         <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">Жобаның GitHub</a>
         <a href="https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk" download>📱 Android APK · v2.2</a>
         <a href="/admin/">Жеке кабинетке кіру</a>
+        <a href="https://shaerware.github.io/ru/" target="_blank" rel="noopener">Әзірлеу — ShaerWare</a>
       </nav>
       <nav class="footer__col">
         <h4>Құқықтық</h4>
@@ -625,10 +628,10 @@
     </div>
     <div class="container footer__bottom">
       <span>© 2026 Хатшы24. Барлық құқықтар қорғалған.</span>
-      <span>AI Secretary System платформасында жасалды</span>
+      <span>Әзірлеу — <a href="https://shaerware.github.io/ru/" target="_blank" rel="noopener">ShaerWare</a></span>
     </div>
   </footer>
 
-  <script src="/main.js?v=4" defer></script>
+  <script src="/main.js?v=5" defer></script>
 </body>
 </html>

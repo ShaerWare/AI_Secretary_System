@@ -70,7 +70,7 @@
   <meta name="twitter:description" content="Виртуальный AI-ассистент: Telegram, WhatsApp, сайт, телефония. Триал 14 дней." />
   <meta name="twitter:image" content="https://ai-sekretar24.ru/og-image.svg" />
 
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 
   <!-- SEO: структурированные данные -->
   <script type="application/ld+json">
@@ -613,6 +613,8 @@
           <p class="section__lead">Свяжемся, ответим на вопросы и активируем бесплатный триал на 14 дней.</p>
           <!-- TODO (Фаза 2): заменить на POST /admin/auth/register для саморегистрации. -->
           <form class="lead-form" id="leadForm" novalidate>
+            <!-- honeypot: скрыто от людей, заполняется ботами → заявка отбрасывается -->
+            <input type="text" name="company" class="lead-form__hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
             <div class="lead-form__row">
               <input type="text" name="name" placeholder="Ваше имя" required autocomplete="name" />
               <input type="text" name="contact" placeholder="Телефон или @Telegram" required autocomplete="tel" />
@@ -663,6 +665,7 @@
         <a href="https://github.com/ShaerWare/AI_Secretary_System" target="_blank" rel="noopener">GitHub проекта</a>
         <a href="https://github.com/ShaerWare/AI_Secretary_System/releases/latest/download/ai-secretary-2.2.apk" download>📱 Android APK · v2.2</a>
         <a href="/admin/">Вход в кабинет</a>
+        <a href="https://shaerware.github.io/ru/" target="_blank" rel="noopener">Разработка — ShaerWare</a>
       </nav>
       <nav class="footer__col">
         <h4>Правовое</h4>
@@ -672,10 +675,10 @@
     </div>
     <div class="container footer__bottom">
       <span>© 2026 Секретарь24. Все права защищены.</span>
-      <span>Сделано на платформе AI Secretary System</span>
+      <span>Разработка — <a href="https://shaerware.github.io/ru/" target="_blank" rel="noopener">ShaerWare</a></span>
     </div>
   </footer>
 
-  <script src="/main.js?v=4" defer></script>
+  <script src="/main.js?v=5" defer></script>
 </body>
 </html>

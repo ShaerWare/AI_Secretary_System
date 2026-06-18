@@ -462,6 +462,8 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
   pointer-events: none;
 }
 .lead-form { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; text-align: left; }
+/* honeypot — невидимо для людей, но доступно ботам-автозаполнителям */
+.lead-form__hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .lead-form__row { display: flex; gap: 12px; }
 .lead-form input, .lead-form select {
   width: 100%;

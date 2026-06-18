@@ -374,7 +374,11 @@ GOOGLE_REDIRECT_URI=                # OAuth callback URL (default: {BASE_URL}/ad
 PLATFORM_AGENT_PROMPT_FILE=         # Override path to platform-agent fallback prompt (default: /opt/ai-secretary/prompts/platform-agent.md)
 BRIDGE_ISOLATE_HOME=                # "1" to spawn Claude CLI with isolated HOME so host's CLAUDE.md/memory files don't leak into user chats
 BRIDGE_ISOLATED_HOME=               # Override isolated HOME path (default: /var/lib/ai-secretary-bridge)
+LEAD_TELEGRAM_BOT_TOKEN=            # Bot token for landing lead notifications (POST /widget/lead → owner's Telegram)
+LEAD_TELEGRAM_CHAT_ID=             # Numeric chat_id that receives landing lead notifications
 ```
+
+**Landing lead form** (`site/` → Telegram): the static landing's lead form (`#leadForm`, handled in `site/main.js`) POSTs JSON to `POST /widget/lead` (in `modules/channels/widget/router_public.py`). Mounted under the already nginx-proxied `/widget/` prefix so no new nginx location is needed. The endpoint reads `LEAD_TELEGRAM_BOT_TOKEN` + `LEAD_TELEGRAM_CHAT_ID` from env (no secrets in the static site) and sends an HTML message to the owner's Telegram via `api.telegram.org/bot<token>/sendMessage`. Anti-spam: a hidden `company` honeypot field (CSS `.lead-form__hp`). If the backend is unreachable, the frontend falls back to opening `t.me/ai_sekretar24bot` with a pre-filled message. Locale + page URL are included in the notification.
 
 ## Deployment
 
