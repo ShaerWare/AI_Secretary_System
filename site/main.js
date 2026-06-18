@@ -68,28 +68,64 @@
     applyBilling(billingSwitch.getAttribute('aria-checked') !== 'true');
   });
 
-  /* --- Лид-форма --- */
+  /* --- Лид-форма: уходит на backend (/widget/lead) → уведомление в Telegram владельца --- */
   var form = document.getElementById('leadForm');
   var success = document.getElementById('leadSuccess');
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var name = form.name.value.trim();
-    var contact = form.contact.value.trim();
-    if (!name || !contact) {
-      if (!name) form.name.focus();
-      else form.contact.focus();
-      return;
-    }
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = form.name.value.trim();
+      var contact = form.contact.value.trim();
+      if (!name || !contact) {
+        if (!name) form.name.focus();
+        else form.contact.focus();
+        return;
+      }
 
-    /* TODO (Фаза 2): отправить заявку на backend.
-       Пример: fetch('/admin/leads', { method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ name: name, contact: contact, role: form.role.value }) })
-       Лид уйдёт в amoCRM через существующее событие WidgetContactSubmitted. */
+      var honeypot = form.company ? form.company.value.trim() : '';
+      var roleEl = form.role;
+      var btn = form.querySelector('button[type="submit"]');
 
-    form.hidden = true;
-    success.hidden = false;
-    success.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
+      var payload = {
+        name: name,
+        contact: contact,
+        role: roleEl ? roleEl.value : '',
+        company: honeypot, /* honeypot — должно остаться пустым у людей */
+        locale: (document.documentElement.lang || '').toLowerCase(),
+        page: location.href
+      };
+
+      if (btn) { btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Отправляем…'; }
+
+      function showSuccess() {
+        form.hidden = true;
+        success.hidden = false;
+        success.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      function restoreBtn() {
+        if (btn) { btn.disabled = false; if (btn.dataset.label) btn.textContent = btn.dataset.label; }
+      }
+
+      fetch('/widget/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(function (r) {
+          if (r.ok) { showSuccess(); return; }
+          throw new Error('bad status ' + r.status);
+        })
+        .catch(function () {
+          /* Фолбэк: не теряем заявку — открываем Telegram владельца с заполненным текстом */
+          restoreBtn();
+          var msg =
+            'Заявка с сайта%0AИмя: ' + encodeURIComponent(name) +
+            '%0AКонтакт: ' + encodeURIComponent(contact) +
+            (payload.role ? '%0AАссистент: ' + encodeURIComponent(payload.role) : '');
+          window.open('https://t.me/ai_sekretar24bot?text=' + msg, '_blank', 'noopener');
+          showSuccess();
+        });
+    });
+  }
 })();

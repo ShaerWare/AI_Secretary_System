@@ -5,12 +5,15 @@ and contact form submissions. CRM integration (amoCRM lead/contact
 creation) is handled reactively via EventBus — see modules/crm/startup.py.
 """
 
+import html
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
@@ -401,4 +404,90 @@ async def widget_submit_contacts(request: Request, session_id: str):
             exc_info=True,
         )
 
+    return {"ok": True}
+
+
+# ============== Landing lead form → Telegram ==============
+
+# Mounted under the already nginx-proxied /widget/ prefix so the static landing
+# site can POST here without a dedicated nginx location block.
+_LEAD_LOCALE_NAMES = {"ru": "🇷🇺 RU", "en": "🇬🇧 EN", "kk": "🇰🇿 KK"}
+
+
+@router.post("/widget/lead")
+async def submit_landing_lead(request: Request):
+    """Public: landing-page lead form → notify owner via Telegram.
+
+    Reads bot token + target chat id from env (LEAD_TELEGRAM_BOT_TOKEN,
+    LEAD_TELEGRAM_CHAT_ID) so no secrets live in the static site. Anti-spam:
+    a hidden honeypot field ("company") — bots fill it, humans don't.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    # Honeypot: silently accept (so the bot thinks it succeeded) but drop it.
+    if (body.get("company") or "").strip():
+        logger.info("Landing lead dropped (honeypot triggered)")
+        return {"ok": True}
+
+    name = (body.get("name") or "").strip()[:200]
+    contact = (body.get("contact") or "").strip()[:200]
+    role = (body.get("role") or "").strip()[:200]
+    locale = (body.get("locale") or "").strip().lower()[:8]
+    page = (body.get("page") or "").strip()[:300]
+
+    if not name or not contact:
+        raise HTTPException(status_code=400, detail="Name and contact are required")
+
+    token = os.getenv("LEAD_TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("LEAD_TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        logger.error("Landing lead delivery not configured (LEAD_TELEGRAM_* missing)")
+        raise HTTPException(status_code=503, detail="Lead delivery is not configured")
+
+    visitor_ip = (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or request.headers.get("x-real-ip")
+        or (request.client.host if request.client else "")
+    )
+
+    lines = [
+        "🔔 <b>Новая заявка с лендинга</b>",
+        "",
+        f"👤 <b>Имя:</b> {html.escape(name)}",
+        f"📞 <b>Контакт:</b> {html.escape(contact)}",
+    ]
+    if role:
+        lines.append(f"🎯 <b>Какой ассистент:</b> {html.escape(role)}")
+    lines.append(f"🌐 <b>Язык:</b> {_LEAD_LOCALE_NAMES.get(locale, locale or '—')}")
+    if page:
+        lines.append(f"🔗 <b>Страница:</b> {html.escape(page)}")
+    if visitor_ip:
+        lines.append(f"🖥 <b>IP:</b> {html.escape(visitor_ip)}")
+    lines.append(f"🕒 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    text = "\n".join(lines)
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                },
+            )
+        if resp.status_code != 200:
+            logger.error("Telegram lead notify failed: %s %s", resp.status_code, resp.text[:300])
+            raise HTTPException(status_code=502, detail="Failed to deliver lead")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Telegram lead notify error", exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to deliver lead")
+
+    logger.info("Landing lead delivered to Telegram (locale=%s, role=%s)", locale, role or "-")
     return {"ok": True}
