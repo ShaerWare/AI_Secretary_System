@@ -262,17 +262,22 @@ SITES = {
     # monolithic URL — no BFS needed, just fetch the seed page.
     # ------------------------------------------------------------------
     "kz-nk-rk": {
-        "name": "НК РК — Налоговый кодекс",
+        "name": "НК РК — Налоговый кодекс (2026)",
         "base_url": "https://adilet.zan.kz",
-        "seed_paths": ["/rus/docs/K1700000120"],
-        "stay_under": "/rus/docs/k1700000120",
+        # New Tax Code in force since 01.01.2026 (Закон РК № 214-VIII от
+        # 18.07.2025). Replaces the repealed K1700000120 (2017, № 120-VI) —
+        # different rates (НДС 16% vs 12%, прогрессивный ИПН, СНР 7→3), so do
+        # NOT keep both in one collection or RAG will mix dead/live ставки.
+        "seed_paths": ["/rus/docs/K2500000214"],
+        "stay_under": "/rus/docs/k2500000214",
         "verify_ssl": False,
-        "max_pages": 5,
+        "max_pages": 8,
         "type": "legal",
         "description": (
             "Кодекс Республики Казахстан о налогах и других обязательных "
-            "платежах в бюджет (Налоговый кодекс) от 25.12.2017 № 120-VI. "
-            "Источник: adilet.zan.kz."
+            "платежах в бюджет (Налоговый кодекс) от 18.07.2025 № 214-VIII, "
+            "действует с 01.01.2026. Заменяет утративший силу НК РК № 120-VI "
+            "от 25.12.2017. Источник: adilet.zan.kz."
         ),
     },
     "kz-uk-rk": {
