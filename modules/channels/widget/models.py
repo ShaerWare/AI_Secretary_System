@@ -67,6 +67,9 @@ class WidgetInstance(Base):
         Integer, ForeignKey("knowledge_collections.id"), nullable=True
     )
     knowledge_collection_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Web search tool — lets the widget assistant fetch fresh facts from the
+    # internet (agentic loop in modules/chat/facade.py). Off by default.
+    web_search_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # Rate limiting
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -135,6 +138,7 @@ class WidgetInstance(Base):
             "knowledge_collection_ids": json.loads(self.knowledge_collection_ids)
             if self.knowledge_collection_ids
             else None,
+            "web_search_enabled": self.web_search_enabled,
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,

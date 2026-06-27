@@ -570,6 +570,7 @@ class ChatServiceImpl:
         system_prompt: str | None = None,
         rag_mode: str = "all",
         collection_ids: list[int] | None = None,
+        web_search: bool | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Send a user message, stream the LLM response, save the result.
 
@@ -603,7 +604,12 @@ class ChatServiceImpl:
         wiki_rag = self._container.wiki_rag_service
         coll_ids = collection_ids or []
         use_agentic = _should_use_agentic_rag(llm, rag_mode, coll_ids, wiki_rag)
-        use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm)
+        # web_search override lets non-session callers (widget) enable it from
+        # their own config; otherwise fall back to the session flag.
+        want_web_search = (
+            web_search if web_search is not None else bool(session.get("web_search_enabled"))
+        )
+        use_web_search = want_web_search and _supports_tools(llm)
 
         # Build prompt
         prompt = system_prompt or session.get("system_prompt")

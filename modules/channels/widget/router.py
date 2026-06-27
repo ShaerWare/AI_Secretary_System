@@ -65,6 +65,10 @@ class WidgetInstanceCreateRequest(BaseModel):
     tts_engine: str = "xtts"
     tts_voice: str = "anna"
     tts_preset: Optional[str] = None
+    # RAG / tools
+    rag_mode: Optional[str] = None
+    knowledge_collection_ids: Optional[List[int]] = None
+    web_search_enabled: bool = False
 
 
 class WidgetInstanceUpdateRequest(BaseModel):
@@ -93,6 +97,8 @@ class WidgetInstanceUpdateRequest(BaseModel):
     # RAG
     rag_mode: Optional[str] = None
     knowledge_collection_ids: Optional[List[int]] = None
+    knowledge_collection_id: Optional[int] = None
+    web_search_enabled: Optional[bool] = None
 
 
 class WidgetShareRequest(BaseModel):

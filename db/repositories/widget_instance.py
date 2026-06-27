@@ -163,6 +163,10 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             tts_engine=kwargs.get("tts_engine", DEFAULT_WIDGET_CONFIG["tts_engine"]),
             tts_voice=kwargs.get("tts_voice", DEFAULT_WIDGET_CONFIG["tts_voice"]),
             tts_preset=kwargs.get("tts_preset"),
+            # RAG / tools
+            rag_mode=kwargs.get("rag_mode", DEFAULT_WIDGET_CONFIG.get("rag_mode", "all")),
+            knowledge_collection_id=kwargs.get("knowledge_collection_id"),
+            web_search_enabled=kwargs.get("web_search_enabled", False),
             # Timestamps
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
@@ -207,6 +211,8 @@ class WidgetInstanceRepository(BaseRepository[WidgetInstance]):
             "tts_voice",
             "tts_preset",
             "rag_mode",
+            "knowledge_collection_id",
+            "web_search_enabled",
         ]
         for field in simple_fields:
             if field in kwargs:
