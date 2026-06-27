@@ -311,35 +311,55 @@ async def widget_stream_message(request: Request, session_id: str):
             )
         )
 
-    default_prompt = custom_prompt
-    if not default_prompt and hasattr(active_llm, "get_system_prompt"):
-        default_prompt = active_llm.get_system_prompt()
-    messages = await chat_service.get_messages_for_llm(session_id, default_prompt)
+    # Resolve RAG (collections) + web_search from the widget instance config,
+    # then delegate generation to the shared chat facade so the widget gets the
+    # same agentic RAG (knowledge_search) + web_search loop as the admin/mobile
+    # chat path. (The old bare LLM call ignored the widget's collections.)
+    from modules.chat.facade import ChatServiceImpl, chat_service_facade
+    from modules.chat.router import _resolve_rag_config
+
+    rag_mode, collection_ids = await _resolve_rag_config(session, widget_instance_id=instance_id)
+    web_search = bool(widget.get("web_search_enabled")) if widget else False
+
+    facade = chat_service_facade or ChatServiceImpl(container)
 
     # Capture lead_id for note-writing after stream completes
     lead_id = session.get("amocrm_lead_id")
 
     async def generate_stream():
-        full_response = []
+        full_response: list[str] = []
         try:
-            yield f"data: {json.dumps({'type': 'user_message', 'message': user_msg}, ensure_ascii=False)}\n\n"
-            for chunk in active_llm.generate_response_from_messages(messages, stream=True):
-                full_response.append(chunk)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            async for chunk in facade.stream_message(
+                session_id,
+                content,
+                llm_service=active_llm,
+                session_data=session,
+                user_msg=user_msg,
+                system_prompt=custom_prompt,
+                rag_mode=rag_mode,
+                collection_ids=collection_ids,
+                web_search=web_search,
+            ):
+                if chunk.get("type") == "chunk" and chunk.get("content"):
+                    full_response.append(chunk["content"])
+                # Serialize StreamChunk to the widget's SSE wire format. `done`
+                # becomes the [DONE] sentinel the embed JS expects; tool_start/
+                # tool_end pass through (embed JS ignores unknown event types).
+                if chunk.get("done"):
+                    yield "data: [DONE]\n\n"
+                else:
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
             response_text = "".join(full_response)
-            assistant_msg = await chat_service.add_message(session_id, "assistant", response_text)
-            yield f"data: {json.dumps({'type': 'assistant_message', 'message': assistant_msg}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
 
             # Publish WidgetMessageSent (fire-and-forget → CRM appends note)
             if lead_id and response_text:
                 import asyncio
 
-                from app.dependencies import get_container
                 from modules.channels.widget.events import WidgetMessageSent
 
                 asyncio.create_task(
-                    get_container().event_bus.publish(
+                    container.event_bus.publish(
                         WidgetMessageSent(
                             session_id=session_id,
                             lead_id=lead_id,

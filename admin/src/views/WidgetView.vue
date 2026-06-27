@@ -80,6 +80,7 @@ const formData = ref<Partial<WidgetInstance>>({
   rag_mode: 'all',
   knowledge_collection_id: null,
   knowledge_collection_ids: [] as number[],
+  web_search_enabled: false,
   rate_limit_count: null,
   rate_limit_hours: null,
 })
@@ -183,6 +184,7 @@ function openCreateDialog() {
     rag_mode: 'all',
     knowledge_collection_id: null,
     knowledge_collection_ids: [],
+    web_search_enabled: false,
     rate_limit_count: null,
     rate_limit_hours: null,
   }
@@ -1270,6 +1272,11 @@ function handleTestKeydown(e: KeyboardEvent) {
                   <span class="text-sm">{{ col.name }}</span>
                 </label>
               </div>
+              <label class="flex items-center gap-2 cursor-pointer pt-1">
+                <input v-model="formData.web_search_enabled" type="checkbox" class="rounded border-border" />
+                <span class="text-sm font-medium">{{ t('widget.webSearch') }}</span>
+              </label>
+              <p class="text-xs text-muted-foreground">{{ t('widget.webSearchHint') }}</p>
             </div>
 
             <!-- System Prompt -->
