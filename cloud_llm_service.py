@@ -230,9 +230,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         # Claude bridge needs longer timeouts: CLI warmup (7-30s) + complex
         # prompt processing can exceed 60s before first token arrives.
         # Bridge itself allows 600s per-chunk; match that on client side.
+        # write bumped to 30s so large prompts (big context files, agentic RAG)
+        # finish uploading before the client gives up.
         if self.provider_type == "claude_bridge":
             self.client = httpx.Client(
-                timeout=httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
+                timeout=httpx.Timeout(connect=10.0, read=600.0, write=30.0, pool=10.0)
             )
             # Bridge/Claude can handle much longer responses than default 512
             self.runtime_params.setdefault("max_tokens", 4096)
