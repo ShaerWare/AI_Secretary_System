@@ -1264,7 +1264,7 @@ async def admin_upload_chat_file(
     original_name = file.filename or "file"
 
     if len(file_data) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+        raise HTTPException(status_code=400, detail="File too large (max 300MB)")
 
     # Allow by MIME type or by known extension
     from pathlib import Path as _Path
