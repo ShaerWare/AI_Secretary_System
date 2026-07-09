@@ -46,7 +46,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 IMAGES_DIR = Path("data/chat_images")
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 300 * 1024 * 1024  # 300MB
 THUMB_MAX_WIDTH = 400
 
 IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
