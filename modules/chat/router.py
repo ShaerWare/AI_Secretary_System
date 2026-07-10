@@ -13,7 +13,16 @@ from pydantic import BaseModel
 from app.dependencies import get_container
 from app.rate_limiter import RATE_LIMIT_CHAT, limiter
 from app.utils.tokens import count_message_tokens, get_context_window
-from auth_manager import User, require_permission, user_has_level, workspace_context
+from auth_manager import (
+    User,
+    get_optional_user,
+    get_user_permissions,
+    level_gte,
+    require_permission,
+    resolve_user_from_token,
+    user_has_level,
+    workspace_context,
+)
 from cloud_llm_service import CloudLLMService
 from modules.channels.mobile.service import mobile_app_instance_service
 from modules.channels.telegram.service import bot_instance_service
@@ -1305,10 +1314,26 @@ async def admin_upload_chat_file(
 async def serve_chat_image(
     session_id: str,
     filename: str,
-    user: User = Depends(require_permission("chat", "view")),
+    token: Optional[str] = None,
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    """Serve an uploaded chat image (auth-gated)."""
+    """Serve an uploaded chat file (image or document), auth-gated.
+
+    Accepts auth via the Authorization header OR a ``?token=`` query param —
+    ``<img src>`` / ``<a download>`` requests can't send an Authorization header,
+    so the frontend appends the JWT as a query param for these URLs.
+    """
     from modules.chat.image_service import get_image_path
+
+    # Header path (get_optional_user) doesn't load permissions; the token path does.
+    if user is not None:
+        user.permissions = await get_user_permissions(user)
+    elif token:
+        user = await resolve_user_from_token(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not level_gte(user.permissions.get("chat", ""), "view"):
+        raise HTTPException(status_code=403, detail="Permission denied: requires chat:view")
 
     path = get_image_path(session_id, filename)
     if not path:

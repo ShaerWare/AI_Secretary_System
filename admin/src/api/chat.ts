@@ -136,6 +136,27 @@ export interface GroupedSessions {
 }
 
 // Chat API
+// <img>/<a download> requests can't carry an Authorization header, so the backend
+// also accepts the JWT as a ?token= query param on served files. Append it to
+// same-origin chat image URLs as they enter the app (token is valid for hours, so
+// it stays live for the render that immediately follows).
+function tokenizeImageUrl(url?: string | null): string | null | undefined {
+  if (!url || !url.startsWith('/admin/chat/images/')) return url
+  const token = localStorage.getItem('admin_token')
+  if (!token) return url
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+}
+
+function tokenizeSessionImages(session: ChatSession): ChatSession {
+  for (const m of session.messages || []) {
+    for (const img of m.metadata?.images || []) {
+      img.url = tokenizeImageUrl(img.url) as string
+      img.thumb_url = tokenizeImageUrl(img.thumb_url)
+    }
+  }
+  return session
+}
+
 export const chatApi = {
   // Sessions
   listSessions: (source?: string, excludeSource?: string) => {
@@ -150,7 +171,9 @@ export const chatApi = {
     api.get<{ sessions: GroupedSessions; grouped: true }>('/admin/chat/sessions?group_by=source'),
 
   getSession: (sessionId: string) =>
-    api.get<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`),
+    api
+      .get<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`)
+      .then((r) => ({ session: tokenizeSessionImages(r.session) })),
 
   createSession: (title?: string, systemPrompt?: string, source?: string, sourceId?: string) =>
     api.post<{ session: ChatSession }>('/admin/chat/sessions', {
@@ -204,15 +227,19 @@ export const chatApi = {
     api.get<{ branches: BranchNode[] }>(`/admin/chat/sessions/${sessionId}/branches`),
 
   switchBranch: (sessionId: string, messageId: string) =>
-    api.post<{ status: string; session: ChatSession }>(
-      `/admin/chat/sessions/${sessionId}/branches/switch`,
-      { message_id: messageId }
-    ),
+    api
+      .post<{ status: string; session: ChatSession }>(
+        `/admin/chat/sessions/${sessionId}/branches/switch`,
+        { message_id: messageId }
+      )
+      .then((r) => ({ ...r, session: tokenizeSessionImages(r.session) })),
 
   newBranchFromScratch: (sessionId: string) =>
-    api.post<{ status: string; session: ChatSession }>(
-      `/admin/chat/sessions/${sessionId}/branches/new`
-    ),
+    api
+      .post<{ status: string; session: ChatSession }>(
+        `/admin/chat/sessions/${sessionId}/branches/new`
+      )
+      .then((r) => ({ ...r, session: tokenizeSessionImages(r.session) })),
 
   renameBranch: (sessionId: string, messageId: string, branchName: string) =>
     api.put<{ status: string; branch_name: string | null }>(
@@ -360,7 +387,13 @@ export const chatApi = {
 
   // Image upload
   uploadImage: (sessionId: string, file: File) =>
-    api.upload<{ image: ChatImage }>(`/admin/chat/sessions/${sessionId}/upload-image`, file),
+    api
+      .upload<{ image: ChatImage }>(`/admin/chat/sessions/${sessionId}/upload-image`, file)
+      .then((r) => {
+        r.image.url = tokenizeImageUrl(r.image.url) as string
+        r.image.thumb_url = tokenizeImageUrl(r.image.thumb_url)
+        return r
+      }),
 
   // Session prompts (named "roles")
   listPrompts: (sessionId: string) =>

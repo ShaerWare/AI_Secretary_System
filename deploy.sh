@@ -41,7 +41,12 @@ log "Re-applying cloud-mode patches..."
 # These patches make TTS/STT/XTTS imports optional for servers without GPU/torch
 python3 "$REPO_DIR/apply_patches.py" 2>&1 | tee -a "$LOG_FILE"
 
-# Install/update Python deps (bridge)
+# Install/update Python deps (main app + bridge)
+# The main requirements.txt MUST be installed too — otherwise new deps added in a
+# PR (e.g. pdfplumber/openpyxl/python-docx for chat file extraction) silently miss
+# the prod venv and features fail at runtime with no error.
+log "Installing Python dependencies (main)..."
+"$REPO_DIR/venv/bin/pip" install -q -r "$REPO_DIR/requirements.txt" 2>&1 | tee -a "$LOG_FILE"
 log "Installing bridge dependencies..."
 "$REPO_DIR/venv/bin/pip" install -q -r "$REPO_DIR/services/bridge/requirements.txt" 2>&1 | tee -a "$LOG_FILE"
 
