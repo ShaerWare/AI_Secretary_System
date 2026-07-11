@@ -413,6 +413,26 @@ async def get_optional_user(
     return await _validate_session(token_payload)
 
 
+async def resolve_user_from_token(token: str) -> Optional[User]:
+    """Resolve a User from a raw JWT string, with permissions loaded.
+
+    For endpoints that must authenticate requests which can't carry an
+    Authorization header — e.g. ``<img src>`` / ``<a download>`` served files,
+    where the JWT arrives as a ``?token=`` query param. Validation (signature,
+    session revocation) is identical to the header path.
+    """
+    if not token:
+        return None
+    token_payload = decode_token(token)
+    if token_payload is None:
+        return None
+    user = await _validate_session(token_payload)
+    if user is None:
+        return None
+    user.permissions = await get_user_permissions(user)
+    return user
+
+
 def require_permission(module: str, min_level: str):
     """FastAPI Depends factory: checks user has >= min_level for module."""
 

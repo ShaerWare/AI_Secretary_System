@@ -1,5 +1,6 @@
 """Chat file service: upload images/documents, OCR/text extraction, storage, cleanup."""
 
+import asyncio
 import hashlib
 import io
 import logging
@@ -223,23 +224,18 @@ def extract_document_text(file_data: bytes, content_type: str, original_name: st
 # --- Upload ---
 
 
-async def upload_file(
+def _process_upload(
     session_id: str,
     file_data: bytes,
     content_type: str,
     original_name: str,
 ) -> dict:
-    """Save file, generate thumbnail (for images), extract text. Returns metadata dict."""
-    if len(file_data) > MAX_FILE_SIZE:
-        raise ValueError(f"File too large: {len(file_data)} > {MAX_FILE_SIZE}")
+    """Blocking upload work: write file, build thumbnail, OCR/extract text.
 
-    if content_type not in ALLOWED_MIME_TYPES:
-        # Try to detect by extension
-        ext = Path(original_name).suffix.lower()
-        text_exts = {".txt", ".csv", ".md", ".json", ".xml", ".html", ".log", ".yaml", ".yml"}
-        if ext not in text_exts:
-            raise ValueError(f"Unsupported type: {content_type}")
-
+    Runs in a worker thread (see ``upload_file``) — PIL, pdfplumber and disk I/O
+    are all synchronous and CPU-bound, so calling them on the event loop would
+    freeze every other request while a large PDF is parsed.
+    """
     file_id = _generate_file_id()
     ext = _get_extension(content_type, original_name)
     session_dir = _session_dir(session_id)
@@ -291,6 +287,30 @@ async def upload_file(
         "mime_type": content_type,
         "is_image": is_img,
     }
+
+
+async def upload_file(
+    session_id: str,
+    file_data: bytes,
+    content_type: str,
+    original_name: str,
+) -> dict:
+    """Save file, generate thumbnail (for images), extract text. Returns metadata dict."""
+    if len(file_data) > MAX_FILE_SIZE:
+        raise ValueError(f"File too large: {len(file_data)} > {MAX_FILE_SIZE}")
+
+    if content_type not in ALLOWED_MIME_TYPES:
+        # Try to detect by extension
+        ext = Path(original_name).suffix.lower()
+        text_exts = {".txt", ".csv", ".md", ".json", ".xml", ".html", ".log", ".yaml", ".yml"}
+        if ext not in text_exts:
+            raise ValueError(f"Unsupported type: {content_type}")
+
+    # Offload blocking I/O + CPU-bound parsing to a thread so a large/complex
+    # document (e.g. a 40MB PDF) can't freeze the orchestrator's event loop.
+    return await asyncio.to_thread(
+        _process_upload, session_id, file_data, content_type, original_name
+    )
 
 
 # Keep backward compatibility alias
