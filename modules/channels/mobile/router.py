@@ -10,6 +10,7 @@ from auth_manager import User, require_permission, user_has_level, workspace_con
 from modules.admin.service import resource_share_service
 from modules.channels.mobile.push_service import fcm_push_service
 from modules.channels.mobile.service import mobile_app_instance_service
+from modules.chat.service import chat_service
 from modules.monitoring.service import audit_service
 
 
@@ -240,6 +241,60 @@ async def get_my_mobile_instances(user: User = Depends(require_permission("chat"
     """
     instances = await mobile_app_instance_service.list_user_instances(user.id)
     return {"instances": instances}
+
+
+@router.get("/instances/{instance_id}/my-session")
+async def get_my_instance_session(
+    instance_id: str, user: User = Depends(require_permission("chat", "view"))
+):
+    """Find-or-create the calling user's PRIVATE session for an assistant.
+
+    Each user gets their own conversation per assistant instance (owner_id=user,
+    source="mobile", source_id=instance_id) while the instance's prompt + RAG
+    collections stay shared. Idempotent: repeated calls return the same session.
+    """
+    is_admin = user_has_level(user, "channels", "manage")
+    if not is_admin:
+        perm = await resource_share_service.get_user_permission(
+            RESOURCE_TYPE, instance_id, user.id
+        )
+        if not perm:
+            raise HTTPException(status_code=403, detail="Assistant not assigned to you")
+
+    instance = await mobile_app_instance_service.get_instance(instance_id)
+    if not instance or not instance.get("enabled", True):
+        raise HTTPException(status_code=404, detail="Assistant not found")
+
+    _, ws_id = workspace_context(user, "chat")
+
+    # This is explicitly the caller's OWN private chat, so it is always owned by
+    # the user (even admins) — not the workspace. Guarantees find-or-create is
+    # idempotent regardless of the user's permission level.
+    existing_id = await chat_service.find_user_instance_session(
+        user.id, "mobile", instance_id
+    )
+    if existing_id:
+        return {"session_id": existing_id, "created": False}
+
+    # Create a new one, inheriting the assistant's persona + RAG config.
+    session = await chat_service.create_session(
+        instance.get("name"),
+        instance.get("system_prompt"),
+        "mobile",
+        instance_id,
+        owner_id=user.id,
+        rag_mode=instance.get("rag_mode"),
+        workspace_id=ws_id,
+    )
+    collection_ids = instance.get("knowledge_collection_ids")
+    if collection_ids:
+        updated = await chat_service.update_session(
+            session["id"], knowledge_collection_ids=collection_ids
+        )
+        if updated:
+            session = updated
+
+    return {"session_id": session["id"], "created": True}
 
 
 # ============== Version check ==============

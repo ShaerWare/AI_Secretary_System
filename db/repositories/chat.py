@@ -121,6 +121,32 @@ class ChatRepository(BaseRepository[ChatSession]):
             return data
         return None
 
+    async def find_user_instance_session(
+        self,
+        owner_id: int,
+        source: str,
+        source_id: str,
+    ) -> Optional[str]:
+        """Find the user's own (private) session for a given instance.
+
+        Matches on owner_id + source + source_id so each user gets their own
+        private conversation per assistant instance. Returns the most recently
+        updated session id, or None. Deliberately does NOT include shared
+        sessions — this is the "my private chat with this assistant" lookup.
+        """
+        query = (
+            select(ChatSession.id)
+            .where(
+                ChatSession.owner_id == owner_id,
+                ChatSession.source == source,
+                ChatSession.source_id == source_id,
+            )
+            .order_by(ChatSession.updated.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def create_session(
         self,
         title: Optional[str] = None,

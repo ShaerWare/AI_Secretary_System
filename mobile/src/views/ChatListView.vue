@@ -11,11 +11,17 @@ import {
   type MobileInstance,
 } from "@/api/admin";
 import { useAuthStore } from "@/stores/auth";
+import { useMobileConfigStore } from "@/stores/mobileConfig";
 import AccountPanel from "@/components/AccountPanel.vue";
 
 const router = useRouter();
 const auth = useAuthStore();
+const mobileConfig = useMobileConfigStore();
 const isAdmin = computed(() => auth.isAdmin);
+
+// Non-admin: assistants assigned to the user (each = private per-user session).
+const assistants = computed(() => mobileConfig.instances);
+const openingAssistantId = ref<string | null>(null);
 
 const sessions = ref<ChatSessionSummary[]>([]);
 const isLoading = ref(false);
@@ -103,32 +109,41 @@ function onResizeEnd() {
   isResizing.value = false;
 }
 
-// For non-admins: all chats shared with them (assistants assigned by
-// admin). They auto-land in the default one but can navigate back to
-// pick another from the list, or use the in-chat assistant switcher.
-const visibleSessions = computed(() => {
-  if (isAdmin.value) return sessions.value;
-  return sessions.value.filter(
-    (s) => s.is_shared_with_me || s.is_default_mobile,
-  );
-});
-
 async function loadSessions() {
   isLoading.value = true;
   error.value = null;
   try {
+    if (!isAdmin.value) {
+      // Non-admins are driven by their assigned assistants, not a raw
+      // session list. Load instances, then auto-open the first one.
+      await mobileConfig.ensureLoaded();
+      await autoOpenChat();
+      return;
+    }
     const data = await chatApi.listSessions();
     sessions.value = data.sessions.sort(
       (a, b) =>
         new Date(b.updated).getTime() - new Date(a.updated).getTime(),
     );
-    if (!isAdmin.value) {
-      await autoOpenChat();
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось загрузить";
   } finally {
     isLoading.value = false;
+  }
+}
+
+// Non-admin: open (find-or-create) the user's private session for an assistant.
+async function openAssistant(instanceId: string) {
+  if (openingAssistantId.value) return;
+  openingAssistantId.value = instanceId;
+  try {
+    mobileConfig.setActive(instanceId);
+    const res = await chatApi.getMyInstanceSession(instanceId);
+    router.push(`/chat/${res.session_id}`);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось открыть ассистента";
+  } finally {
+    openingAssistantId.value = null;
   }
 }
 
@@ -150,25 +165,19 @@ async function loadAdminData() {
 }
 
 async function autoOpenChat() {
-  try {
-    const resp = await chatApi.getMyDefaultMobileSession();
-    if (resp.session_id) {
-      router.replace(`/chat/${resp.session_id}`);
+  // Land the user in their private session for the first assigned assistant.
+  const first = assistants.value[0];
+  if (first) {
+    try {
+      mobileConfig.setActive(first.id);
+      const res = await chatApi.getMyInstanceSession(first.id);
+      router.replace(`/chat/${res.session_id}`);
       return;
+    } catch {
+      // fall through to welcome screen
     }
-  } catch {
-    // fallback
   }
-  if (visibleSessions.value.length > 0) {
-    router.replace(`/chat/${visibleSessions.value[0]!.id}`);
-    return;
-  }
-  try {
-    const data = await chatApi.createSession();
-    router.replace(`/chat/${data.session.id}`);
-  } catch {
-    // stay on list
-  }
+  // No assistants assigned → stay on the welcome screen (list is empty).
 }
 
 function openChat(id: string) {
@@ -179,7 +188,9 @@ async function createNewChat() {
   if (isCreating.value) return;
   isCreating.value = true;
   try {
-    const data = await chatApi.createSession();
+    // "Новый чат" is always a fresh blank chat, not another copy under the
+    // active assistant.
+    const data = await chatApi.createSession(undefined, { instanceId: null });
     router.push(`/chat/${data.session.id}`);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось создать";
@@ -390,11 +401,15 @@ async function sendFromWelcome() {
   if (!text || isSending.value) return;
   isSending.value = true;
   try {
-    if (visibleSessions.value.length > 0) {
-      const sessionId = visibleSessions.value[0]!.id;
-      router.push(`/chat/${sessionId}?msg=${encodeURIComponent(text)}`);
+    const first = assistants.value[0];
+    if (first) {
+      // Send into the private session for the first assigned assistant.
+      mobileConfig.setActive(first.id);
+      const res = await chatApi.getMyInstanceSession(first.id);
+      router.push(`/chat/${res.session_id}?msg=${encodeURIComponent(text)}`);
     } else {
-      const data = await chatApi.createSession(text);
+      // No assistant assigned → blank custom chat.
+      const data = await chatApi.createSession(text, { instanceId: null });
       router.push(`/chat/${data.session.id}?msg=${encodeURIComponent(text)}`);
     }
   } catch (e) {
@@ -819,26 +834,28 @@ onUnmounted(() => {
                 </svg>
               </button>
             </div>
-            <div v-if="visibleSessions.length" class="w-full max-w-sm mx-auto space-y-2 mb-6">
-              <p class="text-xs text-stone-500 uppercase tracking-wide mb-2">Ваши чаты</p>
+            <div v-if="assistants.length" class="w-full max-w-sm mx-auto space-y-2 mb-6">
+              <p class="text-xs text-stone-500 uppercase tracking-wide mb-2">Ваши ассистенты</p>
               <button
-                v-for="session in visibleSessions"
-                :key="session.id"
-                class="w-full text-left p-3 rounded-xl bg-stone-800/60 border border-stone-700/50 hover:border-amber-600/40 hover:bg-stone-800 active:bg-stone-700/80 transition-all group"
-                @click="openChat(session.id)"
+                v-for="a in assistants"
+                :key="a.id"
+                class="w-full text-left p-3 rounded-xl bg-stone-800/60 border border-stone-700/50 hover:border-amber-600/40 hover:bg-stone-800 active:bg-stone-700/80 transition-all group disabled:opacity-60"
+                :disabled="openingAssistantId === a.id"
+                @click="openAssistant(a.id)"
               >
                 <div class="flex items-center gap-3">
                   <div class="shrink-0 w-9 h-9 rounded-lg bg-amber-600/15 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    <div v-if="openingAssistantId === a.id" class="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
+                      <path d="M12 2a8 8 0 0 0-8 8c0 3.5 2 6 5 7.5V21h6v-3.5c3-1.5 5-4 5-7.5a8 8 0 0 0-8-8z" />
                     </svg>
                   </div>
                   <div class="flex-1 min-w-0">
                     <span class="font-medium text-sm text-white truncate block group-hover:text-amber-200 transition-colors">
-                      {{ session.title || "Чат" }}
+                      {{ a.name }}
                     </span>
-                    <span v-if="session.last_message" class="text-xs text-stone-500 truncate block">
-                      {{ truncate(session.last_message, 50) }}
+                    <span v-if="a.description" class="text-xs text-stone-500 truncate block">
+                      {{ truncate(a.description, 50) }}
                     </span>
                   </div>
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone-600 group-hover:text-amber-500 shrink-0 transition-colors">
