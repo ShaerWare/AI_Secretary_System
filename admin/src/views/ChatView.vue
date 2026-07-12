@@ -89,6 +89,8 @@ import {
   Palette
 } from 'lucide-vue-next'
 import UserProfileModal from '@/components/UserProfileModal.vue'
+import AssistantPresetPicker from '@/components/AssistantPresetPicker.vue'
+import type { AssistantPreset } from '@/api/presets'
 import { useSidebarCollapse } from '@/composables/useSidebarCollapse'
 import { useClaudeCode } from '@/composables/useClaudeCode'
 import { claudeCodeApi, type CcProject, type CcProjectInput } from '@/api/claudeCode'
@@ -1066,12 +1068,31 @@ watch(selectedPromptId, (id) => {
 
 // Mutations
 const createSessionMutation = useMutation({
-  mutationFn: () => chatApi.createSession(undefined, undefined, 'admin'),
+  mutationFn: (preset?: AssistantPreset) =>
+    chatApi.createSession(
+      undefined,
+      preset?.system_prompt ?? undefined,
+      'admin',
+      undefined,
+      preset
+        ? {
+            knowledgeCollectionIds: preset.knowledge_collection_ids,
+            ragMode: preset.rag_mode ?? undefined,
+          }
+        : undefined,
+    ),
   onSuccess: (data) => {
     refetchSessions()
     currentSessionId.value = data.session.id
   },
 })
+
+const showPresetPicker = ref(false)
+
+function handlePresetSelect(preset: AssistantPreset) {
+  showPresetPicker.value = false
+  createSessionMutation.mutate(preset)
+}
 
 const deleteSessionMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.deleteSession(sessionId),
@@ -1347,7 +1368,7 @@ watch(currentSessionId, () => {
 })
 
 function createNewChat() {
-  createSessionMutation.mutate()
+  showPresetPicker.value = true
 }
 
 async function deleteCurrentSession() {
@@ -4804,6 +4825,13 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
 
   <!-- User Profile modal (chat-only users open it from the focus-mode toolbar) -->
   <UserProfileModal v-model="showUserProfile" />
+
+  <!-- Assistant preset picker — opens on "+" new-chat click -->
+  <AssistantPresetPicker
+    :open="showPresetPicker"
+    @select="handlePresetSelect"
+    @close="showPresetPicker = false"
+  />
 </template>
 
 <style scoped>
