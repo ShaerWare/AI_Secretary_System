@@ -223,30 +223,30 @@ async function loadAvailableAssistants() {
       })
     }
 
-    // (b)+(c) Chat sessions shared with this user (admin-pinned default + ad-hoc shares).
-    // For non-admin users, read-only shares are excluded — they appeared as "fake
-    // assistants" (lawyer/accountant reference chats admins shared for browsing) and
-    // switching to one dead-ends the user since they can't reply. Admins keep the full
-    // list since they legitimately need to browse all shares.
+    // (b) Genuine chat sessions shared user-to-user with this user. Default
+    // assistants are NOT here anymore — each is covered by its instance entry
+    // in (a), and the old "share one conversation with everyone" default-mobile
+    // sessions are removed by the private-sessions migration. Read-only shares
+    // stay excluded for non-admins (they can't reply, so they'd dead-end).
+    const instanceIds = new Set(instances.map(i => i.id))
     const allSessions = await chatApi.listSessions()
     for (const s of allSessions.sessions || []) {
       const ext = s as ChatSessionSummary & {
         is_shared_with_me?: boolean
-        is_default_mobile?: boolean
+        source_id?: string
         share_permission?: string
       }
-      if (ext.is_shared_with_me || ext.is_default_mobile) {
-        const isReadOnlyShare =
-          ext.is_shared_with_me && ext.share_permission === 'read'
-        if (isReadOnlyShare && !authStore.isAdmin) continue
-        result.push({
-          id: s.id,
-          title: s.title || (ext.is_default_mobile ? 'Основной чат' : 'Общий чат'),
-          sessionId: s.id,
-          kind: 'session',
-          shared: true,
-        })
-      }
+      if (!ext.is_shared_with_me) continue
+      // Skip a shared session that just mirrors an assistant already listed in (a).
+      if (ext.source_id && instanceIds.has(ext.source_id)) continue
+      if (ext.share_permission === 'read' && !authStore.isAdmin) continue
+      result.push({
+        id: s.id,
+        title: s.title || 'Общий чат',
+        sessionId: s.id,
+        kind: 'session',
+        shared: true,
+      })
     }
 
     availableAssistants.value = result

@@ -130,18 +130,33 @@ export const chatApi = {
       `/admin/chat/sessions/${id}`,
     ),
 
-  createSession: (title?: string, options?: { skipInstancePrompt?: boolean }) => {
+  createSession: (
+    title?: string,
+    options?: { skipInstancePrompt?: boolean; instanceId?: string | null },
+  ) => {
     const config = useMobileConfigStore();
-    const instanceId = config.instance?.id;
+    // Explicit instanceId wins; else fall back to the active assistant.
+    const instanceId =
+      options?.instanceId !== undefined
+        ? options.instanceId
+        : config.instance?.id;
+    const inst = config.getById(instanceId);
     return api.post<{ session: ChatSession }>("/admin/chat/sessions", {
       title,
-      source: "mobile",
+      source: instanceId ? "mobile" : "admin",
       source_id: instanceId || undefined,
       system_prompt: options?.skipInstancePrompt
         ? undefined
-        : config.instance?.system_prompt || undefined,
+        : inst?.system_prompt || undefined,
     });
   },
+
+  // Find-or-create the caller's PRIVATE session for an assistant instance.
+  // Idempotent — repeated calls return the same session id.
+  getMyInstanceSession: (instanceId: string) =>
+    api.get<{ session_id: string; created: boolean }>(
+      `/admin/mobile/instances/${instanceId}/my-session`,
+    ),
 
   deleteSession: (id: string) =>
     api.delete<{ status: string }>(`/admin/chat/sessions/${id}`),
@@ -232,11 +247,18 @@ export const chatApi = {
     const controller = new AbortController();
 
     const body: Record<string, unknown> = { content };
-    if (config.instance?.id) {
+    // Prefer an explicit per-call instance (the current session's assistant);
+    // only fall back to the active config instance when none is passed.
+    const explicitInstance = overrides && "mobile_instance_id" in overrides;
+    if (!explicitInstance && config.instance?.id) {
       body.mobile_instance_id = config.instance.id;
     }
     if (overrides) {
       Object.assign(body, overrides);
+    }
+    // A blank/custom chat (no instance) must not carry a stale instance id.
+    if (body.mobile_instance_id == null) {
+      delete body.mobile_instance_id;
     }
 
     fetch(

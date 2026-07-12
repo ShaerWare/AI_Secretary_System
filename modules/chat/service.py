@@ -86,6 +86,14 @@ class ChatService:
             await session.commit()
             return result
 
+    async def find_user_instance_session(
+        self, owner_id: int, source: str, source_id: str
+    ) -> Optional[str]:
+        """Find the user's own private session id for an instance (or None)."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.find_user_instance_session(owner_id, source, source_id)
+
     @retry_on_busy()
     async def update_session(
         self,

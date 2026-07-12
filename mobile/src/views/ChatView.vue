@@ -13,6 +13,7 @@ import {
   type ChatImage,
 } from "@/api/chat";
 import { useAuthStore } from "@/stores/auth";
+import { useMobileConfigStore } from "@/stores/mobileConfig";
 import MessageBubble from "@/components/MessageBubble.vue";
 import ChatInput from "@/components/ChatInput.vue";
 import ContextFilesPanel from "@/components/ContextFilesPanel.vue";
@@ -21,6 +22,7 @@ import AccountPanel from "@/components/AccountPanel.vue";
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const mobileConfig = useMobileConfigStore();
 const isAdmin = computed(() => auth.isAdmin);
 
 const sessionId = computed(() => route.params.id as string);
@@ -33,10 +35,14 @@ const streamingContent = ref("");
 const error = ref<string | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
 
-// Assistant switcher: list of chats accessible to user (own + shared)
+// Assistant switcher. For non-admins each entry is an assistant INSTANCE that
+// maps to the user's own private session (find-or-create on open). For admins
+// it stays a flat list of their chat sessions.
 type AvailableAssistant = {
-  id: string;
+  id: string; // instance_id (kind=instance) or session_id (kind=session)
   title: string;
+  kind: "instance" | "session";
+  sessionId: string | null; // existing session to open, null = create on click
   is_shared_with_me?: boolean;
   is_default_mobile?: boolean;
 };
@@ -159,6 +165,9 @@ async function loadSession() {
   try {
     const data = await chatApi.getSession(sessionId.value);
     currentSession.value = data.session;
+    // Keep the active assistant in sync with the opened session so new-chat /
+    // streaming defaults resolve to the right instance.
+    mobileConfig.setActive(data.session.source_id || null);
     title.value = data.session.title || "Chat";
     messages.value = data.session.messages.filter(
       (m) => m.is_active !== false,
@@ -178,26 +187,38 @@ async function loadSession() {
 
 async function loadAvailableAssistants() {
   try {
-    const data = await chatApi.listSessions();
     if (isAdmin.value) {
-      // Admins see all their sessions
+      // Admins see all their sessions as a flat list.
+      const data = await chatApi.listSessions();
       availableAssistants.value = data.sessions.map((s) => ({
         id: s.id,
         title: s.title,
+        kind: "session" as const,
+        sessionId: s.id,
         is_shared_with_me: s.is_shared_with_me,
         is_default_mobile: s.is_default_mobile,
       }));
-    } else {
-      // Non-admins: only chats shared with them by admin (the assistants)
-      availableAssistants.value = data.sessions
-        .filter((s) => s.is_shared_with_me || s.is_default_mobile)
-        .map((s) => ({
-          id: s.id,
-          title: s.title,
-          is_shared_with_me: s.is_shared_with_me,
-          is_default_mobile: s.is_default_mobile,
-        }));
+      return;
     }
+
+    // Non-admins: one entry per assigned assistant instance. Each maps to the
+    // user's OWN private session (owner_id=user, source=mobile, source_id=id).
+    await mobileConfig.ensureLoaded();
+    const sessions = await chatApi.listSessions();
+    const sessionByInstance = new Map<string, string>();
+    for (const s of sessions.sessions || []) {
+      const ext = s as typeof s & { source_id?: string; is_shared_with_me?: boolean };
+      if (ext.is_shared_with_me) continue; // never map a shared conversation
+      if (ext.source_id && !sessionByInstance.has(ext.source_id)) {
+        sessionByInstance.set(ext.source_id, s.id);
+      }
+    }
+    availableAssistants.value = mobileConfig.instances.map((i) => ({
+      id: i.id,
+      title: i.name,
+      kind: "instance" as const,
+      sessionId: sessionByInstance.get(i.id) || null,
+    }));
   } catch {
     // Non-critical — switcher just won't show
     availableAssistants.value = [];
@@ -217,29 +238,54 @@ function toggleAssistantSwitcher() {
   loadAvailableAssistants();
 }
 
-async function switchToAssistant(id: string) {
+function isActiveAssistant(a: AvailableAssistant): boolean {
+  if (a.kind === "instance") {
+    return currentSession.value?.source_id === a.id;
+  }
+  return a.id === sessionId.value;
+}
+
+async function switchToAssistant(a: AvailableAssistant) {
   showAssistantSwitcher.value = false;
-  if (id === sessionId.value) return;
-  closePanel();
-  // Reset visible state immediately so old chat doesn't flash during navigation
-  messages.value = [];
-  branches.value = [];
-  contextFiles.value = [];
-  sessionPrompts.value = [];
-  selectedPromptId.value = null;
-  streamingContent.value = "";
-  await router.replace(`/chat/${id}`);
-  // Defensive: explicitly reload in case the sessionId watcher didn't fire
-  // (Vue Router reuses the same component instance for same-named routes)
-  await loadSession();
-  if (showBranches.value) await loadBranches();
+  try {
+    let targetId = a.sessionId;
+    if (a.kind === "instance") {
+      if (a.id === currentSession.value?.source_id) return;
+      mobileConfig.setActive(a.id);
+      if (!targetId) {
+        const res = await chatApi.getMyInstanceSession(a.id);
+        targetId = res.session_id;
+      }
+    }
+    if (!targetId || targetId === sessionId.value) return;
+    closePanel();
+    // Reset visible state immediately so old chat doesn't flash during navigation
+    messages.value = [];
+    branches.value = [];
+    contextFiles.value = [];
+    sessionPrompts.value = [];
+    selectedPromptId.value = null;
+    streamingContent.value = "";
+    await router.replace(`/chat/${targetId}`);
+    // Defensive: explicitly reload in case the sessionId watcher didn't fire
+    // (Vue Router reuses the same component instance for same-named routes)
+    await loadSession();
+    if (showBranches.value) await loadBranches();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось открыть ассистента";
+  }
 }
 
 async function createNewAssistant() {
   if (isCreatingAssistant.value) return;
   isCreatingAssistant.value = true;
   try {
-    const data = await chatApi.createSession(undefined, { skipInstancePrompt: true });
+    // A blank custom chat — not tied to any assistant instance.
+    const data = await chatApi.createSession(undefined, {
+      skipInstancePrompt: true,
+      instanceId: null,
+    });
+    mobileConfig.setActive(null);
     showAssistantSwitcher.value = false;
     closePanel();
     messages.value = [];
@@ -356,7 +402,12 @@ async function sendMessage(content: string) {
           break;
       }
     },
-    imageIds.length ? { image_ids: imageIds } : undefined,
+    {
+      // Bind the request to THIS session's assistant so switching assistants
+      // never leaks a different instance's LLM/RAG into the call.
+      mobile_instance_id: currentSession.value?.source_id || null,
+      ...(imageIds.length ? { image_ids: imageIds } : {}),
+    },
   );
 
   abortStream = abort;
@@ -1122,16 +1173,16 @@ onUnmounted(() => {
               v-for="a in availableAssistants"
               :key="a.id"
               class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
-              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
-              @click="switchToAssistant(a.id)"
+              :class="isActiveAssistant(a) ? 'bg-amber-600/15' : ''"
+              @click="switchToAssistant(a)"
             >
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
+                :class="isActiveAssistant(a) ? 'bg-amber-400' : 'bg-stone-600'"
               />
               <span
                 class="text-sm flex-1 truncate"
-                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
+                :class="isActiveAssistant(a) ? 'text-amber-300 font-medium' : 'text-stone-200'"
               >{{ a.title }}</span>
               <span
                 v-if="a.is_default_mobile"
@@ -1583,16 +1634,16 @@ onUnmounted(() => {
               v-for="a in availableAssistants"
               :key="a.id"
               class="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-stone-800 transition-colors"
-              :class="a.id === sessionId ? 'bg-amber-600/15' : ''"
-              @click="switchToAssistant(a.id)"
+              :class="isActiveAssistant(a) ? 'bg-amber-600/15' : ''"
+              @click="switchToAssistant(a)"
             >
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="a.id === sessionId ? 'bg-amber-400' : 'bg-stone-600'"
+                :class="isActiveAssistant(a) ? 'bg-amber-400' : 'bg-stone-600'"
               />
               <span
                 class="text-sm flex-1 truncate"
-                :class="a.id === sessionId ? 'text-amber-300 font-medium' : 'text-stone-200'"
+                :class="isActiveAssistant(a) ? 'text-amber-300 font-medium' : 'text-stone-200'"
               >{{ a.title }}</span>
               <span
                 v-if="a.is_default_mobile"
