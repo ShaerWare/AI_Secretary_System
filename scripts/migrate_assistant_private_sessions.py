@@ -67,9 +67,7 @@ async def run(dry_run: bool = False) -> None:
     created = 0
     skipped = 0
     async with AsyncSessionLocal() as session:
-        instances = (
-            (await session.execute(select(MobileAppInstance))).scalars().all()
-        )
+        instances = (await session.execute(select(MobileAppInstance))).scalars().all()
         inst_by_id = {i.id: i for i in instances}
 
         shares = (
@@ -151,9 +149,7 @@ async def run(dry_run: bool = False) -> None:
 
         if not dry_run and shares_to_delete:
             await session.execute(
-                delete(ChatSessionShare).where(
-                    ChatSessionShare.session_id.in_(mobile_session_ids)
-                )
+                delete(ChatSessionShare).where(ChatSessionShare.session_id.in_(mobile_session_ids))
             )
             await session.commit()
 

@@ -255,9 +255,7 @@ async def get_my_instance_session(
     """
     is_admin = user_has_level(user, "channels", "manage")
     if not is_admin:
-        perm = await resource_share_service.get_user_permission(
-            RESOURCE_TYPE, instance_id, user.id
-        )
+        perm = await resource_share_service.get_user_permission(RESOURCE_TYPE, instance_id, user.id)
         if not perm:
             raise HTTPException(status_code=403, detail="Assistant not assigned to you")
 
@@ -270,9 +268,7 @@ async def get_my_instance_session(
     # This is explicitly the caller's OWN private chat, so it is always owned by
     # the user (even admins) — not the workspace. Guarantees find-or-create is
     # idempotent regardless of the user's permission level.
-    existing_id = await chat_service.find_user_instance_session(
-        user.id, "mobile", instance_id
-    )
+    existing_id = await chat_service.find_user_instance_session(user.id, "mobile", instance_id)
     if existing_id:
         return {"session_id": existing_id, "created": False}
 
