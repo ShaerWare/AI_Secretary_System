@@ -340,6 +340,35 @@ SITES = {
         "type": "legal",
         "description": "Гражданский кодекс Республики Казахстан (особенная часть) от 01.07.1999 № 409-I.",
     },
+    # ------------------------------------------------------------------
+    # Russian SEO assistant — sbup.com (SMF 2.1 forum + wiki + articles)
+    # ------------------------------------------------------------------
+    "ru-sbup-seo": {
+        "name": "sbup.com — SEO учебник, вики, форум",
+        "base_url": "https://www.sbup.com",
+        "seed_paths": [
+            "/",
+            "/seo-forum/",
+            "/wiki/",
+            "/seo-articales/",
+            # The flagship A-to-Z SEO tutorial — long thread, ~21 pages.
+            "/seo-forum/poiskovaya_optimizaciya_v_obshih_chertah/seo_poiskovaya_optimizaciya_ot_a_do_ya/",
+            # Top-level forum sections we definitely want to cover.
+            "/seo-forum/poiskovaya_optimizaciya_v_obshih_chertah/",
+            "/seo-forum/indeksaciya_saita/",
+            "/seo-forum/vneshnyaya_optimizaciya_saita_-_seo/",
+            "/seo-forum/vnutrennyaya_optimizaciya_saita_-_seo/",
+        ],
+        "stay_under": "/",  # whole sbup.com — content lives across forum/wiki/articles
+        "max_pages": 8000,  # SMF forum is large, BFS will naturally exhaust useful URLs
+        "type": "forum",
+        "engine": "smf",  # Simple Machines Forum 2.1
+        "description": (
+            "sbup.com — русскоязычный SEO-портал: учебник «Поисковая оптимизация "
+            "от А до Я», SEO-вики, статьи, форум вебмастеров (SMF 2.1). "
+            "Архив за много лет, охватывает белое/серое SEO под Яндекс и Google."
+        ),
+    },
     "icaew-ireland": {
         "name": "ICAEW Ireland Standards",
         "base_url": "https://www.icaew.com",
