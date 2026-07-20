@@ -2811,18 +2811,6 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           <GitFork v-else class="w-4 h-4" />
         </button>
 
-      <!-- Theme toggle (chat-only users, zen mode) — cycles light → dark → night-eyes -->
-      <button
-        v-if="isChatOnly"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
-        :title="t('chatView.themeToggle', 'Сменить тему')"
-        @click="cycleChatTheme"
-      >
-        <Sun v-if="themeStore.resolvedTheme === 'light'" class="w-4 h-4" />
-        <Moon v-else-if="themeStore.resolvedTheme === 'dark'" class="w-4 h-4" />
-        <Palette v-else class="w-4 h-4" />
-      </button>
-
       <!-- Assistant switcher (visible when any pre-configured assistant is shared) -->
       <div v-if="availableAssistants.length > 0" class="relative shrink-0">
         <button
@@ -3121,6 +3109,17 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           @click="showUserProfile = true"
         >
           <UserCog class="w-4 h-4" />
+        </button>
+
+        <!-- Theme toggle (chat-only users, zen mode) — cycles light → dark → night-eyes -->
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
+          :title="t('chatView.themeToggle', 'Сменить тему')"
+          @click="cycleChatTheme"
+        >
+          <Sun v-if="themeStore.resolvedTheme === 'light'" class="w-4 h-4" />
+          <Moon v-else-if="themeStore.resolvedTheme === 'dark'" class="w-4 h-4" />
+          <Palette v-else class="w-4 h-4" />
         </button>
 
         <button
