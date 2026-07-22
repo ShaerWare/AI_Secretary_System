@@ -161,3 +161,6 @@ wiki-pages/dev-architecture/CLAUDE.md
 google-services.json
 *firebase-adminsdk*.json
 mobile/android/app/google-services.json
+
+# Supplier price lists (StalkerElectric) — dealer/purchase prices, never commit
+docs/файлысталкера/
