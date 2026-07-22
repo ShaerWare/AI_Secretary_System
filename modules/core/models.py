@@ -35,6 +35,9 @@ class User(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     salt: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="user")  # guest, user, admin, contact
+    # Country drives which country-specific default assistants (lawyer/accountant)
+    # a user gets provisioned: "ru" (default) or "kz". Admin can switch per user.
+    country: Mapped[str] = mapped_column(String(2), default="ru", server_default="ru")
     display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", index=True)
@@ -58,6 +61,7 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "role": self.role,
+            "country": self.country,
             "display_name": self.display_name,
             "email": self.email,
             "is_active": self.is_active,
