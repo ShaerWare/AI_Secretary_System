@@ -58,3 +58,19 @@ async def procurement_sync_site(user: User = Depends(require_permission("sales",
         details=result,
     )
     return result
+
+
+@router.post("/sync-suppliers")
+async def procurement_sync_suppliers(user: User = Depends(require_permission("sales", "edit"))):
+    """Rebuild supplier offers from configured price files (SUPPLIER_PRICES_DIR)."""
+    from modules.procurement.suppliers.adapter import sync_all_suppliers
+
+    results = await sync_all_suppliers()
+    await audit_service.log(
+        action="sync",
+        resource="procurement_offers",
+        resource_id=SOURCE_SUPPLIER,
+        user_id=user.username,
+        details={"suppliers": results},
+    )
+    return {"suppliers": results}

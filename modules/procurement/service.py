@@ -43,20 +43,28 @@ class OfferService:
 
     @retry_on_busy()
     async def replace_source_offers(
-        self, source: str, offers: List[dict], workspace_id: int = 1
+        self,
+        source: str,
+        offers: List[dict],
+        workspace_id: int = 1,
+        scope_supplier: Optional[str] = None,
     ) -> int:
         """Full re-sync of one source: delete its offers, insert the fresh set.
 
         `offers` is a list of dicts with keys matching ProductOffer fields
-        (must include source_key + name). Returns number of rows written.
+        (must include source_key + name). When `scope_supplier` is given, only
+        that supplier's rows within the source are replaced (so several
+        suppliers can share source='supplier' without wiping each other).
+        Returns number of rows written.
         """
         async with AsyncSessionLocal() as session:
-            await session.execute(
-                sa_delete(ProductOffer).where(
-                    ProductOffer.source == source,
-                    ProductOffer.workspace_id == workspace_id,
-                )
+            del_stmt = sa_delete(ProductOffer).where(
+                ProductOffer.source == source,
+                ProductOffer.workspace_id == workspace_id,
             )
+            if scope_supplier is not None:
+                del_stmt = del_stmt.where(ProductOffer.supplier_name == scope_supplier)
+            await session.execute(del_stmt)
             rows = 0
             for o in offers:
                 if not o.get("source_key") or not o.get("name"):
