@@ -81,6 +81,7 @@ from modules.llm.models import (
     LLMPreset,
 )
 from modules.monitoring.models import AuditLog, UsageLimits, UsageLog
+from modules.procurement.models import ProductOffer
 from modules.sales.models import PaymentLog
 from modules.speech.models import TTSPreset
 from modules.telephony.models import GSMCallLog, GSMSMSLog
@@ -154,6 +155,8 @@ __all__ = [
     "AmoCRMSyncLog",
     # ecommerce
     "WooCommerceConfig",
+    # procurement
+    "ProductOffer",
     # telephony
     "GSMCallLog",
     "GSMSMSLog",
