@@ -149,7 +149,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 Foundation layer for the modular decomposition. All 28 routers live under `modules/*/router*.py`; inline endpoints and global service variables are gone from `orchestrator.py`; background tasks run through `TaskRegistry`; service initialization lives in per-domain `startup.py` modules; Protocol interfaces (`modules/*/protocols.py`) and facades (`modules/{core,knowledge,llm,chat}/{auth_service,facade}.py`) front the underlying services. History of the migration lives in `CHANGELOG.md` and issue #489.
 
 - **`EventBus`** (`modules/core/events.py`): In-process async pub/sub. Handlers run concurrently via `asyncio.gather`; exceptions are logged, never propagated to publisher. `BaseEvent` dataclass with auto-timestamp. Singleton in `ServiceContainer.event_bus`. Domain events: `InternetStatusChanged`, `UserRoleChanged`, `SessionRevoked`, `DatasetSynced` (in `modules/core/events.py`), `KnowledgeUpdated` (in `modules/knowledge/events.py`), `WidgetSessionCreated`, `WidgetMessageSent`, `WidgetContactSubmitted` (in `modules/channels/widget/events.py`). Subscriptions registered via `setup_event_subscriptions()` in `modules/core/startup.py`, which delegates to domain-specific setup functions (`setup_llm_event_subscriptions()` in `modules/llm/startup.py`, `setup_knowledge_event_subscriptions()` in `modules/knowledge/startup.py`, `setup_crm_event_subscriptions()` in `modules/crm/startup.py`). `DatasetSynced` decouples CRM/ecommerce/kanban from knowledge. Widget events decouple widget router from amoCRM: widget publishes events, CRM domain handles lead/contact/note creation reactively.
-- **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error. 7 tasks registered in `startup_event()`: `session-cleanup` (1h), `periodic-vacuum` (7d), `kanban-sync` (15min), `woocommerce-sync` (daily 23:00 UTC), `rss-sync` (1h), `wiki-embeddings` (one-shot), `wiki-collection-indexes` (one-shot). Task functions in `modules/core/maintenance.py`, `modules/knowledge/tasks.py`, `modules/knowledge/rss_service.py`, `modules/kanban/tasks.py`, `modules/ecommerce/tasks.py`.
+- **`TaskRegistry`** (`modules/core/tasks.py`): Named background tasks — periodic (interval-based) or one-shot. `start_all()` / `cancel_all(timeout)` lifecycle. `TaskInfo` dataclass tracks status, run count, last error. 8 tasks registered in `startup_event()`: `session-cleanup` (1h), `periodic-vacuum` (7d), `kanban-sync` (15min), `woocommerce-sync` (daily 23:00 UTC), `procurement-site-sync` (daily 23:30 UTC), `rss-sync` (1h), `wiki-embeddings` (one-shot), `wiki-collection-indexes` (one-shot). Task functions in `modules/core/maintenance.py`, `modules/knowledge/tasks.py`, `modules/knowledge/rss_service.py`, `modules/kanban/tasks.py`, `modules/ecommerce/tasks.py`, `modules/procurement/tasks.py`.
 - **`HealthRegistry`** (`modules/core/health.py`): Modular health checks with per-check timeout (`asyncio.wait_for`). Status aggregation: all ok → ok, any degraded → degraded, any error → error.
 
 - **`InternetMonitor`** (`modules/core/internet_monitor.py`): Periodic connectivity checker (ping DNS/Cloudflare). Auto-switches LLM backend: online → cloud provider (claude_bridge priority), offline → local vLLM. Publishes `InternetStatusChanged` events via EventBus (`container.event_bus`). Configurable thresholds, 30s default interval. Status endpoint: `GET /admin/gsm/internet-status`. Health check includes `internet` section.
@@ -181,6 +181,7 @@ Service classes extracted from the former monolithic `db/integration.py` into pe
 | `modules/speech/` | `service.py`, `streaming.py` | `PresetService`, `StreamingTTSManager` |
 | `modules/crm/` | `service.py` | `AmoCRMService` |
 | `modules/ecommerce/` | `service.py` | `WooCommerceService` |
+| `modules/procurement/` | `service.py` | `OfferService` (unified product-offer search) |
 | `modules/telephony/` | `service.py` | `GSMService` |
 | `modules/google/` | `service.py`, `models.py` | `GoogleOAuthService` |
 | `modules/search/` | `service.py` | `WebSearchService` (DuckDuckGo via `ddgs`/`duckduckgo_search`, optional import) |
@@ -194,6 +195,7 @@ All 28 routers live in domain modules. Files under `app/routers/` are 1–3 line
 | Domain | Router file | Facade |
 |--------|------------|--------|
 | `modules/ecommerce/` | `router.py` | `app/routers/woocommerce.py` |
+| `modules/procurement/` | `router.py` | `/admin/procurement/*` (direct include) |
 | `modules/crm/` | `router.py` | `app/routers/amocrm.py` (exports `router` + `webhook_router`) |
 | `modules/telephony/` | `router.py` | `app/routers/gsm.py` |
 | `modules/speech/` | `router_tts.py`, `router_stt.py`, `router_services.py` | `app/routers/tts.py`, `stt.py`, `services.py` |
@@ -316,6 +318,10 @@ These routers import domain services directly (`from modules.monitoring.service 
 ### Landing Site (`site/`)
 
 Static marketing site served at `https://ai-sekretar24.ru/` — no build step, no framework. Plain HTML/CSS/JS with i18n: `site/index.html` (ru, canonical), `site/en/index.html`, `site/kk/index.html`. Auto-detects browser language and redirects from root on first visit only (skipped if user already chose a language or arrived from an in-site language page). `site/main.js` handles the language switcher and shared interactions; `site/styles.css` is hand-written, no Tailwind. Deployed independently of admin/mobile — nginx serves `site/` from `/var/www/` directly. Auth CTAs link to `/login` (not `/admin/`).
+
+### Unified product search (`modules/procurement/`)
+
+Code-pipeline «единый поиск позиции» для торгового ассистента (StalkerElectric). Модель `ProductOffer` (table `product_offers`) — единое структурное представление оффера из любого источника: `source` (`site`/`ekf`/`supplier`), `article`, `name`, `price`, `in_stock`, `lead_time_days`, `url` + `UniqueConstraint(source, source_key)` для upsert. `OfferService.replace_source_offers()` делает полный ре-синк одного источника; `OfferService.search()` детерминированно ранжирует (article_exact → article_partial → name_all → name_any; тай-брейк: in_stock, `SOURCE_PRIORITY` site<ekf<supplier, price) и **возвращает `[]`, если ничего не найдено — не выдумывает позиций** (жёсткое требование клиента реализовано архитектурно, а не промптом). Адаптеры населяют общую таблицу: `site_adapter.sync_site_offers()` (WooCommerce→офферы, ~30k товаров) есть; EKF (партнёрский REST API `ekfgroup.com/api/v{N}`) и supplier (парсинг xlsx-прайсов) встают в тот же интерфейс. Провайдер по умолчанию `claude_bridge` не поддерживает tools → поиск = код-шаг, не агентный tool. Роутер `/admin/procurement/{status,search,sync}` (RBAC `sales`). Периодическая задача `procurement-site-sync` (daily 23:30 UTC, после `woocommerce-sync`). Перф: `search()` грузит офферы в память — приемлемо на фоне bridge-латентности; FTS-оптимизация при росте таблицы прайсами.
 
 ## Code Patterns
 
