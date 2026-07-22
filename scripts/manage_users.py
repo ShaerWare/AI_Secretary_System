@@ -98,6 +98,21 @@ def cmd_create(args):
     conn.close()
     print(f"Created user '{args.username}' with role '{args.role}' (workspace role: {ws_role})")
 
+    # Provision the default assistant set (marketer, programmer, lawyer, accountant).
+    # Best-effort: a failure here (e.g. ORM/app import, un-migrated country column)
+    # must not fail user creation. Runs after the raw sqlite connection is closed.
+    try:
+        import asyncio
+
+        from modules.channels.mobile.provisioning import provision_for_username
+
+        shared = asyncio.run(provision_for_username(args.username))
+        print(f"Provisioned {shared} default assistant(s) for '{args.username}'")
+    except Exception as e:
+        print(
+            f"⚠️  Default-assistant provisioning skipped ({e}). Run seed_legal_assistants.py later."
+        )
+
 
 def cmd_delete(args):
     conn = get_connection()

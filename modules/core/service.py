@@ -487,6 +487,7 @@ class WorkspaceService:
                 password_hash=pw_hash,
                 salt=salt,
                 role="user",
+                country="ru",
                 display_name=display_name or username,
                 is_active=True,
             )
@@ -500,6 +501,14 @@ class WorkspaceService:
                     role_name=invite.role_name,
                 )
             )
+            # Provision the default assistant set (best-effort — never block
+            # registration on it). New users default to country="ru".
+            try:
+                from modules.channels.mobile.provisioning import provision_default_assistants
+
+                await provision_default_assistants(session, user.id, user.country)
+            except Exception:
+                logger.exception("Default-assistant provisioning failed for %s", username)
             # Record usage
             invite.used_count += 1
             invite.used_at = datetime.utcnow()
