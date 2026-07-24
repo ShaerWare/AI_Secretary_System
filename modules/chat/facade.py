@@ -375,9 +375,7 @@ async def _inject_offer_context(
 
         lines = []
         for o in offers:
-            price = (
-                f"{o['price']:g} {o['currency']}" if o.get("price") is not None else "цена н/у"
-            )
+            price = f"{o['price']:g} {o['currency']}" if o.get("price") is not None else "цена н/у"
             if o.get("in_stock") is True:
                 stock = "в наличии"
             elif o.get("in_stock") is False:
