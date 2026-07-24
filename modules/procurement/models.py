@@ -67,6 +67,7 @@ class ProductOffer(Base):
         return {
             "id": self.id,
             "source": self.source,
+            "source_key": self.source_key,
             "supplier_name": self.supplier_name,
             "article": self.article,
             "name": self.name,

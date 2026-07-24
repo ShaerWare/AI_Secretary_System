@@ -46,6 +46,31 @@ async def procurement_search(
     return {"query": q, "count": len(results), "results": results}
 
 
+@router.get("/price")
+async def procurement_price(
+    q: str,
+    limit: int = 10,
+    user: User = Depends(require_permission("sales", "view")),
+):
+    """Search + compute purchase/client (КП) prices per supplier rules.
+
+    Manager view — includes dealer prices + computed client price + margin flag.
+    """
+    from modules.procurement.pricing import price_offer
+    from modules.procurement.rate_service import get_usd_kzt
+
+    offers = await offer_service.search(q, limit=limit)
+    rate_info = await get_usd_kzt()
+    results = []
+    for o in offers:
+        if o["source"] == "supplier":
+            o["pricing"] = await price_offer(o, rate_info=rate_info)
+        else:
+            o["pricing"] = {"ok": False, "reason": "site_retail"}
+        results.append(o)
+    return {"query": q, "rate": rate_info, "count": len(results), "results": results}
+
+
 @router.post("/sync")
 async def procurement_sync_site(user: User = Depends(require_permission("sales", "edit"))):
     """Manually rebuild site offers from the WooCommerce catalog."""

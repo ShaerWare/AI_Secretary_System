@@ -365,10 +365,18 @@ async def _inject_offer_context(
                 "запрос менеджеру для подбора у поставщиков."
             )
 
+        # For managers, compute purchase + client (КП) prices for supplier
+        # offers. Rate fetched once (cached per day).
+        rate_info = None
+        if manager_ctx and any(o.get("source") == "supplier" for o in offers):
+            from modules.procurement.rate_service import get_usd_kzt
+
+            rate_info = await get_usd_kzt()
+
         lines = []
         for o in offers:
             price = (
-                f"{o['price']:.0f} {o['currency']}" if o.get("price") is not None else "цена н/у"
+                f"{o['price']:g} {o['currency']}" if o.get("price") is not None else "цена н/у"
             )
             if o.get("in_stock") is True:
                 stock = "в наличии"
@@ -379,7 +387,18 @@ async def _inject_offer_context(
             art = f"арт. {o['article']}" if o.get("article") else ""
             src = ""
             if manager_ctx and o.get("source") == "supplier":
-                src = f" · поставщик {o.get('supplier_name') or ''} (закупочная)"
+                from modules.procurement.pricing import price_offer
+
+                p = await price_offer(o, rate_info=rate_info)
+                supplier_lbl = o.get("supplier_name") or ""
+                if p.get("ok"):
+                    flag = " ⚠️НУЛЕВАЯ МАРЖА→директору" if p.get("zero_margin_flag") else ""
+                    src = (
+                        f" · {supplier_lbl}: закуп {p['purchase_price']:.0f}₸ →"
+                        f" клиенту {p['client_price']:.0f}₸{flag}"
+                    )
+                else:
+                    src = f" · {supplier_lbl} (закупочная)"
             parts = [o.get("name") or "", art, price, stock]
             lines.append("- " + " | ".join(p for p in parts if p) + src)
 
@@ -390,9 +409,16 @@ async def _inject_offer_context(
         )
         if manager_ctx:
             block += (
-                " Закупочные цены поставщиков конфиденциальны — используй для расчёта, "
-                "но не называй их клиенту напрямую."
+                " «клиенту» — цена для КП (наценка+НДС уже учтены); «закуп» — закупочная, "
+                "конфиденциальна, клиенту не называть. Позиции с ⚠️НУЛЕВОЙ МАРЖОЙ не ставить в "
+                "КП автоматически — показать директору."
             )
+            if rate_info and rate_info.get("rate"):
+                stale = " (fallback, подтвердить у директора)" if rate_info.get("stale") else ""
+                block += (
+                    f" Курс USD/KZT {rate_info['rate']} на {rate_info.get('date')}"
+                    f" ({rate_info.get('source')}){stale} — указывать в КП."
+                )
         return (prompt or "") + block
     except Exception as e:
         logger.warning("offer injection failed: %s", e)
