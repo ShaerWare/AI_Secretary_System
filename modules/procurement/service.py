@@ -26,6 +26,57 @@ SOURCE_PRIORITY = {"site": 0, "ekf": 1, "supplier": 2}
 
 _TOKEN_RE = re.compile(r"[^\w]+", re.UNICODE)
 
+# Conversational filler dropped from queries so it doesn't match everything
+# (e.g. "и" is a substring of most Russian words). Real product tokens stay.
+_STOPWORDS = {
+    "и",
+    "в",
+    "на",
+    "с",
+    "по",
+    "для",
+    "или",
+    "что",
+    "это",
+    "есть",
+    "нет",
+    "нужен",
+    "нужна",
+    "нужно",
+    "нужны",
+    "надо",
+    "хочу",
+    "дай",
+    "дайте",
+    "какой",
+    "какая",
+    "какие",
+    "почём",
+    "почем",
+    "цена",
+    "цены",
+    "сколько",
+    "стоит",
+    "стоят",
+    "а",
+    "у",
+    "от",
+    "до",
+    "к",
+    "же",
+    "ли",
+    "бы",
+    "мне",
+    "подбери",
+    "подберите",
+    "покажи",
+    "найди",
+    "ищу",
+    "the",
+    "and",
+    "for",
+}
+
 
 def _norm(s: Optional[str]) -> str:
     """Lowercase + strip punctuation/space, Unicode-aware (handles Cyrillic)."""
@@ -47,23 +98,23 @@ class OfferService:
         source: str,
         offers: List[dict],
         workspace_id: int = 1,
-        scope_supplier: Optional[str] = None,
+        scope_key: Optional[str] = None,
     ) -> int:
         """Full re-sync of one source: delete its offers, insert the fresh set.
 
         `offers` is a list of dicts with keys matching ProductOffer fields
-        (must include source_key + name). When `scope_supplier` is given, only
-        that supplier's rows within the source are replaced (so several
-        suppliers can share source='supplier' without wiping each other).
-        Returns number of rows written.
+        (must include source_key + name). When `scope_key` is given, only rows
+        whose ``source_key`` starts with ``{scope_key}#`` are replaced — so
+        several suppliers can share source='supplier' without wiping each other,
+        and renaming a supplier doesn't orphan its rows. Returns rows written.
         """
         async with AsyncSessionLocal() as session:
             del_stmt = sa_delete(ProductOffer).where(
                 ProductOffer.source == source,
                 ProductOffer.workspace_id == workspace_id,
             )
-            if scope_supplier is not None:
-                del_stmt = del_stmt.where(ProductOffer.supplier_name == scope_supplier)
+            if scope_key is not None:
+                del_stmt = del_stmt.where(ProductOffer.source_key.like(f"{scope_key}#%"))
             await session.execute(del_stmt)
             rows = 0
             for o in offers:
@@ -112,12 +163,13 @@ class OfferService:
         """Rank real offers against a free-text position query.
 
         Ranking (lower is better): exact article > article contains query >
-        name contains all tokens > name contains any token. Ties broken by
-        in-stock, source priority, then price. Returns [] if nothing matches
-        (the caller must then say "не найдено" — never invent a position).
+        name match (more matched query tokens = better). Stopwords/1-char tokens
+        are dropped so filler like "и"/"что" doesn't match everything. Ties
+        broken by in-stock, source priority, then price. Returns [] if nothing
+        matches (caller must then say "не найдено" — never invent a position).
         """
         q_norm = _norm(query)
-        q_tokens = _tokens(query)
+        q_tokens = [t for t in _tokens(query) if len(t) >= 2 and t not in _STOPWORDS]
         if not q_norm and not q_tokens:
             return []
 
@@ -131,32 +183,37 @@ class OfferService:
         scored = []
         for r in rows:
             art_norm = _norm(r.article)
+            # include category so items with terse names (1C exports) stay findable
             name_low = (r.name or "").lower()
-            rank = None
+            if r.category:
+                name_low = f"{name_low} {r.category.lower()}"
             if q_norm and art_norm and art_norm == q_norm:
-                rank = 0
-            elif q_norm and art_norm and q_norm in art_norm:
-                rank = 1
-            elif q_tokens and all(t in name_low for t in q_tokens):
-                rank = 2
-            elif q_tokens and any(t in name_low for t in q_tokens):
-                rank = 3
-            if rank is None:
+                primary, misses = 0, 0
+            elif len(q_norm) >= 4 and art_norm and q_norm in art_norm:
+                primary, misses = 1, 0
+            elif q_tokens:
+                matched = sum(1 for t in q_tokens if t in name_low)
+                if not matched:
+                    continue
+                primary, misses = 2, len(q_tokens) - matched
+            else:
                 continue
-            scored.append((rank, r))
+            scored.append((primary, misses, r))
 
         scored.sort(
-            key=lambda pair: (
-                pair[0],
-                0 if pair[1].in_stock else 1,
-                SOURCE_PRIORITY.get(pair[1].source, 9),
-                pair[1].price if pair[1].price is not None else float("inf"),
+            key=lambda x: (
+                x[0],
+                x[1],
+                0 if x[2].in_stock else 1,
+                SOURCE_PRIORITY.get(x[2].source, 9),
+                x[2].price if x[2].price is not None else float("inf"),
             )
         )
+        labels = {0: "article_exact", 1: "article_partial", 2: "name"}
         out = []
-        for rank, r in scored[:limit]:
+        for primary, _misses, r in scored[:limit]:
             d = r.to_dict()
-            d["match"] = ["article_exact", "article_partial", "name_all", "name_any"][rank]
+            d["match"] = labels[primary]
             out.append(d)
         return out
 

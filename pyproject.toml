@@ -53,6 +53,7 @@ ignore = [
     "B008",   # function-call-in-default-argument (FastAPI Depends)
     "B904",   # raise-without-from-inside-except
     "PLR0913", # too many arguments
+    "PLR0917", # too many positional arguments (enabled in newer ruff)
     "PLR2004", # magic value comparison
     "PLR0912", # too many branches
     "PLR0915", # too many statements
