@@ -66,12 +66,22 @@ def _read_xlsx(path: str, cfg: dict) -> List[dict]:
             else None
         )
         unit = row[cols["unit"]] if "unit" in cols and cols["unit"] < len(row) else None
+        # optional in-file stock (some suppliers carry stock in the price file);
+        # "stock2" sums a second warehouse column when present.
+        stock = None
+        if "stock" in cols and cols["stock"] < len(row):
+            stock = parse_number(row[cols["stock"]])
+            if "stock2" in cols and cols["stock2"] < len(row):
+                s2 = parse_number(row[cols["stock2"]])
+                if s2:
+                    stock = (stock or 0) + s2
         rows.append(
             {
                 "article": str(article).strip() if article else None,
                 "name": str(name).strip() if name else None,
                 "price": price,
                 "unit": str(unit).strip() if unit else None,
+                "stock": stock,
             }
         )
     wb.close()
@@ -123,6 +133,89 @@ def _read_pdf_lines(path: str, cfg: dict) -> List[dict]:
     return rows
 
 
+def _read_xls(path: str, cfg: dict) -> List[dict]:
+    """Legacy .xls (1C export): category rows interspersed with products.
+
+    A product row has a non-empty article column; category rows have a name
+    but no article — tracked so each product carries its category.
+    """
+    import xlrd
+
+    cols = cfg["cols"]
+    header_row = cfg.get("header_row", -1)
+    cat_col = cfg.get("category_col")
+    require_article = cfg.get("require_article", False)
+    rows: List[dict] = []
+    category: Optional[str] = None
+    wb = xlrd.open_workbook(path)
+    ws = wb.sheet_by_index(0)
+    for i in range(ws.nrows):
+        if i <= header_row:
+            continue
+
+        def _cell(c: int):
+            return ws.cell_value(i, c) if c < ws.ncols else None  # noqa: B023
+
+        art = _cell(cols["article"])
+        article = str(art).strip() if art not in (None, "") else None
+        nm = _cell(cols["name"])
+        name = str(nm).strip() if nm else None
+
+        if cat_col is not None and name and not article:
+            category = name  # category header row
+            if require_article:
+                continue
+        if require_article and not article:
+            continue
+        if not name and not article:
+            continue
+
+        price = parse_number(_cell(cols["price"])) if "price" in cols else None
+        rows.append(
+            {"article": article, "name": name, "price": price, "category": category, "unit": None}
+        )
+    return rows
+
+
+def _read_pdf_table(path: str, cfg: dict) -> List[dict]:
+    """PDF with real column tables (pdfplumber): model/size/price + category col."""
+    import pdfplumber
+
+    cols = cfg["cols"]
+    cat_col = cfg.get("category_col")
+    rows: List[dict] = []
+    category: Optional[str] = None
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables() or []:
+                for row in table:
+
+                    def _cell(i: int) -> str:
+                        return row[i].strip() if i < len(row) and row[i] else ""  # noqa: B023
+
+                    article = _cell(cols["article"])
+                    price = parse_number(_cell(cols["price"])) if "price" in cols else None
+
+                    if cat_col is not None and _cell(cat_col) and not article and price is None:
+                        category = _cell(cat_col)  # category header row
+                        continue
+                    if not article or price is None or price <= 0:
+                        continue
+
+                    size = _cell(cols["size"]) if "size" in cols else ""
+                    name = " ".join(p for p in (category or "", article, size) if p)
+                    rows.append(
+                        {
+                            "article": article,
+                            "name": name,
+                            "price": price,
+                            "category": category,
+                            "unit": None,
+                        }
+                    )
+    return rows
+
+
 def parse_supplier_file(cfg: dict) -> List[dict]:
     """Parse a supplier's price file (+ optional stock file) -> raw rows."""
     path = resolve_file(cfg["price_file"])
@@ -132,8 +225,12 @@ def parse_supplier_file(cfg: dict) -> List[dict]:
     fmt = cfg["format"]
     if fmt == "xlsx":
         rows = _read_xlsx(path, cfg)
+    elif fmt == "xls":
+        rows = _read_xls(path, cfg)
     elif fmt == "pdf_lines":
         rows = _read_pdf_lines(path, cfg)
+    elif fmt == "pdf_table":
+        rows = _read_pdf_table(path, cfg)
     else:
         raise ValueError(f"unsupported format {fmt} for {cfg['key']}")
 

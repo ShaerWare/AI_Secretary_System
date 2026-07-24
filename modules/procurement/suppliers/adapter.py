@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 def _row_to_offer(row: dict, cfg: dict, idx: int) -> dict:
-    # source_key: prefer article, else supplier+index (files without articles)
-    key = row.get("article") or f"{cfg['key']}#{idx}"
+    # source_key must be unique within source='supplier' (articles are not —
+    # they repeat within a file and collide across suppliers). Full re-sync per
+    # supplier makes an index-based key stable enough. Article stays searchable.
+    key = f"{cfg['key']}#{idx}"
     return {
         "source_key": key,
         "supplier_name": cfg["name"],
@@ -43,7 +45,7 @@ async def sync_supplier(key: str, workspace_id: int = 1) -> dict:
     rows = parse_supplier_file(cfg)
     offers = [_row_to_offer(r, cfg, i) for i, r in enumerate(rows) if r.get("name")]
     written = await offer_service.replace_source_offers(
-        SOURCE_SUPPLIER, offers, workspace_id=workspace_id, scope_supplier=cfg["name"]
+        SOURCE_SUPPLIER, offers, workspace_id=workspace_id, scope_key=cfg["key"]
     )
     logger.info("supplier %s: %d rows -> %d offers", key, len(rows), written)
     return {"supplier": cfg["name"], "rows": len(rows), "offers": written}

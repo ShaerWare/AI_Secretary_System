@@ -62,6 +62,7 @@ lxml>=4.9.0
 # Document text extraction (Telegram file uploads + chat attachments)
 pdfplumber>=0.10.0
 openpyxl>=3.1.0
+xlrd>=2.0.1  # legacy .xls supplier price lists (1C exports)
 python-docx>=1.0.0
 
 # OCR for chat image uploads (optional — requires tesseract-ocr system package)

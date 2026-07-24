@@ -34,6 +34,23 @@ logger = logging.getLogger(__name__)
 # Max agentic tool-call iterations (matches router constant)
 MAX_TOOL_ITERATIONS = 10
 
+# Sessions attached to one of these knowledge collections get unified product
+# offer injection (procurement code-pipeline). Opt-in so other tenants are
+# unaffected. Default: the WooCommerce catalog collection (id 6).
+_PROCUREMENT_CATALOG_COLLECTIONS = {
+    int(x)
+    for x in os.getenv("PROCUREMENT_CATALOG_COLLECTIONS", "6").split(",")
+    if x.strip().isdigit()
+}
+
+
+def _is_procurement_session(collection_ids: list[int]) -> bool:
+    """True if the session is attached to a procurement catalog collection."""
+    return bool(collection_ids) and bool(
+        _PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids)
+    )
+
+
 # Default RAG system prompt
 _DEFAULT_RAG_PROMPT = (
     "Ты — ИИ-секретарь. Отвечай на вопросы пользователя кратко и по делу, "
@@ -316,6 +333,72 @@ async def _inject_rag_context_async(
     return f"{base}{no_context_instruction}"
 
 
+async def _inject_offer_context(
+    prompt: str | None, content: str, session: dict, collection_ids: list[int]
+) -> str | None:
+    """Inject real product offers (unified search) for procurement sessions.
+
+    Opt-in: only when the session is attached to a catalog collection
+    (``_PROCUREMENT_CATALOG_COLLECTIONS``). Deterministic search returns only
+    real rows — never invented. Dealer (supplier) prices are gated to internal
+    contexts (``source == 'admin'``); client channels (widget/telegram/mobile)
+    see own-site retail offers only. Best-effort: never breaks the chat.
+    """
+    if not content or not collection_ids:
+        return prompt
+    if not _PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids):
+        return prompt
+    try:
+        from modules.procurement.service import offer_service
+
+        manager_ctx = session.get("source") == "admin"
+        offers = await offer_service.search(content, limit=8)
+        if not manager_ctx:
+            offers = [o for o in offers if o.get("source") == "site"]
+        if not offers:
+            return (prompt or "") + (
+                "\n\n--- ПОИСК ПО БАЗЕ ---\n"
+                "По этому запросу точных позиций в базе (каталог сайта"
+                + (" + прайсы поставщиков" if manager_ctx else "")
+                + ") не найдено. НЕ выдумывай цену/артикул. Уточни параметры "
+                "(производитель, номинал, характеристику) и предложи передать "
+                "запрос менеджеру для подбора у поставщиков."
+            )
+
+        lines = []
+        for o in offers:
+            price = (
+                f"{o['price']:.0f} {o['currency']}" if o.get("price") is not None else "цена н/у"
+            )
+            if o.get("in_stock") is True:
+                stock = "в наличии"
+            elif o.get("in_stock") is False:
+                stock = "под заказ"
+            else:
+                stock = ""
+            art = f"арт. {o['article']}" if o.get("article") else ""
+            src = ""
+            if manager_ctx and o.get("source") == "supplier":
+                src = f" · поставщик {o.get('supplier_name') or ''} (закупочная)"
+            parts = [o.get("name") or "", art, price, stock]
+            lines.append("- " + " | ".join(p for p in parts if p) + src)
+
+        block = (
+            "\n\n--- РЕАЛЬНЫЕ ПОЗИЦИИ ИЗ БАЗЫ (только эти данные для цен, наличия, артикулов) ---\n"
+            + "\n".join(lines)
+            + "\n\nЕсли нужной позиции здесь нет — честно скажи «не нашёл», не выдумывай цену/артикул."
+        )
+        if manager_ctx:
+            block += (
+                " Закупочные цены поставщиков конфиденциальны — используй для расчёта, "
+                "но не называй их клиенту напрямую."
+            )
+        return (prompt or "") + block
+    except Exception as e:
+        logger.warning("offer injection failed: %s", e)
+        return prompt
+
+
 def _get_model_name(llm_service) -> str:
     """Extract model name from LLM service for token counting."""
     if hasattr(llm_service, "model_name") and llm_service.model_name:
@@ -499,7 +582,14 @@ class ChatServiceImpl:
             prompt = llm.get_system_prompt()
 
         if not use_agentic:
-            prompt = await _inject_rag_context_async(wiki_rag, content, prompt, rag_mode, coll_ids)
+            if _is_procurement_session(coll_ids):
+                # Procurement sessions use structured offer search (real prices/
+                # stock across site + suppliers) instead of wiki-RAG injection.
+                prompt = await _inject_offer_context(prompt, content, session, coll_ids)
+            else:
+                prompt = await _inject_rag_context_async(
+                    wiki_rag, content, prompt, rag_mode, coll_ids
+                )
 
         prompt = _inject_context_files(prompt, session)
 
@@ -619,7 +709,14 @@ class ChatServiceImpl:
             prompt = llm.get_system_prompt()
 
         if not use_agentic:
-            prompt = await _inject_rag_context_async(wiki_rag, content, prompt, rag_mode, coll_ids)
+            if _is_procurement_session(coll_ids):
+                # Procurement sessions use structured offer search (real prices/
+                # stock across site + suppliers) instead of wiki-RAG injection.
+                prompt = await _inject_offer_context(prompt, content, session, coll_ids)
+            else:
+                prompt = await _inject_rag_context_async(
+                    wiki_rag, content, prompt, rag_mode, coll_ids
+                )
 
         prompt = _inject_context_files(prompt, session)
 
