@@ -569,6 +569,34 @@ async def crm_get_unsorted_leads(
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
+@router.get("/triage")
+async def crm_triage(
+    limit: int = 20,
+    user: User = Depends(require_permission("sales", "view")),
+):
+    """Triage unanswered (unsorted) leads: routing + priced matches + action.
+
+    Returns {ok:false, reason:"reauth_needed"} when the amoCRM token is dead —
+    re-authorize via GET /admin/crm/auth-url.
+    """
+    _owner_id, ws_id = workspace_context(user, "sales")
+    try:
+        config = await _get_valid_token(workspace_id=ws_id)
+    except HTTPException as e:
+        return {
+            "ok": False,
+            "reason": "reauth_needed",
+            "detail": e.detail,
+            "auth_hint": "Переавторизуйте amoCRM: GET /admin/crm/auth-url → открыть auth_url",
+        }
+    from modules.crm.triage import triage_unanswered
+
+    try:
+        return await triage_unanswered(config, limit=limit)
+    except AmoCRMAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
 @router.get("/leads/{lead_id}")
 async def crm_get_lead(
     lead_id: int,
