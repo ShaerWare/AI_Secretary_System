@@ -356,7 +356,7 @@ async def _inject_offer_context(
         if not manager_ctx:
             offers = [o for o in offers if o.get("source") == "site"]
         if not offers:
-            return (prompt or "") + (
+            block = (
                 "\n\n--- ПОИСК ПО БАЗЕ ---\n"
                 "По этому запросу точных позиций в базе (каталог сайта"
                 + (" + прайсы поставщиков" if manager_ctx else "")
@@ -364,6 +364,24 @@ async def _inject_offer_context(
                 "(производитель, номинал, характеристику) и предложи передать "
                 "запрос менеджеру для подбора у поставщиков."
             )
+            # Managers get routing: which supplier(s) to request from.
+            if manager_ctx:
+                from modules.procurement.routing import route
+
+                r = route(content)
+                if r["suppliers"]:
+                    names = ", ".join(
+                        f"{s['name']} (тип {s['type']})"
+                        + (" ⚠️конкурент, не раскрывать объект/клиента" if s["competitor"] else "")
+                        for s in r["suppliers"]
+                    )
+                    cat = f"«{r['category']}»" if r["category"] else "по профилю"
+                    block += (
+                        f"\nМАРШРУТ ({cat}"
+                        + (", клиент из Атырау → ЭКТ первым" if r["atyrau_priority"] else "")
+                        + f"): запросить в порядке — {names}."
+                    )
+            return (prompt or "") + block
 
         # For managers, compute purchase + client (КП) prices for supplier
         # offers. Rate fetched once (cached per day).
