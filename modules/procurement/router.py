@@ -71,6 +71,25 @@ async def procurement_price(
     return {"query": q, "rate": rate_info, "count": len(results), "results": results}
 
 
+@router.post("/kp")
+async def procurement_build_kp(
+    data: dict,
+    user: User = Depends(require_permission("sales", "view")),
+):
+    """Draft a КП (quote) from [{query, qty}] items. Manager reviews before send.
+
+    Body: {"items": [{"query": str, "qty": number}], "client_name"?, "quote_date"?}.
+    """
+    from modules.procurement.kp import build_kp_for_queries
+
+    items = data.get("items") or []
+    return await build_kp_for_queries(
+        items,
+        client_name=data.get("client_name"),
+        quote_date=data.get("quote_date"),
+    )
+
+
 @router.post("/sync")
 async def procurement_sync_site(user: User = Depends(require_permission("sales", "edit"))):
     """Manually rebuild site offers from the WooCommerce catalog."""

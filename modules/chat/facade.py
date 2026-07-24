@@ -417,6 +417,12 @@ async def _inject_offer_context(
                     f" Курс USD/KZT {rate_info['rate']} на {rate_info.get('date')}"
                     f" ({rate_info.get('source')}){stale} — указывать в КП."
                 )
+            block += (
+                " Если просят КП/счёт — таблица (№|Наименование|Артикул|Кол-во|Цена клиенту|Сумма) "
+                "по ценам «клиенту», итог с разбивкой НДС 16%, строка про доставку по факту веса/"
+                "габаритов и срок действия цен. Поставщиков клиенту НЕ раскрывать; свет Мегазаказа — "
+                "как бренд Stalker Electric. Это ЧЕРНОВИК на подтверждение директора."
+            )
         return (prompt or "") + block
     except Exception as e:
         logger.warning("offer injection failed: %s", e)
