@@ -71,6 +71,18 @@ async def procurement_price(
     return {"query": q, "rate": rate_info, "count": len(results), "results": results}
 
 
+@router.get("/route")
+async def procurement_route(
+    q: str,
+    city: str = "",
+    user: User = Depends(require_permission("sales", "view")),
+):
+    """Which supplier(s) to query for a request (Reestr routing, Atyrau→ЭКТ)."""
+    from modules.procurement.routing import route
+
+    return route(q, city=city or None)
+
+
 @router.post("/kp")
 async def procurement_build_kp(
     data: dict,
