@@ -19,7 +19,9 @@ jobs:
           cache: 'pip'
 
       - name: Install linting dependencies
-        run: pip install ruff mypy
+        # ruff pinned: unpinned installs drift (e.g. 0.16 enabled PLR0917 +
+        # reformatted files), breaking CI on unrelated code.
+        run: pip install ruff==0.15.21 mypy
 
       - name: Run ruff linter
         run: ruff check .
