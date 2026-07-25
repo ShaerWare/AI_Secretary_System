@@ -1177,19 +1177,12 @@ const switchBranchMutation = useMutation({
 const newBranchMutation = useMutation({
   mutationFn: (sessionId: string) => chatApi.newBranchFromScratch(sessionId),
   onSuccess: async () => {
-    showBranchTree.value = true
     await Promise.all([refetchSession(), refetchBranches()])
   },
 })
 
 function startNewBranch() {
   if (!currentSessionId.value) return
-  newBranchMutation.mutate(currentSessionId.value)
-}
-
-function startNewBranchAndShowTree() {
-  if (!currentSessionId.value) return
-  showBranchTree.value = true
   newBranchMutation.mutate(currentSessionId.value)
 }
 
@@ -3782,7 +3775,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
           :disabled="newBranchMutation.isPending.value"
           class="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
           :title="t('chatView.newBranch')"
-          @click="startNewBranchAndShowTree"
+          @click="startNewBranch"
         >
           <Plus class="w-5 h-5" />
         </button>
@@ -3893,7 +3886,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
               :disabled="newBranchMutation.isPending.value"
               class="p-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 shrink-0 sm:order-1"
               :title="t('chatView.newBranch')"
-              @click="startNewBranchAndShowTree"
+              @click="startNewBranch"
             >
               <Plus class="w-5 h-5" />
             </button>
