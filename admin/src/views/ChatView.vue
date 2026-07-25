@@ -2102,6 +2102,18 @@ function exportChatJson() {
   showExportMenu.value = false
 }
 
+function downloadMessageAsText(message: ChatMessage) {
+  const blob = new Blob([message.content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const base = (currentSession.value?.title || 'response').replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')
+  const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-')
+  a.href = url
+  a.download = `${base}_${ts}.txt`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function saveMessageToContext(message: ChatMessage) {
   if (!currentSessionId.value) return
   const ts = new Date().toISOString().slice(0, 16).replace('T', '_')
@@ -4212,6 +4224,15 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
                     @click="copyToClipboard(message.content)"
                   >
                     <Copy class="w-3 h-3" />
+                  </button>
+                  <!-- Download assistant response as a .txt file -->
+                  <button
+                    v-if="message.role === 'assistant'"
+                    class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                    :title="t('chatView.downloadText')"
+                    @click="downloadMessageAsText(message)"
+                  >
+                    <Download class="w-3 h-3" />
                   </button>
                   <button
                     class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
