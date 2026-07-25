@@ -113,6 +113,12 @@ class VectorSearchClient:
         result = await self._request("POST", "/upsert", json=body)
         return result.get("record_ids", [])
 
+    async def upsert_batch(self, items: list[dict], group: str = "default") -> list[str]:
+        """Batch upsert: one embed call for all items. `items`: [{text, doc_id,
+        metadata}]. Each item → one record (no chunking). Returns record IDs."""
+        result = await self._request("POST", "/upsert-batch", json={"items": items, "group": group})
+        return result.get("record_ids", [])
+
     async def search(
         self,
         text: str,

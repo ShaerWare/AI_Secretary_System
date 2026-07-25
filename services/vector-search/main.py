@@ -69,6 +69,17 @@ class UpsertRequest(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class UpsertBatchItem(BaseModel):
+    text: str
+    doc_id: str = ""
+    metadata: dict = Field(default_factory=dict)
+
+
+class UpsertBatchRequest(BaseModel):
+    items: list[UpsertBatchItem]
+    group: str = "default"
+
+
 class SearchRequest(BaseModel):
     text: str
     group: str = "default"
@@ -182,6 +193,31 @@ async def upsert(request: UpsertRequest):
         collection.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
 
     return {"status": "ok", "record_ids": ids, "chunks": len(ids)}
+
+
+@app.post("/upsert-batch", dependencies=[Depends(verify_token)])
+async def upsert_batch(request: UpsertBatchRequest):
+    """Batch upsert: embed all texts in ONE model.encode() call (no chunking).
+
+    Each item becomes one record (short structured texts like product offers).
+    Far faster than per-item /upsert because sentence-transformers batches.
+    """
+    items = [it for it in request.items if it.text and it.text.strip()]
+    if not items:
+        return {"status": "ok", "record_ids": [], "count": 0}
+
+    collection = _get_collection(request.group)
+    texts = [it.text.strip() for it in items]
+    embeddings = model.encode(texts, batch_size=64).tolist()
+
+    ids, documents, metadatas = [], [], []
+    for it in items:
+        ids.append(_record_id(it.doc_id, 0, it.text.strip()))
+        documents.append(it.text.strip())
+        metadatas.append({"doc_id": it.doc_id, "chunk_index": 0, "chunk_count": 1, **it.metadata})
+
+    collection.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
+    return {"status": "ok", "record_ids": ids, "count": len(ids)}
 
 
 @app.post("/search", dependencies=[Depends(verify_token)])
