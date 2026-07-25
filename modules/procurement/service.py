@@ -217,27 +217,29 @@ class OfferService:
                 primary, misses = 2, len(q_tokens) - matched
             else:
                 continue
-            scored.append((primary, misses, r))
+            # significant matches: tokens len≥4 (short/stray ones like «из», com,
+            # at don't count) — computed here where name_low is the current row.
+            sig_matched = sum(1 for t in q_tokens if len(t) >= 4 and t in name_low)
+            scored.append((primary, misses, sig_matched, r))
 
         scored.sort(
             key=lambda x: (
                 x[0],
                 x[1],
-                0 if x[2].in_stock else 1,
-                SOURCE_PRIORITY.get(x[2].source, 9),
-                x[2].price if x[2].price is not None else float("inf"),
+                0 if x[3].in_stock else 1,
+                SOURCE_PRIORITY.get(x[3].source, 9),
+                x[3].price if x[3].price is not None else float("inf"),
             )
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
         out = []
-        for primary, misses, r in scored[:limit]:
+        for primary, misses, sig_matched, r in scored[:limit]:
             d = r.to_dict()
             d["match"] = labels[primary]
-            matched = (len(q_tokens) - misses) if primary == 2 else max(len(q_tokens), 1)
-            d["matched_tokens"] = matched
-            # confident = exact/partial article OR at least 2 meaningful name tokens
-            # (guards against a single stray token matching random text / spam)
-            d["confident"] = primary in (0, 1) or matched >= 2
+            d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)
+            # confident = exact/partial article OR ≥2 significant name tokens —
+            # spam subjects with a couple of incidental short hits aren't "ready".
+            d["confident"] = primary in (0, 1) or sig_matched >= 2
             out.append(d)
         return out
 

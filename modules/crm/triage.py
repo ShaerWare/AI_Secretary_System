@@ -37,9 +37,14 @@ async def triage_unanswered(config: dict, limit: int = 20) -> dict:
 
     out = []
     for lead in leads:
-        query = (lead.get("name") or "").strip()
-        routing = route(query) if query else {"suppliers": [], "category": None}
-        matches_raw = await offer_service.search(query, limit=3) if query else []
+        name = (lead.get("name") or "").strip()
+        body = (lead.get("_body") or "").strip()
+        # Match/КП on the SUBJECT (precise — a long body dilutes relevance and
+        # matches random tokens). Route on subject+body (category recall). Body
+        # is shown to the manager for context.
+        route_query = f"{name} {body}".strip()[:500]
+        routing = route(route_query) if route_query else {"suppliers": [], "category": None}
+        matches_raw = await offer_service.search(name, limit=3) if name else []
 
         # keep only confident matches (guards against spam subjects matching a
         # single stray token and falsely reading as "ready to quote")
@@ -73,7 +78,8 @@ async def triage_unanswered(config: dict, limit: int = 20) -> dict:
         out.append(
             {
                 "lead_id": lead.get("id"),
-                "name": query,
+                "name": name,
+                "body_preview": body[:200],
                 "category": lead.get("_unsorted_category"),
                 "source": lead.get("_unsorted_source"),
                 "created_at": lead.get("created_at"),
