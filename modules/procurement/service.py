@@ -75,6 +75,25 @@ _STOPWORDS = {
     "the",
     "and",
     "for",
+    # request meta-words (email subjects), not product terms
+    "запрос",
+    "запроса",
+    "стоимость",
+    "стоимости",
+    "цену",
+    "прайс",
+    "коммерческое",
+    "кп",
+    "счёт",
+    "счет",
+    "купить",
+    "заказать",
+    "заявка",
+    "поставка",
+    "поставку",
+    "сообщение",
+    "форма",
+    "формы",
 }
 
 
@@ -211,9 +230,14 @@ class OfferService:
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
         out = []
-        for primary, _misses, r in scored[:limit]:
+        for primary, misses, r in scored[:limit]:
             d = r.to_dict()
             d["match"] = labels[primary]
+            matched = (len(q_tokens) - misses) if primary == 2 else max(len(q_tokens), 1)
+            d["matched_tokens"] = matched
+            # confident = exact/partial article OR at least 2 meaningful name tokens
+            # (guards against a single stray token matching random text / spam)
+            d["confident"] = primary in (0, 1) or matched >= 2
             out.append(d)
         return out
 
