@@ -447,6 +447,10 @@ async def get_unsorted_leads(
 
         lead_id = stub_leads[0]["id"] if stub_leads else item.get("uid")
 
+        # Body preview for triage: mail carries content_summary (email text
+        # preview); chats' last_message_text is a timestamp here, so skip it.
+        body = metadata.get("content_summary", "") if category == "mail" else ""
+
         lead: dict[str, Any] = {
             "id": lead_id,
             "name": name,
@@ -458,6 +462,7 @@ async def get_unsorted_leads(
             "_unsorted_uid": item.get("uid"),
             "_unsorted_category": category,
             "_unsorted_source": source_name,
+            "_body": body,
         }
         if contacts:
             lead["_embedded"] = {"contacts": contacts}
