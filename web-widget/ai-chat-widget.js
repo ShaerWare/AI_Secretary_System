@@ -157,8 +157,8 @@
       ${settings.position}: ${settings.buttonOffsetSide}px;
       width: 380px;
       max-width: calc(100vw - 40px);
-      height: 520px;
-      max-height: calc(100vh - 120px);
+      height: 680px;
+      max-height: calc(100vh - 90px);
       background: white;
       border-radius: 16px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.2);
@@ -187,7 +187,7 @@
     .ai-chat-header {
       background: var(--ai-primary);
       color: white;
-      padding: 16px 20px;
+      padding: 6px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -263,8 +263,16 @@
 
     .ai-chat-message.typing {
       display: flex;
+      align-items: center;
       gap: 4px;
-      padding: 14px 18px;
+      padding: 12px 16px;
+    }
+
+    .ai-chat-message.typing .ai-typing-text {
+      font-size: 13px;
+      font-style: normal;
+      color: #6b7280;
+      margin-right: 6px;
     }
 
     .ai-chat-message.typing span {
@@ -289,7 +297,7 @@
     }
 
     .ai-chat-input-area {
-      padding: 12px 16px;
+      padding: 6px 10px;
       background: white;
       border-top: 1px solid #e5e7eb;
       display: flex;
@@ -361,7 +369,7 @@
 
     .ai-chat-powered {
       text-align: center;
-      padding: 8px;
+      padding: 4px;
       font-size: 11px;
       color: #9ca3af;
       background: white;
@@ -495,7 +503,7 @@
         </button>
       </div>
       <div class="ai-chat-powered">
-        Powered by <a href="https://shaerware.digital" target="_blank">ShaerWare AI</a>
+        Powered by <a href="https://shaerware.github.io/ru" target="_blank">ShaerWare AI</a>
       </div>
     </div>
   `;
@@ -609,7 +617,8 @@
 
     if (content === '...') {
       messageEl.classList.add('typing');
-      messageEl.innerHTML = '<span></span><span></span><span></span>';
+      messageEl.innerHTML =
+        '<em class="ai-typing-text">печатает ответ</em><span></span><span></span><span></span>';
     } else {
       messageEl.textContent = content;
     }

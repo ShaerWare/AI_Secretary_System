@@ -108,6 +108,41 @@ def _tokens(s: str) -> List[str]:
     return [t for t in _TOKEN_RE.split(s.lower()) if t]
 
 
+# Colloquial / abbreviation → catalog wording (catalog names are formal, e.g.
+# "преобразователь частоты", not "ЧРП"/"частотник"). Stemming handles inflected
+# forms; this map covers abbreviations that share no stem with the full term.
+_SYNONYMS = {
+    "чрп": ["преобразователь", "частоты"],
+    "пч": ["преобразователь", "частоты"],
+    "частотник": ["преобразователь", "частоты"],
+    "частотники": ["преобразователь", "частоты"],
+    "частотный": ["преобразователь", "частоты"],
+    "упп": ["устройство", "плавного", "пуска"],
+    "узо": ["устройство", "защитного", "отключения"],
+    "дифавтомат": ["дифференциальный", "автоматический"],
+    "автоматы": ["автоматический", "выключатель"],
+}
+
+_STEM_LEN = 6
+
+
+def _stem(t: str) -> str:
+    """Crude Russian stemming: keep a 6-char prefix so inflections match
+    (частотник/частоты → частот, преобразователи/преобразователь → преобр)."""
+    return t[:_STEM_LEN] if len(t) >= _STEM_LEN else t
+
+
+def _expand_query_tokens(query: str) -> List[str]:
+    """Tokenize + drop stopwords/short + expand abbreviations (dedup, ordered)."""
+    out: List[str] = []
+    for t in _tokens(query):
+        if len(t) < 2 or t in _STOPWORDS:
+            continue
+        out.append(t)
+        out.extend(_SYNONYMS.get(t, []))
+    return list(dict.fromkeys(out))
+
+
 class OfferService:
     """CRUD + search over `product_offers`."""
 
@@ -188,7 +223,7 @@ class OfferService:
         matches (caller must then say "не найдено" — never invent a position).
         """
         q_norm = _norm(query)
-        q_tokens = [t for t in _tokens(query) if len(t) >= 2 and t not in _STOPWORDS]
+        q_tokens = _expand_query_tokens(query)
         if not q_norm and not q_tokens:
             return []
 
@@ -211,29 +246,33 @@ class OfferService:
             elif len(q_norm) >= 4 and art_norm and q_norm in art_norm:
                 primary, misses = 1, 0
             elif q_tokens:
-                matched = sum(1 for t in q_tokens if t in name_low)
+                matched = sum(1 for t in q_tokens if _stem(t) in name_low)
                 if not matched:
                     continue
                 primary, misses = 2, len(q_tokens) - matched
             else:
                 continue
             # significant matches: tokens len≥4 (short/stray ones like «из», com,
-            # at don't count) — computed here where name_low is the current row.
-            sig_matched = sum(1 for t in q_tokens if len(t) >= 4 and t in name_low)
-            scored.append((primary, misses, sig_matched, r))
+            # at don't count) — stem-matched, computed here where name_low is set.
+            sig_matched = sum(1 for t in q_tokens if len(t) >= 4 and _stem(t) in name_low)
+            # head match: name STARTS with a query term → it's that product, not
+            # an accessory «…для преобразователей частоты». Ranks products first.
+            head = 0 if any(len(t) >= 4 and name_low.startswith(_stem(t)) for t in q_tokens) else 1
+            scored.append((primary, misses, head, sig_matched, r))
 
         scored.sort(
             key=lambda x: (
                 x[0],
                 x[1],
-                0 if x[3].in_stock else 1,
-                SOURCE_PRIORITY.get(x[3].source, 9),
-                x[3].price if x[3].price is not None else float("inf"),
+                x[2],
+                0 if x[4].in_stock else 1,
+                SOURCE_PRIORITY.get(x[4].source, 9),
+                x[4].price if x[4].price is not None else float("inf"),
             )
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
         out = []
-        for primary, misses, sig_matched, r in scored[:limit]:
+        for primary, misses, head, sig_matched, r in scored[:limit]:
             d = r.to_dict()
             d["match"] = labels[primary]
             d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)
