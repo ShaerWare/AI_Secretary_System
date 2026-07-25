@@ -41,8 +41,12 @@ async def triage_unanswered(config: dict, limit: int = 20) -> dict:
         routing = route(query) if query else {"suppliers": [], "category": None}
         matches_raw = await offer_service.search(query, limit=3) if query else []
 
+        # keep only confident matches (guards against spam subjects matching a
+        # single stray token and falsely reading as "ready to quote")
         matches = []
         for o in matches_raw:
+            if not o.get("confident"):
+                continue
             if o["source"] == "supplier":
                 p = await price_offer(o, rate_info=rate_info)
                 client_price = p.get("client_price") if p.get("ok") else None
@@ -64,7 +68,7 @@ async def triage_unanswered(config: dict, limit: int = 20) -> dict:
             names = ", ".join(s["name"] for s in routing["suppliers"])
             suggestion = f"в базе нет — запросить у: {names}"
         else:
-            suggestion = "уточнить запрос у клиента"
+            suggestion = "нет совпадений в базе — проверить вручную (спам или редкая позиция)"
 
         out.append(
             {
