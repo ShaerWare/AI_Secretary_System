@@ -352,7 +352,26 @@ async def _inject_offer_context(
         from modules.procurement.service import offer_service
 
         manager_ctx = session.get("source") == "admin"
+        # Exact keyword search for offers (prices/stock/articles — КП-exact rule).
         offers = await offer_service.search(content, limit=8)
+
+        # Supplementary meaning-based context from the catalog collection (rich
+        # descriptions) — helps vague/functional queries («чем питать насос»).
+        # Prices/stock/articles still come ONLY from the exact offers above.
+        semantic_ctx = ""
+        try:
+            from app.dependencies import get_container
+
+            wiki = get_container().wiki_rag_service
+            cat_ids = list(_PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids))
+            if wiki and cat_ids:
+                ctx = await wiki.retrieve_async(
+                    content, top_k=3, max_chars=1200, collection_id=cat_ids[0]
+                )
+                semantic_ctx = (ctx or "").strip()
+        except Exception as e:
+            logger.warning("catalog semantic context failed: %s", e)
+
         if not manager_ctx:
             offers = [o for o in offers if o.get("source") == "site"]
         if not offers:
@@ -381,6 +400,11 @@ async def _inject_offer_context(
                         + (", клиент из Атырау → ЭКТ первым" if r["atyrau_priority"] else "")
                         + f"): запросить в порядке — {names}."
                     )
+            if semantic_ctx:
+                block += (
+                    "\n\n--- СПРАВОЧНО ИЗ КАТАЛОГА (описания; точные цены/наличие "
+                    "уточнит менеджер) ---\n" + semantic_ctx[:1200]
+                )
             return (prompt or "") + block
 
         # For managers, compute purchase + client (КП) prices for supplier
@@ -440,6 +464,11 @@ async def _inject_offer_context(
                 "по ценам «клиенту», итог с разбивкой НДС 16%, строка про доставку по факту веса/"
                 "габаритов и срок действия цен. Поставщиков клиенту НЕ раскрывать; свет Мегазаказа — "
                 "как бренд Stalker Electric. Это ЧЕРНОВИК на подтверждение директора."
+            )
+        if semantic_ctx:
+            block += (
+                "\n\n--- СПРАВОЧНО ИЗ КАТАЛОГА (описания/характеристики для понимания; "
+                "цены, наличие и артикулы бери ТОЛЬКО из позиций выше) ---\n" + semantic_ctx[:1200]
             )
         return (prompt or "") + block
     except Exception as e:
