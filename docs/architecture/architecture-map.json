@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "AI Secretary System",
+  "generated": "2026-07-27",
+  "description": "Полный маппинг архитектуры: виртуальный секретарь с клонированием голоса, локальным/облачным LLM, GSM-телефонией, amoCRM, Vue 3 PWA, мульти-инстанс Telegram/WhatsApp ботами, чат-виджетами и LoRA fine-tuning.",
+  "entrypoint": {
+    "file": "orchestrator.py",
+    "framework": "FastAPI",
+    "port": 8002,
+    "role": "Чистая обвязка (~320 строк): CORS/middleware, декларативная регистрация ~28 роутеров, startup_event(), shutdown_event(), статика, Vite dev proxy. Нулевая доменная логика.",
+    "startup_modules": [
+      "modules/speech/startup.py (TTS/STT)",
+      "modules/llm/startup.py (LLM + fallback chain + InternetMonitor)",
+      "modules/knowledge/startup.py (Wiki RAG + embeddings)",
+      "modules/core/startup.py (seed, monitor, shutdown, event subscriptions)",
+      "modules/telephony/startup.py (GSM)",
+      "modules/channels/telegram/startup.py, whatsapp/startup.py (bot auto-start)"
+    ]
+  },
+  "deployment_modes": {
+    "env": "DEPLOYMENT_MODE",
+    "modes": {
+      "full": "По умолчанию — всё включено (GPU, TTS, STT, GSM)",
+      "cloud": "Без GPU/TTS/STT/GSM; пропускает регистрацию hardware-роутеров, скрывает hardware-табы, фильтрует speech/gsm permissions",
+      "local": "То же, что full"
+    }
+  },
+  "layers": [
+    {
+      "id": "orchestration",
+      "title": "Оркестрация и ядро",
+      "color": "#6366f1",
+      "components": [
+        { "name": "orchestrator.py", "kind": "entrypoint", "note": "FastAPI wiring, ~28 routers" },
+        { "name": "ServiceContainer", "kind": "singleton", "file": "app/dependencies.py", "note": "Единственный источник состояния сервисов; держит event_bus; сервисы отдаются через FastAPI Depends" },
+        { "name": "EventBus", "kind": "infra", "file": "modules/core/events.py", "note": "In-process async pub/sub; handlers через asyncio.gather; исключения логируются, не пробрасываются" },
+        { "name": "TaskRegistry", "kind": "infra", "file": "modules/core/tasks.py", "note": "Именованные фоновые задачи (periodic/one-shot); start_all/cancel_all; 8 задач" },
+        { "name": "HealthRegistry", "kind": "infra", "file": "modules/core/health.py", "note": "Модульные health-checks с per-check timeout; агрегация ok/degraded/error" },
+        { "name": "InternetMonitor", "kind": "infra", "file": "modules/core/internet_monitor.py", "note": "Пинг DNS/Cloudflare; online→cloud LLM, offline→local vLLM; публикует InternetStatusChanged" }
+      ]
+    },
+    {
+      "id": "ai_services",
+      "title": "AI-сервисы (root-level)",
+      "color": "#ec4899",
+      "components": [
+        { "name": "cloud_llm_service.py", "kind": "llm", "note": "Factory; OpenAICompatibleProvider + кастомные SDK; fallback_models; generate_with_tools()" },
+        { "name": "vllm_llm_service.py", "kind": "llm", "note": "Локальный vLLM (Qwen/Llama/DeepSeek); tool-calling" },
+        { "name": "voice_clone_service.py", "kind": "tts", "note": "XTTS v2 клонирование голоса (CUDA CC>=7.0)" },
+        { "name": "openvoice_service.py", "kind": "tts", "note": "OpenVoice для старых GPU" },
+        { "name": "piper_tts_service.py", "kind": "tts", "note": "Piper — предобученные голоса (CPU mode)" },
+        { "name": "stt_service.py", "kind": "stt", "note": "Vosk / Whisper" },
+        { "name": "phone_service.py / telegram_bot_service.py", "kind": "misc", "note": "Телефония, TG-хелперы" }
+      ]
+    },
+    {
+      "id": "bridge",
+      "title": "Claude Code Bridge (services/bridge)",
+      "color": "#f59e0b",
+      "components": [
+        { "name": "server/main.py", "kind": "service", "note": "FastAPI сервер бриджа; routes: chat, files, models; middleware auth/logging/rate_limit" },
+        { "name": "providers/claude/provider.py", "kind": "provider", "note": "Спавнит Claude CLI subprocess; BRIDGE_ISOLATE_HOME для изоляции HOME от утечки CLAUDE.md" },
+        { "name": "providers/gemini, gpt", "kind": "provider", "note": "Доп. провайдеры бриджа" },
+        { "name": "bridge_manager.py (root)", "kind": "manager", "note": "Стрипает proxy env vars; управляет жизненным циклом бриджа" }
+      ]
+    },
+    {
+      "id": "data",
+      "title": "Слой данных",
+      "color": "#10b981",
+      "components": [
+        { "name": "db/database.py", "kind": "engine", "note": "Async SQLAlchemy + aiosqlite" },
+        { "name": "db/integration.py", "kind": "facade", "note": "~100-строчный фасад: реэкспорт доменных синглтонов под старыми именами" },
+        { "name": "db/repositories/ (46 репозиториев)", "kind": "repository", "note": "BaseRepository[T] generic CRUD + _apply_workspace_filter(); только flush(), никогда commit()" },
+        { "name": "db/retry.py", "kind": "infra", "note": "@retry_on_busy() — экспоненциальный backoff для SQLITE_BUSY (3 ретрая)" },
+        { "name": "Unit of Work", "kind": "pattern", "note": "Границы транзакций у вызывающего: service.commit(); get_async_session() авто-commit/rollback" },
+        { "name": "Alembic (alembic/versions/)", "kind": "migrations", "note": "Схема; + scripts/migrate_*.py для данных; + Base.metadata.create_all для новых таблиц" }
+      ]
+    }
+  ],
+  "modules": [
+    { "domain": "core", "path": "modules/core", "routers": ["router_auth", "router_roles", "router_workspace", "router_health"], "services": ["DatabaseService", "UserService", "UserSessionService", "RoleService", "WorkspaceService", "ConfigService", "UserIdentityService", "AuthService"], "notes": "Аутентификация, RBAC, workspaces, health, EventBus/TaskRegistry/InternetMonitor" },
+    { "domain": "llm", "path": "modules/llm", "routers": ["router", "router_finetune", "router_models"], "services": ["LLMServiceImpl (facade)", "CloudProviderService"], "notes": "Роутинг чата через LLM, LoRA fine-tune, HuggingFace модели. GPU-роутеры registered при DEPLOYMENT_MODE != cloud" },
+    { "domain": "chat", "path": "modules/chat", "routers": ["router"], "services": ["ChatServiceImpl (facade)", "ChatService", "ChatShareService"], "notes": "Agentic RAG loop (knowledge_search tool, max 5 iter); platform-agent fallback; per-user token tracking; _inject_offer_context для procurement" },
+    { "domain": "knowledge", "path": "modules/knowledge", "routers": ["router_faq", "router_wiki_rag", "router_github_repos", "router_google_drive", "router_rss"], "services": ["KnowledgeServiceImpl (facade)", "FAQService", "KnowledgeDocService", "KnowledgeCollectionService", "GitHubRepoProjectService"], "notes": "Tiered RAG: семантика → BM25 → Vector Search microservice; RSS layer (feedparser); мульти-коллекции" },
+    { "domain": "speech", "path": "modules/speech", "routers": ["router_tts", "router_stt", "router_services", "router_voices", "router_finetune"], "services": ["PresetService", "StreamingTTSManager"], "notes": "TTS/STT/voices/finetune. GPU-only, скрыты в cloud mode" },
+    { "domain": "crm", "path": "modules/crm", "routers": ["router"], "services": ["AmoCRMService"], "notes": "amoCRM интеграция; триаж лидов (triage.py); реактивно обрабатывает Widget-события" },
+    { "domain": "ecommerce", "path": "modules/ecommerce", "routers": ["router"], "services": ["WooCommerceService"], "notes": "WooCommerce sync (daily 23:00 UTC → DatasetSynced)" },
+    { "domain": "procurement", "path": "modules/procurement", "routers": ["router"], "services": ["OfferService", "rate_service", "pricing"], "notes": "Единый поиск позиции (ProductOffer); детерминированное ранжирование, [] если не найдено; адаптеры site/suppliers; КП-генерация; ценовой движок (USD/KZT)" },
+    { "domain": "kanban", "path": "modules/kanban", "routers": ["router"], "services": ["KanbanService", "KanbanProjectService"], "notes": "kanban-sync задача (15 мин)" },
+    { "domain": "claude_code", "path": "modules/claude_code", "routers": ["router"], "services": ["ClaudeCodeService", "ClaudeCodeProjectService"], "notes": "Мост к Claude Code CLI" },
+    { "domain": "monitoring", "path": "modules/monitoring", "routers": ["router_audit", "router_usage", "router_monitor", "router_logs"], "services": ["AuditService", "PaymentService"], "notes": "Аудит, usage/token tracking, логи, мониторинг" },
+    { "domain": "admin", "path": "modules/admin", "routers": ["router_backup", "router_legal", "router_github_webhook"], "services": ["ResourceShareService"], "notes": "Бэкапы, legal, GitHub webhook, шаринг ресурсов" },
+    { "domain": "sales", "path": "modules/sales", "routers": ["router_bot_sales", "router_yoomoney"], "services": ["sales_funnel"], "notes": "Продажи в ботах, платежи YooMoney" },
+    { "domain": "telephony", "path": "modules/telephony", "routers": ["router"], "services": ["GSMService"], "notes": "GSM (SIM7600E-H). GPU/hardware, скрыт в cloud mode" },
+    { "domain": "google", "path": "modules/google", "routers": ["router", "callback_router"], "services": ["GoogleOAuthService"], "notes": "Google OAuth 2.0 (Drive, Docs, Sheets, Gmail)" },
+    { "domain": "search", "path": "modules/search", "routers": [], "services": ["WebSearchService"], "notes": "DuckDuckGo (ddgs/duckduckgo_search), опциональный импорт" },
+    { "domain": "compat", "path": "modules/compat", "routers": ["router"], "services": [], "notes": "Legacy телефония (/tts /stt /chat /process_call) + OpenAI-compat (/v1/*)" },
+    { "domain": "channels/telegram", "path": "modules/channels/telegram", "routers": ["router"], "services": ["BotInstanceService", "TelegramSessionService"], "notes": "Мульти-инстанс TG боты; subprocess через multi_bot_manager.py; python-telegram-bot + aiogram" },
+    { "domain": "channels/whatsapp", "path": "modules/channels/whatsapp", "routers": ["router"], "services": ["WhatsAppInstanceService"], "notes": "WhatsApp Cloud API; subprocess через whatsapp_manager.py" },
+    { "domain": "channels/widget", "path": "modules/channels/widget", "routers": ["router", "router_public"], "services": ["WidgetInstanceService"], "notes": "Чат-виджеты для сайтов; публикует WidgetSessionCreated/MessageSent/ContactSubmitted; landing lead form → Telegram" },
+    { "domain": "channels/mobile", "path": "modules/channels/mobile", "routers": ["router"], "services": ["MobileAppInstanceService", "push_service", "provisioning"], "notes": "Android чат-приложение; default-assistant provisioning (6 ассистентов по User.country); приватные per-user сессии" }
+  ],
+  "events": {
+    "bus": "modules/core/events.py",
+    "domain_events": [
+      { "event": "InternetStatusChanged", "source": "modules/core", "note": "Переключение LLM backend online/offline" },
+      { "event": "UserRoleChanged", "source": "modules/core" },
+      { "event": "SessionRevoked", "source": "modules/core" },
+      { "event": "DatasetSynced", "source": "modules/core", "note": "Декаплит CRM/ecommerce/kanban от knowledge" },
+      { "event": "KnowledgeUpdated", "source": "modules/knowledge" },
+      { "event": "WidgetSessionCreated", "source": "modules/channels/widget", "note": "CRM реактивно создаёт lead/contact/note" },
+      { "event": "WidgetMessageSent", "source": "modules/channels/widget" },
+      { "event": "WidgetContactSubmitted", "source": "modules/channels/widget" }
+    ]
+  },
+  "background_tasks": [
+    { "name": "session-cleanup", "interval": "1h", "fn": "modules/core/maintenance.py" },
+    { "name": "periodic-vacuum", "interval": "7d", "fn": "modules/core/maintenance.py" },
+    { "name": "kanban-sync", "interval": "15min", "fn": "modules/kanban/tasks.py" },
+    { "name": "woocommerce-sync", "interval": "daily 23:00 UTC", "fn": "modules/ecommerce/tasks.py" },
+    { "name": "procurement-site-sync", "interval": "daily 23:30 UTC", "fn": "modules/procurement/tasks.py" },
+    { "name": "rss-sync", "interval": "1h", "fn": "modules/knowledge/rss_service.py" },
+    { "name": "wiki-embeddings", "interval": "one-shot", "fn": "modules/knowledge/tasks.py" },
+    { "name": "wiki-collection-indexes", "interval": "one-shot", "fn": "modules/knowledge/tasks.py" },
+    { "name": "vector-search-sync", "interval": "startup + DatasetSynced", "fn": "app/services/vector_search_client.py" }
+  ],
+  "rag": {
+    "primary": "app/services/wiki_rag_service.py",
+    "tiers": [
+      "1. Семантические эмбеддинги (Gemini/OpenAI/local)",
+      "2. BM25 с русским/английским стеммингом",
+      "3. Vector Search microservice (если VECTOR_SEARCH_URL задан)"
+    ],
+    "agentic": "modules/chat/router.py — серверный loop, LLM вызывает knowledge_search tool (max 5 iter); провайдеры без supports_tools (Gemini SDK, claude_bridge) → one-shot инъекция",
+    "vector_search": { "path": "services/vector-search/", "engine": "ChromaDB + paraphrase-multilingual-mpnet-base-v2 (768 dims)", "port": 8003, "client": "app/services/vector_search_client.py" },
+    "static_collections": "scripts/scrape_digitax/ — правовые/бухгалтерские/SEO корпуса (consultant.ru коды, adilet.zan.kz, sbup.com SEO forum id=59)"
+  },
+  "frontend": {
+    "admin_panel": {
+      "path": "admin/",
+      "stack": ["Vue 3 + Composition API + TypeScript", "Vite", "Pinia (persisted)", "Vue Router (hash history)", "TanStack Vue Query", "vue-i18n (ru/en/kk)", "TailwindCSS + radix-vue", "lucide-vue-next"],
+      "served_at": "/admin/ (FastAPI), production nginx /var/www/admin-ai-sekretar24/",
+      "views": ["Dashboard", "Chat", "Llm", "Models", "Finetune", "Tts", "Faq", "WikiRag", "Crm", "WooCommerce", "Kanban", "Sales", "Telegram", "WhatsApp", "Widget", "MobileApp", "GSM", "Services", "Users", "Roles", "Audit", "Usage", "Monitoring", "Settings", "About", "Login", "Invite"],
+      "key_stores": ["auth.ts (JWT, user, deploymentMode, permissions, isAdmin, hasModule, canView/Edit/Manage)"],
+      "api_layer": "admin/src/api/client.ts — api.get/post/put/delete/upload + createSSE()",
+      "variants": { "full": "default", "lite": "VITE_PRODUCT_VARIANT=lite — урезанная панель", "demo": "VITE_DEMO_MODE=true — monkey-patch window.fetch с mock data" }
+    },
+    "mobile_app": {
+      "path": "mobile/",
+      "stack": ["Vue 3 + TypeScript", "Vite", "Pinia", "Vue Router", "Capacitor (Android)", "TailwindCSS 4"],
+      "server_url": "https://ai-sekretar24.ru (hardcoded)",
+      "size": "~77KB gzipped",
+      "screens": ["LoginView", "ChatListView", "ChatView", "SettingsView"],
+      "role_based": "admin → полный контроль; non-admin → shared chats + приватные per-user assistant сессии",
+      "jwt": "native Preferences (не localStorage)"
+    },
+    "landing": {
+      "path": "site/",
+      "note": "Статический маркетинг-сайт, без build-step; i18n ru(canonical)/en/kk; nginx /var/www/; lead form → POST /widget/lead → Telegram"
+    }
+  },
+  "api_conventions": {
+    "list_create": "GET/POST /admin/{resource}",
+    "crud": "GET/PUT/DELETE /admin/{resource}/{id}",
+    "actions": "POST /admin/{resource}/{id}/{action}",
+    "webhooks": "POST /webhooks/{service}",
+    "openai_compat": "POST /v1/chat/completions, GET /v1/models",
+    "rbac": "Depends(require_permission(module, level)) — level: view|edit|manage; workspace_context → (owner_id, workspace_id); gate-check перед mutation"
+  },
+  "deployment": {
+    "production": {
+      "server": "root@155.212.231.7 (ssh ai-server)",
+      "manager": "systemd (ai-secretary), НЕ Docker Compose",
+      "path": "/opt/ai-secretary",
+      "nginx_frontend": "/var/www/admin-ai-sekretar24/ (rsync после npm run build, НЕ admin/dist)",
+      "steps": ["git pull origin main", "cd admin && npm ci && npm run build", "rsync -av --delete admin/dist/ /var/www/admin-ai-sekretar24/", "bust sw.js cache", "systemctl restart ai-secretary", "curl localhost:8002/health"],
+      "webhook": "ai-secretary-webhook.service (GitHub push auto-deploy)"
+    },
+    "docker": {
+      "gpu": "docker compose up -d",
+      "cpu": "docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d",
+      "full": "+ vLLM containerized",
+      "vector_search": "docker compose --profile vector-search up -d (:8003)"
+    },
+    "ci": {
+      "file": ".github/workflows/ci.yml",
+      "jobs": ["lint-backend (ruff + format + mypy soft на orchestrator.py)", "lint-frontend (npm ci + eslint + build type-check)", "security (Trivy)"],
+      "branch_protection": "PR workflow обязателен, никогда прямой push в main"
+    }
+  },
+  "key_env_vars": {
+    "LLM_BACKEND": "vllm или cloud:{provider_id}",
+    "VLLM_API_URL": "http://localhost:11434",
+    "DEPLOYMENT_MODE": "full | cloud | local",
+    "ORCHESTRATOR_PORT": "8002",
+    "ADMIN_JWT_SECRET": "auto-generated если пусто (рестарт инвалидирует токены)",
+    "VECTOR_SEARCH_URL": "http://localhost:8003 (опционально)",
+    "GOOGLE_CLIENT_ID/SECRET": "OAuth 2.0",
+    "BRIDGE_ISOLATE_HOME": "1 — изолировать HOME Claude CLI",
+    "PROCUREMENT_CATALOG_COLLECTIONS": "default {6}",
+    "SUPPLIER_PRICES_DIR": "прайсы поставщиков (не в git)"
+  },
+  "known_issues": [
+    "Vosk-модель обязательна для STT (models/vosk/)",
+    "XTTS требует CUDA CC >= 7.0 (RTX 3060+)",
+    "GPU память: vLLM ~6GB + XTTS ~5GB в 12GB",
+    "VLESS proxy vs localhost — NO_PROXY для claude_bridge",
+    "Claude bridge warmup 7-30s, read=300s timeout, max_tokens=4096",
+    "services/bridge/src/models/ gitignored (pattern models/)",
+    "Docker CPU: whisper исключён; Claude CLI требует Node.js 20",
+    "Circular import — domain __init__.py ДОЛЖНЫ быть пустыми; импортировать сервисы напрямую"
+  ],
+  "stats": {
+    "routers": 40,
+    "domain_modules": 21,
+    "repositories": 46,
+    "admin_views": 25,
+    "background_tasks": 9,
+    "domain_events": 8
+  }
+}
