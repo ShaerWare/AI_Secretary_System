@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Secretary System — Карта архитектуры</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-alt: #161b22;
+    --card: #1c2333;
+    --card-hover: #232b3d;
+    --border: #2d3548;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #6366f1;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    padding: 0 0 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,17,23,.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+  }
+  .header-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  h1 .sub { color: var(--text-dim); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .meta-pills { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .pill {
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: 12px; color: var(--text-dim);
+  }
+  .pill b { color: var(--accent); font-family: var(--mono); }
+  .search-row { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #search {
+    flex: 1; min-width: 220px; background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px; color: var(--text); font-size: 14px; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  .toc { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toc a {
+    font-size: 12px; color: var(--text-dim); text-decoration: none;
+    padding: 5px 11px; border-radius: 6px; border: 1px solid transparent;
+  }
+  .toc a:hover { color: var(--text); border-color: var(--border); background: var(--card); }
+  main { max-width: 1400px; margin: 0 auto; padding: 28px; }
+  section { margin-bottom: 44px; scroll-margin-top: 130px; }
+  .section-title {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+    font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  }
+  .section-title .dot { width: 11px; height: 11px; border-radius: 3px; }
+  .section-title .count { color: var(--text-dim); font-weight: 400; font-size: 12px; }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; transition: .15s;
+  }
+  .card:hover { background: var(--card-hover); border-color: #3d4763; }
+  .card h3 { font-size: 14px; font-family: var(--mono); font-weight: 600; margin-bottom: 6px; word-break: break-word; }
+  .card .kind {
+    display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 2px 8px; border-radius: 5px; background: rgba(99,102,241,.15); color: #a5b4fc; margin-bottom: 8px;
+  }
+  .card p { font-size: 12.5px; color: var(--text-dim); }
+  .card .file { font-family: var(--mono); font-size: 11px; color: #79c0ff; margin-bottom: 6px; word-break: break-all; }
+
+  /* flow diagram */
+  .flow { display: flex; flex-direction: column; gap: 14px; }
+  .flow-band {
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--bg-alt);
+    position: relative;
+  }
+  .flow-band .band-label {
+    position: absolute; top: -10px; left: 16px; background: var(--bg); padding: 0 8px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim);
+  }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font-family: var(--mono); font-size: 12px;
+  }
+  .arrow { text-align: center; color: var(--text-dim); font-size: 18px; }
+
+  /* module table */
+  .mod { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .mod summary {
+    cursor: pointer; padding: 13px 16px; background: var(--card); list-style: none;
+    display: flex; align-items: center; gap: 12px; user-select: none;
+  }
+  .mod summary::-webkit-details-marker { display: none; }
+  .mod summary:hover { background: var(--card-hover); }
+  .mod summary .domain { font-family: var(--mono); font-weight: 600; font-size: 14px; }
+  .mod summary .path { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .mod summary .badges { margin-left: auto; display: flex; gap: 6px; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--bg-alt); color: var(--text-dim); border: 1px solid var(--border); }
+  .mod .body { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
+  .mod .body .lbl { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 10px 0 4px; }
+  .mod .body .lbl:first-child { margin-top: 0; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; margin: 2px 3px 2px 0; }
+  .tag.svc { color: #7ee787; }
+  .tag.rtr { color: #ffa657; }
+  .note { color: var(--text-dim); font-size: 12.5px; margin-top: 8px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; color: var(--text-dim); }
+  .kv { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { font-family: var(--mono); color: #79c0ff; flex-shrink: 0; min-width: 130px; word-break: break-all; }
+  .kv .v { color: var(--text-dim); }
+  ul.list { list-style: none; }
+  ul.list li { padding: 6px 0 6px 18px; position: relative; font-size: 13px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  ul.list li:last-child { border-bottom: none; }
+  ul.list li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
+  ul.list li code { font-family: var(--mono); color: #ffa657; font-size: 12px; }
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--text-dim); font-size: 12px; margin-top: 40px; }
+  a.self { color: var(--accent); text-decoration: none; }
+  a.self:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <h1>AI Secretary System <span class="sub">карта архитектуры</span></h1>
+    <div class="meta-pills" id="statPills"></div>
+  </div>
+  <div class="search-row">
+    <input id="search" type="text" placeholder="Поиск по модулям, сервисам, роутерам, файлам…" autocomplete="off">
+    <nav class="toc" id="toc"></nav>
+  </div>
+</header>
+<main id="main"></main>
+<footer>
+  Сгенерировано из <a class="self" href="architecture-map.json">architecture-map.json</a> ·
+  источник истины: <a class="self" href="../../CLAUDE.md">CLAUDE.md</a> · <span id="genDate"></span>
+</footer>
+
+<script id="data" type="application/json">
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "AI Secretary System",
+  "generated": "2026-07-27",
+  "description": "Полный маппинг архитектуры: виртуальный секретарь с клонированием голоса, локальным/облачным LLM, GSM-телефонией, amoCRM, Vue 3 PWA, мульти-инстанс Telegram/WhatsApp ботами, чат-виджетами и LoRA fine-tuning.",
+  "entrypoint": {
+    "file": "orchestrator.py",
+    "framework": "FastAPI",
+    "port": 8002,
+    "role": "Чистая обвязка (~320 строк): CORS/middleware, декларативная регистрация ~28 роутеров, startup_event(), shutdown_event(), статика, Vite dev proxy. Нулевая доменная логика.",
+    "startup_modules": [
+      "modules/speech/startup.py (TTS/STT)",
+      "modules/llm/startup.py (LLM + fallback chain + InternetMonitor)",
+      "modules/knowledge/startup.py (Wiki RAG + embeddings)",
+      "modules/core/startup.py (seed, monitor, shutdown, event subscriptions)",
+      "modules/telephony/startup.py (GSM)",
+      "modules/channels/telegram/startup.py, whatsapp/startup.py (bot auto-start)"
+    ]
+  },
+  "deployment_modes": {
+    "env": "DEPLOYMENT_MODE",
+    "modes": {
+      "full": "По умолчанию — всё включено (GPU, TTS, STT, GSM)",
+      "cloud": "Без GPU/TTS/STT/GSM; пропускает регистрацию hardware-роутеров, скрывает hardware-табы, фильтрует speech/gsm permissions",
+      "local": "То же, что full"
+    }
+  },
+  "layers": [
+    {
+      "id": "orchestration",
+      "title": "Оркестрация и ядро",
+      "color": "#6366f1",
+      "components": [
+        { "name": "orchestrator.py", "kind": "entrypoint", "note": "FastAPI wiring, ~28 routers" },
+        { "name": "ServiceContainer", "kind": "singleton", "file": "app/dependencies.py", "note": "Единственный источник состояния сервисов; держит event_bus; сервисы отдаются через FastAPI Depends" },
+        { "name": "EventBus", "kind": "infra", "file": "modules/core/events.py", "note": "In-process async pub/sub; handlers через asyncio.gather; исключения логируются, не пробрасываются" },
+        { "name": "TaskRegistry", "kind": "infra", "file": "modules/core/tasks.py", "note": "Именованные фоновые задачи (periodic/one-shot); start_all/cancel_all; 8 задач" },
+        { "name": "HealthRegistry", "kind": "infra", "file": "modules/core/health.py", "note": "Модульные health-checks с per-check timeout; агрегация ok/degraded/error" },
+        { "name": "InternetMonitor", "kind": "infra", "file": "modules/core/internet_monitor.py", "note": "Пинг DNS/Cloudflare; online→cloud LLM, offline→local vLLM; публикует InternetStatusChanged" }
+      ]
+    },
+    {
+      "id": "ai_services",
+      "title": "AI-сервисы (root-level)",
+      "color": "#ec4899",
+      "components": [
+        { "name": "cloud_llm_service.py", "kind": "llm", "note": "Factory; OpenAICompatibleProvider + кастомные SDK; fallback_models; generate_with_tools()" },
+        { "name": "vllm_llm_service.py", "kind": "llm", "note": "Локальный vLLM (Qwen/Llama/DeepSeek); tool-calling" },
+        { "name": "voice_clone_service.py", "kind": "tts", "note": "XTTS v2 клонирование голоса (CUDA CC>=7.0)" },
+        { "name": "openvoice_service.py", "kind": "tts", "note": "OpenVoice для старых GPU" },
+        { "name": "piper_tts_service.py", "kind": "tts", "note": "Piper — предобученные голоса (CPU mode)" },
+        { "name": "stt_service.py", "kind": "stt", "note": "Vosk / Whisper" },
+        { "name": "phone_service.py / telegram_bot_service.py", "kind": "misc", "note": "Телефония, TG-хелперы" }
+      ]
+    },
+    {
+      "id": "bridge",
+      "title": "Claude Code Bridge (services/bridge)",
+      "color": "#f59e0b",
+      "components": [
+        { "name": "server/main.py", "kind": "service", "note": "FastAPI сервер бриджа; routes: chat, files, models; middleware auth/logging/rate_limit" },
+        { "name": "providers/claude/provider.py", "kind": "provider", "note": "Спавнит Claude CLI subprocess; BRIDGE_ISOLATE_HOME для изоляции HOME от утечки CLAUDE.md" },
+        { "name": "providers/gemini, gpt", "kind": "provider", "note": "Доп. провайдеры бриджа" },
+        { "name": "bridge_manager.py (root)", "kind": "manager", "note": "Стрипает proxy env vars; управляет жизненным циклом бриджа" }
+      ]
+    },
+    {
+      "id": "data",
+      "title": "Слой данных",
+      "color": "#10b981",
+      "components": [
+        { "name": "db/database.py", "kind": "engine", "note": "Async SQLAlchemy + aiosqlite" },
+        { "name": "db/integration.py", "kind": "facade", "note": "~100-строчный фасад: реэкспорт доменных синглтонов под старыми именами" },
+        { "name": "db/repositories/ (46 репозиториев)", "kind": "repository", "note": "BaseRepository[T] generic CRUD + _apply_workspace_filter(); только flush(), никогда commit()" },
+        { "name": "db/retry.py", "kind": "infra", "note": "@retry_on_busy() — экспоненциальный backoff для SQLITE_BUSY (3 ретрая)" },
+        { "name": "Unit of Work", "kind": "pattern", "note": "Границы транзакций у вызывающего: service.commit(); get_async_session() авто-commit/rollback" },
+        { "name": "Alembic (alembic/versions/)", "kind": "migrations", "note": "Схема; + scripts/migrate_*.py для данных; + Base.metadata.create_all для новых таблиц" }
+      ]
+    }
+  ],
+  "modules": [
+    { "domain": "core", "path": "modules/core", "routers": ["router_auth", "router_roles", "router_workspace", "router_health"], "services": ["DatabaseService", "UserService", "UserSessionService", "RoleService", "WorkspaceService", "ConfigService", "UserIdentityService", "AuthService"], "notes": "Аутентификация, RBAC, workspaces, health, EventBus/TaskRegistry/InternetMonitor" },
+    { "domain": "llm", "path": "modules/llm", "routers": ["router", "router_finetune", "router_models"], "services": ["LLMServiceImpl (facade)", "CloudProviderService"], "notes": "Роутинг чата через LLM, LoRA fine-tune, HuggingFace модели. GPU-роутеры registered при DEPLOYMENT_MODE != cloud" },
+    { "domain": "chat", "path": "modules/chat", "routers": ["router"], "services": ["ChatServiceImpl (facade)", "ChatService", "ChatShareService"], "notes": "Agentic RAG loop (knowledge_search tool, max 5 iter); platform-agent fallback; per-user token tracking; _inject_offer_context для procurement" },
+    { "domain": "knowledge", "path": "modules/knowledge", "routers": ["router_faq", "router_wiki_rag", "router_github_repos", "router_google_drive", "router_rss"], "services": ["KnowledgeServiceImpl (facade)", "FAQService", "KnowledgeDocService", "KnowledgeCollectionService", "GitHubRepoProjectService"], "notes": "Tiered RAG: семантика → BM25 → Vector Search microservice; RSS layer (feedparser); мульти-коллекции" },
+    { "domain": "speech", "path": "modules/speech", "routers": ["router_tts", "router_stt", "router_services", "router_voices", "router_finetune"], "services": ["PresetService", "StreamingTTSManager"], "notes": "TTS/STT/voices/finetune. GPU-only, скрыты в cloud mode" },
+    { "domain": "crm", "path": "modules/crm", "routers": ["router"], "services": ["AmoCRMService"], "notes": "amoCRM интеграция; триаж лидов (triage.py); реактивно обрабатывает Widget-события" },
+    { "domain": "ecommerce", "path": "modules/ecommerce", "routers": ["router"], "services": ["WooCommerceService"], "notes": "WooCommerce sync (daily 23:00 UTC → DatasetSynced)" },
+    { "domain": "procurement", "path": "modules/procurement", "routers": ["router"], "services": ["OfferService", "rate_service", "pricing"], "notes": "Единый поиск позиции (ProductOffer); детерминированное ранжирование, [] если не найдено; адаптеры site/suppliers; КП-генерация; ценовой движок (USD/KZT)" },
+    { "domain": "kanban", "path": "modules/kanban", "routers": ["router"], "services": ["KanbanService", "KanbanProjectService"], "notes": "kanban-sync задача (15 мин)" },
+    { "domain": "claude_code", "path": "modules/claude_code", "routers": ["router"], "services": ["ClaudeCodeService", "ClaudeCodeProjectService"], "notes": "Мост к Claude Code CLI" },
+    { "domain": "monitoring", "path": "modules/monitoring", "routers": ["router_audit", "router_usage", "router_monitor", "router_logs"], "services": ["AuditService", "PaymentService"], "notes": "Аудит, usage/token tracking, логи, мониторинг" },
+    { "domain": "admin", "path": "modules/admin", "routers": ["router_backup", "router_legal", "router_github_webhook"], "services": ["ResourceShareService"], "notes": "Бэкапы, legal, GitHub webhook, шаринг ресурсов" },
+    { "domain": "sales", "path": "modules/sales", "routers": ["router_bot_sales", "router_yoomoney"], "services": ["sales_funnel"], "notes": "Продажи в ботах, платежи YooMoney" },
+    { "domain": "telephony", "path": "modules/telephony", "routers": ["router"], "services": ["GSMService"], "notes": "GSM (SIM7600E-H). GPU/hardware, скрыт в cloud mode" },
+    { "domain": "google", "path": "modules/google", "routers": ["router", "callback_router"], "services": ["GoogleOAuthService"], "notes": "Google OAuth 2.0 (Drive, Docs, Sheets, Gmail)" },
+    { "domain": "search", "path": "modules/search", "routers": [], "services": ["WebSearchService"], "notes": "DuckDuckGo (ddgs/duckduckgo_search), опциональный импорт" },
+    { "domain": "compat", "path": "modules/compat", "routers": ["router"], "services": [], "notes": "Legacy телефония (/tts /stt /chat /process_call) + OpenAI-compat (/v1/*)" },
+    { "domain": "channels/telegram", "path": "modules/channels/telegram", "routers": ["router"], "services": ["BotInstanceService", "TelegramSessionService"], "notes": "Мульти-инстанс TG боты; subprocess через multi_bot_manager.py; python-telegram-bot + aiogram" },
+    { "domain": "channels/whatsapp", "path": "modules/channels/whatsapp", "routers": ["router"], "services": ["WhatsAppInstanceService"], "notes": "WhatsApp Cloud API; subprocess через whatsapp_manager.py" },
+    { "domain": "channels/widget", "path": "modules/channels/widget", "routers": ["router", "router_public"], "services": ["WidgetInstanceService"], "notes": "Чат-виджеты для сайтов; публикует WidgetSessionCreated/MessageSent/ContactSubmitted; landing lead form → Telegram" },
+    { "domain": "channels/mobile", "path": "modules/channels/mobile", "routers": ["router"], "services": ["MobileAppInstanceService", "push_service", "provisioning"], "notes": "Android чат-приложение; default-assistant provisioning (6 ассистентов по User.country); приватные per-user сессии" }
+  ],
+  "events": {
+    "bus": "modules/core/events.py",
+    "domain_events": [
+      { "event": "InternetStatusChanged", "source": "modules/core", "note": "Переключение LLM backend online/offline" },
+      { "event": "UserRoleChanged", "source": "modules/core" },
+      { "event": "SessionRevoked", "source": "modules/core" },
+      { "event": "DatasetSynced", "source": "modules/core", "note": "Декаплит CRM/ecommerce/kanban от knowledge" },
+      { "event": "KnowledgeUpdated", "source": "modules/knowledge" },
+      { "event": "WidgetSessionCreated", "source": "modules/channels/widget", "note": "CRM реактивно создаёт lead/contact/note" },
+      { "event": "WidgetMessageSent", "source": "modules/channels/widget" },
+      { "event": "WidgetContactSubmitted", "source": "modules/channels/widget" }
+    ]
+  },
+  "background_tasks": [
+    { "name": "session-cleanup", "interval": "1h", "fn": "modules/core/maintenance.py" },
+    { "name": "periodic-vacuum", "interval": "7d", "fn": "modules/core/maintenance.py" },
+    { "name": "kanban-sync", "interval": "15min", "fn": "modules/kanban/tasks.py" },
+    { "name": "woocommerce-sync", "interval": "daily 23:00 UTC", "fn": "modules/ecommerce/tasks.py" },
+    { "name": "procurement-site-sync", "interval": "daily 23:30 UTC", "fn": "modules/procurement/tasks.py" },
+    { "name": "rss-sync", "interval": "1h", "fn": "modules/knowledge/rss_service.py" },
+    { "name": "wiki-embeddings", "interval": "one-shot", "fn": "modules/knowledge/tasks.py" },
+    { "name": "wiki-collection-indexes", "interval": "one-shot", "fn": "modules/knowledge/tasks.py" },
+    { "name": "vector-search-sync", "interval": "startup + DatasetSynced", "fn": "app/services/vector_search_client.py" }
+  ],
+  "rag": {
+    "primary": "app/services/wiki_rag_service.py",
+    "tiers": [
+      "1. Семантические эмбеддинги (Gemini/OpenAI/local)",
+      "2. BM25 с русским/английским стеммингом",
+      "3. Vector Search microservice (если VECTOR_SEARCH_URL задан)"
+    ],
+    "agentic": "modules/chat/router.py — серверный loop, LLM вызывает knowledge_search tool (max 5 iter); провайдеры без supports_tools (Gemini SDK, claude_bridge) → one-shot инъекция",
+    "vector_search": { "path": "services/vector-search/", "engine": "ChromaDB + paraphrase-multilingual-mpnet-base-v2 (768 dims)", "port": 8003, "client": "app/services/vector_search_client.py" },
+    "static_collections": "scripts/scrape_digitax/ — правовые/бухгалтерские/SEO корпуса (consultant.ru коды, adilet.zan.kz, sbup.com SEO forum id=59)"
+  },
+  "frontend": {
+    "admin_panel": {
+      "path": "admin/",
+      "stack": ["Vue 3 + Composition API + TypeScript", "Vite", "Pinia (persisted)", "Vue Router (hash history)", "TanStack Vue Query", "vue-i18n (ru/en/kk)", "TailwindCSS + radix-vue", "lucide-vue-next"],
+      "served_at": "/admin/ (FastAPI), production nginx /var/www/admin-ai-sekretar24/",
+      "views": ["Dashboard", "Chat", "Llm", "Models", "Finetune", "Tts", "Faq", "WikiRag", "Crm", "WooCommerce", "Kanban", "Sales", "Telegram", "WhatsApp", "Widget", "MobileApp", "GSM", "Services", "Users", "Roles", "Audit", "Usage", "Monitoring", "Settings", "About", "Login", "Invite"],
+      "key_stores": ["auth.ts (JWT, user, deploymentMode, permissions, isAdmin, hasModule, canView/Edit/Manage)"],
+      "api_layer": "admin/src/api/client.ts — api.get/post/put/delete/upload + createSSE()",
+      "variants": { "full": "default", "lite": "VITE_PRODUCT_VARIANT=lite — урезанная панель", "demo": "VITE_DEMO_MODE=true — monkey-patch window.fetch с mock data" }
+    },
+    "mobile_app": {
+      "path": "mobile/",
+      "stack": ["Vue 3 + TypeScript", "Vite", "Pinia", "Vue Router", "Capacitor (Android)", "TailwindCSS 4"],
+      "server_url": "https://ai-sekretar24.ru (hardcoded)",
+      "size": "~77KB gzipped",
+      "screens": ["LoginView", "ChatListView", "ChatView", "SettingsView"],
+      "role_based": "admin → полный контроль; non-admin → shared chats + приватные per-user assistant сессии",
+      "jwt": "native Preferences (не localStorage)"
+    },
+    "landing": {
+      "path": "site/",
+      "note": "Статический маркетинг-сайт, без build-step; i18n ru(canonical)/en/kk; nginx /var/www/; lead form → POST /widget/lead → Telegram"
+    }
+  },
+  "api_conventions": {
+    "list_create": "GET/POST /admin/{resource}",
+    "crud": "GET/PUT/DELETE /admin/{resource}/{id}",
+    "actions": "POST /admin/{resource}/{id}/{action}",
+    "webhooks": "POST /webhooks/{service}",
+    "openai_compat": "POST /v1/chat/completions, GET /v1/models",
+    "rbac": "Depends(require_permission(module, level)) — level: view|edit|manage; workspace_context → (owner_id, workspace_id); gate-check перед mutation"
+  },
+  "deployment": {
+    "production": {
+      "server": "root@155.212.231.7 (ssh ai-server)",
+      "manager": "systemd (ai-secretary), НЕ Docker Compose",
+      "path": "/opt/ai-secretary",
+      "nginx_frontend": "/var/www/admin-ai-sekretar24/ (rsync после npm run build, НЕ admin/dist)",
+      "steps": ["git pull origin main", "cd admin && npm ci && npm run build", "rsync -av --delete admin/dist/ /var/www/admin-ai-sekretar24/", "bust sw.js cache", "systemctl restart ai-secretary", "curl localhost:8002/health"],
+      "webhook": "ai-secretary-webhook.service (GitHub push auto-deploy)"
+    },
+    "docker": {
+      "gpu": "docker compose up -d",
+      "cpu": "docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d",
+      "full": "+ vLLM containerized",
+      "vector_search": "docker compose --profile vector-search up -d (:8003)"
+    },
+    "ci": {
+      "file": ".github/workflows/ci.yml",
+      "jobs": ["lint-backend (ruff + format + mypy soft на orchestrator.py)", "lint-frontend (npm ci + eslint + build type-check)", "security (Trivy)"],
+      "branch_protection": "PR workflow обязателен, никогда прямой push в main"
+    }
+  },
+  "key_env_vars": {
+    "LLM_BACKEND": "vllm или cloud:{provider_id}",
+    "VLLM_API_URL": "http://localhost:11434",
+    "DEPLOYMENT_MODE": "full | cloud | local",
+    "ORCHESTRATOR_PORT": "8002",
+    "ADMIN_JWT_SECRET": "auto-generated если пусто (рестарт инвалидирует токены)",
+    "VECTOR_SEARCH_URL": "http://localhost:8003 (опционально)",
+    "GOOGLE_CLIENT_ID/SECRET": "OAuth 2.0",
+    "BRIDGE_ISOLATE_HOME": "1 — изолировать HOME Claude CLI",
+    "PROCUREMENT_CATALOG_COLLECTIONS": "default {6}",
+    "SUPPLIER_PRICES_DIR": "прайсы поставщиков (не в git)"
+  },
+  "known_issues": [
+    "Vosk-модель обязательна для STT (models/vosk/)",
+    "XTTS требует CUDA CC >= 7.0 (RTX 3060+)",
+    "GPU память: vLLM ~6GB + XTTS ~5GB в 12GB",
+    "VLESS proxy vs localhost — NO_PROXY для claude_bridge",
+    "Claude bridge warmup 7-30s, read=300s timeout, max_tokens=4096",
+    "services/bridge/src/models/ gitignored (pattern models/)",
+    "Docker CPU: whisper исключён; Claude CLI требует Node.js 20",
+    "Circular import — domain __init__.py ДОЛЖНЫ быть пустыми; импортировать сервисы напрямую"
+  ],
+  "stats": {
+    "routers": 40,
+    "domain_modules": 21,
+    "repositories": 46,
+    "admin_views": 25,
+    "background_tasks": 9,
+    "domain_events": 8
+  }
+}
+
+</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const $ = (s, r=document) => r.querySelector(s);
+const el = (t, c, h) => { const e = document.createElement(t); if(c) e.className=c; if(h!=null) e.innerHTML=h; return e; };
+const esc = s => String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+$('#genDate').textContent = DATA.generated;
+
+// stat pills
+const stats = DATA.stats;
+$('#statPills').innerHTML = Object.entries(stats).map(([k,v]) =>
+  `<span class="pill"><b>${v}</b> ${esc(k.replace(/_/g,' '))}</span>`).join('');
+
+const main = $('#main');
+const toc = $('#toc');
+const sections = [];
+function addSection(id, title, color, countLabel, builder) {
+  const s = el('section'); s.id = id;
+  const t = el('div', 'section-title');
+  if (color) { const d = el('span','dot'); d.style.background = color; t.appendChild(d); }
+  t.appendChild(el('span', null, esc(title)));
+  if (countLabel) t.appendChild(el('span','count', esc(countLabel)));
+  s.appendChild(t);
+  builder(s);
+  main.appendChild(s);
+  sections.push({id, title});
+  const a = el('a', null, esc(title)); a.href = '#'+id; toc.appendChild(a);
+}
+
+// ---- Overview: intro + request flow ----
+addSection('overview', 'Обзор', DATA.layers[0].color, null, s => {
+  s.appendChild(el('p', 'note', esc(DATA.description)));
+  const ep = DATA.entrypoint;
+  const flow = el('div','flow');
+  flow.style.marginTop = '18px';
+  flow.innerHTML = `
+    <div class="flow-band"><span class="band-label">Entrypoint · ${esc(ep.framework)} :${ep.port}</span>
+      <div class="chips"><span class="chip">${esc(ep.file)}</span></div>
+      <p class="note">${esc(ep.role)}</p>
+    </div>`;
+  const rf = el('div','flow-band');
+  rf.innerHTML = `<span class="band-label">Request flow</span>
+    <div class="chips" style="align-items:center">
+      <span class="chip">User message</span><span class="arrow">→</span>
+      <span class="chip">FAQ check (instant)</span><span class="arrow">/</span>
+      <span class="chip">LLM (agentic RAG)</span><span class="arrow">→</span>
+      <span class="chip">TTS</span><span class="arrow">→</span>
+      <span class="chip">Audio response</span>
+    </div>`;
+  flow.appendChild(rf);
+  s.appendChild(flow);
+
+  // deployment modes
+  const dm = el('div','panel'); dm.style.marginTop='14px';
+  dm.innerHTML = `<h3>Deployment modes · env <code style="font-family:var(--mono);color:#ffa657">${esc(DATA.deployment_modes.env)}</code></h3>`;
+  Object.entries(DATA.deployment_modes.modes).forEach(([k,v]) => {
+    const kv = el('div','kv'); kv.innerHTML = `<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`; dm.appendChild(kv);
+  });
+  s.appendChild(dm);
+});
+
+// ---- Layers ----
+DATA.layers.forEach(layer => {
+  addSection('layer-'+layer.id, layer.title, layer.color, layer.components.length+' компонентов', s => {
+    const g = el('div','grid');
+    layer.components.forEach(c => {
+      const card = el('div','card searchable');
+      card.dataset.text = (c.name+' '+(c.file||'')+' '+(c.note||'')+' '+(c.kind||'')).toLowerCase();
+      card.innerHTML =
+        `<h3>${esc(c.name)}</h3>` +
+        (c.kind ? `<span class="kind">${esc(c.kind)}</span>` : '') +
+        (c.file ? `<div class="file">${esc(c.file)}</div>` : '') +
+        (c.note ? `<p>${esc(c.note)}</p>` : '');
+      g.appendChild(card);
+    });
+    s.appendChild(g);
+  });
+});
+
+// ---- Domain modules ----
+addSection('modules', 'Доменные модули', '#22d3ee', DATA.modules.length+' модулей', s => {
+  DATA.modules.forEach(m => {
+    const d = el('details','mod searchable');
+    d.dataset.text = (m.domain+' '+m.path+' '+m.routers.join(' ')+' '+m.services.join(' ')+' '+m.notes).toLowerCase();
+    const routersH = m.routers.length ? m.routers.map(r=>`<span class="tag rtr">${esc(r)}</span>`).join('') : '<span class="note">—</span>';
+    const svcsH = m.services.length ? m.services.map(x=>`<span class="tag svc">${esc(x)}</span>`).join('') : '<span class="note">—</span>';
+    d.innerHTML =
+      `<summary>
+        <span class="domain">${esc(m.domain)}</span>
+        <span class="path">${esc(m.path)}</span>
+        <span class="badges"><span class="badge">${m.routers.length} rtr</span><span class="badge">${m.services.length} svc</span></span>
+      </summary>
+      <div class="body">
+        <div class="lbl">Routers</div>${routersH}
+        <div class="lbl">Services</div>${svcsH}
+        <div class="note">${esc(m.notes)}</div>
+      </div>`;
+    s.appendChild(d);
+  });
+});
+
+// ---- Events + Tasks ----
+addSection('events-tasks', 'События и фоновые задачи', '#f472b6', null, s => {
+  const two = el('div','two-col');
+  const evp = el('div','panel'); evp.innerHTML = `<h3>EventBus · ${esc(DATA.events.bus)}</h3>`;
+  DATA.events.domain_events.forEach(e => {
+    const kv = el('div','kv searchable'); kv.dataset.text=(e.event+' '+e.source+' '+(e.note||'')).toLowerCase();
+    kv.innerHTML = `<span class="k">${esc(e.event)}</span><span class="v">${esc(e.source)}${e.note?' — '+esc(e.note):''}</span>`; evp.appendChild(kv);
+  });
+  const tp = el('div','panel'); tp.innerHTML = `<h3>TaskRegistry · ${DATA.background_tasks.length} задач</h3>`;
+  DATA.background_tasks.forEach(t => {
+    const kv = el('div','kv searchable'); kv.dataset.text=(t.name+' '+t.interval+' '+t.fn).toLowerCase();
+    kv.innerHTML = `<span class="k">${esc(t.name)}</span><span class="v">${esc(t.interval)} · <span style="color:#79c0ff">${esc(t.fn)}</span></span>`; tp.appendChild(kv);
+  });
+  two.appendChild(evp); two.appendChild(tp); s.appendChild(two);
+});
+
+// ---- RAG ----
+addSection('rag', 'RAG / Knowledge', '#34d399', null, s => {
+  const p = el('div','panel');
+  p.innerHTML = `<h3>Wiki RAG · ${esc(DATA.rag.primary)}</h3>
+    <div class="lbl" style="color:var(--text-dim);font-size:11px;text-transform:uppercase;margin-bottom:6px">Tiered search</div>
+    <ul class="list">${DATA.rag.tiers.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`;
+  const kvs = [
+    ['Agentic RAG', DATA.rag.agentic],
+    ['Vector Search', `${DATA.rag.vector_search.engine} · :${DATA.rag.vector_search.port} · ${DATA.rag.vector_search.client}`],
+    ['Static collections', DATA.rag.static_collections]
+  ];
+  kvs.forEach(([k,v]) => { const kv=el('div','kv'); kv.style.marginTop='2px'; kv.innerHTML=`<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`; p.appendChild(kv); });
+  s.appendChild(p);
+});
+
+// ---- Frontend ----
+addSection('frontend', 'Фронтенд', '#a78bfa', null, s => {
+  const fe = DATA.frontend;
+  // admin
+  const ap = el('div','panel searchable'); ap.dataset.text=('admin panel vue '+fe.admin_panel.views.join(' ')+' '+fe.admin_panel.stack.join(' ')).toLowerCase();
+  ap.innerHTML = `<h3>Admin Panel · ${esc(fe.admin_panel.path)} · ${esc(fe.admin_panel.served_at)}</h3>
+    <div class="note" style="margin-bottom:10px">${fe.admin_panel.stack.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>
+    <div class="lbl" style="color:var(--text-dim);font-size:11px;text-transform:uppercase">Views (${fe.admin_panel.views.length})</div>
+    <div style="margin:6px 0">${fe.admin_panel.views.map(v=>`<span class="tag rtr">${esc(v)}</span>`).join('')}</div>
+    <div class="kv"><span class="k">API layer</span><span class="v">${esc(fe.admin_panel.api_layer)}</span></div>
+    <div class="kv"><span class="k">Variants</span><span class="v">${Object.entries(fe.admin_panel.variants).map(([k,v])=>`<b style="color:#7ee787">${esc(k)}</b>: ${esc(v)}`).join(' · ')}</span></div>`;
+  s.appendChild(ap);
+  // mobile + landing
+  const two = el('div','two-col'); two.style.marginTop='14px';
+  const mp = el('div','panel searchable'); mp.dataset.text=('mobile capacitor android '+fe.mobile_app.screens.join(' ')).toLowerCase();
+  mp.innerHTML = `<h3>Mobile App · ${esc(fe.mobile_app.path)}</h3>
+    <div class="note" style="margin-bottom:8px">${fe.mobile_app.stack.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>
+    <div class="kv"><span class="k">Server</span><span class="v">${esc(fe.mobile_app.server_url)} (${esc(fe.mobile_app.size)})</span></div>
+    <div class="kv"><span class="k">Screens</span><span class="v">${fe.mobile_app.screens.map(x=>esc(x)).join(', ')}</span></div>
+    <div class="kv"><span class="k">Roles</span><span class="v">${esc(fe.mobile_app.role_based)}</span></div>
+    <div class="kv"><span class="k">JWT</span><span class="v">${esc(fe.mobile_app.jwt)}</span></div>`;
+  const lp = el('div','panel searchable'); lp.dataset.text=('landing site static '+fe.landing.note).toLowerCase();
+  lp.innerHTML = `<h3>Landing · ${esc(fe.landing.path)}</h3><p class="note">${esc(fe.landing.note)}</p>`;
+  two.appendChild(mp); two.appendChild(lp); s.appendChild(two);
+});
+
+// ---- API + Deployment ----
+addSection('api-deploy', 'API-конвенции и деплой', '#fbbf24', null, s => {
+  const two = el('div','two-col');
+  const ap = el('div','panel'); ap.innerHTML = '<h3>API conventions</h3>';
+  Object.entries(DATA.api_conventions).forEach(([k,v]) => { const kv=el('div','kv searchable'); kv.dataset.text=(k+' '+v).toLowerCase(); kv.innerHTML=`<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`; ap.appendChild(kv); });
+  const dp = el('div','panel'); dp.innerHTML = '<h3>Production deployment</h3>';
+  const prod = DATA.deployment.production;
+  [['server',prod.server],['manager',prod.manager],['path',prod.path],['nginx',prod.nginx_frontend]].forEach(([k,v])=>{ const kv=el('div','kv'); kv.innerHTML=`<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`; dp.appendChild(kv);});
+  dp.appendChild(el('div','lbl',''));
+  const ol = el('ul','list'); prod.steps.forEach(st=>{ const li=el('li'); li.innerHTML=`<code>${esc(st)}</code>`; ol.appendChild(li); }); dp.appendChild(ol);
+  two.appendChild(ap); two.appendChild(dp); s.appendChild(two);
+
+  const ci = el('div','panel'); ci.style.marginTop='14px';
+  ci.innerHTML = `<h3>CI · ${esc(DATA.deployment.ci.file)}</h3>
+    <ul class="list">${DATA.deployment.ci.jobs.map(j=>`<li>${esc(j)}</li>`).join('')}</ul>
+    <p class="note">${esc(DATA.deployment.ci.branch_protection)}</p>`;
+  s.appendChild(ci);
+});
+
+// ---- Env + Known issues ----
+addSection('env-issues', 'Env-переменные и известные проблемы', '#f87171', null, s => {
+  const two = el('div','two-col');
+  const ep = el('div','panel'); ep.innerHTML = '<h3>Key env vars</h3>';
+  Object.entries(DATA.key_env_vars).forEach(([k,v]) => { const kv=el('div','kv searchable'); kv.dataset.text=(k+' '+v).toLowerCase(); kv.innerHTML=`<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`; ep.appendChild(kv); });
+  const ip = el('div','panel'); ip.innerHTML = '<h3>Known issues</h3>';
+  const ul = el('ul','list'); DATA.known_issues.forEach(i=>{ const li=el('li','searchable'); li.dataset.text=i.toLowerCase(); li.textContent=i; ul.appendChild(li); }); ip.appendChild(ul);
+  two.appendChild(ep); two.appendChild(ip); s.appendChild(two);
+});
+
+// ---- Search ----
+const searchables = () => Array.from(document.querySelectorAll('.searchable'));
+$('#search').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  const items = searchables();
+  if (!q) { items.forEach(i=>i.classList.remove('hidden')); sections.forEach(s=>$('#'+s.id).classList.remove('hidden')); return; }
+  items.forEach(i => i.classList.toggle('hidden', !(i.dataset.text||'').includes(q)));
+  // hide sections with no visible searchable items (only those that contain searchables)
+  sections.forEach(sc => {
+    const sec = $('#'+sc.id);
+    const inner = sec.querySelectorAll('.searchable');
+    if (inner.length === 0) { sec.classList.remove('hidden'); return; }
+    const anyVisible = Array.from(inner).some(i=>!i.classList.contains('hidden'));
+    sec.classList.toggle('hidden', !anyVisible);
+  });
+});
+</script>
+</body>
+</html>
