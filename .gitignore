@@ -40,6 +40,11 @@ voice_samples/
 
 # Models (НЕ КОММИТИМ большие модели AI!)
 models/
+# Exception: the bridge's OpenAI-compat schema package is code, not AI weights —
+# the blanket `models/` rule used to swallow it, breaking fresh clones/deploys
+# with `ModuleNotFoundError: No module named 'src.models'` (was Known Issue #6).
+!services/bridge/src/models/
+!services/bridge/src/models/**
 *.bin
 *.onnx
 *.pt

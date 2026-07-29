@@ -413,7 +413,7 @@ curl -s http://localhost:8002/health         # health check
 
 Webhook auto-deploy: `ai-secretary-webhook.service` triggers on GitHub push.
 
-**Local-only files** (not in git): `.env`, `docker-compose.override.yml`, modified `Dockerfile`, `services/bridge/src/models/`
+**Local-only files** (not in git): `.env`, `docker-compose.override.yml`, modified `Dockerfile`
 
 ### Deployment Checklist
 
@@ -479,7 +479,7 @@ Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`#
 3. **GPU memory** — vLLM ~6GB + XTTS ~5GB must fit in 12GB
 4. **VLESS proxy vs localhost** — `GeminiProvider` sets global `HTTP_PROXY`; `OpenAICompatibleProvider` sets `NO_PROXY=127.0.0.1,localhost` for `claude_bridge`; `bridge_manager.py` strips proxy env vars
 5. **Claude bridge timeouts** — 7-30s warmup. `read=300s` timeout for bridge (vs 60s default). `max_tokens=4096` (vs 512)
-6. **`services/bridge/src/models/` gitignored** — `.gitignore` pattern `models/` catches it. Copy manually after clone
+6. **`services/bridge/src/models/` now committed** — previously the blanket `.gitignore` pattern `models/` swallowed this OpenAI-compat schema package, so fresh clones/deploys crashed the bridge with `ModuleNotFoundError: No module named 'src.models'`. Fixed by a `.gitignore` negation (`!services/bridge/src/models/`); the package (reconstructed) is now tracked. No manual copy needed.
 7. **Docker CPU: whisper excluded** — `openai-whisper` fails to build (missing `pkg_resources`). Server Dockerfile patched to `grep -v whisper`
 8. **Docker + Claude CLI** — CPU image needs Node.js. Server Dockerfile patched to install Node.js 20 + `@anthropic-ai/claude-code`
 9. **Circular import in domain `__init__.py`** — Domain `__init__.py` files MUST stay empty (no service re-exports). Chain: `db/models.py` imports `from modules.X.models import ...` → Python executes `modules/X/__init__.py` → if it imports `service.py` → `service.py` imports `db.repositories` → `db.repositories` imports `db.models` → circular. **Workaround**: import services directly (`from modules.chat.service import ChatService`). **Future fix** (Phase 3+): eliminate eager imports in `db/models.py` by making it a lazy facade or removing it entirely once consumers import models from domain modules.
