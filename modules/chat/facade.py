@@ -101,6 +101,67 @@ def _load_platform_agent_prompt() -> str | None:
     return _PLATFORM_AGENT_PROMPT
 
 
+async def _resolve_session_persona(session: dict, persona_id: str | None):
+    """Resolve the persona backing a session.
+
+    An explicit ``persona_id`` (channel instance the message came through)
+    wins over the one stored on the session itself. Returns None when nothing
+    is attached — existing chats keep their current behaviour.
+    """
+    from modules.llm.persona import resolve_persona
+
+    persona = await resolve_persona(persona_id)
+    if persona:
+        return persona
+    return await resolve_persona(session.get("llm_persona"))
+
+
+def _build_prompt(
+    explicit: str | None,
+    session: dict,
+    persona,
+    llm,
+) -> str | None:
+    """System prompt precedence: explicit → session → persona → platform agent → service.
+
+    The persona sits below the session's own prompt so a per-chat override
+    always wins, and above ``platform-agent.md`` so attaching a persona
+    actually changes the assistant.
+    """
+    prompt = explicit or session.get("system_prompt")
+    if not prompt and persona:
+        prompt = persona.system_prompt
+    if not prompt:
+        prompt = _load_platform_agent_prompt()
+    if not prompt and hasattr(llm, "get_system_prompt"):
+        prompt = llm.get_system_prompt()
+    return prompt
+
+
+def _llm_accepts_params(llm) -> bool:
+    """True if the LLM service takes per-call generation params.
+
+    Guards against provider classes that predate the persona feature.
+    """
+    import inspect
+
+    try:
+        sig = inspect.signature(llm.generate_response_from_messages)
+    except (TypeError, ValueError):
+        return False
+    return "params" in sig.parameters
+
+
+def _generate(llm, messages, *, stream: bool, tools=None, params=None):
+    """Call the LLM, passing per-call params only when supported."""
+    kwargs: dict = {"stream": stream}
+    if tools:
+        kwargs["tools"] = tools
+    if params and _llm_accepts_params(llm):
+        kwargs["params"] = params
+    return llm.generate_response_from_messages(messages, **kwargs)
+
+
 KNOWLEDGE_SEARCH_TOOL = {
     "type": "function",
     "function": {
@@ -485,6 +546,21 @@ def _get_model_name(llm_service) -> str:
     return "claude"
 
 
+def _get_context_window(llm_service) -> int:
+    """Размер контекста модели.
+
+    Локальный vLLM сообщает реальный max_model_len (например 4096) — эвристика
+    по имени модели его не знает и вернула бы 128k, из-за чего запрос уходил бы
+    в vLLM без обрезки и получал 400 "maximum context length".
+    """
+    from app.utils.tokens import get_context_window
+
+    reported = getattr(llm_service, "max_model_len", None)
+    if isinstance(reported, int) and reported > 0:
+        return reported
+    return get_context_window(_get_model_name(llm_service))
+
+
 def _is_claude_provider(llm_service) -> bool:
     """True if llm_service is a Claude provider (claude / claude_bridge)."""
     ptype = getattr(llm_service, "provider_type", None)
@@ -617,6 +693,8 @@ class ChatServiceImpl:
         llm_service=None,
         session_data: dict | None = None,
         system_prompt: str | None = None,
+        persona_id: str | None = None,
+        gen_params: dict | None = None,
         rag_mode: str = "all",
         collection_ids: list[int] | None = None,
         parent_id: str | None = None,
@@ -630,6 +708,9 @@ class ChatServiceImpl:
             llm_service: Resolved LLM service instance (CloudLLMService/VLLMLLMService).
             session_data: Pre-fetched session dict (avoids redundant DB call).
             system_prompt: Override system prompt (from widget/mobile/override).
+            persona_id: Persona (LLM preset) from the channel instance; falls
+                back to the one stored on the session.
+            gen_params: Explicit generation parameters overriding the persona's.
             rag_mode: RAG mode ("all", "selected", "collection", "none").
             collection_ids: Knowledge collection IDs for RAG.
             parent_id: Parent message ID (for branching on edit/regenerate).
@@ -651,12 +732,12 @@ class ChatServiceImpl:
         use_agentic = _should_use_agentic_rag(llm, rag_mode, coll_ids, wiki_rag)
         use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm)
 
-        # Build prompt
-        prompt = system_prompt or session.get("system_prompt")
-        if not prompt:
-            prompt = _load_platform_agent_prompt()
-        if not prompt and hasattr(llm, "get_system_prompt"):
-            prompt = llm.get_system_prompt()
+        # Build prompt + generation params from the attached persona
+        from modules.llm.persona import merge_params
+
+        persona = await _resolve_session_persona(session, persona_id)
+        prompt = _build_prompt(system_prompt, session, persona, llm)
+        params = merge_params(gen_params, persona)
 
         if not use_agentic:
             if _is_procurement_session(coll_ids):
@@ -676,10 +757,9 @@ class ChatServiceImpl:
         )
 
         # Trim context
-        from app.utils.tokens import get_context_window, trim_messages
+        from app.utils.tokens import trim_messages
 
-        model = _get_model_name(llm)
-        context_window = get_context_window(model)
+        context_window = _get_context_window(llm)
         messages, _ = trim_messages(messages, context_window)
 
         # Generate
@@ -689,9 +769,7 @@ class ChatServiceImpl:
             response_text = ""
 
             for _iteration in range(MAX_TOOL_ITERATIONS):
-                result = llm.generate_response_from_messages(
-                    loop_messages, stream=False, tools=tools
-                )
+                result = _generate(llm, loop_messages, stream=False, tools=tools, params=params)
                 if isinstance(result, str):
                     response_text = result
                     break
@@ -711,7 +789,7 @@ class ChatServiceImpl:
                         {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                     )
         else:
-            response_text = llm.generate_response_from_messages(messages, stream=False)
+            response_text = _generate(llm, messages, stream=False, params=params)
             if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
                 response_text = "".join(response_text)
 
@@ -735,6 +813,8 @@ class ChatServiceImpl:
         session_data: dict | None = None,
         user_msg: dict | None = None,
         system_prompt: str | None = None,
+        persona_id: str | None = None,
+        gen_params: dict | None = None,
         rag_mode: str = "all",
         collection_ids: list[int] | None = None,
         web_search: bool | None = None,
@@ -778,12 +858,12 @@ class ChatServiceImpl:
         )
         use_web_search = want_web_search and _supports_tools(llm)
 
-        # Build prompt
-        prompt = system_prompt or session.get("system_prompt")
-        if not prompt:
-            prompt = _load_platform_agent_prompt()
-        if not prompt and hasattr(llm, "get_system_prompt"):
-            prompt = llm.get_system_prompt()
+        # Build prompt + generation params from the attached persona
+        from modules.llm.persona import merge_params
+
+        persona = await _resolve_session_persona(session, persona_id)
+        prompt = _build_prompt(system_prompt, session, persona, llm)
+        params = merge_params(gen_params, persona)
 
         if not use_agentic:
             if _is_procurement_session(coll_ids):
@@ -803,10 +883,10 @@ class ChatServiceImpl:
         )
 
         # Trim context
-        from app.utils.tokens import count_message_tokens, get_context_window, trim_messages
+        from app.utils.tokens import count_message_tokens, trim_messages
 
         model = _get_model_name(llm)
-        context_window = get_context_window(model)
+        context_window = _get_context_window(llm)
         messages, was_trimmed = trim_messages(messages, context_window)
         if was_trimmed:
             logger.info(f"Trimmed context for session {session_id}")
@@ -827,8 +907,8 @@ class ChatServiceImpl:
                     content_chunks: list[str] = []
                     tool_calls_result = None
 
-                    for event in llm.generate_response_from_messages(
-                        loop_messages, stream=True, tools=tools
+                    for event in _generate(
+                        llm, loop_messages, stream=True, tools=tools, params=params
                     ):
                         if isinstance(event, dict):
                             if event["type"] == "content":
@@ -871,7 +951,7 @@ class ChatServiceImpl:
                         )
             else:
                 # One-shot streaming
-                for chunk in llm.generate_response_from_messages(messages, stream=True):
+                for chunk in _generate(llm, messages, stream=True, params=params):
                     full_response.append(chunk)
                     yield StreamChunk(type="chunk", content=chunk)
 

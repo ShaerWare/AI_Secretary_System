@@ -157,6 +157,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
         workspace_id: Optional[int] = None,
+        llm_persona: Optional[str] = None,
     ) -> dict:
         """Create new chat session."""
         session_id = self._generate_session_id()
@@ -166,6 +167,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             id=session_id,
             title=title or "Новый чат",
             system_prompt=system_prompt,
+            llm_persona=llm_persona or None,
             source=source,
             source_id=source_id,
             owner_id=owner_id,
@@ -187,6 +189,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             "id": session.id,
             "title": session.title,
             "system_prompt": session.system_prompt,
+            "llm_persona": session.llm_persona,
             "source": session.source,
             "source_id": session.source_id,
             "rag_mode": session.rag_mode,
@@ -209,6 +212,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         web_search_enabled: Optional[bool] = None,
         source: Optional[str] = None,
         source_id: Optional[str] = None,
+        llm_persona: Optional[str] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
         result = await self.session.execute(
@@ -252,6 +256,9 @@ class ChatRepository(BaseRepository[ChatSession]):
             session.source = source
         if source_id is not None:
             session.source_id = source_id if source_id else None
+        if llm_persona is not None:
+            # Empty string detaches the persona
+            session.llm_persona = llm_persona or None
         session.updated = datetime.utcnow()
 
         await self.session.flush()

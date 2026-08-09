@@ -54,7 +54,7 @@ class BotInstanceCreateRequest(BaseModel):
     error_message: str = "Произошла ошибка. Попробуйте позже."
     typing_enabled: bool = True
     llm_backend: str = "vllm"
-    llm_persona: str = "anna"
+    llm_persona: str = ""  # LLMPreset id; "" = no persona
     system_prompt: Optional[str] = None
     llm_params: Optional[dict] = None
     tts_engine: str = "xtts"

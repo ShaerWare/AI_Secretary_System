@@ -39,7 +39,9 @@ class MobileAppInstance(Base):
 
     # AI configuration
     llm_backend: Mapped[str] = mapped_column(String(20), default="vllm")
-    llm_persona: Mapped[str] = mapped_column(String(50), default="anna")
+    # Attached persona (LLMPreset.id). "" = none — the prompt then falls
+    # back to the instance's own system_prompt / platform-agent.md.
+    llm_persona: Mapped[str] = mapped_column(String(50), default="")
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     llm_params: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
 

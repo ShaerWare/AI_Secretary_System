@@ -25,7 +25,7 @@ DEFAULT_BOT_CONFIG = {
     "error_message": "Произошла ошибка. Попробуйте позже.",
     "typing_enabled": True,
     "llm_backend": "vllm",
-    "llm_persona": "anna",
+    "llm_persona": "",
     "tts_engine": "xtts",
     "tts_voice": "anna",
 }

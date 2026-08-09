@@ -301,7 +301,7 @@ const formData = ref<Partial<BotInstance>>({
   error_message: 'Произошла ошибка. Попробуйте позже.',
   typing_enabled: true,
   llm_backend: 'vllm',
-  llm_persona: 'anna',
+  llm_persona: '',
   rag_mode: 'all',
   knowledge_collection_id: null as number | null,
   knowledge_collection_ids: [] as number[],
@@ -360,6 +360,24 @@ const { data: collectionsData } = useQuery({
   queryFn: () => wikiRagApi.getCollections(),
 })
 const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
+
+// Personas (LLM presets). Attaching one makes its prompt + generation params
+// the live source for this bot; its own system prompt still wins when set.
+const { data: presetsData } = useQuery({
+  queryKey: ['llm-presets'],
+  queryFn: () => llmApi.getPresets(),
+})
+const personas = computed(() => presetsData.value?.presets || [])
+const selectedPersona = computed(
+  () => personas.value.find(p => p.id === formData.value.llm_persona) || null,
+)
+const instancePersona = computed(
+  () => personas.value.find(p => p.id === selectedInstance.value?.llm_persona) || null,
+)
+/** What actually reaches the model: the instance prompt, else the persona's. */
+const instanceEffectivePrompt = computed(
+  () => selectedInstance.value?.system_prompt || instancePersona.value?.system_prompt || '',
+)
 
 // Available LLM options for dropdown
 interface LlmOption {
@@ -491,7 +509,7 @@ function openCreateDialog() {
     error_message: 'Произошла ошибка. Попробуйте позже.',
     typing_enabled: true,
     llm_backend: 'vllm',
-    llm_persona: 'anna',
+    llm_persona: '',
     rag_mode: 'all',
     knowledge_collection_id: null,
     knowledge_collection_ids: [],
@@ -1095,7 +1113,7 @@ watch(instances, (newInstances) => {
               </div>
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('telegram.llmPersona') }}</h3>
-                <p class="text-lg font-semibold">{{ selectedInstance.llm_persona }}</p>
+                <p class="text-lg font-semibold">{{ instancePersona?.name || t('telegram.llmPersonaNone') }}</p>
               </div>
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('telegram.ttsEngine') }}</h3>
@@ -1117,9 +1135,14 @@ watch(instances, (newInstances) => {
                 </div>
               </div>
             </div>
-            <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
+            <div class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('telegram.systemPrompt') }}</h3>
-              <p class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap">{{ selectedInstance.system_prompt }}</p>
+              <p class="text-xs text-muted-foreground mb-2">
+                <template v-if="selectedInstance.system_prompt">{{ t('telegram.promptSourceInstance') }}</template>
+                <template v-else-if="instancePersona">{{ t('telegram.promptSourcePersona', { name: instancePersona.name }) }}</template>
+                <template v-else>{{ t('telegram.promptSourcePlatform') }}</template>
+              </p>
+              <p v-if="instanceEffectivePrompt" class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">{{ instanceEffectivePrompt }}</p>
             </div>
           </template>
 
@@ -1858,9 +1881,12 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
                   v-model="formData.llm_persona"
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="anna">Анна</option>
-                  <option value="marina">Марина</option>
+                  <option value="">{{ t('telegram.llmPersonaNone') }}</option>
+                  <option v-for="p in personas" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
+                <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                  {{ t('telegram.llmPersonaHint') }}
+                </p>
               </div>
             </div>
 
@@ -1883,9 +1909,12 @@ v-for="ev in (salesGithub.events || [])" :key="ev"
                   v-model="formData.tts_voice"
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="anna">Анна</option>
-                  <option value="marina">Марина</option>
+                  <option value="">{{ t('telegram.llmPersonaNone') }}</option>
+                  <option v-for="p in personas" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
+                <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                  {{ t('telegram.llmPersonaHint') }}
+                </p>
               </div>
             </div>
 

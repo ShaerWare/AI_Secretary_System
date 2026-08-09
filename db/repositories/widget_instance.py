@@ -29,7 +29,7 @@ DEFAULT_WIDGET_CONFIG = {
     "button_icon": "chat",
     "position": "right",
     "llm_backend": "vllm",
-    "llm_persona": "anna",
+    "llm_persona": "",
     "tts_engine": "xtts",
     "tts_voice": "anna",
 }

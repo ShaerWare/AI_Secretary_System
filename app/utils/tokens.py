@@ -162,6 +162,9 @@ def trim_messages(
 
     Returns (trimmed_messages, was_trimmed).
     """
+    # Для коротких окон (локальный vLLM с max-model-len 4096) фиксированный
+    # резерв в 4096 съел бы весь бюджет — ограничиваем его четвертью окна.
+    reserve_output = min(reserve_output, context_window // 4)
     max_input = context_window - reserve_output
     if count_message_tokens(messages) <= max_input:
         return messages, False

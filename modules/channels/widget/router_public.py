@@ -21,6 +21,7 @@ from cloud_llm_service import CloudLLMService
 from modules.channels.widget.service import widget_instance_service
 from modules.chat.service import chat_service
 from modules.core.service import config_service
+from modules.llm.persona import normalize_persona_id
 from modules.llm.service import cloud_provider_service
 
 
@@ -168,7 +169,13 @@ async def widget_create_session(request: Request):
         raise HTTPException(status_code=404, detail="Widget not found or disabled")
 
     system_prompt = instance_data.get("system_prompt")
-    session = await chat_service.create_session(None, system_prompt, "widget", instance_id)
+    session = await chat_service.create_session(
+        None,
+        system_prompt,
+        "widget",
+        instance_id,
+        llm_persona=normalize_persona_id(instance_data.get("llm_persona")),
+    )
 
     # Collect visitor metadata (server-side + client-side)
     client_metadata = body.get("metadata") or {}
@@ -258,6 +265,10 @@ async def widget_stream_message(request: Request, session_id: str):
     container = get_container()
     active_llm = container.llm_service
     custom_prompt = None
+    # Persona (LLM preset) backing this widget — supplies the system prompt when
+    # the instance has none of its own, and always supplies generation params.
+    persona_id = None
+    gen_params = None
 
     widget = await widget_instance_service.get_instance(instance_id)
 
@@ -285,6 +296,8 @@ async def widget_stream_message(request: Request, session_id: str):
             except Exception as e:
                 logger.warning(f"Widget LLM override failed: {e}")
         custom_prompt = widget.get("system_prompt")
+        persona_id = normalize_persona_id(widget.get("llm_persona"))
+        gen_params = widget.get("llm_params")
 
     if not active_llm:
         raise HTTPException(status_code=503, detail="LLM service not available")
@@ -336,6 +349,8 @@ async def widget_stream_message(request: Request, session_id: str):
                 session_data=session,
                 user_msg=user_msg,
                 system_prompt=custom_prompt,
+                persona_id=persona_id,
+                gen_params=gen_params,
                 rag_mode=rag_mode,
                 collection_ids=collection_ids,
                 web_search=web_search,

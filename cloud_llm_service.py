@@ -172,9 +172,13 @@ class BaseLLMProvider(ABC):
 
     @abstractmethod
     def generate_response_from_messages(
-        self, messages: List[Dict[str, str]], stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False, params: Optional[Dict] = None
     ) -> Union[str, Generator[str, None, None]]:
-        """Generate response from OpenAI-format messages."""
+        """Generate response from OpenAI-format messages.
+
+        params — per-call generation parameters (chat/instance persona),
+        overriding the provider's runtime defaults.
+        """
         pass
 
     @abstractmethod
@@ -364,14 +368,18 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         yield from self._generate_stream(messages)
 
     def generate_response_from_messages(
-        self, messages: List[Dict[str, str]], stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False, params: Optional[Dict] = None
     ) -> Union[str, Generator[str, None, None]]:
         if stream:
-            return self._generate_stream(messages)
-        return self._generate_non_stream(messages)
+            return self._generate_stream(messages, params=params)
+        return self._generate_non_stream(messages, params=params)
 
     def generate_with_tools(
-        self, messages: List[Dict], tools: List[Dict], stream: bool = False
+        self,
+        messages: List[Dict],
+        tools: List[Dict],
+        stream: bool = False,
+        params: Optional[Dict] = None,
     ) -> Union[dict, str, Generator]:
         """Generate response with tool-calling support.
 
@@ -380,10 +388,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 {"type": "tool_calls", "tool_calls": [...]}.
         """
         if stream:
-            return self._generate_stream_with_tools(messages, tools)
-        return self._generate_non_stream_with_tools(messages, tools)
+            return self._generate_stream_with_tools(messages, tools, params=params)
+        return self._generate_non_stream_with_tools(messages, tools, params=params)
 
-    def _generate_non_stream_with_tools(self, messages: List[Dict], tools: List[Dict]):
+    def _generate_non_stream_with_tools(
+        self, messages: List[Dict], tools: List[Dict], params: Optional[Dict] = None
+    ):
         """Non-stream generation with tools. Returns str or dict with tool_calls."""
         last_error_msg = "Извините, произошла техническая ошибка."
 
@@ -392,7 +402,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 response = self.client.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=self._build_request_json(model, messages, stream=False, tools=tools),
+                    json=self._build_request_json(
+                        model, messages, stream=False, tools=tools, params=params
+                    ),
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -429,7 +441,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         return last_error_msg
 
-    def _generate_stream_with_tools(self, messages: List[Dict], tools: List[Dict]) -> Generator:
+    def _generate_stream_with_tools(
+        self, messages: List[Dict], tools: List[Dict], params: Optional[Dict] = None
+    ) -> Generator:
         """Stream generation with tools. Yields typed dicts."""
         for model in self._model_chain:
             try:
@@ -437,7 +451,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     "POST",
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=self._build_request_json(model, messages, stream=True, tools=tools),
+                    json=self._build_request_json(
+                        model, messages, stream=True, tools=tools, params=params
+                    ),
                 ) as response:
                     response.raise_for_status()
 
@@ -538,19 +554,28 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         yield {"type": "content", "content": "Извините, произошла техническая ошибка."}
 
     def _build_request_json(
-        self, model: str, messages: List[Dict], stream: bool, tools: Optional[List[Dict]] = None
+        self,
+        model: str,
+        messages: List[Dict],
+        stream: bool,
+        tools: Optional[List[Dict]] = None,
+        params: Optional[Dict] = None,
     ) -> dict:
         default_max_tokens = 512
         # Tool-calling (agentic RAG) needs much more tokens: text + JSON tool calls
         # + accumulated context from prior search results
         if tools:
             default_max_tokens = 4096
+        # Per-call params (persona) win over the provider's runtime defaults
+        effective = dict(self.runtime_params)
+        if params:
+            effective.update({k: v for k, v in params.items() if v is not None})
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": self.runtime_params.get("temperature", 0.7),
-            "max_tokens": self.runtime_params.get("max_tokens", default_max_tokens),
-            "top_p": self.runtime_params.get("top_p", 0.9),
+            "temperature": effective.get("temperature", 0.7),
+            "max_tokens": effective.get("max_tokens", default_max_tokens),
+            "top_p": effective.get("top_p", 0.9),
             "stream": stream,
         }
         if tools:
@@ -558,7 +583,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             payload["tool_choice"] = "auto"
         return payload
 
-    def _generate_non_stream(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_non_stream(
+        self, messages: List[Dict[str, str]], params: Optional[Dict] = None
+    ) -> str:
         last_error_msg = "Извините, произошла техническая ошибка."
 
         for model in self._model_chain:
@@ -566,7 +593,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 response = self.client.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=self._build_request_json(model, messages, stream=False),
+                    json=self._build_request_json(model, messages, stream=False, params=params),
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -606,14 +633,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         return last_error_msg
 
-    def _generate_stream(self, messages: List[Dict[str, str]]) -> Generator[str, None, None]:
+    def _generate_stream(
+        self, messages: List[Dict[str, str]], params: Optional[Dict] = None
+    ) -> Generator[str, None, None]:
         for model in self._model_chain:
             try:
                 with self.client.stream(
                     "POST",
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=self._build_request_json(model, messages, stream=True),
+                    json=self._build_request_json(model, messages, stream=True, params=params),
                 ) as response:
                     response.raise_for_status()
                     if model != self._model_chain[0]:
@@ -803,8 +832,29 @@ class GeminiProvider(BaseLLMProvider):
             logger.warning(f"[{self.provider_id}] Health check failed: {e}")
             return False
 
+    def _gemini_generation_config(self, params: Optional[Dict] = None) -> Optional[Dict]:
+        """Map generic generation params onto Gemini's naming.
+
+        repetition_penalty has no Gemini equivalent and is dropped.
+        """
+        effective = dict(self.runtime_params)
+        if params:
+            effective.update({k: v for k, v in params.items() if v is not None})
+        config = {}
+        if effective.get("temperature") is not None:
+            config["temperature"] = effective["temperature"]
+        if effective.get("top_p") is not None:
+            config["top_p"] = effective["top_p"]
+        if effective.get("max_tokens") is not None:
+            config["max_output_tokens"] = effective["max_tokens"]
+        return config or None
+
     def generate_response(
-        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
+        self,
+        user_message: str,
+        system_prompt: str = None,
+        history: List[Dict] = None,
+        params: Optional[Dict] = None,
     ) -> str:
         """Generate response. Proxy is already running if configured."""
         try:
@@ -827,14 +877,20 @@ class GeminiProvider(BaseLLMProvider):
                     gemini_history.append({"role": role, "parts": [msg["content"]]})
 
             chat = model.start_chat(history=gemini_history)
-            response = chat.send_message(user_message)
+            response = chat.send_message(
+                user_message, generation_config=self._gemini_generation_config(params)
+            )
             return response.text.strip()
         except Exception as e:
             logger.error(f"[{self.provider_id}] Error: {e}")
             return "Извините, произошла техническая ошибка."
 
     def generate_response_stream(
-        self, user_message: str, system_prompt: str = None, history: List[Dict] = None
+        self,
+        user_message: str,
+        system_prompt: str = None,
+        history: List[Dict] = None,
+        params: Optional[Dict] = None,
     ) -> Generator[str, None, None]:
         """Generate streaming response. Proxy is already running if configured."""
         try:
@@ -855,7 +911,11 @@ class GeminiProvider(BaseLLMProvider):
                     gemini_history.append({"role": role, "parts": [msg["content"]]})
 
             chat = model.start_chat(history=gemini_history)
-            response = chat.send_message(user_message, stream=True)
+            response = chat.send_message(
+                user_message,
+                stream=True,
+                generation_config=self._gemini_generation_config(params),
+            )
 
             for chunk in response:
                 if chunk.text:
@@ -865,7 +925,7 @@ class GeminiProvider(BaseLLMProvider):
             yield "Извините, произошла техническая ошибка."
 
     def generate_response_from_messages(
-        self, messages: List[Dict[str, str]], stream: bool = False
+        self, messages: List[Dict[str, str]], stream: bool = False, params: Optional[Dict] = None
     ) -> Union[str, Generator[str, None, None]]:
         # Extract system prompt and convert to Gemini format
         system_prompt = None
@@ -886,8 +946,8 @@ class GeminiProvider(BaseLLMProvider):
             history = history[:-1]
 
         if stream:
-            return self.generate_response_stream(last_user, system_prompt, history)
-        return self.generate_response(last_user, system_prompt, history)
+            return self.generate_response_stream(last_user, system_prompt, history, params=params)
+        return self.generate_response(last_user, system_prompt, history, params=params)
 
 
 class CloudLLMService:
@@ -1051,11 +1111,15 @@ class CloudLLMService:
         messages: List[Dict[str, str]],
         stream: bool = False,
         tools: Optional[List[Dict]] = None,
+        params: Optional[Dict] = None,
     ) -> Union[str, Generator[str, None, None]]:
-        """Generate response from OpenAI-format messages (compatible with orchestrator)."""
+        """Generate response from OpenAI-format messages (compatible with orchestrator).
+
+        params — per-call generation parameters (chat/instance persona).
+        """
         # Tool-calling mode: skip FAQ, delegate to provider
         if tools and getattr(self.provider, "supports_tools", False):
-            return self.provider.generate_with_tools(messages, tools, stream)
+            return self.provider.generate_with_tools(messages, tools, stream, params=params)
 
         # Check FAQ for single-message requests
         user_messages = [m for m in messages if m.get("role") == "user"]
@@ -1070,7 +1134,7 @@ class CloudLLMService:
                     return gen()
                 return faq_response
 
-        return self.provider.generate_response_from_messages(messages, stream)
+        return self.provider.generate_response_from_messages(messages, stream, params=params)
 
     def reset_conversation(self):
         """Clear conversation history."""

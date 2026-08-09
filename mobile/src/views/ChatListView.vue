@@ -13,6 +13,8 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { useMobileConfigStore } from "@/stores/mobileConfig";
 import AccountPanel from "@/components/AccountPanel.vue";
+import AssistantPresetPicker from "@/components/AssistantPresetPicker.vue";
+import type { AssistantPreset } from "@/api/presets";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -56,9 +58,11 @@ const sessionRagIds = ref<number[]>([]);
 // Mobile instance attached to session
 const sessionMobileInstanceId = ref<string | null>(null);
 
-// Account panel — same UX as chat panels: portrait = bottom sheet with
-// height resize, landscape = right side panel with width resize.
+// Account / preset-picker overlays — same UX as chat panels: portrait =
+// bottom sheet with height resize, landscape = right side panel with
+// width resize. Only one overlay open at a time.
 const showAccount = ref(false);
+const showPresetPicker = ref(false);
 const panelSize = ref(Math.round(window.innerHeight * 0.6));
 const isLandscape = ref(false);
 const isResizing = ref(false);
@@ -71,12 +75,39 @@ function updateOrientation() {
 
 function toggleAccount() {
   showAccount.value = !showAccount.value;
+  if (showAccount.value) showPresetPicker.value = false;
+}
+
+function togglePresetPicker() {
+  showPresetPicker.value = !showPresetPicker.value;
+  if (showPresetPicker.value) showAccount.value = false;
 }
 
 async function handleAccountLogout() {
   showAccount.value = false;
   await auth.logout();
   router.replace("/login");
+}
+
+async function handlePresetSelect(preset: AssistantPreset) {
+  showPresetPicker.value = false;
+  if (isCreating.value) return;
+  isCreating.value = true;
+  try {
+    const data = await chatApi.createSession(undefined, {
+      // Preset chats are fresh blank chats, not copies under the active
+      // assistant — the preset itself supplies the prompt/RAG config.
+      instanceId: null,
+      systemPrompt: preset.system_prompt ?? undefined,
+      knowledgeCollectionIds: preset.knowledge_collection_ids,
+      ragMode: preset.rag_mode ?? undefined,
+    });
+    router.push(`/chat/${data.session.id}`);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Не удалось создать";
+  } finally {
+    isCreating.value = false;
+  }
 }
 
 function onResizeStart(e: TouchEvent | MouseEvent) {
@@ -184,19 +215,11 @@ function openChat(id: string) {
   router.push(`/chat/${id}`);
 }
 
-async function createNewChat() {
-  if (isCreating.value) return;
-  isCreating.value = true;
-  try {
-    // "Новый чат" is always a fresh blank chat, not another copy under the
-    // active assistant.
-    const data = await chatApi.createSession(undefined, { instanceId: null });
-    router.push(`/chat/${data.session.id}`);
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "Не удалось создать";
-  } finally {
-    isCreating.value = false;
-  }
+// "+" button opens the preset picker; actual session creation happens
+// in handlePresetSelect once the user chooses a preset (or "Свой ассистент"
+// for an empty session).
+function createNewChat() {
+  togglePresetPicker();
 }
 
 async function deleteSession(id: string, event: Event) {
@@ -930,6 +953,64 @@ onUnmounted(() => {
           </div>
           <div class="flex-1 overflow-y-auto">
             <AccountPanel :active="showAccount" @logout="handleAccountLogout" />
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Preset picker overlay (same UX as account panel) -->
+    <template v-if="showPresetPicker">
+      <div class="fixed inset-0 bg-black/40 z-40" @click="togglePresetPicker" />
+
+      <!-- Portrait: bottom sheet, height-resizable -->
+      <div
+        v-if="!isLandscape"
+        class="fixed left-0 right-0 bottom-0 z-50 bg-stone-900/95 border-t border-stone-700 flex flex-col"
+        :style="{ height: panelSize + 'px' }"
+      >
+        <div
+          class="shrink-0 h-3 flex items-center justify-center cursor-row-resize bg-stone-900/80 border-b border-stone-700 touch-none select-none"
+          @mousedown="onResizeStart"
+          @touchstart="onResizeStart"
+        >
+          <div class="w-10 h-1 rounded-full bg-stone-600" />
+        </div>
+        <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b border-stone-800">
+          <span class="text-xs font-medium text-stone-400 uppercase tracking-wide">Новый ассистент</span>
+          <button class="text-stone-500 hover:text-white transition-colors" @click="togglePresetPicker">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex-1 overflow-hidden">
+          <AssistantPresetPicker :active="showPresetPicker" @select="handlePresetSelect" @close="togglePresetPicker" />
+        </div>
+      </div>
+
+      <!-- Landscape: right side panel, width-resizable -->
+      <div v-else class="fixed top-0 bottom-0 right-0 z-50 flex">
+        <div
+          class="shrink-0 w-3 flex items-center justify-center cursor-col-resize bg-stone-900/80 border-l border-stone-700 touch-none select-none"
+          @mousedown="onResizeStart"
+          @touchstart="onResizeStart"
+        >
+          <div class="h-10 w-1 rounded-full bg-stone-600" />
+        </div>
+        <div
+          class="bg-stone-900/95 border-l border-stone-700 flex flex-col"
+          :style="{ width: panelSize + 'px' }"
+        >
+          <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b border-stone-800">
+            <span class="text-xs font-medium text-stone-400 uppercase tracking-wide">Новый ассистент</span>
+            <button class="text-stone-500 hover:text-white transition-colors" @click="togglePresetPicker">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            <AssistantPresetPicker :active="showPresetPicker" @select="handlePresetSelect" @close="togglePresetPicker" />
           </div>
         </div>
       </div>

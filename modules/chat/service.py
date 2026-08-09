@@ -69,6 +69,7 @@ class ChatService:
         rag_mode: Optional[str] = None,
         knowledge_collection_id: Optional[int] = None,
         workspace_id: Optional[int] = None,
+        llm_persona: Optional[str] = None,
     ) -> dict:
         """Create new session."""
         async with AsyncSessionLocal() as session:
@@ -82,6 +83,7 @@ class ChatService:
                 rag_mode=rag_mode,
                 knowledge_collection_id=knowledge_collection_id,
                 workspace_id=workspace_id,
+                llm_persona=llm_persona,
             )
             await session.commit()
             return result
@@ -108,6 +110,7 @@ class ChatService:
         web_search_enabled: Optional[bool] = None,
         source: Optional[str] = None,
         source_id: Optional[str] = None,
+        llm_persona: Optional[str] = None,
     ) -> Optional[dict]:
         """Update session title, system prompt, pinned status, RAG config, or context files."""
         async with AsyncSessionLocal() as session:
@@ -124,6 +127,7 @@ class ChatService:
                 web_search_enabled=web_search_enabled,
                 source=source,
                 source_id=source_id,
+                llm_persona=llm_persona,
             )
             await session.commit()
             return result

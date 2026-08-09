@@ -72,7 +72,7 @@ const formData = ref<Partial<WidgetInstance>>({
   allowed_domains: [],
   tunnel_url: '',
   llm_backend: 'vllm',
-  llm_persona: 'anna',
+  llm_persona: '',
   system_prompt: '',
   tts_engine: 'xtts',
   tts_voice: 'anna',
@@ -119,6 +119,25 @@ const { data: collectionsData } = useQuery({
   queryFn: () => wikiRagApi.getCollections(),
 })
 const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
+
+// Personas (LLM presets). Attaching one makes its prompt + generation params
+// the live source for this widget; its own system prompt still wins when set.
+const { data: presetsData } = useQuery({
+  queryKey: ['llm-presets'],
+  queryFn: () => llmApi.getPresets(),
+})
+const personas = computed(() => presetsData.value?.presets || [])
+const selectedPersona = computed(
+  () => personas.value.find(p => p.id === formData.value.llm_persona) || null,
+)
+/** Persona attached to the instance currently open in the detail pane. */
+const instancePersona = computed(
+  () => personas.value.find(p => p.id === selectedInstance.value?.llm_persona) || null,
+)
+/** What actually reaches the model: the instance prompt, else the persona's. */
+const instanceEffectivePrompt = computed(
+  () => selectedInstance.value?.system_prompt || instancePersona.value?.system_prompt || '',
+)
 
 const selectedInstance = computed(() =>
   instances.value.find(i => i.id === selectedInstanceId.value)
@@ -176,7 +195,7 @@ function openCreateDialog() {
     allowed_domains: [],
     tunnel_url: '',
     llm_backend: 'vllm',
-    llm_persona: 'anna',
+    llm_persona: '',
     system_prompt: '',
     tts_engine: 'xtts',
     tts_voice: 'anna',
@@ -727,7 +746,7 @@ function handleTestKeydown(e: KeyboardEvent) {
               </div>
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('widget.llmPersona') }}</h3>
-                <p class="text-lg font-semibold">{{ selectedInstance.llm_persona }}</p>
+                <p class="text-lg font-semibold">{{ instancePersona?.name || t('widget.llmPersonaNone') }}</p>
               </div>
               <div class="bg-card rounded-xl border border-border p-4">
                 <h3 class="font-medium mb-2">{{ t('widget.ttsEngine') }}</h3>
@@ -751,9 +770,14 @@ function handleTestKeydown(e: KeyboardEvent) {
                 </div>
               </div>
             </div>
-            <div v-if="selectedInstance.system_prompt" class="bg-card rounded-xl border border-border p-4">
+            <div class="bg-card rounded-xl border border-border p-4">
               <h3 class="font-medium mb-2">{{ t('widget.systemPrompt') }}</h3>
-              <p class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap">{{ selectedInstance.system_prompt }}</p>
+              <p class="text-xs text-muted-foreground mb-2">
+                <template v-if="selectedInstance.system_prompt">{{ t('widget.promptSourceInstance') }}</template>
+                <template v-else-if="instancePersona">{{ t('widget.promptSourcePersona', { name: instancePersona.name }) }}</template>
+                <template v-else>{{ t('widget.promptSourcePlatform') }}</template>
+              </p>
+              <p v-if="instanceEffectivePrompt" class="text-sm bg-secondary rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">{{ instanceEffectivePrompt }}</p>
             </div>
           </template>
 
@@ -1224,9 +1248,12 @@ function handleTestKeydown(e: KeyboardEvent) {
                   v-model="formData.llm_persona"
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="anna">Анна</option>
-                  <option value="marina">Марина</option>
+                  <option value="">{{ t('widget.llmPersonaNone') }}</option>
+                  <option v-for="p in personas" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
+                <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                  {{ t('widget.llmPersonaHint') }}
+                </p>
               </div>
             </div>
 
@@ -1249,9 +1276,12 @@ function handleTestKeydown(e: KeyboardEvent) {
                   v-model="formData.tts_voice"
                   class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="anna">Анна</option>
-                  <option value="marina">Марина</option>
+                  <option value="">{{ t('widget.llmPersonaNone') }}</option>
+                  <option v-for="p in personas" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
+                <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                  {{ t('widget.llmPersonaHint') }}
+                </p>
               </div>
             </div>
 
@@ -1286,8 +1316,11 @@ function handleTestKeydown(e: KeyboardEvent) {
                 v-model="formData.system_prompt"
                 rows="3"
                 class="w-full px-3 py-2 bg-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                :placeholder="t('widget.systemPromptPlaceholder')"
+                :placeholder="selectedPersona ? t('widget.systemPromptPersonaPlaceholder', { name: selectedPersona.name }) : t('widget.systemPromptPlaceholder')"
               />
+              <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                {{ t('widget.systemPromptOverridesPersona') }}
+              </p>
             </div>
 
             <!-- Rate Limiting -->

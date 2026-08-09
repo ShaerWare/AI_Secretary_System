@@ -59,11 +59,27 @@ export interface TokenUsage {
   trimmed?: boolean
 }
 
+/** Persona (LLM preset) attachable to a chat: prompt + generation params. */
+export interface ChatPersona {
+  id: string
+  name: string
+  description?: string | null
+  system_prompt: string
+  params: {
+    temperature?: number
+    max_tokens?: number
+    top_p?: number
+    repetition_penalty?: number
+  }
+}
+
 export interface ChatSession {
   id: string
   title: string
   messages: ChatMessage[]
   system_prompt?: string
+  /** Attached LLMPreset id; empty/absent = no persona. */
+  llm_persona?: string | null
   pinned?: boolean
   context_files?: { name: string; content: string }[]
   source?: 'admin' | 'telegram' | 'widget' | 'whatsapp' | null
@@ -175,15 +191,26 @@ export const chatApi = {
       .get<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`)
       .then((r) => ({ session: tokenizeSessionImages(r.session) })),
 
-  createSession: (title?: string, systemPrompt?: string, source?: string, sourceId?: string) =>
+  createSession: (
+    title?: string,
+    systemPrompt?: string,
+    source?: string,
+    sourceId?: string,
+    options?: { knowledgeCollectionIds?: number[]; ragMode?: string | null },
+  ) =>
     api.post<{ session: ChatSession }>('/admin/chat/sessions', {
       title,
       system_prompt: systemPrompt,
       source,
       source_id: sourceId,
+      knowledge_collection_ids: options?.knowledgeCollectionIds,
+      rag_mode: options?.ragMode,
     }),
 
-  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; pinned?: boolean; context_files?: { name: string; content: string }[]; rag_mode?: string; knowledge_collection_ids?: number[]; web_search_enabled?: boolean }) =>
+  listPersonas: () =>
+    api.get<{ personas: ChatPersona[]; can_edit: boolean }>('/admin/chat/personas'),
+
+  updateSession: (sessionId: string, data: { title?: string; system_prompt?: string; llm_persona?: string; pinned?: boolean; context_files?: { name: string; content: string }[]; rag_mode?: string; knowledge_collection_ids?: number[]; web_search_enabled?: boolean }) =>
     api.put<{ session: ChatSession }>(`/admin/chat/sessions/${sessionId}`, data),
 
   deleteSession: (sessionId: string) =>
