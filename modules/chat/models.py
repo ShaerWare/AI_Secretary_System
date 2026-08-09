@@ -26,6 +26,11 @@ class ChatSession(Base):
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), default="Новый чат")
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Attached persona (LLMPreset.id). NULL = no persona. When set and
+    # `system_prompt` is empty, the preset's prompt + generation parameters are
+    # resolved live on every message — editing the preset changes this chat too.
+    llm_persona: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -77,6 +82,7 @@ class ChatSession(Base):
             "id": self.id,
             "title": self.title,
             "system_prompt": self.system_prompt,
+            "llm_persona": self.llm_persona,
             "pinned": self.pinned,
             "context_files": json.loads(self.context_files) if self.context_files else [],
             "source": self.source,
@@ -107,6 +113,7 @@ class ChatSession(Base):
         return {
             "id": self.id,
             "title": self.title,
+            "llm_persona": self.llm_persona,
             "pinned": self.pinned,
             "message_count": len(messages),
             "last_message": last_msg,

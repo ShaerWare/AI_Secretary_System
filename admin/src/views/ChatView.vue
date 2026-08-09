@@ -686,6 +686,16 @@ const { data: collectionsData } = useQuery({
 })
 const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
 
+// Personas (LLM presets) attachable to this chat. The prompt and the
+// generation params are read live from the preset on every message, so what
+// the picker shows is what actually reaches the model.
+const { data: personasData, refetch: refetchPersonas } = useQuery({
+  queryKey: ['chat-personas'],
+  queryFn: () => chatApi.listPersonas(),
+})
+const availablePersonas = computed(() => personasData.value?.personas || [])
+const canEditPersonas = computed(() => !!personasData.value?.can_edit)
+
 // Branch tree query
 const { data: branchData, refetch: refetchBranches } = useQuery({
   queryKey: ['chat-branches', currentSessionId],
@@ -907,6 +917,116 @@ const selectedPrompt = computed<ChatSessionPrompt | null>(() => {
   if (selectedPromptId.value == null) return null
   return sessionPrompts.value.find(p => p.id === selectedPromptId.value) || null
 })
+
+// ---- Persona binding -------------------------------------------------------
+// The persona is a live link, not a copy: its prompt + generation params are
+// re-read on every message. A prompt saved on the chat itself overrides the
+// persona's prompt, which is why both are shown side by side instead of one
+// silently shadowing the other.
+const personaDraft = ref('')
+const personaSaving = ref(false)
+
+const attachedPersonaId = computed(() => currentSession.value?.llm_persona || '')
+const attachedPersona = computed(
+  () => availablePersonas.value.find(p => p.id === attachedPersonaId.value) || null,
+)
+
+/** Prompt text that will actually be sent for this chat (empty = none set here). */
+const activePromptContent = computed(() => {
+  const active = sessionPrompts.value.find(p => p.is_active)
+  return (active?.content ?? currentSession.value?.system_prompt ?? '').trim()
+})
+
+/** Where the system prompt comes from right now. */
+const promptSource = computed<'session' | 'persona' | 'platform'>(() => {
+  if (activePromptContent.value) return 'session'
+  if (attachedPersona.value?.system_prompt) return 'persona'
+  return 'platform'
+})
+
+const personaParamsLabel = computed(() => {
+  const p = attachedPersona.value?.params
+  if (!p) return ''
+  return [
+    p.temperature != null ? `temp ${p.temperature}` : '',
+    p.max_tokens != null ? `max_tokens ${p.max_tokens}` : '',
+    p.top_p != null ? `top_p ${p.top_p}` : '',
+    p.repetition_penalty != null ? `rep ${p.repetition_penalty}` : '',
+  ].filter(Boolean).join(' · ')
+})
+
+// Keep the persona editor in sync with the attached persona
+watch(attachedPersona, (persona) => {
+  personaDraft.value = persona?.system_prompt || ''
+}, { immediate: true })
+
+async function changePersona(personaId: string) {
+  if (!currentSessionId.value || personaSaving.value) return
+  personaSaving.value = true
+  try {
+    await chatApi.updateSession(currentSessionId.value, { llm_persona: personaId })
+    await refetchSession()
+    refetchSessions()
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    personaSaving.value = false
+  }
+}
+
+/** Write the draft back into the persona — affects every chat using it. */
+async function savePersonaPrompt() {
+  const persona = attachedPersona.value
+  if (!persona || personaSaving.value) return
+  personaSaving.value = true
+  try {
+    await llmApi.setPrompt(persona.id, personaDraft.value)
+    await refetchPersonas()
+    toastStore.success(t('chatView.personaSaved', { name: persona.name }))
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    personaSaving.value = false
+  }
+}
+
+/** Copy the draft into this chat only, leaving the persona untouched. */
+async function overridePersonaForChat() {
+  if (!currentSessionId.value || personaSaving.value) return
+  personaSaving.value = true
+  try {
+    customPrompt.value = personaDraft.value
+    if (selectedPromptId.value != null) {
+      await saveSelectedPromptContent()
+    } else {
+      await chatApi.updateSession(currentSessionId.value, { system_prompt: personaDraft.value })
+      await refetchSession()
+    }
+    toastStore.success(t('chatView.personaOverridden'))
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    personaSaving.value = false
+  }
+}
+
+/** Drop the chat-local prompt so the persona takes over again. */
+async function clearChatPromptOverride() {
+  if (!currentSessionId.value || personaSaving.value) return
+  personaSaving.value = true
+  try {
+    customPrompt.value = ''
+    if (selectedPromptId.value != null) {
+      await saveSelectedPromptContent()
+    }
+    await chatApi.updateSession(currentSessionId.value, { system_prompt: '' })
+    await refetchSession()
+  } catch (e) {
+    toastStore.error(String((e as Error).message || e))
+  } finally {
+    personaSaving.value = false
+  }
+}
 
 async function loadSessionPrompts(sid: string) {
   try {
@@ -4524,6 +4644,71 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         <div class="flex-1 overflow-y-auto p-3 pb-16 flex flex-col">
           <!-- Session Prompt Tab -->
           <div v-if="settingsTab === 'session'" class="flex flex-col flex-1 gap-3">
+            <!-- Persona: live link to an LLM preset (prompt + generation params) -->
+            <div class="rounded-lg border border-border p-3 space-y-2">
+              <div class="flex items-center gap-2">
+                <label class="text-xs font-medium shrink-0">{{ t('chatView.persona') }}</label>
+                <select
+                  :value="attachedPersonaId"
+                  :disabled="personaSaving"
+                  class="flex-1 min-w-0 px-2 py-1 text-xs rounded-md bg-secondary border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                  @change="changePersona(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">{{ t('chatView.personaNone') }}</option>
+                  <option v-for="p in availablePersonas" :key="p.id" :value="p.id">
+                    {{ p.name }}
+                  </option>
+                </select>
+              </div>
+
+              <p class="text-[11px] text-muted-foreground">
+                <template v-if="promptSource === 'session'">{{ t('chatView.promptSourceSession') }}</template>
+                <template v-else-if="promptSource === 'persona'">{{ t('chatView.promptSourcePersona', { name: attachedPersona?.name }) }}</template>
+                <template v-else>{{ t('chatView.promptSourcePlatform') }}</template>
+              </p>
+
+              <template v-if="attachedPersona">
+                <div v-if="personaParamsLabel" class="text-[11px] text-muted-foreground font-mono">
+                  {{ personaParamsLabel }}
+                </div>
+
+                <textarea
+                  v-model="personaDraft"
+                  rows="6"
+                  class="w-full p-2 bg-secondary rounded-md focus:outline-none focus:ring-1 focus:ring-primary resize-y text-xs font-mono"
+                  :placeholder="t('chatView.personaPromptPlaceholder')"
+                />
+
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-if="canEditPersonas"
+                    class="px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    :disabled="personaSaving || personaDraft === (attachedPersona.system_prompt || '')"
+                    :title="t('chatView.personaSaveHint')"
+                    @click="savePersonaPrompt"
+                  >
+                    {{ t('chatView.personaSave') }}
+                  </button>
+                  <button
+                    class="px-2 py-1 text-xs rounded-md border border-border hover:bg-secondary disabled:opacity-50 transition-colors"
+                    :disabled="personaSaving"
+                    :title="t('chatView.personaOverrideHint')"
+                    @click="overridePersonaForChat"
+                  >
+                    {{ t('chatView.personaOverride') }}
+                  </button>
+                  <button
+                    v-if="promptSource === 'session'"
+                    class="px-2 py-1 text-xs rounded-md border border-border hover:bg-secondary disabled:opacity-50 transition-colors"
+                    :disabled="personaSaving"
+                    @click="clearChatPromptOverride"
+                  >
+                    {{ t('chatView.personaClearOverride') }}
+                  </button>
+                </div>
+              </template>
+            </div>
+
             <p class="text-xs text-muted-foreground">
               {{ t('chatView.promptHint') }}
             </p>

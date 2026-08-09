@@ -11,6 +11,7 @@ from modules.admin.service import resource_share_service
 from modules.channels.mobile.push_service import fcm_push_service
 from modules.channels.mobile.service import mobile_app_instance_service
 from modules.chat.service import chat_service
+from modules.llm.persona import normalize_persona_id
 from modules.monitoring.service import audit_service
 
 
@@ -27,7 +28,7 @@ class MobileAppInstanceCreateRequest(BaseModel):
     description: Optional[str] = None
     enabled: bool = True
     llm_backend: str = "vllm"
-    llm_persona: str = "anna"
+    llm_persona: str = ""  # LLMPreset id; "" = no persona
     system_prompt: Optional[str] = None
     llm_params: Optional[dict] = None
     tts_engine: str = "xtts"
@@ -281,6 +282,7 @@ async def get_my_instance_session(
         owner_id=user.id,
         rag_mode=instance.get("rag_mode"),
         workspace_id=ws_id,
+        llm_persona=normalize_persona_id(instance.get("llm_persona")),
     )
     collection_ids = instance.get("knowledge_collection_ids")
     if collection_ids:

@@ -32,6 +32,7 @@ from modules.chat.facade import ChatServiceImpl, chat_service_facade
 from modules.chat.presets import resolve_presets
 from modules.chat.service import chat_service, chat_share_service
 from modules.knowledge.service import knowledge_collection_service
+from modules.llm.persona import normalize_persona_id, resolve_persona_for_instance
 from modules.llm.service import cloud_provider_service
 
 
@@ -233,6 +234,7 @@ def _build_token_usage(messages: list[dict], model: str, trimmed: bool = False) 
 class CreateSessionRequest(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    llm_persona: Optional[str] = None  # LLMPreset id; "" / None = no persona
     source: Optional[str] = None  # "admin", "telegram", "widget"
     source_id: Optional[str] = None  # identifier (e.g., "bot_id:user_id")
     rag_mode: Optional[str] = None  # "all", "collection", "none"
@@ -251,6 +253,7 @@ class BulkDeleteRequest(BaseModel):
 class UpdateSessionRequest(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    llm_persona: Optional[str] = None  # LLMPreset id; "" detaches the persona
     pinned: Optional[bool] = None
     rag_mode: Optional[str] = None
     knowledge_collection_id: Optional[int] = None
@@ -264,6 +267,7 @@ class UpdateSessionRequest(BaseModel):
 class LLMOverrideConfig(BaseModel):
     llm_backend: Optional[str] = None  # "vllm" or "cloud:provider-id"
     system_prompt: Optional[str] = None
+    llm_persona: Optional[str] = None  # LLMPreset id, overrides the session's
     llm_params: Optional[dict] = None
     rag_mode: Optional[str] = None  # "all", "selected", "none" ("collection" = backward compat)
     knowledge_collection_id: Optional[int] = None  # backward compat (single)
@@ -395,6 +399,42 @@ async def admin_list_chat_sessions(
     return {"sessions": sessions}
 
 
+@router.get("/personas")
+async def admin_list_chat_personas(
+    user: User = Depends(require_permission("chat", "view")),
+):
+    """Персоны (LLM-пресеты), которые можно привязать к чату.
+
+    Дублирует `/admin/llm/presets` под правами `chat`, чтобы пикер персоны в
+    чате работал у пользователей без доступа к разделу LLM. Отдаёт промпт и
+    параметры — чат показывает их как «что реально уедет в модель».
+    """
+    from db.database import get_session_context
+    from db.repositories.llm_preset import LLMPresetRepository
+
+    async with get_session_context() as session:
+        repo = LLMPresetRepository(session)
+        await repo.ensure_defaults()
+        presets = await repo.get_all_enabled()
+
+    # Editing a shared persona stays an `llm:edit` action — the UI hides the
+    # "save into persona" button when the user lacks it.
+    can_edit = user_has_level(user, "llm", "edit")
+    return {
+        "personas": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "system_prompt": p.system_prompt or "",
+                "params": p.get_params(),
+            }
+            for p in presets
+        ],
+        "can_edit": can_edit,
+    }
+
+
 @router.get("/assistant-presets")
 async def admin_list_assistant_presets(
     user: User = Depends(require_permission("chat", "view")),
@@ -422,12 +462,15 @@ async def admin_create_chat_session(
     # `source_id` (e.g. assistant switcher) and inherit the persona.
     system_prompt = request.system_prompt
     rag_mode = request.rag_mode
+    llm_persona = normalize_persona_id(request.llm_persona)
     inherited_collection_ids: list[int] | None = None
     if request.source == "widget" and request.source_id:
         widget = await widget_instance_service.get_instance(request.source_id)
         if widget:
             if not system_prompt and widget.get("system_prompt"):
                 system_prompt = widget["system_prompt"]
+            if not llm_persona:
+                llm_persona = normalize_persona_id(widget.get("llm_persona"))
             if not rag_mode and widget.get("rag_mode"):
                 rag_mode = widget["rag_mode"]
             if not request.knowledge_collection_id and widget.get("knowledge_collection_ids"):
@@ -437,6 +480,8 @@ async def admin_create_chat_session(
         if mobile_inst:
             if not system_prompt and mobile_inst.get("system_prompt"):
                 system_prompt = mobile_inst["system_prompt"]
+            if not llm_persona:
+                llm_persona = normalize_persona_id(mobile_inst.get("llm_persona"))
             if not rag_mode and mobile_inst.get("rag_mode"):
                 rag_mode = mobile_inst["rag_mode"]
             if not request.knowledge_collection_id and mobile_inst.get("knowledge_collection_ids"):
@@ -451,6 +496,7 @@ async def admin_create_chat_session(
         rag_mode=rag_mode,
         knowledge_collection_id=request.knowledge_collection_id,
         workspace_id=ws_id,
+        llm_persona=llm_persona,
     )
 
     # Multi-collection RAG selection. Explicit request.knowledge_collection_ids
@@ -539,6 +585,7 @@ async def admin_update_chat_session(
         web_search_enabled=request.web_search_enabled,
         source=request.source,
         source_id=request.source_id,
+        llm_persona=request.llm_persona,
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -670,6 +717,10 @@ async def admin_stream_chat_message(
     # Determine which LLM service to use
     active_llm = container.llm_service
     custom_prompt = None
+    # Persona + generation params for this message. Both are resolved live on
+    # every request, so editing the preset changes the next reply immediately.
+    persona_id: Optional[str] = None
+    gen_params: Optional[dict] = None
 
     if msg_request.llm_override:
         override = msg_request.llm_override
@@ -702,6 +753,8 @@ async def admin_stream_chat_message(
         # else use default vllm/llm_service
 
         custom_prompt = override.system_prompt
+        persona_id = normalize_persona_id(override.llm_persona)
+        gen_params = override.llm_params
 
     elif msg_request.widget_instance_id:
         widget = await widget_instance_service.get_instance(msg_request.widget_instance_id)
@@ -739,6 +792,8 @@ async def admin_stream_chat_message(
                         logger.warning(f"Widget Gemini cloud override failed: {e}")
             # else use default vllm/llm_service
             custom_prompt = widget.get("system_prompt")
+            persona_id = normalize_persona_id(widget.get("llm_persona"))
+            gen_params = widget.get("llm_params")
 
     elif msg_request.mobile_instance_id:
         mobile_inst = await mobile_app_instance_service.get_instance(msg_request.mobile_instance_id)
@@ -759,6 +814,16 @@ async def admin_stream_chat_message(
                 except Exception as e:
                     logger.warning(f"Mobile LLM override failed: {e}")
             custom_prompt = mobile_inst.get("system_prompt")
+            persona_id = normalize_persona_id(mobile_inst.get("llm_persona"))
+            gen_params = mobile_inst.get("llm_params")
+
+    # Telegram bots post through llm_override without instance ids — the bot
+    # instance is only identifiable via the session's source_id.
+    if not persona_id and session.get("source") in ("telegram", "telegram_bot"):
+        tg_persona = await resolve_persona_for_instance(
+            session.get("source"), session.get("source_id")
+        )
+        persona_id = tg_persona.id if tg_persona else None
 
     if not active_llm:
         raise HTTPException(status_code=503, detail="LLM service not available")
@@ -821,6 +886,8 @@ async def admin_stream_chat_message(
             session_data=session,
             user_msg=user_msg,
             system_prompt=custom_prompt,
+            persona_id=persona_id,
+            gen_params=gen_params,
             rag_mode=rag_mode,
             collection_ids=collection_ids,
         ):

@@ -59,7 +59,7 @@ class WidgetInstanceCreateRequest(BaseModel):
     allowed_domains: List[str] = []
     tunnel_url: Optional[str] = None
     llm_backend: str = "vllm"
-    llm_persona: str = "anna"
+    llm_persona: str = ""  # LLMPreset id; "" = no persona
     system_prompt: Optional[str] = None
     llm_params: Optional[dict] = None
     tts_engine: str = "xtts"

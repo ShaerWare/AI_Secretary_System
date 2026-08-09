@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MOBILE_CONFIG = {
     "llm_backend": "vllm",
-    "llm_persona": "anna",
+    "llm_persona": "",
     "tts_engine": "xtts",
     "tts_voice": "anna",
 }

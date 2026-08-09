@@ -41,7 +41,7 @@ const formData = ref<Partial<MobileAppInstance>>({
   description: '',
   enabled: true,
   llm_backend: 'vllm',
-  llm_persona: 'anna',
+  llm_persona: '',
   system_prompt: '',
   llm_params: {},
   tts_engine: 'xtts',
@@ -75,6 +75,24 @@ const { data: collectionsData } = useQuery({
   queryFn: () => wikiRagApi.getCollections(),
 })
 const knowledgeCollections = computed(() => collectionsData.value?.collections || [])
+
+// Personas (LLM presets). Attaching one makes its prompt + generation params
+// the live source for this assistant; its own system prompt still wins when set.
+const { data: presetsData } = useQuery({
+  queryKey: ['llm-presets'],
+  queryFn: () => llmApi.getPresets(),
+})
+const personas = computed(() => presetsData.value?.presets || [])
+const selectedPersona = computed(
+  () => personas.value.find(p => p.id === formData.value.llm_persona) || null,
+)
+const instancePersona = computed(
+  () => personas.value.find(p => p.id === selectedInstance.value?.llm_persona) || null,
+)
+/** What actually reaches the model: the instance prompt, else the persona's. */
+const instanceEffectivePrompt = computed(
+  () => selectedInstance.value?.system_prompt || instancePersona.value?.system_prompt || '',
+)
 
 // LLM backend options
 const llmOptions = computed(() => {
@@ -141,7 +159,7 @@ function openCreate() {
     description: '',
     enabled: true,
     llm_backend: 'vllm',
-    llm_persona: 'anna',
+    llm_persona: '',
     system_prompt: '',
     llm_params: {},
     tts_engine: 'xtts',
@@ -365,11 +383,16 @@ watch(instances, (list) => {
               </div>
               <div>
                 <label class="block text-sm font-medium mb-1">{{ t('mobile.persona') }}</label>
-                <span class="text-sm">{{ selectedInstance.llm_persona }}</span>
+                <span class="text-sm">{{ instancePersona?.name || t('mobile.personaNone') }}</span>
               </div>
               <div>
                 <label class="block text-sm font-medium mb-1">{{ t('mobile.systemPrompt') }}</label>
-                <pre v-if="selectedInstance.system_prompt" class="text-sm bg-muted rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">{{ selectedInstance.system_prompt }}</pre>
+                <p class="text-xs text-muted-foreground mb-1">
+                  <template v-if="selectedInstance.system_prompt">{{ t('mobile.promptSourceInstance') }}</template>
+                  <template v-else-if="instancePersona">{{ t('mobile.promptSourcePersona', { name: instancePersona.name }) }}</template>
+                  <template v-else>{{ t('mobile.promptSourcePlatform') }}</template>
+                </p>
+                <pre v-if="instanceEffectivePrompt" class="text-sm bg-muted rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">{{ instanceEffectivePrompt }}</pre>
                 <span v-else class="text-sm text-muted-foreground italic">{{ t('mobile.defaultPrompt') }}</span>
               </div>
             </div>
@@ -478,11 +501,16 @@ watch(instances, (list) => {
             <!-- Persona -->
             <div>
               <label class="block text-sm font-medium mb-1">{{ t('mobile.persona') }}</label>
-              <input
+              <select
                 v-model="formData.llm_persona"
-                type="text"
                 class="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              />
+              >
+                <option value="">{{ t('mobile.personaNone') }}</option>
+                <option v-for="p in personas" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+              <p v-if="selectedPersona" class="text-xs text-muted-foreground mt-1">
+                {{ t('mobile.personaHint') }}
+              </p>
             </div>
 
             <!-- System Prompt -->

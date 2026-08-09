@@ -117,6 +117,8 @@ case "$MODEL" in
                 --port 11434 \
                 --enforce-eager \
                 --trust-remote-code \
+                --enable-auto-tool-choice \
+                --tool-call-parser hermes \
                 $LORA_ARGS
         ) > logs/vllm.log 2>&1 &
         ;;
@@ -137,7 +139,9 @@ case "$MODEL" in
                 --max-num-seqs 32 \
                 --port 11434 \
                 --enforce-eager \
-                --trust-remote-code
+                --trust-remote-code \
+                --enable-auto-tool-choice \
+                --tool-call-parser llama3_json
         ) > logs/vllm.log 2>&1 &
         ;;
 

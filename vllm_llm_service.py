@@ -253,6 +253,12 @@ class VLLMLLMService:
         self.model_name = model_name or os.getenv("VLLM_MODEL_NAME", "")
         self.timeout = timeout
         self.conversation_history: List[Dict[str, str]] = []
+        # Реальный контекст модели, отдаётся vLLM в /v1/models.
+        # None = неизвестен (fallback на эвристику по имени модели).
+        self.max_model_len: Optional[int] = None
+        # supports_tools — экземплярный флаг: vLLM отвечает 400 на tool_choice,
+        # если сервер запущен без --enable-auto-tool-choice/--tool-call-parser.
+        self.supports_tools = True
 
         # HTTP клиент
         self.client = httpx.Client(timeout=timeout)
@@ -291,7 +297,8 @@ class VLLMLLMService:
             response.raise_for_status()
             models = response.json()
 
-            available_models = [m["id"] for m in models.get("data", [])]
+            entries = models.get("data", [])
+            available_models = [m["id"] for m in entries]
 
             if self.model_name:
                 # Модель указана явно - проверяем её наличие
@@ -317,6 +324,9 @@ class VLLMLLMService:
             if len(available_models) > 1:
                 logger.info(f"📋 Доступные модели: {available_models}")
 
+            self._detect_max_model_len(entries)
+            self._probe_tool_support()
+
         except httpx.ConnectError:
             logger.warning(f"⚠️ vLLM недоступен по адресу {self.api_url}")
             if not self.model_name:
@@ -325,6 +335,68 @@ class VLLMLLMService:
             logger.warning(f"⚠️ Ошибка подключения к vLLM: {e}")
             if not self.model_name:
                 self.model_name = "error"
+
+    def _detect_max_model_len(self, entries: List[Dict]) -> None:
+        """Определяет реальный размер контекста модели из /v1/models.
+
+        LoRA-адаптеры отдают max_model_len=null — тогда берём минимум среди
+        известных значений (адаптер не может быть длиннее базовой модели).
+        """
+        env_len = os.getenv("VLLM_MAX_MODEL_LEN")
+        if env_len and env_len.isdigit():
+            self.max_model_len = int(env_len)
+            logger.info(f"📏 Контекст модели (env): {self.max_model_len}")
+            return
+
+        exact = next(
+            (m.get("max_model_len") for m in entries if m.get("id") == self.model_name),
+            None,
+        )
+        known = [m["max_model_len"] for m in entries if m.get("max_model_len")]
+        self.max_model_len = exact or (min(known) if known else None)
+
+        if self.max_model_len:
+            logger.info(f"📏 Контекст модели: {self.max_model_len} токенов")
+        else:
+            logger.warning("⚠️ vLLM не сообщил max_model_len — контекст не будет обрезан по факту")
+
+    def _probe_tool_support(self) -> None:
+        """Проверяет, принимает ли vLLM tool_choice='auto'.
+
+        vLLM отвечает 400, если сервер запущен без --enable-auto-tool-choice
+        и --tool-call-parser. Без этой проверки agentic RAG уходит в 400 и
+        пользователь видит «техническая проблема» вместо ответа.
+        """
+        probe = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "probe",
+                        "description": "probe",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+        }
+        try:
+            response = self.client.post(f"{self.api_url}/v1/chat/completions", json=probe)
+            if response.status_code == 400:
+                self.supports_tools = False
+                logger.warning(
+                    "⚠️ vLLM запущен без --enable-auto-tool-choice/--tool-call-parser: "
+                    "tool-calling отключён, RAG работает через one-shot инъекцию"
+                )
+            else:
+                response.raise_for_status()
+                logger.info("🔧 vLLM поддерживает tool-calling")
+        except Exception as e:
+            # Не роняем инициализацию из-за пробы — оставляем runtime-fallback
+            logger.warning(f"⚠️ Не удалось проверить поддержку tool-calling: {e}")
 
     def _normalize_faq(self, faq_dict: Dict[str, str]) -> Dict[str, str]:
         """Нормализует ключи FAQ (lowercase, strip)"""
@@ -455,6 +527,17 @@ class VLLMLLMService:
     def get_params(self) -> Dict:
         """Возвращает текущие параметры генерации"""
         return self.runtime_params.copy()
+
+    def _effective_params(self, params: Optional[Dict] = None) -> Dict:
+        """Параметры одного вызова: персона/оверрайд поверх runtime-дефолтов.
+
+        Сервис — синглтон, общий для всех параллельных чатов, поэтому per-call
+        параметры передаются аргументом, а не пишутся в ``runtime_params``.
+        """
+        effective = dict(self.runtime_params)
+        if params:
+            effective.update({k: v for k, v in params.items() if v is not None})
+        return effective
 
     # Для обратной совместимости (старый промпт)
     @staticmethod
@@ -614,23 +697,33 @@ class VLLMLLMService:
         messages: List[Dict[str, str]],
         stream: bool = False,
         tools: Optional[List[Dict]] = None,
+        params: Optional[Dict] = None,
     ):
         """
         Генерирует ответ на основе списка сообщений OpenAI формата.
         Совместимо с форматом orchestrator.py.
+
+        params — параметры генерации на один вызов (из персоны чата/инстанса),
+        перекрывают runtime-дефолты сервиса.
         """
         # Tool-calling mode
         if tools:
-            return self.generate_with_tools(messages, tools, stream)
+            return self.generate_with_tools(messages, tools, stream, params=params)
 
         # Для non-streaming используем отдельный метод (избегаем yield в non-stream)
         if not stream:
-            return self._generate_response_non_stream(messages)
+            return self._generate_response_non_stream(messages, params=params)
 
         # Streaming режим - возвращает генератор
-        return self._generate_response_stream(messages)
+        return self._generate_response_stream(messages, params=params)
 
-    def generate_with_tools(self, messages: List[Dict], tools: List[Dict], stream: bool = False):
+    def generate_with_tools(
+        self,
+        messages: List[Dict],
+        tools: List[Dict],
+        stream: bool = False,
+        params: Optional[Dict] = None,
+    ):
         """Generate response with tool-calling support (vLLM OpenAI API)."""
         has_system = any(m.get("role") == "system" for m in messages)
         if not has_system:
@@ -639,22 +732,48 @@ class VLLMLLMService:
         else:
             final_messages = list(messages)
 
+        effective = self._effective_params(params)
         payload = {
             "model": self.model_name,
             "messages": final_messages,
-            "max_tokens": self.runtime_params.get("max_tokens", 512),
-            "temperature": self.runtime_params.get("temperature", 0.7),
-            "top_p": self.runtime_params.get("top_p", 0.9),
+            "max_tokens": effective.get("max_tokens", 512),
+            "temperature": effective.get("temperature", 0.7),
+            "top_p": effective.get("top_p", 0.9),
             "tools": tools,
             "tool_choice": "auto",
             "stream": stream,
         }
 
-        if stream:
-            return self._stream_with_tools(payload)
-        return self._non_stream_with_tools(payload)
+        # Сервер без --enable-auto-tool-choice отвергнет tool_choice='auto'
+        if not self.supports_tools:
+            payload.pop("tools", None)
+            payload.pop("tool_choice", None)
+            return (
+                self._generate_response_stream(final_messages, params=params)
+                if stream
+                else self._generate_response_non_stream(final_messages, params=params)
+            )
 
-    def _non_stream_with_tools(self, payload: dict):
+        if stream:
+            return self._stream_with_tools(payload, params=params)
+        return self._non_stream_with_tools(payload, params=params)
+
+    def _disable_tools_on_400(self, exc: Exception, payload: dict) -> bool:
+        """True, если vLLM отверг запрос из-за tools — тогда повторяем без них."""
+        if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 400:
+            return False
+        try:
+            body = exc.response.text
+        except Exception:
+            body = ""
+        # Только ошибки про tool_choice — 400 по переполнению контекста не в счёт
+        if body and "tool" not in body.lower():
+            return False
+        self.supports_tools = False
+        logger.warning("⚠️ vLLM отверг tool_choice — повтор запроса без tools")
+        return True
+
+    def _non_stream_with_tools(self, payload: dict, params: Optional[Dict] = None):
         """Non-stream generation with tools. Returns str or dict with tool_calls."""
         try:
             response = self.client.post(f"{self.api_url}/v1/chat/completions", json=payload)
@@ -669,15 +788,20 @@ class VLLMLLMService:
             logger.error("vLLM недоступен")
             return "Извините, сервис временно недоступен."
         except Exception as e:
+            if self._disable_tools_on_400(e, payload):
+                return self._generate_response_non_stream(payload["messages"], params=params)
             logger.error(f"Ошибка генерации с tools: {e}")
             return "Извините, возникла техническая проблема."
 
-    def _stream_with_tools(self, payload: dict) -> Generator:
+    def _stream_with_tools(self, payload: dict, params: Optional[Dict] = None) -> Generator:
         """Stream generation with tools. Yields typed dicts."""
         try:
             with self.client.stream(
                 "POST", f"{self.api_url}/v1/chat/completions", json=payload
             ) as response:
+                if response.is_error:
+                    # Тело нужно вычитать до выхода из with, иначе .text недоступен
+                    response.read()
                 response.raise_for_status()
 
                 tool_calls_acc: Dict[int, dict] = {}
@@ -728,10 +852,16 @@ class VLLMLLMService:
             logger.error("vLLM недоступен")
             yield {"type": "content", "content": "Извините, сервис временно недоступен."}
         except Exception as e:
+            if self._disable_tools_on_400(e, payload):
+                for chunk in self._generate_response_stream(payload["messages"], params=params):
+                    yield {"type": "content", "content": chunk}
+                return
             logger.error(f"Ошибка streaming с tools: {e}")
             yield {"type": "content", "content": "Извините, возникла техническая проблема."}
 
-    def _generate_response_non_stream(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_response_non_stream(
+        self, messages: List[Dict[str, str]], params: Optional[Dict] = None
+    ) -> str:
         """Non-streaming генерация ответа"""
         # Добавляем system prompt если его нет
         has_system = any(m.get("role") == "system" for m in messages)
@@ -757,16 +887,17 @@ class VLLMLLMService:
                 logger.info(f"⚡ FAQ ответ: '{faq_response[:50]}...'")
                 return faq_response
 
+        effective = self._effective_params(params)
         try:
             response = self.client.post(
                 f"{self.api_url}/v1/chat/completions",
                 json={
                     "model": self.model_name,
                     "messages": final_messages,
-                    "max_tokens": self.runtime_params.get("max_tokens", 512),
-                    "temperature": self.runtime_params.get("temperature", 0.7),
-                    "top_p": self.runtime_params.get("top_p", 0.9),
-                    "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
+                    "max_tokens": effective.get("max_tokens", 512),
+                    "temperature": effective.get("temperature", 0.7),
+                    "top_p": effective.get("top_p", 0.9),
+                    "repetition_penalty": effective.get("repetition_penalty", 1.1),
                     "stream": False,
                 },
             )
@@ -782,7 +913,7 @@ class VLLMLLMService:
             return "Извините, возникла техническая проблема."
 
     def _generate_response_stream(
-        self, messages: List[Dict[str, str]]
+        self, messages: List[Dict[str, str]], params: Optional[Dict] = None
     ) -> Generator[str, None, None]:
         """Streaming генерация ответа"""
         # Добавляем system prompt если его нет
@@ -810,6 +941,7 @@ class VLLMLLMService:
                 yield faq_response
                 return
 
+        effective = self._effective_params(params)
         try:
             # Streaming с runtime параметрами
             with self.client.stream(
@@ -818,10 +950,10 @@ class VLLMLLMService:
                 json={
                     "model": self.model_name,
                     "messages": final_messages,
-                    "max_tokens": self.runtime_params.get("max_tokens", 512),
-                    "temperature": self.runtime_params.get("temperature", 0.7),
-                    "top_p": self.runtime_params.get("top_p", 0.9),
-                    "repetition_penalty": self.runtime_params.get("repetition_penalty", 1.1),
+                    "max_tokens": effective.get("max_tokens", 512),
+                    "temperature": effective.get("temperature", 0.7),
+                    "top_p": effective.get("top_p", 0.9),
+                    "repetition_penalty": effective.get("repetition_penalty", 1.1),
                     "stream": True,
                 },
             ) as response:
