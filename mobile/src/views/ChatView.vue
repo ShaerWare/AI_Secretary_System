@@ -63,6 +63,7 @@ const promptActionPending = ref(false);
 const branches = ref<BranchNode[]>([]);
 const contextFiles = ref<ContextFile[]>([]);
 const branchesLoading = ref(false);
+const switchingBranch = ref(false);
 const contextFileInputRef = ref<HTMLInputElement | null>(null);
 
 // Web search
@@ -514,6 +515,10 @@ function toggleBranches() {
 }
 
 async function switchBranch(messageId: string) {
+  // One switch at a time — overlapping switches race on the server's active
+  // branch and their reloads can land out of order, leaving the wrong branch.
+  if (switchingBranch.value) return;
+  switchingBranch.value = true;
   try {
     await chatApi.switchBranch(sessionId.value, messageId);
     await loadSession();
@@ -521,6 +526,8 @@ async function switchBranch(messageId: string) {
     await scrollToBottom();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Не удалось переключить";
+  } finally {
+    switchingBranch.value = false;
   }
 }
 
@@ -1266,7 +1273,8 @@ onUnmounted(() => {
                       <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
                     </svg>
                     <button
-                      class="flex items-center gap-1 flex-1 text-left min-w-0"
+                      class="flex items-center gap-1 flex-1 text-left min-w-0 disabled:opacity-50"
+                      :disabled="switchingBranch"
                       @click="switchBranch(node.id)"
                     >
                       <span class="shrink-0">
@@ -1707,7 +1715,7 @@ onUnmounted(() => {
                   <svg v-if="node.is_pinned" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-amber-400">
                     <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
                   </svg>
-                  <button class="flex items-center gap-1 flex-1 text-left min-w-0" @click="switchBranch(node.id)">
+                  <button class="flex items-center gap-1 flex-1 text-left min-w-0 disabled:opacity-50" :disabled="switchingBranch" @click="switchBranch(node.id)">
                     <span class="shrink-0">
                       <svg v-if="node.role === 'user'" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />

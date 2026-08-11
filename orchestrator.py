@@ -170,6 +170,12 @@ async def startup_event():
     await seed_system_roles()
     await seed_default_workspace()
 
+    # Load tiktoken encodings off the request path — the first use downloads
+    # a BPE file and would otherwise block the event loop inside a handler.
+    from app.utils.tokens import prewarm_token_encodings
+
+    prewarm_token_encodings()
+
     try:
         # TTS/STT services
         from modules.speech.startup import (

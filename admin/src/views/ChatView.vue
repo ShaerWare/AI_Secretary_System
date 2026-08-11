@@ -1316,6 +1316,11 @@ const regenerateMutation = useMutation({
 // Track which message to scroll to after branch switch
 const pendingScrollMessageId = ref<string | null>(null)
 
+// Only one switch may be in flight: two overlapping switches race on the
+// server's active-branch state and the refetches can land out of order,
+// which used to leave the chat showing the branch you didn't pick.
+const switchingBranch = ref(false)
+
 const switchBranchMutation = useMutation({
   mutationFn: ({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
     chatApi.switchBranch(sessionId, messageId),
@@ -1325,6 +1330,13 @@ const switchBranchMutation = useMutation({
       scrollToMessage(pendingScrollMessageId.value)
       pendingScrollMessageId.value = null
     }
+  },
+  onError: (e: unknown) => {
+    pendingScrollMessageId.value = null
+    toastStore.error(String((e as Error)?.message || e))
+  },
+  onSettled: () => {
+    switchingBranch.value = false
   },
 })
 
@@ -1916,7 +1928,8 @@ function regenerateAssistantResponse(assistantMessageId: string) {
 }
 
 function onBranchSwitch(messageId: string) {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value || switchingBranch.value) return
+  switchingBranch.value = true
   pendingScrollMessageId.value = messageId
   switchBranchMutation.mutate({
     sessionId: currentSessionId.value,
@@ -1929,7 +1942,8 @@ function onBranchScrollTo(messageId: string) {
 }
 
 function switchToSibling(messageId: string) {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value || switchingBranch.value) return
+  switchingBranch.value = true
   switchBranchMutation.mutate({
     sessionId: currentSessionId.value,
     messageId,
@@ -4335,13 +4349,13 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
                     <span class="flex items-center gap-1 ml-1">
                       <button
                         class="px-0.5 hover:text-foreground disabled:opacity-30"
-                        :disabled="getSiblingInfo(message.id)!.index === 0"
+                        :disabled="switchingBranch || getSiblingInfo(message.id)!.index === 0"
                         @click="switchToSibling(getSiblingInfo(message.id)!.siblings[getSiblingInfo(message.id)!.index - 1])"
                       >&lt;</button>
-                      <span>{{ getSiblingInfo(message.id)!.index + 1 }}/{{ getSiblingInfo(message.id)!.total }}</span>
+                      <span :class="switchingBranch && 'opacity-50'">{{ getSiblingInfo(message.id)!.index + 1 }}/{{ getSiblingInfo(message.id)!.total }}</span>
                       <button
                         class="px-0.5 hover:text-foreground disabled:opacity-30"
-                        :disabled="getSiblingInfo(message.id)!.index === getSiblingInfo(message.id)!.total - 1"
+                        :disabled="switchingBranch || getSiblingInfo(message.id)!.index === getSiblingInfo(message.id)!.total - 1"
                         @click="switchToSibling(getSiblingInfo(message.id)!.siblings[getSiblingInfo(message.id)!.index + 1])"
                       >&gt;</button>
                     </span>
@@ -4559,6 +4573,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
         <BranchTree
           :branches="branchTree"
           :session-id="currentSessionId || ''"
+          :switching="switchingBranch"
           :style="{ width: branchTreeWidth + 'px' }"
           @switch="onBranchSwitch"
           @scroll-to="onBranchScrollTo"
