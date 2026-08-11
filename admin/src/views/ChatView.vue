@@ -207,11 +207,18 @@ async function loadAvailableAssistants() {
     const data = await api.get<{ instances: Array<{ id: string; name: string; enabled?: boolean }> }>('/admin/mobile/my-instances')
     const instances = (data.instances || []).filter(i => i.enabled !== false)
 
+    // Only the caller's OWN session counts as "this assistant is already open".
+    // Legacy workspace-wide sessions (owner_id = null, e.g. old API-test chats
+    // with source_id="lawyer-ru") are visible to every user and would otherwise
+    // be picked here — dropping the user into somebody else's read-only dialog
+    // instead of their private one.
+    const myId = authStore.user?.id
     const sessionsRes = await chatApi.listSessions('mobile')
     const sessionByInstance = new Map<string, string>()
     for (const s of sessionsRes.sessions || []) {
       const ext = s as ChatSessionSummary & { source_id?: string; is_shared_with_me?: boolean }
       if (ext.is_shared_with_me) continue
+      if (!myId || ext.owner_id !== myId) continue
       if (ext.source_id && !sessionByInstance.has(ext.source_id)) {
         sessionByInstance.set(ext.source_id, s.id)
       }
@@ -269,9 +276,15 @@ async function switchToAssistant(a: AvailableAssistant) {
   switchingToAssistantId.value = a.id
   try {
     let targetId = a.sessionId
-    if (!targetId) {
-      const created = await chatApi.createSession(undefined, undefined, 'mobile', a.id)
-      targetId = created.session.id
+    if (!targetId && a.kind === 'instance') {
+      // Find-or-create the caller's PRIVATE session for this assistant. Must go
+      // through my-session, not createSession: only that endpoint copies the
+      // instance's system prompt + RAG collections onto the new session, and it
+      // resolves by owner_id so it can never hand back another user's chat.
+      const res = await api.get<{ session_id: string }>(
+        `/admin/mobile/instances/${encodeURIComponent(a.id)}/my-session`,
+      )
+      targetId = res.session_id
     }
     if (!targetId) return
     // Set the active session FIRST — ChatView keys most things on
