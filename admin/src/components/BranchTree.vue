@@ -9,6 +9,8 @@ import BranchTreeNode from '@/components/BranchTreeNode.vue'
 const props = defineProps<{
   branches: BranchNode[]
   sessionId: string
+  /** A branch switch is in flight — block further clicks until it lands. */
+  switching?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -175,6 +177,7 @@ function confirmDeleteSelected() {
 }
 
 function handleClick(messageId: string) {
+  if (props.switching) return
   emit('switch', messageId)
 }
 
@@ -399,7 +402,7 @@ onUnmounted(() => {
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
     >
-      <div class="w-max min-w-full">
+      <div class="w-max min-w-full transition-opacity" :class="switching && 'opacity-50 pointer-events-none'">
         <BranchTreeNode
           v-for="root in branches"
           :key="root.id"

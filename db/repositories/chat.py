@@ -530,6 +530,9 @@ class ChatRepository(BaseRepository[ChatSession]):
         # instead of the full body. For sessions with hundreds of messages
         # and MB-sized bodies this drops the round-trip from megabytes to
         # kilobytes and skips ORM hydration of full ChatMessage rows.
+        # 51 chars is one more than the preview shows, so the prefix alone
+        # says whether it was truncated — no length(content), which would
+        # force SQLite to read every message body in full.
         preview_col = func.substr(ChatMessage.content, 1, 51).label("preview")
         result = await self.session.execute(
             select(
@@ -539,7 +542,6 @@ class ChatRepository(BaseRepository[ChatSession]):
                 ChatMessage.is_active,
                 ChatMessage.branch_name,
                 preview_col,
-                func.length(ChatMessage.content).label("content_len"),
             )
             .where(ChatMessage.session_id == session_id)
             .order_by(ChatMessage.created.desc())
@@ -558,7 +560,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         def build_node(row: Any) -> dict:
             kids = children_map.get(row.id, [])
             preview = row.preview or ""
-            if row.content_len and row.content_len > 50:
+            if len(preview) > 50:
                 preview = preview[:50] + "..."
             node: dict = {
                 "id": row.id,
@@ -698,8 +700,8 @@ class ChatRepository(BaseRepository[ChatSession]):
 
         # Match historical "most recent first" tie-breaking from
         # _activate_default_path (order_by created.desc()).
-        for kids in children_by_parent.values():
-            kids.sort(key=lambda x: x[1] or datetime.min, reverse=True)
+        for siblings in children_by_parent.values():
+            siblings.sort(key=lambda x: x[1] or datetime.min, reverse=True)
 
         to_activate: set[str] = set()
         to_deactivate: set[str] = set()
@@ -714,10 +716,20 @@ class ChatRepository(BaseRepository[ChatSession]):
                 for cid, _ in children_by_parent.get(nid, []):
                     stack.append(cid)
 
-        # Ancestors + the target itself.
+        # Ancestors + the target itself. At *every* level of that path the
+        # currently-active sibling subtrees have to be deactivated, not just
+        # at the target's own parent: switching to a node deep inside an
+        # inactive branch diverges from the active one at some ancestor, and
+        # leaving that ancestor's sibling subtree active makes both branches
+        # render at once (the UI then looks like the switch did nothing).
+        # children_by_parent[None] holds the session's roots, so separate
+        # root chains created by start_new_branch are handled too.
         cur: Optional[str] = message_id
         while cur is not None:
             to_activate.add(cur)
+            for sib_id, _ in children_by_parent.get(parent_of.get(cur), []):
+                if sib_id != cur:
+                    _collect_active_subtree(sib_id, to_deactivate)
             cur = parent_of.get(cur)
 
         # Default path forward: pick most-recent child at each step,
@@ -732,12 +744,6 @@ class ChatRepository(BaseRepository[ChatSession]):
             for other_id, _ in kids[1:]:
                 _collect_active_subtree(other_id, to_deactivate)
             cur = chosen_id
-
-        # Sibling branches of the target (other children of same parent).
-        target_parent = parent_of[message_id]
-        for sib_id, _ in children_by_parent.get(target_parent, []):
-            if sib_id != message_id:
-                _collect_active_subtree(sib_id, to_deactivate)
 
         # Bulk-flip only what actually changes.
         activate_ids = [mid for mid in to_activate if not is_active_now.get(mid)]
