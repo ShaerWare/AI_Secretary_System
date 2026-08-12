@@ -215,11 +215,11 @@ export const chatApi = {
       `/admin/chat/sessions/${sessionId}/branches`,
     ),
 
+  // Возвращает только {status} — сессия рефетчится отдельно.
   switchBranch: (sessionId: string, messageId: string) =>
-    api.post<{ status: string; session: ChatSession }>(
-      `/admin/chat/sessions/${sessionId}/branches/switch`,
-      { message_id: messageId },
-    ),
+    api.post<{ status: string }>(`/admin/chat/sessions/${sessionId}/branches/switch`, {
+      message_id: messageId,
+    }),
 
   newBranch: (sessionId: string) =>
     api.post<{ status: string; session: ChatSession }>(
