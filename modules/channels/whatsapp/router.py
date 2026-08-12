@@ -4,11 +4,18 @@
 import logging
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from auth_manager import User, require_permission, user_has_level, workspace_context
 from modules.admin.service import resource_share_service
+from modules.channels.whatsapp.bridge import (
+    bridge_webhook_url,
+    get_bridge_client,
+    is_bridge_instance,
+    resolve_bridge_url,
+)
 from modules.channels.whatsapp.service import whatsapp_instance_service
 from modules.monitoring.service import audit_service
 from whatsapp_manager import whatsapp_manager
@@ -27,6 +34,10 @@ class WhatsAppInstanceCreateRequest(BaseModel):
     description: Optional[str] = None
     enabled: bool = True
     auto_start: bool = False
+    # Transport: "cloud" (Meta Cloud API) or "bridge" (self-hosted, QR-linked phone)
+    provider: str = "cloud"
+    bridge_url: Optional[str] = None
+    bridge_token: Optional[str] = None
     # WhatsApp Cloud API
     phone_number_id: str = ""
     waba_id: Optional[str] = None
@@ -57,6 +68,10 @@ class WhatsAppInstanceUpdateRequest(BaseModel):
     description: Optional[str] = None
     enabled: Optional[bool] = None
     auto_start: Optional[bool] = None
+    # Transport
+    provider: Optional[str] = None
+    bridge_url: Optional[str] = None
+    bridge_token: Optional[str] = None
     # WhatsApp Cloud API
     phone_number_id: Optional[str] = None
     waba_id: Optional[str] = None
@@ -389,6 +404,118 @@ async def get_whatsapp_instance_logs(
 
     logs = await whatsapp_manager.get_recent_logs(instance_id, lines=lines)
     return {"logs": logs}
+
+
+# ============== Self-hosted bridge (QR linking) ==============
+
+
+async def _get_bridge_instance(instance_id: str, user: User, *, edit: bool) -> dict:
+    """Fetch an instance for a bridge operation, enforcing workspace + share ACLs."""
+    owner_id, ws_id = workspace_context(user, "channels")
+    instance = await whatsapp_instance_service.get_instance(
+        instance_id, owner_id=owner_id if not edit else None, workspace_id=ws_id
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="WhatsApp instance not found")
+
+    if edit:
+        await _check_wa_share_edit_permission(instance_id, user)
+
+    if not is_bridge_instance(instance):
+        raise HTTPException(
+            status_code=400,
+            detail="Instance is not using the self-hosted provider (provider='bridge')",
+        )
+
+    # Re-fetch with secrets so a per-instance bridge token is honoured.
+    full = await whatsapp_instance_service.get_instance_with_token(instance_id)
+    return full or instance
+
+
+async def _bridge_call(instance: dict, action: str) -> dict:
+    """Run one bridge operation, mapping transport failures to clean HTTP errors."""
+    client = get_bridge_client(instance)
+    try:
+        if action == "start":
+            return await client.start_session(bridge_webhook_url(instance))
+        if action == "status":
+            return await client.get_status()
+        if action == "stop":
+            return await client.stop_session()
+        if action == "logout":
+            return await client.logout()
+        raise ValueError(f"unknown bridge action: {action}")
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:500]
+        if e.response.status_code == 401:
+            detail = "Bridge rejected the token (check WHATSAPP_BRIDGE_TOKEN)"
+        raise HTTPException(status_code=502, detail=f"Bridge error: {detail}") from e
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"WhatsApp bridge is unreachable at {resolve_bridge_url(instance)} "
+                f"({type(e).__name__}). Is services/whatsapp-bridge running?"
+            ),
+        ) from e
+    finally:
+        await client.close()
+
+
+@router.post("/instances/{instance_id}/bridge/start")
+async def start_bridge_session(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
+    """Open the bridge session — returns a QR to scan when the phone isn't linked yet."""
+    instance = await _get_bridge_instance(instance_id, user, edit=True)
+    state = await _bridge_call(instance, "start")
+
+    await audit_service.log(
+        action="bridge_start",
+        resource="whatsapp_instance",
+        resource_id=instance_id,
+        user_id=user.username,
+        details={"status": state.get("status")},
+    )
+    return state
+
+
+@router.get("/instances/{instance_id}/bridge/status")
+async def get_bridge_session_status(
+    instance_id: str, user: User = Depends(require_permission("channels", "view"))
+):
+    """Link state of the phone: idle / starting / qr / connected / disconnected / logged_out.
+
+    While the status is ``qr`` the response carries a ``qr`` data-URL to render.
+    """
+    instance = await _get_bridge_instance(instance_id, user, edit=False)
+    return await _bridge_call(instance, "status")
+
+
+@router.post("/instances/{instance_id}/bridge/stop")
+async def stop_bridge_session(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
+    """Close the socket but keep credentials — a later start re-attaches without a QR."""
+    instance = await _get_bridge_instance(instance_id, user, edit=True)
+    return await _bridge_call(instance, "stop")
+
+
+@router.post("/instances/{instance_id}/bridge/logout")
+async def logout_bridge_session(
+    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+):
+    """Unlink the phone and wipe credentials. The next start requires a fresh QR scan."""
+    instance = await _get_bridge_instance(instance_id, user, edit=True)
+    state = await _bridge_call(instance, "logout")
+
+    await audit_service.log(
+        action="bridge_logout",
+        resource="whatsapp_instance",
+        resource_id=instance_id,
+        user_id=user.username,
+    )
+    return state
 
 
 # ============== Resource Sharing Endpoints ==============

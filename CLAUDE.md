@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Secretary System — virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony (SIM7600E-H), amoCRM integration, Vue 3 PWA admin panel, i18n (ru/en/kk), multi-instance Telegram bots with sales/payments, multi-instance WhatsApp bots (Cloud API), website chat widgets, and LoRA fine-tuning.
+AI Secretary System — virtual secretary with voice cloning (XTTS v2, OpenVoice), pre-trained voices (Piper), local LLM (vLLM + Qwen/Llama/DeepSeek), cloud LLM fallback (Gemini, Kimi, OpenAI, Claude, DeepSeek, OpenRouter), and Claude Code CLI bridge. Features GSM telephony (SIM7600E-H), amoCRM integration, Vue 3 PWA admin panel, i18n (ru/en/kk), multi-instance Telegram bots with sales/payments, multi-instance WhatsApp bots (Meta Cloud API or a self-hosted QR-linked provider), website chat widgets, and LoRA fine-tuning.
 
 ## Commands
 
@@ -247,7 +247,12 @@ These routers import domain services directly (`from modules.monitoring.service 
 
 **Telegram bots**: Subprocesses managed by `multi_bot_manager.py`. Config pre-fetched from DB, written to `/tmp/bot_config_{id}.json`. Two frameworks: `python-telegram-bot` (legacy) + `aiogram` (new). `LLMRouter` in `telegram_bot/services/llm_router.py` routes through orchestrator chat API. File uploads: `telegram_bot/services/file_extractor.py` extracts text from documents (text files + PDF via `pdfplumber`), injected into chat as plain text.
 
-**WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`).
+**WhatsApp bots**: Same subprocess pattern via `whatsapp_manager.py`. Module: `whatsapp_bot/` (runs as `python -m whatsapp_bot`). Two transports, chosen per instance by `whatsapp_instances.provider` (migration `scripts/migrate_whatsapp_provider.py`):
+
+- **`cloud`** (default) — Meta Cloud API via `WhatsAppClient`; needs a number enrolled in the WhatsApp Business API.
+- **`bridge`** — self-hosted provider in `services/whatsapp-bridge/` (Node + [Baileys](https://github.com/WhiskeySockets/Baileys), port 8005): an ordinary phone links by QR like WhatsApp Web, no third-party SaaS. `BridgeClient` (`whatsapp_bot/services/bridge_client.py`) implements the *same* interface as `WhatsAppClient`, so handlers, the sales funnel and the LLM router are untouched — `get_whatsapp_client()` picks the implementation. Incoming messages arrive at `POST /bridge/webhook` on the bot's own webhook port, HMAC-signed with the bridge token. QR linking from the admin panel: `POST/GET /admin/whatsapp/instances/{id}/bridge/{start,status,stop,logout}` (`modules/channels/whatsapp/bridge.py` resolves URL/token: instance row → env). Docker: `docker compose --profile whatsapp-bridge up -d` (credentials volume is mandatory — without it every restart demands a new QR).
+
+  **Bridge caveats**: interactive buttons/lists don't exist on a linked phone, so `BridgeClient` renders them as a numbered text menu and `whatsapp_bot/services/choices.py` maps the reply ("2", "2)", or the option's title) back to the original `reply_id` — the displayed numbering and the registry numbering must stay in step, so both skip id-less rows. Templates degrade to plain text (no 24h window on a linked phone). Group chats are ignored. The protocol is unofficial: a number behaving like a broadcaster can be banned, and opening WhatsApp Web elsewhere with the same account replaces the session (the bridge then stays down instead of fighting for the slot). Media (voice/photo/doc) is downloadable via `GET /sessions/{id}/media/{msgid}` but not yet wired into STT/file extraction — the bot replies asking for text.
 
 **Platform agent fallback** (`prompts/platform-agent.md`): When a chat session has no `system_prompt` set, `modules/chat/facade.py` loads this file as the system prompt (lazy, cached per-process) before falling back to `llm.get_system_prompt()`. Persona helps end-users configure their own assistants; no admin/ops content. Override path via `PLATFORM_AGENT_PROMPT_FILE`.
 
@@ -390,6 +395,9 @@ BRIDGE_ISOLATE_HOME=                # "1" to spawn Claude CLI with isolated HOME
 BRIDGE_ISOLATED_HOME=               # Override isolated HOME path (default: /var/lib/ai-secretary-bridge)
 LEAD_TELEGRAM_BOT_TOKEN=            # Bot token for landing lead notifications (POST /widget/lead → owner's Telegram)
 LEAD_TELEGRAM_CHAT_ID=             # Numeric chat_id that receives landing lead notifications
+WHATSAPP_BRIDGE_TOKEN=              # Shared secret for the self-hosted WhatsApp provider; also signs its webhooks
+WHATSAPP_BRIDGE_URL=                # Bridge location (default http://127.0.0.1:8005); per-instance override in DB
+WHATSAPP_BRIDGE_CALLBACK_HOST=      # Host the bridge calls back on to reach the bot (default 127.0.0.1)
 TIKTOKEN_CACHE_DIR=                 # Override tiktoken BPE cache dir (default: <repo>/models/tiktoken)
 ```
 
@@ -480,7 +488,7 @@ Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`#
 1. **Vosk model required** — Download to `models/vosk/` for STT
 2. **XTTS requires CUDA CC >= 7.0** — RTX 3060+; use OpenVoice for older GPUs
 3. **GPU memory** — vLLM ~6GB + XTTS ~5GB must fit in 12GB. `start_gpu.sh` launches vLLM with `--enable-auto-tool-choice` + `--tool-call-parser` (`hermes` for Qwen, `llama3_json` for Llama) — without them the server 400s on `tool_choice: auto` and `VLLMLLMService` permanently flips its `supports_tools` flag off, silently dropping agentic RAG to one-shot injection. Short context windows (`--max-model-len 4096`) also need `trim_messages`' output reserve capped at a quarter of the window, otherwise the fixed 4096-token reserve leaves no input budget at all
-4. **VLESS proxy vs localhost** — `GeminiProvider` sets global `HTTP_PROXY`; `OpenAICompatibleProvider` sets `NO_PROXY=127.0.0.1,localhost` for `claude_bridge`; `bridge_manager.py` strips proxy env vars
+4. **VLESS proxy vs localhost** — `GeminiProvider` sets global `HTTP_PROXY`; `OpenAICompatibleProvider` sets `NO_PROXY=127.0.0.1,localhost` for `claude_bridge`; `bridge_manager.py` strips proxy env vars. Because that env var is process-global, anything talking to a *local* service must pass `trust_env=False` to httpx — `VLLMLLMService.client`, the vLLM health check in `modules/llm/router.py`, and `BridgeClient` (WhatsApp) all do. `GeminiProvider` also only exports the proxy vars if `proxy_manager.start()` actually succeeded; a dead xray left `HTTP_PROXY` pointing at a closed port and broke every unrelated HTTP call in the process
 5. **Claude bridge timeouts** — 7-30s warmup. `read=300s` timeout for bridge (vs 60s default). `max_tokens=4096` (vs 512)
 6. **`services/bridge/src/models/` now committed** — previously the blanket `.gitignore` pattern `models/` swallowed this OpenAI-compat schema package, so fresh clones/deploys crashed the bridge with `ModuleNotFoundError: No module named 'src.models'`. Fixed by a `.gitignore` negation (`!services/bridge/src/models/`); the package (reconstructed) is now tracked. No manual copy needed.
 7. **Docker CPU: whisper excluded** — `openai-whisper` fails to build (missing `pkg_resources`). Server Dockerfile patched to `grep -v whisper`
