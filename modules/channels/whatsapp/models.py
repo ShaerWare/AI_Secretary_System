@@ -34,6 +34,15 @@ class WhatsAppInstance(Base):
         Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
 
+    # Transport: "cloud" = Meta Cloud API, "bridge" = self-hosted provider
+    # (services/whatsapp-bridge, a phone linked by QR over multi-device)
+    provider: Mapped[str] = mapped_column(String(20), default="cloud", server_default="cloud")
+    # Bridge location + shared secret. Both fall back to the bot's environment
+    # (WHATSAPP_BRIDGE_URL / WHATSAPP_BRIDGE_TOKEN) when left empty, so the
+    # secret doesn't have to be duplicated per instance.
+    bridge_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    bridge_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
     # WhatsApp Cloud API credentials
     phone_number_id: Mapped[str] = mapped_column(String(50), default="")
     waba_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -119,6 +128,9 @@ class WhatsAppInstance(Base):
             "description": self.description,
             "enabled": self.enabled,
             "auto_start": self.auto_start,
+            # Transport
+            "provider": self.provider or "cloud",
+            "bridge_url": self.bridge_url,
             # WhatsApp API
             "phone_number_id": self.phone_number_id,
             "waba_id": self.waba_id,
@@ -153,7 +165,10 @@ class WhatsAppInstance(Base):
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
         }
-        if include_token and self.access_token:
-            result["access_token"] = self.access_token
-            result["app_secret"] = self.app_secret
+        if include_token:
+            if self.access_token:
+                result["access_token"] = self.access_token
+                result["app_secret"] = self.app_secret
+            if self.bridge_token:
+                result["bridge_token"] = self.bridge_token
         return result

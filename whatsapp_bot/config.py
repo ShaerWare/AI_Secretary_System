@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 class WhatsAppSettings(BaseSettings):
     """WhatsApp bot settings loaded from environment variables."""
 
+    # Provider: "cloud" (Meta Cloud API) or "bridge" (self-hosted, QR-linked phone)
+    provider: str = Field(default="cloud", alias="WHATSAPP_PROVIDER")
+
+    # Self-hosted bridge (services/whatsapp-bridge)
+    bridge_url: str = Field(default="http://127.0.0.1:8005", alias="WHATSAPP_BRIDGE_URL")
+    bridge_token: str = Field(default="", alias="WHATSAPP_BRIDGE_TOKEN")
+    bridge_session_id: str = Field(default="", alias="WHATSAPP_BRIDGE_SESSION_ID")
+    # Host the bridge should call back on. Only needs changing when the bridge
+    # runs somewhere the bot isn't (e.g. bridge in Docker, bot on the host).
+    bridge_callback_host: str = Field(default="127.0.0.1", alias="WHATSAPP_BRIDGE_CALLBACK_HOST")
+
     # WhatsApp Cloud API credentials
     phone_number_id: str = Field(default="", alias="WHATSAPP_PHONE_NUMBER_ID")
     access_token: str = Field(default="", alias="WHATSAPP_ACCESS_TOKEN")
@@ -72,6 +83,10 @@ class WhatsAppBotConfig:
     verify_token: str
     app_secret: str
     name: str = "WhatsApp Bot"
+    # "cloud" (Meta Cloud API) or "bridge" (self-hosted, QR-linked phone)
+    provider: str = "cloud"
+    bridge_url: str = "http://127.0.0.1:8005"
+    bridge_token: str = ""
     llm_backend: str = "vllm"
     system_prompt: str | None = None
     tts_enabled: bool = False
@@ -124,13 +139,22 @@ async def load_config_from_api(instance_id: str) -> WhatsAppBotConfig:
         data = resp.json()
 
     instance = data["instance"]
+    settings = get_whatsapp_settings()
 
     return WhatsAppBotConfig(
         instance_id=instance["id"],
-        phone_number_id=instance["phone_number_id"],
-        access_token=instance["access_token"],
-        verify_token=instance.get("verify_token", ""),
-        app_secret=instance.get("app_secret", ""),
+        # The bridge is a host-level service: the instance row may override its
+        # location, but the shared secret normally lives in the environment so
+        # it isn't duplicated into the database.
+        provider=instance.get("provider") or "cloud",
+        bridge_url=instance.get("bridge_url") or settings.bridge_url,
+        bridge_token=instance.get("bridge_token") or settings.bridge_token,
+        phone_number_id=instance.get("phone_number_id") or "",
+        # Absent for bridge instances, and for cloud instances whose token was
+        # never filled in — the client surfaces that as an API error later.
+        access_token=instance.get("access_token") or "",
+        verify_token=instance.get("verify_token") or "",
+        app_secret=instance.get("app_secret") or "",
         name=instance.get("name", "WhatsApp Bot"),
         llm_backend=instance.get("llm_backend", "vllm"),
         system_prompt=instance.get("system_prompt"),

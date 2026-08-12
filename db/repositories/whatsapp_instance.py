@@ -145,6 +145,10 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             auto_start=kwargs.get("auto_start", False),
             owner_id=kwargs.get("owner_id"),
             **create_kwargs,
+            # Transport
+            provider=kwargs.get("provider", "cloud"),
+            bridge_url=kwargs.get("bridge_url"),
+            bridge_token=kwargs.get("bridge_token"),
             # WhatsApp API
             phone_number_id=phone_number_id,
             waba_id=kwargs.get("waba_id"),
@@ -194,6 +198,9 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             "description",
             "enabled",
             "auto_start",
+            "provider",
+            "bridge_url",
+            "bridge_token",
             "phone_number_id",
             "waba_id",
             "access_token",

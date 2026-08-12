@@ -21,6 +21,7 @@ from .config import (
 )
 from .handlers.interactive import handle_interactive_reply
 from .handlers.messages import handle_text_message
+from .services import choices
 from .services.whatsapp_client import get_whatsapp_client
 from .state import get_bot_config, set_bot_config
 
@@ -36,12 +37,62 @@ async def lifespan(app: FastAPI):
     from .sales.database import close_sales_db, get_sales_db
 
     await get_sales_db()
+
+    # Self-hosted provider: tell the bridge where to deliver incoming messages.
+    # Deferred to a task so the webhook endpoint is already accepting requests
+    # by the time the bridge replays the session's connection state.
+    bridge_task: asyncio.Task | None = None
+    if _is_bridge_provider():
+        bridge_task = asyncio.create_task(_register_with_bridge())
+
     yield
+
     # Cleanup
+    if bridge_task and not bridge_task.done():
+        bridge_task.cancel()
     await close_sales_db()
     client = get_whatsapp_client()
     await client.close()
     logger.info("WhatsApp bot shut down")
+
+
+def _is_bridge_provider() -> bool:
+    """True when this instance is served by the self-hosted bridge."""
+    bot_config = get_bot_config()
+    if bot_config:
+        return bot_config.provider == "bridge"
+    return get_whatsapp_settings().provider == "bridge"
+
+
+def _bridge_webhook_url() -> str:
+    """URL the bridge should POST incoming messages to."""
+    settings = get_whatsapp_settings()
+    bot_config = get_bot_config()
+    port = bot_config.webhook_port if bot_config else settings.webhook_port
+    return f"http://{settings.bridge_callback_host}:{port}/bridge/webhook"
+
+
+async def _register_with_bridge(delay: float = 1.0) -> None:
+    """Open (or re-attach) the bridge session for this instance."""
+    await asyncio.sleep(delay)
+    client = get_whatsapp_client()
+    webhook_url = _bridge_webhook_url()
+
+    try:
+        state = await client.start_session(webhook_url)
+        logger.info(
+            "Bridge session %s registered (status=%s, phone=%s)",
+            state.get("session_id"),
+            state.get("status"),
+            state.get("phone"),
+        )
+        if state.get("status") == "qr":
+            logger.warning(
+                "Bridge session is waiting for a QR scan — "
+                "open the WhatsApp instance in the admin panel to link the phone"
+            )
+    except Exception:
+        logger.exception("Failed to register with the WhatsApp bridge at %s", webhook_url)
 
 
 app = FastAPI(title="WhatsApp Bot Webhook", lifespan=lifespan)
@@ -104,6 +155,42 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks) -
     return {"status": "ok"}
 
 
+@app.post("/bridge/webhook")
+async def receive_bridge_webhook(request: Request, background_tasks: BackgroundTasks) -> dict:
+    """Receive events from the self-hosted bridge (`services/whatsapp-bridge`).
+
+    Payload: ``{"event": "message"|"connection", "session_id": ..., ...}``,
+    signed with HMAC-SHA256 over the raw body in ``X-Bridge-Signature``.
+    """
+    body = await request.body()
+
+    client = get_whatsapp_client()
+    signature = request.headers.get("X-Bridge-Signature", "")
+    if not client.verify_webhook_signature(body, signature):
+        logger.warning("Invalid bridge webhook signature")
+        return {"status": "error", "message": "Invalid signature"}
+
+    data = await request.json()
+    event = data.get("event", "")
+
+    if event == "message":
+        message = data.get("message") or {}
+        if message:
+            background_tasks.add_task(_dispatch_bridge_message, message)
+    elif event == "connection":
+        logger.info(
+            "Bridge session %s: status=%s phone=%s%s",
+            data.get("session_id"),
+            data.get("status"),
+            data.get("phone"),
+            f" error={data['last_error']}" if data.get("last_error") else "",
+        )
+    else:
+        logger.debug("Unhandled bridge event: %s", event)
+
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def health() -> dict:
     """Health check endpoint."""
@@ -144,6 +231,61 @@ async def _dispatch_message(message: dict[str, Any]) -> None:
         logger.debug("Unhandled message type: %s from %s", msg_type, phone)
 
 
+async def _dispatch_bridge_message(message: dict[str, Any]) -> None:
+    """Route a normalized message coming from the self-hosted bridge."""
+    msg_type = message.get("type", "")
+    phone = message.get("from", "")
+    message_id = message.get("id", "")
+    text = message.get("text", "") or ""
+
+    if not phone:
+        return
+
+    # Group chats would pull the assistant into every unrelated conversation the
+    # linked phone belongs to.
+    if message.get("chat_type") == "group":
+        logger.debug("Ignoring group message from %s", phone)
+        return
+
+    logger.info("Incoming %s message from %s (bridge)", msg_type, phone)
+
+    if msg_type == "text":
+        # A linked phone can't render buttons, so menus are sent as numbered
+        # text — map "2" back to the reply_id the funnel expects.
+        resolved = choices.resolve(phone, text)
+        if resolved:
+            kind, reply_id = resolved
+            await handle_interactive_reply(
+                phone, {"type": kind, kind: {"id": reply_id, "title": text}}
+            )
+            return
+        await handle_text_message(phone, text, message_id)
+
+    elif msg_type in ("button_reply", "list_reply"):
+        reply_id = message.get("reply_id", "")
+        if reply_id:
+            choices.clear(phone)
+            await handle_interactive_reply(
+                phone, {"type": msg_type, msg_type: {"id": reply_id, "title": text}}
+            )
+
+    elif msg_type in ("image", "audio", "video", "document", "sticker"):
+        # TODO (WA-13): download via the bridge and run through STT / file extraction.
+        logger.info("Unsupported media type %s from %s", msg_type, phone)
+        if text:
+            # A caption still carries intent — treat it as the message.
+            await handle_text_message(phone, text, message_id)
+        else:
+            client = get_whatsapp_client()
+            await client.send_text(
+                to=phone,
+                text="Пока я понимаю только текстовые сообщения. Напишите, пожалуйста, текстом.",
+            )
+
+    else:
+        logger.debug("Unhandled bridge message type: %s from %s", msg_type, phone)
+
+
 def _log_status(status: dict[str, Any]) -> None:
     """Log message delivery status updates."""
     recipient = status.get("recipient_id", "?")
@@ -168,7 +310,11 @@ async def main() -> None:
             set_bot_config(bot_config)
             logger.info(f"Loaded config for WhatsApp bot: {bot_config.name}")
             logger.info(f"LLM backend: {bot_config.llm_backend}")
-            logger.info(f"Phone Number ID: {bot_config.phone_number_id}")
+            logger.info(f"Provider: {bot_config.provider}")
+            if bot_config.provider == "bridge":
+                logger.info(f"Bridge URL: {bot_config.bridge_url}")
+            else:
+                logger.info(f"Phone Number ID: {bot_config.phone_number_id}")
         except Exception as e:
             logger.error(f"Failed to load config from API: {e}")
             logger.info("Falling back to .env configuration")

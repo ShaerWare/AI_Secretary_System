@@ -20,6 +20,9 @@ import {
   Shield,
   Phone,
   Share2,
+  QrCode,
+  Smartphone,
+  Unlink,
 } from 'lucide-vue-next'
 import { whatsappInstancesApi, type WhatsAppInstance } from '@/api'
 import { wikiRagApi } from '@/api/wikiRag'
@@ -40,12 +43,15 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showLogsDialog = ref(false)
 const showShareDialog = ref(false)
+const showQrDialog = ref(false)
 const activeTab = ref<'settings' | 'ai' | 'access' | 'logs'>('settings')
 
 // Form data
 const formData = ref<Partial<WhatsAppInstance>>({
   name: '',
   description: '',
+  provider: 'cloud',
+  bridge_url: '',
   phone_number_id: '',
   waba_id: '',
   access_token: '',
@@ -165,6 +171,54 @@ const restartMutation = useMutation({
   onError: () => toast.error(t('whatsapp.restartFailed')),
 })
 
+// ─── Self-hosted bridge (QR linking) ────────────────────────
+
+const isBridgeInstance = computed(() => selectedInstance.value?.provider === 'bridge')
+
+const { data: bridgeState, refetch: refetchBridge } = useQuery({
+  queryKey: ['whatsapp-bridge', selectedInstanceId],
+  queryFn: () =>
+    selectedInstanceId.value ? whatsappInstancesApi.bridgeStatus(selectedInstanceId.value) : null,
+  // The QR rotates roughly every 20s, so poll while the dialog is open.
+  refetchInterval: 3000,
+  retry: false,
+  enabled: computed(() => !!selectedInstanceId.value && isBridgeInstance.value && showQrDialog.value),
+})
+
+const bridgeStartMutation = useMutation({
+  mutationFn: (id: string) => whatsappInstancesApi.bridgeStart(id),
+  onSuccess: () => refetchBridge(),
+  onError: (e: Error) => toast.error(e.message || t('whatsapp.bridgeStartFailed')),
+})
+
+const bridgeLogoutMutation = useMutation({
+  mutationFn: (id: string) => whatsappInstancesApi.bridgeLogout(id),
+  onSuccess: () => {
+    toast.success(t('whatsapp.bridgeUnlinked'))
+    refetchBridge()
+  },
+  onError: (e: Error) => toast.error(e.message || t('whatsapp.bridgeLogoutFailed')),
+})
+
+/** Open the linking dialog and ask the bridge to produce a QR. */
+function openQrDialog() {
+  if (!selectedInstanceId.value) return
+  showQrDialog.value = true
+  bridgeStartMutation.mutate(selectedInstanceId.value)
+}
+
+function unlinkPhone() {
+  if (!selectedInstanceId.value) return
+  if (!confirm(t('whatsapp.confirmUnlink'))) return
+  bridgeLogoutMutation.mutate(selectedInstanceId.value)
+}
+
+const bridgeStatusLabel = computed(() => {
+  const status = bridgeState.value?.status
+  if (!status) return t('whatsapp.bridgeUnknown')
+  return t(`whatsapp.bridgeStatus.${status}`)
+})
+
 // ─── Actions ──────────────────────────────────────────────
 
 function selectInstance(id: string) {
@@ -177,6 +231,8 @@ function openCreate() {
   formData.value = {
     name: '',
     description: '',
+    provider: 'cloud',
+    bridge_url: '',
     phone_number_id: '',
     waba_id: '',
     access_token: '',
@@ -341,8 +397,22 @@ watch(instances, (val) => {
           <MessageCircle class="w-6 h-6 text-green-600" />
           <div class="flex-1 min-w-0">
             <h2 class="font-semibold truncate">{{ selectedInstance.name }}</h2>
-            <p class="text-xs text-muted-foreground">{{ selectedInstance.phone_number_id || t('whatsapp.noPhoneId') }}</p>
+            <p class="text-xs text-muted-foreground">
+              <template v-if="isBridgeInstance">{{ t('whatsapp.providerBridge') }}</template>
+              <template v-else>{{ selectedInstance.phone_number_id || t('whatsapp.noPhoneId') }}</template>
+            </p>
           </div>
+
+          <!-- Link a phone (self-hosted provider only) -->
+          <button
+            v-if="isBridgeInstance"
+            class="px-2.5 py-1 rounded-lg text-xs font-medium border border-border hover:bg-secondary flex items-center gap-1.5"
+            :title="t('whatsapp.linkPhoneHint')"
+            @click="openQrDialog"
+          >
+            <QrCode class="w-3.5 h-3.5" />
+            {{ t('whatsapp.linkPhone') }}
+          </button>
 
           <!-- Status badge -->
           <span
@@ -629,6 +699,22 @@ watch(instances, (val) => {
               <input v-model="formData.description" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
             </div>
             <div class="border-t border-border pt-3">
+              <label class="block text-sm font-medium mb-1">{{ t('whatsapp.provider') }}</label>
+              <select v-model="formData.provider" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                <option value="cloud">{{ t('whatsapp.providerCloud') }}</option>
+                <option value="bridge">{{ t('whatsapp.providerBridge') }}</option>
+              </select>
+              <p class="text-xs text-muted-foreground mt-1">
+                {{ formData.provider === 'bridge' ? t('whatsapp.providerBridgeHint') : t('whatsapp.providerCloudHint') }}
+              </p>
+            </div>
+            <div v-if="formData.provider === 'bridge'" class="border-t border-border pt-3">
+              <h4 class="text-sm font-medium mb-2">{{ t('whatsapp.bridgeSettings') }}</h4>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.bridgeUrl') }}</label>
+              <input v-model="formData.bridge_url" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono" placeholder="http://127.0.0.1:8005" />
+              <p class="text-xs text-muted-foreground mt-1">{{ t('whatsapp.bridgeUrlHint') }}</p>
+            </div>
+            <div v-else class="border-t border-border pt-3">
               <h4 class="text-sm font-medium mb-2">WhatsApp Cloud API</h4>
               <div class="space-y-2">
                 <div>
@@ -716,6 +802,28 @@ watch(instances, (val) => {
               <input v-model="formData.description" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
             </div>
             <div class="border-t border-border pt-3">
+              <label class="block text-sm font-medium mb-1">{{ t('whatsapp.provider') }}</label>
+              <select v-model="formData.provider" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                <option value="cloud">{{ t('whatsapp.providerCloud') }}</option>
+                <option value="bridge">{{ t('whatsapp.providerBridge') }}</option>
+              </select>
+              <p class="text-xs text-muted-foreground mt-1">{{ t('whatsapp.providerSwitchHint') }}</p>
+            </div>
+            <div v-if="formData.provider === 'bridge'" class="border-t border-border pt-3">
+              <h4 class="text-sm font-medium mb-2">{{ t('whatsapp.bridgeSettings') }}</h4>
+              <div class="space-y-2">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.bridgeUrl') }}</label>
+                  <input v-model="formData.bridge_url" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono" placeholder="http://127.0.0.1:8005" />
+                  <p class="text-xs text-muted-foreground mt-1">{{ t('whatsapp.bridgeUrlHint') }}</p>
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.webhookPort') }}</label>
+                  <input v-model.number="formData.webhook_port" type="number" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="border-t border-border pt-3">
               <h4 class="text-sm font-medium mb-2">WhatsApp Cloud API</h4>
               <div class="space-y-2">
                 <div>
@@ -817,6 +925,94 @@ watch(instances, (val) => {
             </div>
           </div>
           <pre class="flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap">{{ logsData?.logs || t('whatsapp.noLogs') }}</pre>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Phone linking (self-hosted provider) -->
+    <Teleport to="body">
+      <div v-if="showQrDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showQrDialog = false">
+        <div class="bg-card rounded-2xl shadow-xl w-full max-w-md mx-4">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="font-semibold flex items-center gap-2">
+              <Smartphone class="w-4 h-4" />
+              {{ t('whatsapp.linkPhone') }}
+            </h3>
+            <button class="p-1 rounded hover:bg-secondary" @click="showQrDialog = false"><X class="w-4 h-4" /></button>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <!-- Link state -->
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-muted-foreground">{{ t('whatsapp.bridgeState') }}</span>
+              <span
+                :class="[
+                  'px-2 py-0.5 rounded-full text-xs font-medium',
+                  bridgeState?.status === 'connected'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : bridgeState?.status === 'qr'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                ]"
+              >
+                {{ bridgeStatusLabel }}
+              </span>
+            </div>
+
+            <!-- QR to scan -->
+            <div v-if="bridgeState?.status === 'qr' && bridgeState.qr" class="space-y-3">
+              <div class="flex justify-center bg-white rounded-xl p-3">
+                <img :src="bridgeState.qr" alt="WhatsApp QR" class="w-56 h-56" />
+              </div>
+              <ol class="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>{{ t('whatsapp.qrStep1') }}</li>
+                <li>{{ t('whatsapp.qrStep2') }}</li>
+                <li>{{ t('whatsapp.qrStep3') }}</li>
+              </ol>
+            </div>
+
+            <!-- Linked -->
+            <div v-else-if="bridgeState?.status === 'connected'" class="text-center space-y-2 py-4">
+              <Smartphone class="w-10 h-10 mx-auto text-green-600" />
+              <p class="text-sm font-medium">{{ t('whatsapp.phoneLinked') }}</p>
+              <p class="text-xs font-mono text-muted-foreground">+{{ bridgeState.phone }}</p>
+            </div>
+
+            <!-- Waiting / error -->
+            <div v-else class="text-center space-y-2 py-6">
+              <Loader2 class="w-8 h-8 mx-auto animate-spin text-muted-foreground" />
+              <p class="text-xs text-muted-foreground">{{ t('whatsapp.bridgeWaiting') }}</p>
+              <p v-if="bridgeState?.last_error" class="text-xs text-red-500">{{ bridgeState.last_error }}</p>
+            </div>
+
+            <p v-if="bridgeState?.status === 'logged_out'" class="text-xs text-amber-600 dark:text-amber-400">
+              {{ t('whatsapp.bridgeLoggedOutHint') }}
+            </p>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 p-4 border-t border-border">
+            <button
+              v-if="bridgeState?.status === 'connected'"
+              class="px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1.5"
+              :disabled="bridgeLogoutMutation.isPending.value"
+              @click="unlinkPhone"
+            >
+              <Unlink class="w-4 h-4" />
+              {{ t('whatsapp.unlinkPhone') }}
+            </button>
+            <button
+              v-else
+              class="px-3 py-2 rounded-lg text-sm hover:bg-secondary flex items-center gap-1.5"
+              :disabled="bridgeStartMutation.isPending.value"
+              @click="selectedInstanceId && bridgeStartMutation.mutate(selectedInstanceId)"
+            >
+              <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': bridgeStartMutation.isPending.value }" />
+              {{ t('whatsapp.bridgeRetry') }}
+            </button>
+            <button class="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground" @click="showQrDialog = false">
+              {{ t('common.close') }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>

@@ -210,6 +210,29 @@ services:
     networks:
       - ai-secretary
 
+  # ---------------------------------------------------------------------------
+  # WhatsApp Bridge - self-hosted provider, phone linked by QR (optional)
+  # ---------------------------------------------------------------------------
+  # Start with: docker compose --profile whatsapp-bridge up -d
+  whatsapp-bridge:
+    build: ./services/whatsapp-bridge
+    container_name: ai-secretary-whatsapp-bridge
+    profiles: ["whatsapp-bridge"]
+    ports:
+      - "8005:8005"
+    environment:
+      - WHATSAPP_BRIDGE_TOKEN=${WHATSAPP_BRIDGE_TOKEN:?set WHATSAPP_BRIDGE_TOKEN in .env}
+      - WHATSAPP_BRIDGE_HOST=0.0.0.0
+      - WHATSAPP_BRIDGE_PORT=8005
+      - WHATSAPP_BRIDGE_DATA=/data
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      # Linked-device credentials — without this every restart needs a new QR scan
+      - whatsapp_bridge_data:/data
+    restart: unless-stopped
+    networks:
+      - ai-secretary
+
 # =============================================================================
 # Volumes
 # =============================================================================
@@ -217,6 +240,8 @@ volumes:
   redis_data:
     driver: local
   vector_search_data:
+    driver: local
+  whatsapp_bridge_data:
     driver: local
 
 # =============================================================================

@@ -6,6 +6,10 @@ export interface WhatsAppInstance {
   description?: string
   enabled: boolean
   auto_start: boolean
+  // Transport: 'cloud' = Meta Cloud API, 'bridge' = self-hosted (phone linked by QR)
+  provider?: 'cloud' | 'bridge'
+  bridge_url?: string | null
+  bridge_token?: string
   // WhatsApp API
   phone_number_id: string
   waba_id?: string
@@ -53,6 +57,17 @@ export interface WhatsAppStatus {
   pid: number | null
 }
 
+/** Link state of a self-hosted bridge session (one linked phone). */
+export interface BridgeSessionState {
+  session_id: string
+  status: 'idle' | 'starting' | 'qr' | 'connected' | 'disconnected' | 'logged_out'
+  phone: string | null
+  /** data-URL of the QR to scan; present only while status === 'qr' */
+  qr: string | null
+  last_error: string | null
+  connected_at: string | null
+}
+
 // WhatsApp instances API
 export const whatsappInstancesApi = {
   // List instances
@@ -94,6 +109,19 @@ export const whatsappInstancesApi = {
   // Get logs
   getLogs: (instanceId: string, lines = 100) =>
     api.get<{ logs: string }>(`/admin/whatsapp/instances/${instanceId}/logs?lines=${lines}`),
+
+  // Self-hosted bridge: QR linking of a phone
+  bridgeStart: (instanceId: string) =>
+    api.post<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/start`),
+
+  bridgeStatus: (instanceId: string) =>
+    api.get<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/status`),
+
+  bridgeStop: (instanceId: string) =>
+    api.post<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/stop`),
+
+  bridgeLogout: (instanceId: string) =>
+    api.post<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/logout`),
 
   // Sharing
   getShares: (instanceId: string) =>

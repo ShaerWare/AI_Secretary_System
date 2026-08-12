@@ -296,17 +296,32 @@ class WhatsAppClient:
 
 # ─── Singleton ─────────────────────────────────────────────────
 
-_client: WhatsAppClient | None = None
+# Either a WhatsAppClient or a BridgeClient — both share the same interface.
+_client: Any = None
 
 
-def get_whatsapp_client() -> WhatsAppClient:
-    """Get or create the singleton WhatsApp client."""
+def get_whatsapp_client() -> Any:
+    """Get or create the singleton WhatsApp client.
+
+    Returns a :class:`WhatsAppClient` (Meta Cloud API) or a
+    ``BridgeClient`` (self-hosted, QR-linked phone) depending on the instance's
+    ``provider``. Both expose the same interface, so callers stay unaware.
+    """
     global _client
     if _client is None:
         from ..state import get_bot_config
 
         bot_config = get_bot_config()
-        if bot_config:
+
+        if bot_config and bot_config.provider == "bridge":
+            from .bridge_client import BridgeClient
+
+            _client = BridgeClient(
+                session_id=bot_config.instance_id,
+                bridge_url=bot_config.bridge_url,
+                bridge_token=bot_config.bridge_token,
+            )
+        elif bot_config:
             _client = WhatsAppClient(
                 phone_number_id=bot_config.phone_number_id,
                 access_token=bot_config.access_token,
@@ -317,10 +332,25 @@ def get_whatsapp_client() -> WhatsAppClient:
             from ..config import get_whatsapp_settings
 
             settings = get_whatsapp_settings()
-            _client = WhatsAppClient(
-                phone_number_id=settings.phone_number_id,
-                access_token=settings.access_token,
-                app_secret=settings.app_secret,
-                api_version=settings.api_version,
-            )
+            if settings.provider == "bridge":
+                from .bridge_client import BridgeClient
+
+                _client = BridgeClient(
+                    session_id=settings.bridge_session_id or "default",
+                    bridge_url=settings.bridge_url,
+                    bridge_token=settings.bridge_token,
+                )
+            else:
+                _client = WhatsAppClient(
+                    phone_number_id=settings.phone_number_id,
+                    access_token=settings.access_token,
+                    app_secret=settings.app_secret,
+                    api_version=settings.api_version,
+                )
     return _client
+
+
+def reset_whatsapp_client() -> None:
+    """Drop the cached client so the next call rebuilds it (used by tests)."""
+    global _client
+    _client = None
