@@ -164,6 +164,9 @@ function tokenizeImageUrl(url?: string | null): string | null | undefined {
 }
 
 function tokenizeSessionImages(session: ChatSession): ChatSession {
+  // Эндпоинты, которые раньше возвращали session, могут её больше не отдавать —
+  // не роняем весь вызов из-за отсутствующего тела ответа.
+  if (!session) return session
   for (const m of session.messages || []) {
     for (const img of m.metadata?.images || []) {
       img.url = tokenizeImageUrl(img.url) as string
@@ -253,13 +256,12 @@ export const chatApi = {
   getBranches: (sessionId: string) =>
     api.get<{ branches: BranchNode[] }>(`/admin/chat/sessions/${sessionId}/branches`),
 
+  // Бэкенд отдаёт только {status}: сессию и ветки фронт всё равно рефетчит
+  // сразу после переключения (см. switchBranchMutation в ChatView).
   switchBranch: (sessionId: string, messageId: string) =>
-    api
-      .post<{ status: string; session: ChatSession }>(
-        `/admin/chat/sessions/${sessionId}/branches/switch`,
-        { message_id: messageId }
-      )
-      .then((r) => ({ ...r, session: tokenizeSessionImages(r.session) })),
+    api.post<{ status: string }>(`/admin/chat/sessions/${sessionId}/branches/switch`, {
+      message_id: messageId,
+    }),
 
   newBranchFromScratch: (sessionId: string) =>
     api
