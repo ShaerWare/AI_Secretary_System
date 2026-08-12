@@ -260,8 +260,11 @@ class VLLMLLMService:
         # если сервер запущен без --enable-auto-tool-choice/--tool-call-parser.
         self.supports_tools = True
 
-        # HTTP клиент
-        self.client = httpx.Client(timeout=timeout)
+        # HTTP клиент.
+        # trust_env=False обязателен: GeminiProvider выставляет глобальный
+        # HTTP_PROXY/HTTPS_PROXY (VLESS), и httpx погнал бы запросы к локальному
+        # vLLM через прокси — при мёртвом/отсутствующем xray это ConnectError.
+        self.client = httpx.Client(timeout=timeout, trust_env=False)
 
         # Runtime параметры генерации (могут быть изменены через API)
         self.runtime_params = {
