@@ -452,7 +452,9 @@ async def admin_set_llm_backend(
             # Проверяем доступность vLLM
             async def check_vllm_health() -> bool:
                 try:
-                    async with httpx.AsyncClient() as client:
+                    # trust_env=False: иначе глобальный HTTP_PROXY (VLESS от Gemini)
+                    # уводит запрос к localhost в прокси и health-check всегда падает
+                    async with httpx.AsyncClient(trust_env=False) as client:
                         # vLLM использует /v1/models для проверки доступности
                         try:
                             resp = await client.get(f"{vllm_url}/v1/models", timeout=5.0)

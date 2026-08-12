@@ -721,13 +721,23 @@ class GeminiProvider(BaseLLMProvider):
         # Start proxy and set env vars BEFORE genai.configure()
         # This ensures the HTTP client is created with proxy settings
         if self.proxy_manager:
-            self.proxy_manager.start()
             proxy_url = f"http://127.0.0.1:{self.proxy_manager.http_port}"
-            os.environ["HTTP_PROXY"] = proxy_url
-            os.environ["HTTPS_PROXY"] = proxy_url
-            os.environ["http_proxy"] = proxy_url
-            os.environ["https_proxy"] = proxy_url
-            logger.info(f"[{self.provider_id}] Proxy env set: {proxy_url}")
+            if self.proxy_manager.start():
+                os.environ["HTTP_PROXY"] = proxy_url
+                os.environ["HTTPS_PROXY"] = proxy_url
+                os.environ["http_proxy"] = proxy_url
+                os.environ["https_proxy"] = proxy_url
+                logger.info(f"[{self.provider_id}] Proxy env set: {proxy_url}")
+            else:
+                # xray не запустился (нет бинарника / порт занят). Оставлять
+                # HTTP_PROXY на мёртвый порт нельзя: он глобальный для процесса
+                # и роняет ВСЕ http-запросы (health-check vLLM, tiktoken, HF).
+                logger.warning(
+                    f"[{self.provider_id}] Proxy не запустился, работаем напрямую: {proxy_url}"
+                )
+                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                    if os.environ.get(key) == proxy_url:
+                        os.environ.pop(key, None)
 
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(model_name=self.model_name or "gemini-2.0-flash")
