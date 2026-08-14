@@ -100,10 +100,12 @@ app.get(
 )
 
 /**
- * Open (or re-open) a session. Body: {webhook_url, force}.
+ * Open (or re-open) a session. Body: {webhook_url, force, pairing_phone}.
  *
  * `force` marks a human-initiated relink: it is the only way to discard
  * revoked credentials and start a fresh pairing.
+ * `pairing_phone` links by an 8-character code typed on that number instead
+ * of by QR.
  */
 app.post(
   '/sessions/:id/start',
@@ -111,6 +113,7 @@ app.post(
     const session = manager.get(req.params.id, { create: true })
     const state = await session.start(req.body?.webhook_url, {
       force: Boolean(req.body?.force),
+      pairingPhone: req.body?.pairing_phone || null,
     })
     res.json(state)
   }),

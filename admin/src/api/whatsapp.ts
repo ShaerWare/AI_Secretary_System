@@ -60,10 +60,13 @@ export interface WhatsAppStatus {
 /** Link state of a self-hosted bridge session (one linked phone). */
 export interface BridgeSessionState {
   session_id: string
-  status: 'idle' | 'starting' | 'qr' | 'connected' | 'disconnected' | 'logged_out'
+  status: 'idle' | 'starting' | 'qr' | 'pairing' | 'connected' | 'disconnected' | 'logged_out'
   phone: string | null
   /** data-URL of the QR to scan; present only while status === 'qr' */
   qr: string | null
+  /** 8-character code to type on the phone; present only while status === 'pairing' */
+  pairing_code: string | null
+  pairing_phone: string | null
   last_error: string | null
   connected_at: string | null
 }
@@ -111,8 +114,12 @@ export const whatsappInstancesApi = {
     api.get<{ logs: string }>(`/admin/whatsapp/instances/${instanceId}/logs?lines=${lines}`),
 
   // Self-hosted bridge: QR linking of a phone
-  bridgeStart: (instanceId: string) =>
-    api.post<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/start`),
+  /** Omit pairingPhone to link by QR; pass digits to link by code instead. */
+  bridgeStart: (instanceId: string, pairingPhone?: string) =>
+    api.post<BridgeSessionState>(
+      `/admin/whatsapp/instances/${instanceId}/bridge/start`,
+      pairingPhone ? { pairing_phone: pairingPhone } : {},
+    ),
 
   bridgeStatus: (instanceId: string) =>
     api.get<BridgeSessionState>(`/admin/whatsapp/instances/${instanceId}/bridge/status`),

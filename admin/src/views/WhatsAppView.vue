@@ -185,11 +185,27 @@ const { data: bridgeState, refetch: refetchBridge } = useQuery({
   enabled: computed(() => !!selectedInstanceId.value && isBridgeInstance.value && showQrDialog.value),
 })
 
+/** Empty = link by QR; digits = link by a code typed on that phone. */
+const pairingPhone = ref('')
+const linkMode = ref<'qr' | 'code'>('qr')
+
 const bridgeStartMutation = useMutation({
-  mutationFn: (id: string) => whatsappInstancesApi.bridgeStart(id),
+  mutationFn: ({ id, phone }: { id: string; phone?: string }) =>
+    whatsappInstancesApi.bridgeStart(id, phone),
   onSuccess: () => refetchBridge(),
   onError: (e: Error) => toast.error(e.message || t('whatsapp.bridgeStartFailed')),
 })
+
+/** Start (or restart) linking with the mode the operator picked. */
+function startLinking() {
+  if (!selectedInstanceId.value) return
+  const phone = linkMode.value === 'code' ? pairingPhone.value.replace(/\D/g, '') : undefined
+  if (linkMode.value === 'code' && !phone) {
+    toast.error(t('whatsapp.pairingPhoneRequired'))
+    return
+  }
+  bridgeStartMutation.mutate({ id: selectedInstanceId.value, phone })
+}
 
 const bridgeLogoutMutation = useMutation({
   mutationFn: (id: string) => whatsappInstancesApi.bridgeLogout(id),
@@ -204,7 +220,7 @@ const bridgeLogoutMutation = useMutation({
 function openQrDialog() {
   if (!selectedInstanceId.value) return
   showQrDialog.value = true
-  bridgeStartMutation.mutate(selectedInstanceId.value)
+  startLinking()
 }
 
 function unlinkPhone() {
@@ -959,8 +975,56 @@ watch(instances, (val) => {
               </span>
             </div>
 
+            <!-- Link method -->
+            <div v-if="bridgeState?.status !== 'connected'" class="space-y-2">
+              <div class="flex gap-2 text-xs">
+                <button
+                  v-for="mode in (['qr', 'code'] as const)"
+                  :key="mode"
+                  :class="[
+                    'flex-1 px-3 py-1.5 rounded-lg border transition',
+                    linkMode === mode
+                      ? 'border-primary bg-primary/10 font-medium'
+                      : 'border-border hover:bg-secondary'
+                  ]"
+                  @click="linkMode = mode"
+                >
+                  {{ mode === 'qr' ? t('whatsapp.linkByQr') : t('whatsapp.linkByCode') }}
+                </button>
+              </div>
+              <div v-if="linkMode === 'code'" class="space-y-1">
+                <input
+                  v-model="pairingPhone"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono"
+                  placeholder="77085442089"
+                />
+                <p class="text-xs text-muted-foreground">{{ t('whatsapp.pairingPhoneHint') }}</p>
+                <button
+                  class="w-full px-3 py-2 rounded-lg text-sm bg-primary text-primary-foreground disabled:opacity-50"
+                  :disabled="bridgeStartMutation.isPending.value"
+                  @click="startLinking"
+                >
+                  {{ t('whatsapp.requestCode') }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Code to type on the phone -->
+            <div v-if="bridgeState?.status === 'pairing' && bridgeState.pairing_code" class="space-y-3">
+              <div class="text-center py-2">
+                <p class="text-3xl font-mono font-bold tracking-[0.3em] select-all">
+                  {{ bridgeState.pairing_code }}
+                </p>
+              </div>
+              <ol class="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>{{ t('whatsapp.codeStep1') }}</li>
+                <li>{{ t('whatsapp.codeStep2') }}</li>
+                <li>{{ t('whatsapp.codeStep3') }}</li>
+              </ol>
+            </div>
+
             <!-- QR to scan -->
-            <div v-if="bridgeState?.status === 'qr' && bridgeState.qr" class="space-y-3">
+            <div v-else-if="bridgeState?.status === 'qr' && bridgeState.qr" class="space-y-3">
               <div class="flex justify-center bg-white rounded-xl p-3">
                 <img :src="bridgeState.qr" alt="WhatsApp QR" class="w-56 h-56" />
               </div>
@@ -1004,10 +1068,10 @@ watch(instances, (val) => {
               v-else
               class="px-3 py-2 rounded-lg text-sm hover:bg-secondary flex items-center gap-1.5"
               :disabled="bridgeStartMutation.isPending.value"
-              @click="selectedInstanceId && bridgeStartMutation.mutate(selectedInstanceId)"
+              @click="startLinking"
             >
               <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': bridgeStartMutation.isPending.value }" />
-              {{ t('whatsapp.bridgeRetry') }}
+              {{ linkMode === 'code' ? t('whatsapp.requestCode') : t('whatsapp.bridgeRetry') }}
             </button>
             <button class="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground" @click="showQrDialog = false">
               {{ t('common.close') }}
