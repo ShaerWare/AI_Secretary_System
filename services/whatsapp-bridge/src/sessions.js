@@ -106,19 +106,22 @@ export function normalize(raw) {
     null
 
   // WhatsApp addresses a growing share of users by an opaque "@lid" instead of
-  // a phone number. Rebuilding an address out of its digits yields a JID that
-  // does not exist: replies vanish silently, and a freshly linked device that
-  // sends to one gets revoked (stream:error 401, conflict device_removed).
-  // So `from` carries something we can always send back to, while `phone` holds
-  // the real number when WhatsApp discloses it.
+  // a phone number, and neither form can be improvised:
+  //   - digits of a lid + "@s.whatsapp.net" is a JID nobody owns; the reply
+  //     vanishes and a freshly linked device that sends to one gets revoked
+  //     (stream:error 401, conflict device_removed)
+  //   - the bare "@lid" JID is refused on delivery (error 463 in the ack)
+  // The number behind the lid travels in senderPn, so prefer it and keep the
+  // lid only as a last resort for senders that disclose nothing else.
   const authorJid = isGroup ? (raw.key.participant ?? '') : jid
   const senderPn = raw.key.senderPn ?? raw.key.participantPn ?? null
+  const senderPhone = senderPn ? jidToPhone(senderPn) : null
 
   const base = {
     id: raw.key.id,
     jid,
-    from: isLidUser(authorJid) ? authorJid : jidToPhone(authorJid),
-    phone: senderPn ? jidToPhone(senderPn) : isLidUser(authorJid) ? null : jidToPhone(authorJid),
+    from: senderPhone ?? (isLidUser(authorJid) ? authorJid : jidToPhone(authorJid)),
+    phone: senderPhone ?? (isLidUser(authorJid) ? null : jidToPhone(authorJid)),
     chat_type: isGroup ? 'group' : 'direct',
     sender_name: raw.pushName ?? '',
     timestamp: Number(raw.messageTimestamp ?? 0),
