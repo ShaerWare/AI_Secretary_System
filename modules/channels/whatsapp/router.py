@@ -437,7 +437,9 @@ async def _bridge_call(instance: dict, action: str) -> dict:
     client = get_bridge_client(instance)
     try:
         if action == "start":
-            return await client.start_session(bridge_webhook_url(instance))
+            # Pressing "Подключить телефон" is an explicit request to link, so a
+            # dead credential set is discarded and pairing starts clean.
+            return await client.start_session(bridge_webhook_url(instance), force=True)
         if action == "status":
             return await client.get_status()
         if action == "stop":

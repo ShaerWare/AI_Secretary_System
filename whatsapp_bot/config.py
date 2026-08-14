@@ -1,5 +1,6 @@
 """WhatsApp bot configuration."""
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -111,17 +112,26 @@ def get_orchestrator_url() -> str:
     return os.environ.get("ORCHESTRATOR_URL", "http://localhost:8002")
 
 
-async def load_config_from_api(instance_id: str) -> WhatsAppBotConfig:
+async def load_config_from_api(
+    instance_id: str, attempts: int = 6, base_delay: float = 2.0
+) -> WhatsAppBotConfig:
     """Load WhatsApp bot configuration from orchestrator API.
+
+    Auto-started bots are spawned from the orchestrator's own startup, before it
+    accepts connections — and on a loaded instance that startup takes tens of
+    seconds (RAG indexing). Without retrying, the very first request fails and
+    the bot silently falls back to `.env`, i.e. to the wrong provider entirely.
 
     Args:
         instance_id: WhatsApp instance ID from database
+        attempts: How many times to try before giving up
+        base_delay: First backoff delay in seconds (doubles, capped at 15s)
 
     Returns:
         WhatsAppBotConfig with all settings from API
 
     Raises:
-        httpx.HTTPError: If API request fails
+        httpx.HTTPError: If every attempt fails
     """
     api_url = get_orchestrator_url()
     url = f"{api_url}/admin/whatsapp/instances/{instance_id}"
@@ -133,10 +143,27 @@ async def load_config_from_api(instance_id: str) -> WhatsAppBotConfig:
     if internal_token:
         headers["Authorization"] = f"Bearer {internal_token}"
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params={"include_token": "true"}, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
+    data = None
+    for attempt in range(1, attempts + 1):
+        try:
+            # trust_env=False: a global HTTP_PROXY (VLESS) would route this
+            # localhost call through the proxy and fail.
+            async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+                resp = await client.get(url, params={"include_token": "true"}, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+            break
+        except (httpx.HTTPError, ValueError) as e:
+            if attempt == attempts:
+                logger.error(f"Config load failed after {attempts} attempts: {e}")
+                raise
+            delay = min(base_delay * 2 ** (attempt - 1), 15.0)
+            logger.warning(
+                f"Config load attempt {attempt}/{attempts} failed ({e}); retrying in {delay:.0f}s"
+            )
+            await asyncio.sleep(delay)
+
+    assert data is not None  # loop either breaks with data or raises
 
     instance = data["instance"]
     settings = get_whatsapp_settings()
@@ -163,4 +190,7 @@ async def load_config_from_api(instance_id: str) -> WhatsAppBotConfig:
         rate_limit_count=instance.get("rate_limit_count", 30),
         rate_limit_hours=instance.get("rate_limit_hours", 1),
         auto_start=instance.get("auto_start", False),
+        # Previously never carried over, so every instance silently listened on
+        # the dataclass default — two instances would fight for the same port.
+        webhook_port=instance.get("webhook_port") or settings.webhook_port,
     )
