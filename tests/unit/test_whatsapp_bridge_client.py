@@ -93,6 +93,45 @@ def test_base_url_trailing_slash_is_normalized(client):
     assert client.bridge_url == "http://127.0.0.1:8005"
 
 
+# ─── Relink safety ─────────────────────────────────────────────
+
+
+async def test_start_session_does_not_force_by_default(client, monkeypatch):
+    """An automatic (re)start must never discard a working or dead credential set.
+
+    A crash-looping bot calling start() repeatedly would otherwise wipe the link
+    or hammer WhatsApp with logins it answers 401 to.
+    """
+    sent: dict = {}
+
+    async def fake_request(method, path, **kwargs):
+        sent["path"] = path
+        sent["json"] = kwargs.get("json")
+        return {}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    await client.start_session("http://127.0.0.1:8003/bridge/webhook")
+
+    assert sent["path"] == "/start"
+    assert sent["json"]["force"] is False
+
+
+async def test_start_session_forwards_force(client, monkeypatch):
+    """The admin "link phone" button asks explicitly, so it may start fresh."""
+    sent: dict = {}
+
+    async def fake_request(method, path, **kwargs):
+        sent["json"] = kwargs.get("json")
+        return {}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    await client.start_session("http://127.0.0.1:8003/bridge/webhook", force=True)
+
+    assert sent["json"]["force"] is True
+
+
 # ─── Sending registers the menu ────────────────────────────────
 
 

@@ -241,16 +241,44 @@ export class Session {
     })
   }
 
+  /** Delete the linked-device credentials from disk. */
+  async _wipeCreds() {
+    await rm(this.authDir, { recursive: true, force: true })
+    this.phone = null
+    this.recent.clear()
+  }
+
   /**
    * Open the WhatsApp socket. Idempotent: calling it on a live session only
    * updates the webhook URL.
+   *
+   * @param {string} [webhookUrl] where to deliver incoming messages
+   * @param {{force?: boolean}} [opts] force = a human explicitly asked to link
+   *   (the admin panel button). Only a forced start may discard dead
+   *   credentials and begin a fresh pairing.
    */
-  async start(webhookUrl) {
+  async start(webhookUrl, { force = false } = {}) {
     if (webhookUrl) this.webhookUrl = webhookUrl
 
     if (this.starting) return this.toJSON()
     if (this.sock && (this.status === Status.CONNECTED || this.status === Status.QR)) {
       return this.toJSON()
+    }
+
+    // WhatsApp answers 401 to every login with credentials it has revoked.
+    // A restarting bot calling start() in a loop would hammer the server with
+    // failed logins — which looks exactly like an attack. Wait for a human to
+    // ask for a new QR instead.
+    if (this.status === Status.LOGGED_OUT) {
+      if (!force) {
+        this.logger.warn(
+          'session is logged out — refusing to reopen with dead credentials; ' +
+            'relink the phone from the admin panel',
+        )
+        return this.toJSON()
+      }
+      this.logger.info('forced start on a logged-out session — wiping dead credentials')
+      await this._wipeCreds()
     }
 
     this.starting = true
@@ -300,6 +328,10 @@ export class Session {
     if (qr) {
       try {
         this.qr = await QRCode.toDataURL(qr, { margin: 1, width: 320 })
+        // A fresh QR means the socket is healthy and waiting for a human, not
+        // failing. Without this reset an unscanned QR burns through the retry
+        // budget, and the mandatory post-pairing restart later gets vetoed.
+        this.reconnectAttempts = 0
         this._setStatus(Status.QR)
       } catch (err) {
         this.logger.error({ err: err.message }, 'failed to render QR')
@@ -345,8 +377,11 @@ export class Session {
 
     // Emitted right after a successful pairing — the socket MUST be recreated
     // immediately, otherwise the freshly scanned QR never finishes linking.
+    // This is a handshake step, not a failure: it bypasses the retry budget
+    // entirely, because refusing it strands a phone that the user just linked.
     if (code === DisconnectReason.restartRequired) {
       this.logger.info('restart required after pairing, reopening')
+      this.reconnectAttempts = 0
       this._scheduleReconnect(0)
       return
     }
@@ -540,9 +575,7 @@ export class Session {
       }
       this.sock = null
     }
-    await rm(this.authDir, { recursive: true, force: true })
-    this.phone = null
-    this.recent.clear()
+    await this._wipeCreds()
     this._setStatus(Status.LOGGED_OUT)
     return this.toJSON()
   }

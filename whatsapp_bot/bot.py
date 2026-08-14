@@ -323,8 +323,17 @@ async def main() -> None:
 
     settings = get_whatsapp_settings()
     bot_config = get_bot_config()
-    host = settings.webhook_host
     port = bot_config.webhook_port if bot_config else settings.webhook_port
+
+    # Meta must reach the webhook from the internet, so the Cloud provider binds
+    # whatever the settings say (0.0.0.0 by default, behind nginx). The bridge
+    # provider is a local process talking to a local process — a public bind
+    # there just hands the internet an open port to scan.
+    if _is_bridge_provider() and settings.webhook_host == "0.0.0.0":
+        host = "127.0.0.1"
+        logger.info("Bridge provider: binding webhook to 127.0.0.1 (local-only)")
+    else:
+        host = settings.webhook_host
 
     logger.info(f"Starting WhatsApp webhook server on {host}:{port}")
 

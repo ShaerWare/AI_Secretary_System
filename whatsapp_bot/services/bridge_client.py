@@ -122,9 +122,20 @@ class BridgeClient:
 
     # ─── Session control ───────────────────────────────────────
 
-    async def start_session(self, webhook_url: str) -> dict[str, Any]:
-        """Open the WhatsApp socket and register where to deliver incoming messages."""
-        return await self._request("POST", "/start", json={"webhook_url": webhook_url})
+    async def start_session(self, webhook_url: str, force: bool = False) -> dict[str, Any]:
+        """Open the WhatsApp socket and register where to deliver incoming messages.
+
+        Args:
+            webhook_url: Where the bridge should POST incoming messages.
+            force: Human-initiated relink (the admin panel button). Only a forced
+                start may discard revoked credentials and begin a fresh pairing —
+                an automatic start must never do that, both to avoid wiping a
+                working link and to keep a restarting bot from hammering WhatsApp
+                with logins it will answer 401 to.
+        """
+        return await self._request(
+            "POST", "/start", json={"webhook_url": webhook_url, "force": force}
+        )
 
     async def get_status(self) -> dict[str, Any]:
         """Current link state: idle / starting / qr / connected / disconnected / logged_out."""

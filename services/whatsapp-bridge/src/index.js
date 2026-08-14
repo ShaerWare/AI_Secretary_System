@@ -99,12 +99,19 @@ app.get(
   }),
 )
 
-/** Open (or re-open) a session. Body: {webhook_url}. */
+/**
+ * Open (or re-open) a session. Body: {webhook_url, force}.
+ *
+ * `force` marks a human-initiated relink: it is the only way to discard
+ * revoked credentials and start a fresh pairing.
+ */
 app.post(
   '/sessions/:id/start',
   wrap(async (req, res) => {
     const session = manager.get(req.params.id, { create: true })
-    const state = await session.start(req.body?.webhook_url)
+    const state = await session.start(req.body?.webhook_url, {
+      force: Boolean(req.body?.force),
+    })
     res.json(state)
   }),
 )
