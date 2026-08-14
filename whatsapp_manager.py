@@ -129,6 +129,9 @@ class WhatsAppManager:
                     user_agent="WhatsAppManager",
                 )
                 env["WA_INTERNAL_TOKEN"] = login_resp.access_token
+                # The LLM router is shared with the Telegram bot and looks for
+                # this name; export both so either lookup finds the token.
+                env["BOT_INTERNAL_TOKEN"] = login_resp.access_token
             except Exception as e:
                 logger.warning(f"Could not generate internal token: {e}")
 

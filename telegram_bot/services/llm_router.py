@@ -57,14 +57,26 @@ class LLMRouter:
         self._session_map: dict[str, str] = {}  # bot session_id → orchestrator session_id
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client with auth from BOT_INTERNAL_TOKEN."""
+        """Get or create HTTP client authenticated as the bot subprocess.
+
+        This router is shared with the WhatsApp bot, whose manager exports the
+        token under a different name — without the fallback every WhatsApp LLM
+        call went out unauthenticated and came back 401.
+        """
         if self._http_client is None or self._http_client.is_closed:
             import os
 
             headers = {}
-            internal_token = os.environ.get("BOT_INTERNAL_TOKEN")
+            internal_token = os.environ.get("BOT_INTERNAL_TOKEN") or os.environ.get(
+                "WA_INTERNAL_TOKEN"
+            )
             if internal_token:
                 headers["Authorization"] = f"Bearer {internal_token}"
+            else:
+                logger.warning(
+                    "No internal token in env (BOT_INTERNAL_TOKEN / WA_INTERNAL_TOKEN) — "
+                    "orchestrator calls will be rejected"
+                )
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(120.0, connect=10.0), headers=headers
             )
