@@ -43,6 +43,20 @@ export const Status = {
 /** WhatsApp needs a few seconds of live socket before it will issue a code. */
 const PAIRING_CODE_DELAY_MS = 4000
 
+/**
+ * How long each pairing ref stays valid (Baileys default: 60s).
+ *
+ * WhatsApp hands out a finite list of refs; when they run out the socket dies
+ * with "QR refs attempts ended". At the default that gave a ~2.5 minute window
+ * — not enough for a human to read the code, unlock the phone, walk through
+ * Settings → Linked devices and type it. Three minutes per ref makes the whole
+ * window comfortably longer than the task.
+ */
+const LINK_WINDOW_MS = 180000
+
+/** How many times to silently re-open a link window before giving up. */
+const MAX_LINK_CYCLES = 5
+
 /** Turn "+7 (900) 123-45-67" or a bare JID into a WhatsApp JID. */
 export function toJid(to) {
   if (!to) throw new Error('recipient is required')
@@ -195,6 +209,8 @@ export class Session {
     this.reconnectTimer = null
     this.stopping = false
     this.starting = false
+    /** Link windows opened since the operator asked to link (see MAX_LINK_CYCLES). */
+    this.linkCycles = 0
     /** @type {Map<string, object>} recent raw messages, for media download + read receipts */
     this.recent = new Map()
   }
@@ -268,36 +284,57 @@ export class Session {
    *   may discard dead credentials and begin a fresh pairing. pairingPhone
    *   switches from a QR to an 8-character code typed on that number's phone.
    */
-  async start(webhookUrl, { force = false, pairingPhone = null } = {}) {
+  async start(webhookUrl, { force = false, pairingPhone } = {}) {
     if (webhookUrl) this.webhookUrl = webhookUrl
 
     if (this.starting) return this.toJSON()
-    if (
-      this.sock &&
-      (this.status === Status.CONNECTED ||
-        this.status === Status.QR ||
-        this.status === Status.PAIRING)
-    ) {
-      return this.toJSON()
+
+    // `undefined` means "keep whatever mode we're in" — reconnects call start()
+    // with no arguments and must not lose the number we're pairing with.
+    const requestedPhone =
+      pairingPhone === undefined
+        ? undefined
+        : pairingPhone
+          ? String(pairingPhone).replace(/\D/g, '')
+          : null
+
+    if (this.sock && this.status === Status.CONNECTED) return this.toJSON()
+
+    if (this.sock && (this.status === Status.QR || this.status === Status.PAIRING)) {
+      // A live link window exists. Reuse it unless the operator switched
+      // methods — swapping QR for a code needs a new socket.
+      if (requestedPhone === undefined || requestedPhone === this.pairingPhone) {
+        return this.toJSON()
+      }
+      this.logger.info('link method changed, reopening the socket')
+      await this.stop()
     }
 
-    this.pairingPhone = pairingPhone ? String(pairingPhone).replace(/\D/g, '') : null
-    this.pairingCode = null
+    if (requestedPhone !== undefined) {
+      this.pairingPhone = requestedPhone
+      this.pairingCode = null
+    }
 
     // WhatsApp answers 401 to every login with credentials it has revoked.
     // A restarting bot calling start() in a loop would hammer the server with
     // failed logins — which looks exactly like an attack. Wait for a human to
-    // ask for a new QR instead.
-    if (this.status === Status.LOGGED_OUT) {
-      if (!force) {
-        this.logger.warn(
-          'session is logged out — refusing to reopen with dead credentials; ' +
-            'relink the phone from the admin panel',
-        )
-        return this.toJSON()
-      }
-      this.logger.info('forced start on a logged-out session — wiping dead credentials')
+    // ask for a new link instead.
+    if (this.status === Status.LOGGED_OUT && !force) {
+      this.logger.warn(
+        'session is logged out — refusing to reopen with dead credentials; ' +
+          'relink the phone from the admin panel',
+      )
+      return this.toJSON()
+    }
+
+    // A forced start is a human asking to link this phone. Always begin from a
+    // clean slate: credentials may be poisoned without the status saying so —
+    // requestPairingCode marks them "registered" up front, so an expired window
+    // leaves a set that looks valid and gets 401 on first use.
+    if (force) {
+      this.logger.info('forced start — wiping credentials to begin a clean pairing')
       await this._wipeCreds()
+      this.linkCycles = 0
     }
 
     this.starting = true
@@ -325,6 +362,7 @@ export class Session {
         syncFullHistory: false,
         browser: Browsers?.ubuntu?.('Chrome') ?? ['AI Secretary', 'Chrome', '1.0.0'],
         generateHighQualityLinkPreview: false,
+        qrTimeout: LINK_WINDOW_MS,
       })
 
       this.sock = sock
@@ -390,6 +428,7 @@ export class Session {
 
     if (connection === 'open') {
       this.reconnectAttempts = 0
+      this.linkCycles = 0
       this.pairingPhone = null // linked; a later reconnect must not re-request a code
       this.phone = jidToPhone(this.sock?.user?.id ?? '')
       this.connectedAt = new Date().toISOString()
@@ -402,10 +441,37 @@ export class Session {
 
     const code = lastDisconnect?.error?.output?.statusCode
     this.lastError = lastDisconnect?.error?.message ?? null
+    const wasLinking = this.status === Status.QR || this.status === Status.PAIRING
     this.sock = null
 
     if (this.stopping) {
       this._setStatus(Status.DISCONNECTED)
+      return
+    }
+
+    // The link window ran out of refs before anyone finished pairing.
+    // Credentials are half-written at this point (requestPairingCode marks them
+    // "registered" the moment the code is issued), so logging in with them
+    // would earn a 401 and strand the session. Wipe and open a fresh window
+    // instead — the operator is still standing at the linking screen.
+    if (wasLinking && code === DisconnectReason.timedOut) {
+      if (this.linkCycles >= MAX_LINK_CYCLES) {
+        this.logger.warn(
+          { cycles: this.linkCycles },
+          'link window expired too many times — press link again to retry',
+        )
+        await this._wipeCreds()
+        this._setStatus(Status.DISCONNECTED)
+        return
+      }
+      this.linkCycles += 1
+      this.logger.info(
+        { cycle: this.linkCycles },
+        'link window expired, wiping unconfirmed credentials and reopening',
+      )
+      await this._wipeCreds()
+      this.reconnectAttempts = 0
+      this._scheduleReconnect(0)
       return
     }
 
