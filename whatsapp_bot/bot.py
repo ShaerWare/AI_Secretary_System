@@ -234,7 +234,11 @@ async def _dispatch_message(message: dict[str, Any]) -> None:
 async def _dispatch_bridge_message(message: dict[str, Any]) -> None:
     """Route a normalized message coming from the self-hosted bridge."""
     msg_type = message.get("type", "")
+    # `from` is the address we can reply to — a phone number, or an opaque
+    # "@lid" JID for users WhatsApp no longer exposes a number for. `phone` is
+    # the real number when disclosed, and is only for logging and identity.
     phone = message.get("from", "")
+    real_phone = message.get("phone")
     message_id = message.get("id", "")
     text = message.get("text", "") or ""
 
@@ -247,7 +251,12 @@ async def _dispatch_bridge_message(message: dict[str, Any]) -> None:
         logger.debug("Ignoring group message from %s", phone)
         return
 
-    logger.info("Incoming %s message from %s (bridge)", msg_type, phone)
+    logger.info(
+        "Incoming %s message from %s%s (bridge)",
+        msg_type,
+        phone,
+        f" (phone {real_phone})" if real_phone and real_phone != phone else "",
+    )
 
     if msg_type == "text":
         # A linked phone can't render buttons, so menus are sent as numbered
