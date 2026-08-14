@@ -432,14 +432,16 @@ async def _get_bridge_instance(instance_id: str, user: User, *, edit: bool) -> d
     return full or instance
 
 
-async def _bridge_call(instance: dict, action: str) -> dict:
+async def _bridge_call(instance: dict, action: str, pairing_phone: Optional[str] = None) -> dict:
     """Run one bridge operation, mapping transport failures to clean HTTP errors."""
     client = get_bridge_client(instance)
     try:
         if action == "start":
             # Pressing "Подключить телефон" is an explicit request to link, so a
             # dead credential set is discarded and pairing starts clean.
-            return await client.start_session(bridge_webhook_url(instance), force=True)
+            return await client.start_session(
+                bridge_webhook_url(instance), force=True, pairing_phone=pairing_phone
+            )
         if action == "status":
             return await client.get_status()
         if action == "stop":
@@ -464,13 +466,29 @@ async def _bridge_call(instance: dict, action: str) -> dict:
         await client.close()
 
 
+class BridgeStartRequest(BaseModel):
+    """Optional body for the link flow."""
+
+    # Digits with country code. When set, WhatsApp is asked for an 8-character
+    # code to type on that phone instead of a QR to scan.
+    pairing_phone: Optional[str] = None
+
+
 @router.post("/instances/{instance_id}/bridge/start")
 async def start_bridge_session(
-    instance_id: str, user: User = Depends(require_permission("channels", "edit"))
+    instance_id: str,
+    request: Optional[BridgeStartRequest] = None,
+    user: User = Depends(require_permission("channels", "edit")),
 ):
-    """Open the bridge session — returns a QR to scan when the phone isn't linked yet."""
+    """Open the bridge session.
+
+    Returns a QR to scan, or — when ``pairing_phone`` is given — an 8-character
+    code to type on that phone.
+    """
     instance = await _get_bridge_instance(instance_id, user, edit=True)
-    state = await _bridge_call(instance, "start")
+    state = await _bridge_call(
+        instance, "start", pairing_phone=request.pairing_phone if request else None
+    )
 
     await audit_service.log(
         action="bridge_start",

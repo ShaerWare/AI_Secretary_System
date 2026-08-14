@@ -33,10 +33,15 @@ export const Status = {
   IDLE: 'idle',
   STARTING: 'starting',
   QR: 'qr',
+  /** Waiting for an 8-character code to be typed on the phone. */
+  PAIRING: 'pairing',
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',
   LOGGED_OUT: 'logged_out',
 }
+
+/** WhatsApp needs a few seconds of live socket before it will issue a code. */
+const PAIRING_CODE_DELAY_MS = 4000
 
 /** Turn "+7 (900) 123-45-67" or a bare JID into a WhatsApp JID. */
 export function toJid(to) {
@@ -178,6 +183,8 @@ export class Session {
 
     this.status = Status.IDLE
     this.qr = null // data-URL, valid only while status === 'qr'
+    this.pairingCode = null // 8 chars, valid only while status === 'pairing'
+    this.pairingPhone = null // number the code was requested for
     this.phone = null
     this.lastError = null
     this.webhookUrl = null
@@ -198,6 +205,8 @@ export class Session {
       status: this.status,
       phone: this.phone,
       qr: this.status === Status.QR ? this.qr : null,
+      pairing_code: this.status === Status.PAIRING ? this.pairingCode : null,
+      pairing_phone: this.pairingPhone,
       last_error: this.lastError,
       connected_at: this.connectedAt,
       webhook_url: this.webhookUrl,
@@ -226,6 +235,7 @@ export class Session {
     const changed = this.status !== status
     this.status = status
     if (status !== Status.QR) this.qr = null
+    if (status !== Status.PAIRING) this.pairingCode = null
     if (!changed) return
 
     this.logger.info({ status, ...extra }, 'session status changed')
@@ -253,17 +263,26 @@ export class Session {
    * updates the webhook URL.
    *
    * @param {string} [webhookUrl] where to deliver incoming messages
-   * @param {{force?: boolean}} [opts] force = a human explicitly asked to link
-   *   (the admin panel button). Only a forced start may discard dead
-   *   credentials and begin a fresh pairing.
+   * @param {{force?: boolean, pairingPhone?: string}} [opts] force = a human
+   *   explicitly asked to link (the admin panel button); only a forced start
+   *   may discard dead credentials and begin a fresh pairing. pairingPhone
+   *   switches from a QR to an 8-character code typed on that number's phone.
    */
-  async start(webhookUrl, { force = false } = {}) {
+  async start(webhookUrl, { force = false, pairingPhone = null } = {}) {
     if (webhookUrl) this.webhookUrl = webhookUrl
 
     if (this.starting) return this.toJSON()
-    if (this.sock && (this.status === Status.CONNECTED || this.status === Status.QR)) {
+    if (
+      this.sock &&
+      (this.status === Status.CONNECTED ||
+        this.status === Status.QR ||
+        this.status === Status.PAIRING)
+    ) {
       return this.toJSON()
     }
+
+    this.pairingPhone = pairingPhone ? String(pairingPhone).replace(/\D/g, '') : null
+    this.pairingCode = null
 
     // WhatsApp answers 401 to every login with credentials it has revoked.
     // A restarting bot calling start() in a loop would hammer the server with
@@ -312,6 +331,14 @@ export class Session {
       sock.ev.on('creds.update', saveCreds)
       sock.ev.on('connection.update', (update) => this._onConnectionUpdate(update))
       sock.ev.on('messages.upsert', (upsert) => this._onMessages(upsert))
+
+      // Code pairing replaces the QR entirely: WhatsApp shows the user a prompt
+      // on the number itself, so nobody has to point a camera at a screen.
+      if (this.pairingPhone && !state.creds.registered) {
+        this._requestPairingCode(sock).catch((err) =>
+          this.logger.error({ err: err.message }, 'pairing code request failed'),
+        )
+      }
     } catch (err) {
       this.lastError = err.message
       this.logger.error({ err: err.message }, 'failed to open socket')
@@ -324,7 +351,29 @@ export class Session {
     return this.toJSON()
   }
 
+  /**
+   * Ask WhatsApp for an 8-character linking code for `this.pairingPhone`.
+   * The socket must be live first, hence the delay.
+   */
+  async _requestPairingCode(sock) {
+    await new Promise((resolve) => setTimeout(resolve, PAIRING_CODE_DELAY_MS))
+    if (this.sock !== sock) return // socket was replaced while we waited
+
+    const code = await sock.requestPairingCode(this.pairingPhone)
+    this.pairingCode = code
+    this.qr = null
+    this.logger.info({ phone: this.pairingPhone }, 'pairing code issued')
+    // Force the event even if the status was already PAIRING — the code itself
+    // is what changed, and the admin panel is waiting for it.
+    this.status = Status.STARTING
+    this._setStatus(Status.PAIRING)
+  }
+
   async _onConnectionUpdate({ connection, lastDisconnect, qr }) {
+    // With code pairing there is nothing to scan; a QR here is just Baileys
+    // offering the other method.
+    if (qr && this.pairingPhone) return
+
     if (qr) {
       try {
         this.qr = await QRCode.toDataURL(qr, { margin: 1, width: 320 })
@@ -341,6 +390,7 @@ export class Session {
 
     if (connection === 'open') {
       this.reconnectAttempts = 0
+      this.pairingPhone = null // linked; a later reconnect must not re-request a code
       this.phone = jidToPhone(this.sock?.user?.id ?? '')
       this.connectedAt = new Date().toISOString()
       this.lastError = null

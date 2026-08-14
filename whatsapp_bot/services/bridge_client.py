@@ -122,7 +122,12 @@ class BridgeClient:
 
     # ─── Session control ───────────────────────────────────────
 
-    async def start_session(self, webhook_url: str, force: bool = False) -> dict[str, Any]:
+    async def start_session(
+        self,
+        webhook_url: str,
+        force: bool = False,
+        pairing_phone: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Open the WhatsApp socket and register where to deliver incoming messages.
 
         Args:
@@ -132,10 +137,13 @@ class BridgeClient:
                 an automatic start must never do that, both to avoid wiping a
                 working link and to keep a restarting bot from hammering WhatsApp
                 with logins it will answer 401 to.
+            pairing_phone: Link by an 8-character code typed on this number
+                instead of by QR. Digits only, country code included.
         """
-        return await self._request(
-            "POST", "/start", json={"webhook_url": webhook_url, "force": force}
-        )
+        payload: dict[str, Any] = {"webhook_url": webhook_url, "force": force}
+        if pairing_phone:
+            payload["pairing_phone"] = pairing_phone
+        return await self._request("POST", "/start", json=payload)
 
     async def get_status(self) -> dict[str, Any]:
         """Current link state: idle / starting / qr / connected / disconnected / logged_out."""
