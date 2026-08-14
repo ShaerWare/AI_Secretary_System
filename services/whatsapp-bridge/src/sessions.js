@@ -74,6 +74,11 @@ function jidToPhone(jid) {
   return jid.split('@')[0].split(':')[0]
 }
 
+/** True for an address that is a real phone number rather than an opaque id. */
+function isPnLike(jid) {
+  return Boolean(jid) && !isLidUser(jid)
+}
+
 /** Unwrap the ephemeral/view-once/document-caption envelopes Baileys nests. */
 function unwrap(message) {
   if (!message) return null
@@ -114,8 +119,16 @@ export function normalize(raw) {
   // The number behind the lid travels in senderPn, so prefer it and keep the
   // lid only as a last resort for senders that disclose nothing else.
   const authorJid = isGroup ? (raw.key.participant ?? '') : jid
-  const senderPn = raw.key.senderPn ?? raw.key.participantPn ?? null
-  const senderPhone = senderPn ? jidToPhone(senderPn) : null
+  // Baileys 6.x exposes the number as senderPn/participantPn; 7.x renamed the
+  // envelope field to senderAlt/participantAlt. Read all four so the bridge
+  // keeps working across the upgrade.
+  const senderPn =
+    raw.key.senderPn ??
+    raw.key.participantPn ??
+    raw.key.senderAlt ??
+    raw.key.participantAlt ??
+    null
+  const senderPhone = senderPn && isPnLike(senderPn) ? jidToPhone(senderPn) : null
 
   const base = {
     id: raw.key.id,
