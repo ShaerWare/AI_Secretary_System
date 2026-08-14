@@ -16,6 +16,7 @@ import makeWASocket, {
   DisconnectReason,
   downloadMediaMessage,
   fetchLatestBaileysVersion,
+  isLidUser,
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
 } from 'baileys'
@@ -104,11 +105,20 @@ export function normalize(raw) {
     content.documentMessage?.contextInfo ??
     null
 
+  // WhatsApp addresses a growing share of users by an opaque "@lid" instead of
+  // a phone number. Rebuilding an address out of its digits yields a JID that
+  // does not exist: replies vanish silently, and a freshly linked device that
+  // sends to one gets revoked (stream:error 401, conflict device_removed).
+  // So `from` carries something we can always send back to, while `phone` holds
+  // the real number when WhatsApp discloses it.
+  const authorJid = isGroup ? (raw.key.participant ?? '') : jid
+  const senderPn = raw.key.senderPn ?? raw.key.participantPn ?? null
+
   const base = {
     id: raw.key.id,
     jid,
-    // In groups the author is `participant`; in DMs it's the chat itself.
-    from: jidToPhone(isGroup ? (raw.key.participant ?? '') : jid),
+    from: isLidUser(authorJid) ? authorJid : jidToPhone(authorJid),
+    phone: senderPn ? jidToPhone(senderPn) : isLidUser(authorJid) ? null : jidToPhone(authorJid),
     chat_type: isGroup ? 'group' : 'direct',
     sender_name: raw.pushName ?? '',
     timestamp: Number(raw.messageTimestamp ?? 0),
@@ -549,7 +559,7 @@ export class Session {
       if (!message) continue
 
       this.logger.info(
-        { from: message.from, type: message.type },
+        { from: message.from, phone: message.phone, type: message.type },
         'incoming message',
       )
       await this._emit('message', { message })
