@@ -83,6 +83,25 @@ class UserSessionRepository(BaseRepository[UserSession]):
         await self.session.flush()
         return result.rowcount
 
+    async def revoke_by_user_agent(self, user_id: int, user_agent: str) -> int:
+        """Revoke a user's active sessions issued under one user_agent.
+
+        Used to retire the previous long-lived internal token of a bot manager
+        when a bot subprocess is respawned, without touching the admin's own
+        browser sessions (internal tokens are issued against the admin user).
+        """
+        result = await self.session.execute(
+            update(UserSession)
+            .where(
+                UserSession.user_id == user_id,
+                UserSession.user_agent == user_agent,
+                UserSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.utcnow())
+        )
+        await self.session.flush()
+        return result.rowcount
+
     async def cleanup_expired(self, days: int = 7) -> int:
         """Delete sessions that expired more than `days` ago."""
         cutoff = datetime.utcnow() - timedelta(days=days)

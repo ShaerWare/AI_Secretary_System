@@ -29,6 +29,13 @@ JWT_SECRET = os.getenv("ADMIN_JWT_SECRET", secrets.token_hex(32))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("ADMIN_JWT_EXPIRATION_HOURS", "24"))
 
+# Bot subprocesses receive their internal token once, in env, at spawn time and
+# have no way to refresh it — so a 24h admin TTL silently kills the channel a day
+# after start (the bot stays connected but every LLM call 401s). Internal sessions
+# are still registered in user_sessions, so they remain revocable and auditable;
+# a bot restart rotates them.
+BOT_INTERNAL_TOKEN_HOURS = int(os.getenv("BOT_INTERNAL_TOKEN_HOURS", str(365 * 24)))
+
 # Legacy env-var credentials (fallback when users table is empty)
 _LEGACY_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 _LEGACY_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "") or ""
@@ -186,15 +193,23 @@ _member_role_cache = MemberRoleCache()
 
 
 def create_access_token(
-    username: str, role: str = "admin", user_id: int = 0, workspace_id: int = 1
+    username: str,
+    role: str = "admin",
+    user_id: int = 0,
+    workspace_id: int = 1,
+    expires_hours: Optional[int] = None,
 ) -> tuple[str, int, str]:
     """Create a JWT access token with a unique JTI.
+
+    Args:
+        expires_hours: Override the default TTL. Used for long-lived internal
+            bot sessions, which cannot refresh their token.
 
     Returns:
         tuple: (token, expires_in_seconds, jti)
     """
     now = datetime.utcnow()
-    expires = now + timedelta(hours=JWT_EXPIRATION_HOURS)
+    expires = now + timedelta(hours=expires_hours or JWT_EXPIRATION_HOURS)
     expires_in = int((expires - now).total_seconds())
     jti = str(uuid4())
 
@@ -244,11 +259,20 @@ async def create_session(
     ip: Optional[str],
     user_agent: Optional[str],
     workspace_id: int = 1,
+    expires_hours: Optional[int] = None,
 ) -> LoginResponse:
-    """Create a new session: generate token, persist to DB, populate cache."""
+    """Create a new session: generate token, persist to DB, populate cache.
+
+    Args:
+        expires_hours: Override the default TTL — pass BOT_INTERNAL_TOKEN_HOURS
+            for bot subprocesses, which hold their token in env for the whole
+            lifetime of the process and cannot refresh it.
+    """
     from db.integration import async_session_manager
 
-    token, expires_in, jti = create_access_token(username, role, user_id, workspace_id)
+    token, expires_in, jti = create_access_token(
+        username, role, user_id, workspace_id, expires_hours=expires_hours
+    )
     expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
 
     await async_session_manager.create_session(
@@ -278,6 +302,25 @@ async def revoke_all_user_sessions(user_id: int) -> int:
 
     _session_cache.remove_all_for_user(user_id)
     return await async_session_manager.revoke_all_for_user(user_id)
+
+
+async def revoke_internal_sessions(user_id: int, user_agent: str) -> int:
+    """Retire the previous long-lived internal token issued under `user_agent`.
+
+    Internal bot tokens are issued against the first admin user, so revoking by
+    user_id would log that admin out of their browser too; `user_agent` carries
+    the bot instance id, which scopes the revocation to one bot. Cached JTIs are
+    dropped first — a cache hit short-circuits DB validation, so a token revoked
+    only in the DB would keep working until the process restarts.
+    """
+    from db.integration import async_session_manager
+
+    sessions = await async_session_manager.get_active_for_user(user_id)
+    for sess in sessions:
+        if sess.get("user_agent") == user_agent and sess.get("token_jti"):
+            _session_cache.remove(sess["token_jti"])
+
+    return await async_session_manager.revoke_by_user_agent(user_id, user_agent)
 
 
 # ============== Authentication ==============

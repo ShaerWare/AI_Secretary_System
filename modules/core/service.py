@@ -251,6 +251,15 @@ class UserSessionService:
             return result
 
     @retry_on_busy()
+    async def revoke_by_user_agent(self, user_id: int, user_agent: str) -> int:
+        """Revoke a user's active sessions issued under one user_agent."""
+        async with AsyncSessionLocal() as session:
+            repo = UserSessionRepository(session)
+            result = await repo.revoke_by_user_agent(user_id, user_agent)
+            await session.commit()
+            return result
+
+    @retry_on_busy()
     async def cleanup_expired(self, days: int = 7) -> int:
         """Delete old expired sessions."""
         async with AsyncSessionLocal() as session:
