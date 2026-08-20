@@ -113,20 +113,36 @@ class WhatsAppManager:
 
             # Generate internal JWT for subprocess to authenticate with orchestrator API
             # Must use create_session() to register in user_sessions table (RBAC validation)
+            #
+            # The token is handed over once, in env, and the subprocess has no way to
+            # refresh it — so it must outlive the process, not the default 24h admin TTL.
+            # With a 24h token the bot keeps its WhatsApp connection but 401s on every
+            # LLM call a day after start, which looks like "the assistant replies with
+            # an error" rather than an outage.
             try:
-                from auth_manager import create_session
+                from auth_manager import (
+                    BOT_INTERNAL_TOKEN_HOURS,
+                    create_session,
+                    revoke_internal_sessions,
+                )
                 from db.integration import async_user_manager
 
                 # Find first admin user for internal token (user_id=0 violates FK)
                 admin_user = await async_user_manager.get_first_admin()
                 internal_user_id = admin_user["id"] if admin_user else 1
 
+                # user_agent carries the instance id so respawning one bot retires
+                # only its own previous token, not the other instances'.
+                session_ua = f"WhatsAppManager:{instance_id}"
+                await revoke_internal_sessions(internal_user_id, session_ua)
+
                 login_resp = await create_session(
                     username="__internal_wa_bot__",
                     role="admin",
                     user_id=internal_user_id,
                     ip=None,
-                    user_agent="WhatsAppManager",
+                    user_agent=session_ua,
+                    expires_hours=BOT_INTERNAL_TOKEN_HOURS,
                 )
                 env["WA_INTERNAL_TOKEN"] = login_resp.access_token
                 # The LLM router is shared with the Telegram bot and looks for

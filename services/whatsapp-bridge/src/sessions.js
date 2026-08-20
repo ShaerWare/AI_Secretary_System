@@ -26,6 +26,12 @@ import { deliver } from './webhook.js'
 
 const RECONNECT_BASE_DELAY_MS = 2000
 const RECONNECT_MAX_DELAY_MS = 60000
+/**
+ * Not a cap — reconnects never stop on their own (see _scheduleReconnect).
+ * Past this many consecutive failures the backoff is already pinned at
+ * RECONNECT_MAX_DELAY_MS and the reconnect log escalates to warn, so a session
+ * that is genuinely stuck rather than riding out a blip becomes visible.
+ */
 const MAX_RECONNECT_ATTEMPTS = 12
 const RECENT_MESSAGE_CACHE = 300
 
@@ -536,13 +542,19 @@ export class Session {
     if (this.stopping) return
     if (this.reconnectTimer) return
 
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      this.logger.error(
-        { attempts: this.reconnectAttempts },
-        'giving up reconnecting, manual start required',
-      )
-      return
-    }
+    // Every unrecoverable disconnect reason returns before reaching here:
+    // loggedOut and connectionReplaced stay down deliberately, restartRequired
+    // resets the counter. So this path is only ever walked for *transient*
+    // failures — a DNS blip, a dropped socket — which means a hard attempt cap
+    // would only ever kill sessions that were going to come back on their own.
+    // It did: a ten-minute DNS outage burned the old 12-attempt budget (~8
+    // minutes of backoff) and left the channel dead for two days.
+    //
+    // So retry indefinitely, pinned at the maximum delay. One connect attempt
+    // per minute costs nothing and the session heals itself whenever the
+    // network does. Past the old budget the log escalates to warn so a genuinely
+    // stuck session is still visible to an operator.
+    const attemptsExhausted = this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS
 
     const delay =
       delayOverride ??
@@ -551,7 +563,13 @@ export class Session {
         RECONNECT_MAX_DELAY_MS,
       )
     this.reconnectAttempts += 1
-    this.logger.info({ delay, attempt: this.reconnectAttempts }, 'scheduling reconnect')
+
+    const details = { delay, attempt: this.reconnectAttempts }
+    if (attemptsExhausted) {
+      this.logger.warn(details, 'still reconnecting after repeated failures')
+    } else {
+      this.logger.info(details, 'scheduling reconnect')
+    }
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
