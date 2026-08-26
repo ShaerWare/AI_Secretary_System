@@ -39,9 +39,15 @@ def get_llm_router(
             default_backend = bot_config.llm_backend
             logger.info(f"WhatsApp LLM Router: using bot config backend: {default_backend}")
 
+        # Tag sessions as WhatsApp. The orchestrator resolves a session's RAG
+        # collections by matching source/source_id against the channel instance,
+        # so reporting the Telegram default left this bot's catalog binding
+        # unread and silently fell through to "every enabled collection".
         _router = LLMRouter(
             orchestrator_url=url,
             claude_provider_id=provider_id,
             default_backend=default_backend,
+            source="whatsapp",
+            instance_id=bot_config.instance_id if bot_config else None,
         )
     return _router

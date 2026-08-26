@@ -108,7 +108,9 @@ async def _process_message(phone: str, text: str, message_id: str) -> None:
 
     try:
         # Non-streaming: collect full response (WhatsApp can't edit messages)
-        response = await router.chat(messages=session.messages)
+        # The phone keys the orchestrator session, so the conversation keeps
+        # its history instead of starting over on every message.
+        response = await router.chat(messages=session.messages, conversation_key=phone)
 
         # Split long responses into multiple messages
         chunks = _split_text(response)

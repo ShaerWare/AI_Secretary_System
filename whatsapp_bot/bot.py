@@ -21,7 +21,7 @@ from .config import (
 )
 from .handlers.interactive import handle_interactive_reply
 from .handlers.messages import handle_text_message
-from .services import choices
+from .services import access, choices
 from .services.whatsapp_client import get_whatsapp_client
 from .state import get_bot_config, set_bot_config
 
@@ -249,6 +249,23 @@ async def _dispatch_bridge_message(message: dict[str, Any]) -> None:
     # linked phone belongs to.
     if message.get("chat_type") == "group":
         logger.debug("Ignoring group message from %s", phone)
+        return
+
+    # WhatsApp replays the offline queue on reconnect. After a long outage that
+    # is a burst of days-old messages, and answering them reads as the assistant
+    # waking up and replying to everyone at once.
+    if access.is_stale(message.get("timestamp")):
+        logger.info("Ignoring stale message from %s (offline replay)", phone)
+        return
+
+    bot_config = get_bot_config()
+    if bot_config and not access.is_sender_allowed(
+        phone,
+        real_phone,
+        bot_config.allowed_phones,
+        bot_config.blocked_phones,
+    ):
+        logger.info("Ignoring message from filtered sender %s", phone)
         return
 
     logger.info(

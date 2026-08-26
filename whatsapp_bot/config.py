@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 import httpx
@@ -95,6 +95,10 @@ class WhatsAppBotConfig:
     rate_limit_count: int = 30
     rate_limit_hours: int = 1
     auto_start: bool = False
+    # Configured in the admin panel but, until now, never carried into the bot —
+    # so both lists were dead config and every sender got through.
+    allowed_phones: list[str] = field(default_factory=list)
+    blocked_phones: list[str] = field(default_factory=list)
 
     # Merged settings for convenience
     max_messages_per_session: int = 100
@@ -190,6 +194,8 @@ async def load_config_from_api(
         rate_limit_count=instance.get("rate_limit_count", 30),
         rate_limit_hours=instance.get("rate_limit_hours", 1),
         auto_start=instance.get("auto_start", False),
+        allowed_phones=list(instance.get("allowed_phones") or []),
+        blocked_phones=list(instance.get("blocked_phones") or []),
         # Previously never carried over, so every instance silently listened on
         # the dataclass default — two instances would fight for the same port.
         webhook_port=instance.get("webhook_port") or settings.webhook_port,
