@@ -31,8 +31,28 @@ _DIGITS = re.compile(r"\D+")
 DEFAULT_MAX_MESSAGE_AGE_SECONDS = 600
 
 
+# Length of the national significant number in the RU/KZ plan: an operator will
+# write "8 708 544 20 89" (domestic trunk prefix) for the very same number
+# WhatsApp reports as "77085442089" (country code). Comparing the last N digits
+# makes those one entry. It can in principle collide across countries sharing a
+# suffix, which is an acceptable trade for a per-instance list an operator
+# curates by hand — and far better than a block that silently does nothing.
+_NSN_LENGTH = 10
+
+
 def _digits(value: str) -> str:
     return _DIGITS.sub("", value or "")
+
+
+def _same_number(a: str, b: str) -> bool:
+    """True if two digit strings denote the same subscriber."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) >= _NSN_LENGTH and len(b) >= _NSN_LENGTH:
+        return a[-_NSN_LENGTH:] == b[-_NSN_LENGTH:]
+    return False
 
 
 def _matches(entry: str, address: str, phone: Optional[str]) -> bool:
@@ -48,7 +68,10 @@ def _matches(entry: str, address: str, phone: Optional[str]) -> bool:
     entry_digits = _digits(entry)
     if not entry_digits:
         return False
-    return entry_digits in {_digits(address), _digits(phone or "")}
+    return any(
+        _same_number(entry_digits, candidate)
+        for candidate in (_digits(address), _digits(phone or ""))
+    )
 
 
 def is_sender_allowed(

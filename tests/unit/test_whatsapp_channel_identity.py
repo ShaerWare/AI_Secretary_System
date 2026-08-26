@@ -109,6 +109,11 @@ class TestSenderFiltering:
     def test_block_entry_formats_are_equivalent(self, entry):
         assert not access.is_sender_allowed("77085442089", None, [], [entry])
 
+    def test_short_entries_do_not_suffix_match(self):
+        # Only full national numbers are compared by suffix; a stray "89"
+        # must not silently block everyone whose number ends in 89.
+        assert access.is_sender_allowed("77085442089", None, [], ["89"])
+
     def test_lid_sender_can_be_blocked_verbatim(self):
         # WhatsApp discloses no number for these, so digits cannot match —
         # this is the only way to silence an automated '@lid' broadcaster.
