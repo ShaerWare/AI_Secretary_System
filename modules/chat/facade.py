@@ -217,6 +217,21 @@ def _supports_tools(llm_service) -> bool:
     )
 
 
+def _supports_web_search(llm_service) -> bool:
+    """Web search needs tool calling — native or emulated by the endpoint.
+
+    The Claude bridge has no native function calling but emulates it in the
+    prompt, so web search works there even though agentic RAG stays off.
+    """
+    if _supports_tools(llm_service):
+        return True
+    if getattr(llm_service, "supports_tools_emulated", False):
+        return True
+    return hasattr(llm_service, "provider") and getattr(
+        llm_service.provider, "supports_tools_emulated", False
+    )
+
+
 def _should_use_agentic_rag(
     llm_service, rag_mode: str, collection_ids: list[int], wiki_rag
 ) -> bool:
@@ -730,7 +745,7 @@ class ChatServiceImpl:
         wiki_rag = self._container.wiki_rag_service
         coll_ids = collection_ids or []
         use_agentic = _should_use_agentic_rag(llm, rag_mode, coll_ids, wiki_rag)
-        use_web_search = bool(session.get("web_search_enabled")) and _supports_tools(llm)
+        use_web_search = bool(session.get("web_search_enabled")) and _supports_web_search(llm)
 
         # Build prompt + generation params from the attached persona
         from modules.llm.persona import merge_params
@@ -856,7 +871,7 @@ class ChatServiceImpl:
         want_web_search = (
             web_search if web_search is not None else bool(session.get("web_search_enabled"))
         )
-        use_web_search = want_web_search and _supports_tools(llm)
+        use_web_search = want_web_search and _supports_web_search(llm)
 
         # Build prompt + generation params from the attached persona
         from modules.llm.persona import merge_params

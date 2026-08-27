@@ -138,6 +138,11 @@ class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     supports_tools: bool = False
+    # Provider has no native function-calling API, but the endpoint emulates it
+    # (tool schemas injected into the prompt, ```tool_call``` blocks parsed back
+    # into OpenAI tool_calls). Works, but costs token-by-token streaming, so the
+    # agentic-RAG decision still keys off `supports_tools`.
+    supports_tools_emulated: bool = False
 
     def __init__(self, config: dict):
         self.config = config
@@ -211,11 +216,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def __init__(self, config: dict):
         super().__init__(config)
 
-        # Bridge CLI runs with --tools "" (no tool access), so tool calls
-        # are silently ignored. Disable supports_tools to fall back to
-        # one-shot RAG injection instead of agentic loop.
+        # Bridge CLI runs with --tools "" (no CLI tool access), so the model
+        # never calls tools by itself. The bridge server, however, emulates
+        # OpenAI function calling in the prompt (src/utils/tools.py), and that
+        # path works — it just buffers the answer until the end instead of
+        # streaming. So: no agentic RAG (one-shot injection keeps streaming and
+        # is good enough), but web_search stays available — without tools that
+        # feature has no fallback at all and the chat toggle does nothing.
         if self.provider_type == "claude_bridge":
             self.supports_tools = False
+            self.supports_tools_emulated = True
 
         # Per-provider override via config (DB column `config` json blob).
         # Useful for OpenRouter free chains where most models reject the
@@ -223,6 +233,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         # force one-shot RAG injection instead of agentic tool-loop.
         if "supports_tools" in self.runtime_params:
             self.supports_tools = bool(self.runtime_params["supports_tools"])
+            # An explicit override wins over the emulated path too — otherwise
+            # "supports_tools": false would still ship a `tools` payload.
+            self.supports_tools_emulated = self.supports_tools
 
         # Bridge runs on localhost — must bypass global VLESS/HTTP proxy.
         # GeminiProvider sets HTTP_PROXY globally for xray; httpx picks it up
@@ -1128,7 +1141,10 @@ class CloudLLMService:
         params — per-call generation parameters (chat/instance persona).
         """
         # Tool-calling mode: skip FAQ, delegate to provider
-        if tools and getattr(self.provider, "supports_tools", False):
+        if tools and (
+            getattr(self.provider, "supports_tools", False)
+            or getattr(self.provider, "supports_tools_emulated", False)
+        ):
             return self.provider.generate_with_tools(messages, tools, stream, params=params)
 
         # Check FAQ for single-message requests
