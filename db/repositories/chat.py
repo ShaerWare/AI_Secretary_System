@@ -147,6 +147,28 @@ class ChatRepository(BaseRepository[ChatSession]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def find_channel_session(self, source: str, source_id: str) -> Optional[str]:
+        """Find an existing bot-channel session for one sender.
+
+        Bot subprocesses cache the session id in memory only, so a bot restart
+        would otherwise open a second session for a conversation already in
+        flight — and with CRM wiring that means a duplicate lead for a client
+        who simply wrote again. Matching on source + source_id makes the
+        conversation survive restarts. No owner filter: these sessions belong to
+        the internal bot user, not to a person.
+        """
+        query = (
+            select(ChatSession.id)
+            .where(
+                ChatSession.source == source,
+                ChatSession.source_id == source_id,
+            )
+            .order_by(ChatSession.updated.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def create_session(
         self,
         title: Optional[str] = None,

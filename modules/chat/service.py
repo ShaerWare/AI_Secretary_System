@@ -96,6 +96,12 @@ class ChatService:
             repo = ChatRepository(session)
             return await repo.find_user_instance_session(owner_id, source, source_id)
 
+    async def find_channel_session(self, source: str, source_id: str) -> Optional[str]:
+        """Find an existing bot-channel session for one sender (or None)."""
+        async with AsyncSessionLocal() as session:
+            repo = ChatRepository(session)
+            return await repo.find_channel_session(source, source_id)
+
     @retry_on_busy()
     async def update_session(
         self,

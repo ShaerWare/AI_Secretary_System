@@ -1,4 +1,4 @@
-"""CRM domain startup: event subscriptions for widget → amoCRM integration."""
+"""CRM domain startup: event subscriptions for channel → amoCRM integration."""
 
 import logging
 
@@ -7,7 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 async def setup_crm_event_subscriptions(event_bus) -> None:
-    """Register CRM event handlers for widget integration."""
+    """Register CRM event handlers for the widget and WhatsApp channels."""
+    from modules.channels.whatsapp.events import (
+        WhatsAppMessageSent,
+        WhatsAppSessionCreated,
+    )
     from modules.channels.widget.events import (
         WidgetContactSubmitted,
         WidgetMessageSent,
@@ -26,10 +30,20 @@ async def setup_crm_event_subscriptions(event_bus) -> None:
         """Create amoCRM contact and link to lead."""
         await _handle_widget_contact_submitted(event)
 
+    async def on_whatsapp_session_created(event: WhatsAppSessionCreated) -> None:
+        """Create amoCRM contact + lead for a new WhatsApp conversation."""
+        await _handle_whatsapp_session_created(event)
+
+    async def on_whatsapp_message_sent(event: WhatsAppMessageSent) -> None:
+        """Append conversation turn to amoCRM lead notes."""
+        await _handle_widget_message_sent(event)
+
     event_bus.subscribe(WidgetSessionCreated, on_widget_session_created)
     event_bus.subscribe(WidgetMessageSent, on_widget_message_sent)
     event_bus.subscribe(WidgetContactSubmitted, on_widget_contact_submitted)
-    logger.info("CRM event subscriptions registered (Widget → amoCRM)")
+    event_bus.subscribe(WhatsAppSessionCreated, on_whatsapp_session_created)
+    event_bus.subscribe(WhatsAppMessageSent, on_whatsapp_message_sent)
+    logger.info("CRM event subscriptions registered (Widget + WhatsApp → amoCRM)")
 
 
 async def _get_amocrm_config() -> dict | None:
@@ -112,6 +126,88 @@ async def _handle_widget_session_created(event) -> None:
     except Exception:
         logger.debug(
             "Failed to create amoCRM lead for session %s",
+            event.session_id,
+            exc_info=True,
+        )
+
+
+async def _handle_whatsapp_session_created(event) -> None:
+    """Create an amoCRM contact + lead for a new WhatsApp conversation.
+
+    Unlike the widget — which only learns a phone if the visitor fills the lead
+    form — WhatsApp hands us the sender's number with the very first message. So
+    the contact is created up front and linked: a lead a manager cannot call
+    back on is not worth much.
+    """
+    try:
+        from app.services import amocrm_service
+
+        config = await _get_amocrm_config()
+        if not config or not config.get("auto_create_lead"):
+            return
+
+        subdomain = config["subdomain"]
+        access_token = config["access_token"]
+
+        # An "@lid" sender discloses no phone; still worth a lead, just without
+        # a callable contact.
+        is_phone = event.sender.isdigit()
+        display = f"+{event.sender}" if is_phone else event.sender
+
+        contact_id = None
+        if is_phone:
+            contact_result = await amocrm_service.create_contact(
+                subdomain,
+                access_token,
+                display,
+                [{"field_code": "PHONE", "values": [{"value": display}]}],
+            )
+            embedded = (contact_result or {}).get("_embedded", {})
+            if embedded.get("contacts"):
+                contact_id = embedded["contacts"][0].get("id")
+
+        result = await amocrm_service.create_lead(
+            subdomain,
+            access_token,
+            f"WhatsApp: {display}",
+            config.get("lead_pipeline_id"),
+            config.get("lead_status_id"),
+        )
+        embedded = (result or {}).get("_embedded", {})
+        lead_id = embedded["leads"][0].get("id") if embedded.get("leads") else None
+
+        if not lead_id:
+            logger.warning("amoCRM create_lead returned no lead ID: %s", result)
+            return
+
+        fields = {"amocrm_lead_id": lead_id}
+        if contact_id:
+            fields["amocrm_contact_id"] = contact_id
+        await _save_session_field(event.session_id, **fields)
+
+        if contact_id:
+            try:
+                await amocrm_service.link_contact_to_lead(
+                    subdomain, access_token, lead_id, contact_id
+                )
+            except Exception:
+                # A lead without its contact attached is still useful; the number
+                # is in the note below either way.
+                logger.debug("Failed to link contact %s to lead %s", contact_id, lead_id)
+
+        note = "\n".join(
+            [
+                f"Канал: WhatsApp ({event.instance_id})",
+                f"Отправитель: {display}",
+                f"Первое сообщение: {event.first_message}",
+            ]
+        )
+        await amocrm_service.add_note_to_lead(subdomain, access_token, lead_id, note)
+        logger.info("Created amoCRM lead %s for WhatsApp session %s", lead_id, event.session_id)
+
+    except Exception:
+        logger.debug(
+            "Failed to create amoCRM lead for WhatsApp session %s",
             event.session_id,
             exc_info=True,
         )
