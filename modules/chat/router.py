@@ -1,6 +1,7 @@
 # modules/chat/router.py
 """Chat session router - sessions CRUD, messages, streaming."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
@@ -201,6 +202,79 @@ async def _resolve_rag_config(
 
     # 6. Default: all enabled collections
     return "all", await _get_all_enabled_collection_ids()
+
+
+def _whatsapp_sender(session: dict) -> tuple[str, str] | None:
+    """Split a WhatsApp session's source_id into (instance_id, sender).
+
+    ``source_id`` is "wa-<instance>:<address>", where address is a phone number
+    or an opaque "@lid" JID. Returns None for any non-WhatsApp session.
+    """
+    if session.get("source") != "whatsapp":
+        return None
+    source_id = session.get("source_id") or ""
+    if ":" not in source_id:
+        return None
+    instance_id, _, sender = source_id.partition(":")
+    if not instance_id or not sender:
+        return None
+    return instance_id, sender
+
+
+async def _publish_whatsapp_session_created(session: dict, content: str) -> int:
+    """Announce a new WhatsApp conversation to the CRM domain.
+
+    Returns the lead id already attached to this session, so the caller can tell
+    whether follow-up turns have somewhere to be filed. Publishing is
+    fire-and-forget: a CRM outage must never break the client's reply.
+    """
+    parts = _whatsapp_sender(session)
+    if not parts:
+        return 0
+
+    lead_id = session.get("amocrm_lead_id") or 0
+    if lead_id:
+        return int(lead_id)
+
+    instance_id, sender = parts
+    from modules.channels.whatsapp.events import WhatsAppSessionCreated
+
+    asyncio.create_task(
+        get_container().event_bus.publish(
+            WhatsAppSessionCreated(
+                session_id=session["id"],
+                instance_id=instance_id,
+                sender=sender,
+                first_message=content,
+            )
+        )
+    )
+    return 0
+
+
+def _publish_whatsapp_turn(
+    session: dict, lead_id: int, user_message: str, assistant_response: str
+) -> None:
+    """Append one WhatsApp turn to its amoCRM lead, if the lead exists yet."""
+    if not lead_id or not assistant_response:
+        return
+    parts = _whatsapp_sender(session)
+    if not parts:
+        return
+
+    from modules.channels.whatsapp.events import WhatsAppMessageSent
+
+    asyncio.create_task(
+        get_container().event_bus.publish(
+            WhatsAppMessageSent(
+                session_id=session["id"],
+                lead_id=lead_id,
+                sender=parts[1],
+                user_message=user_message,
+                assistant_response=assistant_response,
+            )
+        )
+    )
 
 
 # ============== Token Counting Helpers ==============
@@ -486,6 +560,16 @@ async def admin_create_chat_session(
                 rag_mode = mobile_inst["rag_mode"]
             if not request.knowledge_collection_id and mobile_inst.get("knowledge_collection_ids"):
                 inherited_collection_ids = mobile_inst["knowledge_collection_ids"]
+
+    # A bot subprocess caches its session id in memory only, so a restart would
+    # otherwise strand the running conversation and — now that WhatsApp feeds
+    # amoCRM — raise a duplicate lead for a client who merely wrote again.
+    if request.source == "whatsapp" and request.source_id:
+        existing_id = await chat_service.find_channel_session(request.source, request.source_id)
+        if existing_id:
+            existing = await chat_service.get_session(existing_id)
+            if existing:
+                return {"session": existing}
 
     session = await chat_service.create_session(
         request.title,
@@ -878,7 +962,13 @@ async def admin_stream_chat_message(
     # Delegate generation to ChatService facade
     facade = chat_service_facade or ChatServiceImpl(container)
 
+    # The WhatsApp bot runs in its own process and cannot reach the in-process
+    # EventBus, so its CRM events are published here — the orchestrator is the
+    # only side that sees both the conversation and the bus.
+    crm_lead_id = await _publish_whatsapp_session_created(session, msg_request.content)
+
     async def generate_stream():
+        full_response: list[str] = []
         async for chunk in facade.stream_message(
             session_id,
             llm_content,
@@ -891,11 +981,15 @@ async def admin_stream_chat_message(
             rag_mode=rag_mode,
             collection_ids=collection_ids,
         ):
+            if chunk.get("type") == "chunk" and chunk.get("content"):
+                full_response.append(chunk["content"])
             # Serialize StreamChunk to SSE event
             if chunk.get("done"):
                 yield "data: [DONE]\n\n"
             else:
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+        _publish_whatsapp_turn(session, crm_lead_id, msg_request.content, "".join(full_response))
 
     return StreamingResponse(
         generate_stream(),
