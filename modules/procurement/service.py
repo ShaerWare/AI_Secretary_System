@@ -137,6 +137,13 @@ _SYNONYMS = {
     "узо": ["устройство", "защитного", "отключения"],
     "дифавтомат": ["дифференциальный", "автоматический"],
     "автоматы": ["автоматический", "выключатель"],
+    # каталог не знает слова «промышленный»: модульные лежат в категории
+    # «Модульное оборудование», силовые — в «Силовое оборудование»
+    "промышленный": ["силовое"],
+    "промышленные": ["силовое"],
+    "промышленных": ["силовое"],
+    "силовой": ["силовое"],
+    "силовые": ["силовое"],
 }
 
 _STEM_LEN = 6
@@ -254,6 +261,7 @@ class OfferService:
         limit: int = 10,
         in_stock_only: bool = False,
         workspace_id: int = 1,
+        exclude: Optional[List[str]] = None,
     ) -> List[dict]:
         """Rank real offers against a free-text position query.
 
@@ -266,12 +274,18 @@ class OfferService:
         price-ascending tie-break and crowd real, priced positions out of the
         result), then source priority, then price. Returns [] if nothing
         matches (caller must then say "не найдено" — never invent a position).
+
+        ``exclude`` drops rows carrying terminology the client has ruled out
+        («модульный не подходит») — see ``query_builder.build_search_query``.
         """
         q_norm = _norm(query)
         q_tokens = _expand_query_tokens(query)
         if not q_norm and not q_tokens:
             return []
         q_stems = {_stem(t) for t in q_tokens if len(t) >= 4}
+        # Терминология, от которой клиент отказался («модульный не подходит»).
+        # Без этого уточняющая реплика возвращала ровно то, что отвергли.
+        excl_stems = [_stem(t) for x in (exclude or []) for t in _tokens(x) if len(t) >= 4]
         # The first significant word of a request is what is being asked for;
         # everything after it is usually a spec («контактор … катушка 220В» —
         # the coil voltage of a contactor, not a coil). Rows whose name starts
@@ -321,6 +335,8 @@ class OfferService:
             # «Катушка управления ДЛЯ КОНТАКТОРА» on a query for a contactor:
             # demote below the contactors regardless of how many query words it
             # happens to hit (it matches «катушка», «контактор» and the voltage).
+            if excl_stems and any(e in name_low for e in excl_stems):
+                continue
             name_words = _tokens(r.name or "")
             accessory = (
                 1
@@ -353,8 +369,18 @@ class OfferService:
             )
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
+        top = scored[:limit]
+        # ~11k site rows sync with price=0 (issue #841). They rank below equally
+        # matching priced rows, but a tighter text match still wins — so a whole
+        # page of results could carry no price at all and leave the assistant
+        # unable to quote anything. Keep at least one priced position in view.
+        if limit >= 2 and len(scored) > limit and not any(row[-1].price for row in top):
+            priced = [row for row in scored[limit:] if row[-1].price][:1]
+            if priced:
+                top = top[: limit - 1] + priced
+
         out = []
-        for primary, _acc, _lead, _strong, misses, head, sig_matched, r in scored[:limit]:
+        for primary, _acc, _lead, _strong, misses, head, sig_matched, r in top:
             d = r.to_dict()
             d["match"] = labels[primary]
             d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)

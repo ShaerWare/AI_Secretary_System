@@ -410,7 +410,13 @@ async def _inject_rag_context_async(
 
 
 async def _inject_offer_context(
-    prompt: str | None, content: str, session: dict, collection_ids: list[int]
+    prompt: str | None,
+    content: str,
+    session: dict,
+    collection_ids: list[int],
+    *,
+    llm=None,
+    history: list[dict] | None = None,
 ) -> str | None:
     """Inject real product offers (unified search) for procurement sessions.
 
@@ -428,8 +434,15 @@ async def _inject_offer_context(
         from modules.procurement.service import offer_service
 
         manager_ctx = session.get("source") == "admin"
+        # A follow-up («модульный не подходит, нужен промышленный») is a
+        # refinement, not a request: searching its raw text returned exactly the
+        # positions the client had just rejected. Build the query from the
+        # dialogue instead; falls back to `content` when there is no history.
+        from modules.procurement.query_builder import build_search_query
+
+        search_query, exclude = await build_search_query(llm, history or [], content)
         # Exact keyword search for offers (prices/stock/articles — КП-exact rule).
-        offers = await offer_service.search(content, limit=8)
+        offers = await offer_service.search(search_query, limit=8, exclude=exclude)
 
         # Supplementary meaning-based context from the catalog collection (rich
         # descriptions) — helps vague/functional queries («чем питать насос»).
@@ -442,7 +455,7 @@ async def _inject_offer_context(
             cat_ids = list(_PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids))
             if wiki and cat_ids:
                 ctx = await wiki.retrieve_async(
-                    content, top_k=3, max_chars=1200, collection_id=cat_ids[0]
+                    search_query, top_k=3, max_chars=1200, collection_id=cat_ids[0]
                 )
                 semantic_ctx = (ctx or "").strip()
         except Exception as e:
@@ -463,7 +476,7 @@ async def _inject_offer_context(
             if manager_ctx:
                 from modules.procurement.routing import route
 
-                r = route(content)
+                r = route(search_query)
                 if r["suppliers"]:
                     names = ", ".join(
                         f"{s['name']} (тип {s['type']})"
@@ -758,7 +771,14 @@ class ChatServiceImpl:
             if _is_procurement_session(coll_ids):
                 # Procurement sessions use structured offer search (real prices/
                 # stock across site + suppliers) instead of wiki-RAG injection.
-                prompt = await _inject_offer_context(prompt, content, session, coll_ids)
+                prompt = await _inject_offer_context(
+                    prompt,
+                    content,
+                    session,
+                    coll_ids,
+                    llm=llm,
+                    history=await self._crud.get_messages_for_llm(session_id),
+                )
             else:
                 prompt = await _inject_rag_context_async(
                     wiki_rag, content, prompt, rag_mode, coll_ids
@@ -884,7 +904,14 @@ class ChatServiceImpl:
             if _is_procurement_session(coll_ids):
                 # Procurement sessions use structured offer search (real prices/
                 # stock across site + suppliers) instead of wiki-RAG injection.
-                prompt = await _inject_offer_context(prompt, content, session, coll_ids)
+                prompt = await _inject_offer_context(
+                    prompt,
+                    content,
+                    session,
+                    coll_ids,
+                    llm=llm,
+                    history=await self._crud.get_messages_for_llm(session_id),
+                )
             else:
                 prompt = await _inject_rag_context_async(
                     wiki_rag, content, prompt, rag_mode, coll_ids
