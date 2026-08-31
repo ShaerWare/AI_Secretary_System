@@ -164,6 +164,39 @@ def _stem(t: str) -> str:
     return t[: max(_STEM_LEN, math.ceil(len(t) * 0.7))]
 
 
+# Номинальный ток: «18А», «120A» (кириллица и латиница), но не «NC1-1810»
+# и не «220В». Первое вхождение — это и есть номинал позиции.
+_AMP_RE = re.compile(r"(\d+)\s*[аa](?![\wа-яё])", re.UNICODE)
+
+
+def _amperage(text: str) -> Optional[int]:
+    """Номинальный ток из строки, если он там назван."""
+    m = _AMP_RE.search((text or "").lower())
+    return int(m.group(1)) if m else None
+
+
+def _amp_bucket(q_amp: Optional[int], row_amp: Optional[int]) -> int:
+    """Насколько номинал позиции далёк от запрошенного (0 — подходит).
+
+    Без этого ранжирование не отличало 20 А от 120 А: на запрос «контактор
+    20А 2НО» позиции на 120–225 А обгоняли 25-амперные только потому, что у
+    них совпал второстепенный признак «2НО». Для электротехники номинал —
+    определяющая характеристика, поэтому он стоит в ключе выше числа
+    совпавших слов. Когда ток не назван (в запросе или в позиции) —
+    измерение нейтрально и ничего не меняет.
+    """
+    if not q_amp:
+        return 0
+    if not row_amp:
+        # Ток спросили, но в названии его нет («Контактор вакуумный NC9-630»).
+        # Не выдаём это за совпадение: ниже подходящих, но выше явно чужих.
+        return 2
+    ratio = max(q_amp, row_amp) / min(q_amp, row_amp)
+    if ratio <= 1.35:  # 18–25 А по запросу «20 А» — то, что нужно
+        return 0
+    return 1 if ratio <= 2.5 else 3
+
+
 # «Катушка управления ДЛЯ КОНТАКТОРА NXC-18» — товар для товара, а не он сам.
 _FOR_RE = re.compile(r"для\s+([\w-]+)", re.UNICODE)
 
@@ -293,6 +326,7 @@ class OfferService:
         # in full, not stemmed, so «Контакт вспомогательный» can't claim a
         # «контактор» query.
         lead_tok = next((t for t in q_tokens if len(t) >= 4), "")
+        q_amp = _amperage(query)
         has_sig_tokens = any(len(t) >= 4 for t in q_tokens)
 
         async with AsyncSessionLocal() as session:
@@ -346,13 +380,14 @@ class OfferService:
                 else 0
             )
             lead = 0 if lead_tok and name_low.startswith(lead_tok) else 1
+            amp = _amp_bucket(q_amp, _amperage(r.name))
             # whole-word hits: a stem match is enough to be a candidate, but
             # «Контактный зажим» must not outrank «Контактор» on a contactor
             # query just because it is cheaper. Negated in the sort key.
             strong = sum(
                 1 for t in q_tokens if len(t) >= 4 and any(w.startswith(t) for w in name_words)
             )
-            scored.append((primary, accessory, lead, -strong, misses, head, sig_matched, r))
+            scored.append((primary, accessory, lead, amp, -strong, misses, head, sig_matched, r))
 
         scored.sort(
             key=lambda x: (
@@ -362,10 +397,11 @@ class OfferService:
                 x[3],
                 x[4],
                 x[5],
-                0 if x[7].in_stock else 1,
-                0 if x[7].price else 1,
-                SOURCE_PRIORITY.get(x[7].source, 9),
-                x[7].price if x[7].price else float("inf"),
+                x[6],
+                0 if x[8].in_stock else 1,
+                0 if x[8].price else 1,
+                SOURCE_PRIORITY.get(x[8].source, 9),
+                x[8].price if x[8].price else float("inf"),
             )
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
@@ -380,7 +416,7 @@ class OfferService:
                 top = top[: limit - 1] + priced
 
         out = []
-        for primary, _acc, _lead, _strong, misses, head, sig_matched, r in top:
+        for primary, _acc, _lead, _amp, _strong, misses, head, sig_matched, r in top:
             d = r.to_dict()
             d["match"] = labels[primary]
             d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)
