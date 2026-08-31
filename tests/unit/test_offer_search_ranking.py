@@ -25,6 +25,7 @@ CATALOG = [
     ("Контактор NXC-18 18A 220В/АС3 1НО+1НЗ 50Гц", 6237.4, True, "Контакторы"),
     ("Контактор NXC-32 32A 48В/АС3 1НО+1НЗ 50Гц", 0.0, True, "Контакторы"),
     ("Катушка управления для контактора NXC-06-22 48AC 50/60Гц", 0.0, True, "Контакторы"),
+    ("Катушка управления для контактора NXC-06-22 110AC 50/60Гц", 0.0, True, "Контакторы"),
     ("Катушка управления КТЭ F 185А-225А 220В EKF PROxima", 12487.8, True, None),
     ("Контакт дополнительный XB-2 NO зеленый EKF PROxima", 390.0, True, None),
     ("Контактный зажим (упаковка 100 шт.)", 293.8, True, None),
@@ -139,3 +140,11 @@ def test_accessory_detection_respects_the_request():
     assert _is_accessory_for_query(name, "катушк", {"контакт"}) is True
     # asking for the coil itself → not demoted
     assert _is_accessory_for_query(name, "катушк", {"катушк", "контакт"}) is False
+
+
+async def test_result_page_always_carries_at_least_one_price(offers):
+    """~11k site rows sync with price 0 (issue #841). A tighter text match still
+    wins, so a whole page could carry no price and leave nothing to quote."""
+    results = await offers.search("катушка nxc", limit=2)
+    assert len(results) == 2, results
+    assert any(r["price"] for r in results), [r["name"] for r in results]
