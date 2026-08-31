@@ -506,7 +506,9 @@ async def _inject_offer_context(
 
         lines = []
         for o in offers:
-            price = f"{o['price']:g} {o['currency']}" if o.get("price") is not None else "цена н/у"
+            # price=0 — это «цены нет в базе» (#841), а не бесплатный товар:
+            # печатать «0 KZT» значит подсказать ассистенту назвать нулевую цену
+            price = f"{o['price']:g} {o['currency']}" if o.get("price") else "цена не указана"
             if o.get("in_stock") is True:
                 stock = "в наличии"
             elif o.get("in_stock") is False:
