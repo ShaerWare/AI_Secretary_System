@@ -6,7 +6,7 @@ Run with:  python -m telegram_bot
 import asyncio
 import logging
 
-from aiogram import Bot, Dispatcher
+from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from .config import (
@@ -22,6 +22,7 @@ from .sales.database import get_sales_db
 from .sales.keyboards import DEFAULT_ACTION_BUTTONS
 from .services.github_news import news_broadcast_scheduler
 from .services.llm_router import get_llm_router
+from .services.tg_session import build_bot
 from .state import get_action_buttons, get_bot_config, set_action_buttons, set_bot_config
 
 
@@ -70,7 +71,7 @@ async def main() -> None:
         settings = get_telegram_settings()
         bot_token = settings.bot_token
 
-    bot = Bot(token=bot_token)
+    bot = build_bot(bot_token)
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
