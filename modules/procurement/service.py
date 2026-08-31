@@ -7,6 +7,7 @@ never invents data — it only reformulates rows this search returns.
 
 import json
 import logging
+import math
 import re
 from typing import List, Optional
 
@@ -94,6 +95,21 @@ _STOPWORDS = {
     "сообщение",
     "форма",
     "формы",
+    # "из наличия", "помоги найти", "подобрать" — способ спросить, не товар
+    "из",
+    "наличия",
+    "наличие",
+    "помоги",
+    "помогите",
+    "найти",
+    "подобрать",
+    "подскажи",
+    "подскажите",
+    # единицы мощности: числовой номинал мы всё равно не сопоставляем, а как
+    # токен «квт» цепляется к «2,2кВт» у колодок и удлинителей
+    "квт",
+    "вт",
+    "ква",
 }
 
 
@@ -127,9 +143,34 @@ _STEM_LEN = 6
 
 
 def _stem(t: str) -> str:
-    """Crude Russian stemming: keep a 6-char prefix so inflections match
-    (частотник/частоты → частот, преобразователи/преобразователь → преобр)."""
-    return t[:_STEM_LEN] if len(t) >= _STEM_LEN else t
+    """Crude Russian stemming: keep a prefix long enough to survive inflection
+    but short enough to still match other forms (частоты → частот,
+    контактор → контакт, электродвигатель → электродвигат).
+
+    A flat 6-char prefix was too aggressive on long words: «электродвигатель»
+    became «электр» and matched every «Электроустановочное изделие» in the
+    catalog, so a query for a motor contactor came back full of socket blocks.
+    Russian endings are 1–3 chars, so keeping ~70% of a long word is safe.
+    """
+    if len(t) <= _STEM_LEN:
+        return t
+    return t[: max(_STEM_LEN, math.ceil(len(t) * 0.7))]
+
+
+# «Катушка управления ДЛЯ КОНТАКТОРА NXC-18» — товар для товара, а не он сам.
+_FOR_RE = re.compile(r"для\s+([\w-]+)", re.UNICODE)
+
+
+def _is_accessory_for_query(name_low: str, first_stem: str, q_stems: set) -> bool:
+    """True when the row is an accessory FOR something asked for, not the thing.
+
+    Guard: if the row's own leading word is in the query, the client is asking
+    for the accessory itself («катушка для контактора» → coils are the target),
+    so it is not demoted.
+    """
+    if not q_stems or first_stem in q_stems:
+        return False
+    return any(any(m.group(1).startswith(s) for s in q_stems) for m in _FOR_RE.finditer(name_low))
 
 
 def _expand_query_tokens(query: str) -> List[str]:
@@ -218,14 +259,27 @@ class OfferService:
 
         Ranking (lower is better): exact article > article contains query >
         name match (more matched query tokens = better). Stopwords/1-char tokens
-        are dropped so filler like "и"/"что" doesn't match everything. Ties
-        broken by in-stock, source priority, then price. Returns [] if nothing
+        are dropped so filler like "и"/"что" doesn't match everything. An
+        accessory FOR a requested product ranks below the product itself.
+        Ties broken by in-stock, **then by having a price at all** (a third of
+        the site catalog syncs with price 0 — those rows used to win the
+        price-ascending tie-break and crowd real, priced positions out of the
+        result), then source priority, then price. Returns [] if nothing
         matches (caller must then say "не найдено" — never invent a position).
         """
         q_norm = _norm(query)
         q_tokens = _expand_query_tokens(query)
         if not q_norm and not q_tokens:
             return []
+        q_stems = {_stem(t) for t in q_tokens if len(t) >= 4}
+        # The first significant word of a request is what is being asked for;
+        # everything after it is usually a spec («контактор … катушка 220В» —
+        # the coil voltage of a contactor, not a coil). Rows whose name starts
+        # with that exact word rank above rows that merely mention it. Matched
+        # in full, not stemmed, so «Контакт вспомогательный» can't claim a
+        # «контактор» query.
+        lead_tok = next((t for t in q_tokens if len(t) >= 4), "")
+        has_sig_tokens = any(len(t) >= 4 for t in q_tokens)
 
         async with AsyncSessionLocal() as session:
             stmt = sa_select(ProductOffer).where(ProductOffer.workspace_id == workspace_id)
@@ -255,24 +309,52 @@ class OfferService:
             # significant matches: tokens len≥4 (short/stray ones like «из», com,
             # at don't count) — stem-matched, computed here where name_low is set.
             sig_matched = sum(1 for t in q_tokens if len(t) >= 4 and _stem(t) in name_low)
+            # A row that hit nothing but a stray number («100» from «ТТИ-А 100/5»
+            # matching «упаковка 100 шт.») is noise, not a candidate — but only
+            # judge that when the query actually has a word to match; a pure
+            # article query like "NXC 18" has no long tokens at all.
+            if primary == 2 and has_sig_tokens and not sig_matched:
+                continue
             # head match: name STARTS with a query term → it's that product, not
             # an accessory «…для преобразователей частоты». Ranks products first.
             head = 0 if any(len(t) >= 4 and name_low.startswith(_stem(t)) for t in q_tokens) else 1
-            scored.append((primary, misses, head, sig_matched, r))
+            # «Катушка управления ДЛЯ КОНТАКТОРА» on a query for a contactor:
+            # demote below the contactors regardless of how many query words it
+            # happens to hit (it matches «катушка», «контактор» and the voltage).
+            name_words = _tokens(r.name or "")
+            accessory = (
+                1
+                if _is_accessory_for_query(
+                    name_low, _stem(name_words[0]) if name_words else "", q_stems
+                )
+                else 0
+            )
+            lead = 0 if lead_tok and name_low.startswith(lead_tok) else 1
+            # whole-word hits: a stem match is enough to be a candidate, but
+            # «Контактный зажим» must not outrank «Контактор» on a contactor
+            # query just because it is cheaper. Negated in the sort key.
+            strong = sum(
+                1 for t in q_tokens if len(t) >= 4 and any(w.startswith(t) for w in name_words)
+            )
+            scored.append((primary, accessory, lead, -strong, misses, head, sig_matched, r))
 
         scored.sort(
             key=lambda x: (
                 x[0],
                 x[1],
                 x[2],
-                0 if x[4].in_stock else 1,
-                SOURCE_PRIORITY.get(x[4].source, 9),
-                x[4].price if x[4].price is not None else float("inf"),
+                x[3],
+                x[4],
+                x[5],
+                0 if x[7].in_stock else 1,
+                0 if x[7].price else 1,
+                SOURCE_PRIORITY.get(x[7].source, 9),
+                x[7].price if x[7].price else float("inf"),
             )
         )
         labels = {0: "article_exact", 1: "article_partial", 2: "name"}
         out = []
-        for primary, misses, head, sig_matched, r in scored[:limit]:
+        for primary, _acc, _lead, _strong, misses, head, sig_matched, r in scored[:limit]:
             d = r.to_dict()
             d["match"] = labels[primary]
             d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)
