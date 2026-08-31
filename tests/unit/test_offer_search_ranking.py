@@ -14,6 +14,7 @@ from modules.core.models import Workspace
 from modules.procurement.models import ProductOffer
 from modules.procurement.service import (
     OfferService,
+    _amperage,
     _expand_query_tokens,
     _is_accessory_for_query,
     _stem,
@@ -24,6 +25,8 @@ from modules.procurement.service import (
 CATALOG = [
     ("Контактор NXC-18 18A 220В/АС3 1НО+1НЗ 50Гц", 6237.4, True, "Контакторы"),
     ("Контактор NXC-32 32A 48В/АС3 1НО+1НЗ 50Гц", 0.0, True, "Контакторы"),
+    ("Контактор NXC-225 225A 220В/АС3 2НО+2НЗ 50Гц (R)", 93732.6, True, "Контакторы"),
+    ("Контактор вакуумный NC9-630 230В 50Гц", 0.0, True, "Контакторы"),
     ("Катушка управления для контактора NXC-06-22 48AC 50/60Гц", 0.0, True, "Контакторы"),
     ("Катушка управления для контактора NXC-06-22 110AC 50/60Гц", 0.0, True, "Контакторы"),
     ("Катушка управления КТЭ F 185А-225А 220В EKF PROxima", 12487.8, True, None),
@@ -148,3 +151,33 @@ async def test_result_page_always_carries_at_least_one_price(offers):
     results = await offers.search("катушка nxc", limit=2)
     assert len(results) == 2, results
     assert any(r["price"] for r in results), [r["name"] for r in results]
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Контактор NC1-1810 18А 230В/АС3 1НО 50Гц", 18),
+        ("Контактор NXC-120 120A 220В/АС3 2НО+2НЗ", 120),
+        ("контактор промышленный 20А 2НО AC 220/230В", 20),
+        ("Контактор NC1-2508", None),  # артикул — не номинал
+        ("Контактор вакуумный NC9-630 230В 50Гц", None),
+    ],
+)
+def test_amperage_extraction(text, expected):
+    assert _amperage(text) == expected
+
+
+async def test_rating_beats_a_secondary_spec_match(offers):
+    """«20А 2НО»: позиция на 225 А с 2НО не должна обгонять 18-амперную с
+    1НО+1НЗ — для электротехники номинал определяющий."""
+    names = await _names(offers, "контактор 20А 2НО 220В")
+    assert names[0] == "Контактор NXC-18 18A 220В/АС3 1НО+1НЗ 50Гц", names
+
+
+async def test_unstated_rating_ranks_below_a_matching_one(offers):
+    """«Контактор вакуумный NC9-630» тока в названии не несёт — это не повод
+    считать его подходящим под запрошенный номинал."""
+    names = await _names(offers, "контактор 20А 220В")
+    assert names.index("Контактор NXC-18 18A 220В/АС3 1НО+1НЗ 50Гц") < names.index(
+        "Контактор вакуумный NC9-630 230В 50Гц"
+    ), names
