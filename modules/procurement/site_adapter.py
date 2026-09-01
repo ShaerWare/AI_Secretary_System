@@ -48,6 +48,25 @@ def _category(product: dict) -> Optional[str]:
     return ", ".join(cats)[:300] if cats else None
 
 
+def _stock(product: dict) -> Optional[bool]:
+    """Наличие по данным WooCommerce — или None, если магазин его не ведёт.
+
+    В каталоге stalkerelectric.kz учёт остатков выключен: у всех 30 тыс.
+    товаров ``manage_stock: false`` и ``stock_quantity: null``, а
+    ``stock_status`` равен "instock" просто по умолчанию. Раньше это
+    переводилось в ``in_stock=True``, и ассистент писал клиенту «✅ В наличии»
+    про любую позицию каталога — то есть утверждал то, чего не знает
+    (MASTER WORKFLOW §5.5, §44.12: прайс не является подтверждением наличия).
+    """
+    status = product.get("stock_status")
+    if status in ("outofstock", "onbackorder"):
+        return False
+    qty = product.get("stock_quantity")
+    if product.get("manage_stock") and qty is not None:
+        return qty > 0
+    return None
+
+
 def _to_offer(product: dict) -> dict:
     return {
         "source_key": product.get("id"),
@@ -58,7 +77,7 @@ def _to_offer(product: dict) -> dict:
         "category": _category(product),
         "price": _parse_price(product),
         "currency": "KZT",
-        "in_stock": product.get("stock_status") == "instock",
+        "in_stock": _stock(product),
         "stock_qty": product.get("stock_quantity"),
         "url": product.get("permalink") or None,
         "extra": None,
