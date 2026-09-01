@@ -50,7 +50,18 @@ IMAGES_DIR = Path("data/chat_images")
 MAX_FILE_SIZE = 300 * 1024 * 1024  # 300MB
 THUMB_MAX_WIDTH = 400
 
-IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+# PSD читается Pillow как сведённая композитная картинка — этого хватает и на
+# превью, и на OCR. Браузер шлёт для .psd что угодно: image/vnd.adobe.photoshop,
+# application/x-photoshop или вовсе application/octet-stream, поэтому тип
+# доопределяется по расширению (см. _resolve_content_type).
+PSD_MIME_TYPES = {
+    "image/vnd.adobe.photoshop",
+    "image/psd",
+    "application/x-photoshop",
+    "application/photoshop",
+    "application/psd",
+}
+IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"} | PSD_MIME_TYPES
 DOCUMENT_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # xlsx
@@ -86,6 +97,25 @@ _EXT_MAP = {
     "application/xml": "xml",
     "text/xml": "xml",
 }
+_EXT_MAP.update(dict.fromkeys(PSD_MIME_TYPES, "psd"))
+
+# Расширение → тип, когда браузер прислал octet-stream или пустой content-type.
+_TYPE_BY_EXT = {
+    ".psd": "image/vnd.adobe.photoshop",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".pdf": "application/pdf",
+}
+
+
+def _resolve_content_type(content_type: str, original_name: str) -> str:
+    """Доверять расширению, когда браузер не смог определить тип файла."""
+    if content_type in ALLOWED_MIME_TYPES:
+        return content_type
+    return _TYPE_BY_EXT.get(Path(original_name).suffix.lower(), content_type)
 
 
 def _generate_file_id() -> str:
@@ -251,8 +281,25 @@ def _process_upload(
 
     if is_img:
         # Image: dimensions + thumbnail + OCR
-        img = Image.open(saved_path)
-        width, height = img.size
+        try:
+            img = Image.open(saved_path)
+            width, height = img.size
+        except Exception as e:
+            # PSD без сведённой копии (сохранён без «Maximize compatibility»)
+            # Pillow не откроет. Файл всё равно сохранён и приложен к сообщению —
+            # терять загрузку целиком из-за превью нельзя.
+            logger.warning("Cannot open image %s: %s", original_name, e)
+            return {
+                "id": file_id,
+                "filename": f"{file_id}.{ext}",
+                "original_name": original_name,
+                "size": len(file_data),
+                "width": 0,
+                "height": 0,
+                "ocr_text": None,
+                "mime_type": content_type,
+                "is_image": True,
+            }
 
         # Generate thumbnail
         thumb_path = session_dir / f"{file_id}_thumb.jpg"
@@ -260,7 +307,8 @@ def _process_upload(
         if width > THUMB_MAX_WIDTH:
             ratio = THUMB_MAX_WIDTH / width
             thumb = thumb.resize((THUMB_MAX_WIDTH, int(height * ratio)), Image.LANCZOS)
-        if thumb.mode in ("RGBA", "P"):
+        if thumb.mode != "RGB":
+            # PSD приходит в CMYK или с альфа-каналом — JPEG такого не примет
             thumb = thumb.convert("RGB")
         thumb.save(thumb_path, "JPEG", quality=80)
 
@@ -299,6 +347,7 @@ async def upload_file(
     if len(file_data) > MAX_FILE_SIZE:
         raise ValueError(f"File too large: {len(file_data)} > {MAX_FILE_SIZE}")
 
+    content_type = _resolve_content_type(content_type, original_name)
     if content_type not in ALLOWED_MIME_TYPES:
         # Try to detect by extension
         ext = Path(original_name).suffix.lower()
