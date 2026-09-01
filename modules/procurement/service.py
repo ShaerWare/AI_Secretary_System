@@ -329,12 +329,23 @@ class OfferService:
         q_amp = _amperage(query)
         has_sig_tokens = any(len(t) >= 4 for t in q_tokens)
 
+        # Ранжируем по лёгким кортежам, а не по ORM-объектам: полная выборка
+        # 57 тыс. офферов через ORM стоила ~1,5 с на КАЖДОЕ сообщение чата,
+        # те же колонки через Core — втрое дешевле. Полные строки достаём
+        # только для победителей, их единицы.
         async with AsyncSessionLocal() as session:
-            stmt = sa_select(ProductOffer).where(ProductOffer.workspace_id == workspace_id)
+            stmt = sa_select(
+                ProductOffer.id,
+                ProductOffer.source,
+                ProductOffer.article,
+                ProductOffer.name,
+                ProductOffer.category,
+                ProductOffer.price,
+                ProductOffer.in_stock,
+            ).where(ProductOffer.workspace_id == workspace_id)
             if in_stock_only:
                 stmt = stmt.where(ProductOffer.in_stock.is_(True))
-            res = await session.execute(stmt)
-            rows = res.scalars().all()
+            rows = (await session.execute(stmt)).all()
 
         scored = []
         for r in rows:
@@ -415,9 +426,24 @@ class OfferService:
             if priced:
                 top = top[: limit - 1] + priced
 
+        if not top:
+            return []
+
+        # Вторая фаза: полные строки только для попавших в выдачу.
+        async with AsyncSessionLocal() as session:
+            full = (
+                await session.execute(
+                    sa_select(ProductOffer).where(ProductOffer.id.in_([row[-1].id for row in top]))
+                )
+            ).scalars()
+            by_id = {o.id: o for o in full}
+
         out = []
         for primary, _acc, _lead, _amp, _strong, misses, head, sig_matched, r in top:
-            d = r.to_dict()
+            full_row = by_id.get(r.id)
+            if full_row is None:  # строку удалил параллельный ре-синк
+                continue
+            d = full_row.to_dict()
             d["match"] = labels[primary]
             d["matched_tokens"] = (len(q_tokens) - misses) if primary == 2 else len(q_tokens)
             # confident = exact/partial article OR ≥2 significant name tokens —
