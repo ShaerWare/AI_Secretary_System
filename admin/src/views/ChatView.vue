@@ -4095,7 +4095,7 @@ class="w-4 h-4 rounded border flex items-center justify-center shrink-0"
             <input
               ref="imageInputRef"
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
+              accept="image/jpeg,image/png,image/webp,image/gif,.psd,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
               multiple
               class="hidden"
               @change="handleImageUpload"

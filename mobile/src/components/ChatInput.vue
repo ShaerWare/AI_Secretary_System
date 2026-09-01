@@ -140,7 +140,7 @@ function handleFileChange(e: Event) {
     <input
       ref="fileInputRef"
       type="file"
-      accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
+      accept="image/jpeg,image/png,image/webp,image/gif,.psd,.pdf,.xlsx,.xls,.docx,.doc,.txt,.csv,.md,.json,.xml,.html,.log,.yaml,.yml"
       multiple
       class="hidden"
       @change="handleFileChange"
