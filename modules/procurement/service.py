@@ -16,7 +16,7 @@ from sqlalchemy import select as sa_select
 
 from db.database import AsyncSessionLocal
 from db.retry import retry_on_busy
-from modules.procurement.models import ProductOffer
+from modules.procurement.models import SOURCE_SITE, SOURCE_SUPPLIER, ProductOffer
 
 
 logger = logging.getLogger(__name__)
@@ -252,9 +252,24 @@ class OfferService:
                 del_stmt = del_stmt.where(ProductOffer.source_key.like(f"{scope_key}#%"))
             await session.execute(del_stmt)
             rows = 0
+            # Один и тот же source_key может прийти в выборке дважды: пагинация
+            # WooCommerce (302 запроса по 100 товаров ≈ 10 минут) сдвигается,
+            # если каталог меняется на ходу, и товар попадает на две страницы.
+            # Тогда весь синк падал на UNIQUE(source, source_key) и сутки
+            # оставались без обновления (прод, 25.09.2026). Побеждает последняя
+            # версия строки — она свежее.
+            seen: dict[str, dict] = {}
             for o in offers:
                 if not o.get("source_key") or not o.get("name"):
                     continue
+                seen[str(o["source_key"])] = o
+            if len(seen) != sum(1 for o in offers if o.get("source_key") and o.get("name")):
+                logger.warning(
+                    "procurement: source=%s принёс дубли source_key, оставлено %d уникальных",
+                    source,
+                    len(seen),
+                )
+            for o in seen.values():
                 extra = o.get("extra")
                 session.add(
                     ProductOffer(
@@ -450,7 +465,78 @@ class OfferService:
             # spam subjects with a couple of incidental short hits aren't "ready".
             d["confident"] = primary in (0, 1) or sig_matched >= 2
             out.append(d)
+        await self._attach_supply(out, workspace_id=workspace_id)
         return out
+
+    async def _attach_supply(self, offers: List[dict], workspace_id: int = 1) -> None:
+        """Дополнить позиции сайта тем, что известно о них у поставщиков.
+
+        Сам сайт остатки не ведёт (``manage_stock`` выключен у всех 30 тыс.
+        товаров), поэтому единственный источник наличия — прайсы и файлы
+        остатков поставщиков. 18 тыс. из 30 тыс. артикулов каталога есть в этих
+        прайсах, и для них ассистенту нужно уточнять только срок, а не сам факт
+        доступности позиции. Кладём в ``offer["supply"]``; поле служебное —
+        имя поставщика показывать клиенту нельзя (гейт в чат-фасаде).
+        """
+        wanted: dict[str, list[dict]] = {}
+        for o in offers:
+            art = (o.get("article") or "").strip()
+            if o.get("source") != SOURCE_SITE or not art:
+                continue
+            wanted.setdefault(art.upper(), []).append(o)
+        if not wanted:
+            return
+        # Ищем по индексированной колонке (варианты регистра), а не по
+        # upper(trim(...)) — иначе каждый запрос сканирует прайсы целиком.
+        variants = {v for a in wanted for v in (a, a.lower(), a.title())}
+        async with AsyncSessionLocal() as session:
+            rows = (
+                await session.execute(
+                    sa_select(
+                        ProductOffer.article,
+                        ProductOffer.supplier_name,
+                        ProductOffer.in_stock,
+                        ProductOffer.stock_qty,
+                        ProductOffer.price,
+                        ProductOffer.updated,
+                    ).where(
+                        ProductOffer.source == SOURCE_SUPPLIER,
+                        ProductOffer.workspace_id == workspace_id,
+                        ProductOffer.article.in_(variants),
+                    )
+                )
+            ).all()
+
+        for r in rows:
+            targets = wanted.get((r.article or "").strip().upper())
+            if not targets:
+                continue
+            for o in targets:
+                sup = o.setdefault(
+                    "supply",
+                    {
+                        "available": None,
+                        "supplier_name": None,
+                        "qty": None,
+                        "priced": False,
+                        "as_of": None,
+                    },
+                )
+                # True перебивает всё: хотя бы у одного поставщика есть остаток.
+                if r.in_stock and sup["available"] is not True:
+                    sup["available"] = True
+                    sup["supplier_name"] = r.supplier_name
+                    sup["qty"] = r.stock_qty
+                elif sup["available"] is None and r.in_stock is False:
+                    sup["available"] = False
+                if sup["supplier_name"] is None:
+                    sup["supplier_name"] = r.supplier_name
+                if r.price:
+                    sup["priced"] = True
+                if r.updated and (
+                    sup["as_of"] is None or r.updated.date().isoformat() > sup["as_of"]
+                ):
+                    sup["as_of"] = r.updated.date().isoformat()
 
 
 offer_service = OfferService()
