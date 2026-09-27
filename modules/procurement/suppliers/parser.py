@@ -75,15 +75,22 @@ def _read_xlsx(path: str, cfg: dict) -> List[dict]:
                 s2 = parse_number(row[cols["stock2"]])
                 if s2:
                     stock = (stock or 0) + s2
-        rows.append(
-            {
-                "article": str(article).strip() if article else None,
-                "name": str(name).strip() if name else None,
-                "price": price,
-                "unit": str(unit).strip() if unit else None,
-                "stock": stock,
-            }
-        )
+        item = {
+            "article": str(article).strip() if article else None,
+            "name": str(name).strip() if name else None,
+            "price": price,
+            "unit": str(unit).strip() if unit else None,
+        }
+        # Ключ "stock" ставим ТОЛЬКО когда остаток реально прочитан. Пустая
+        # ячейка у Аксимы/Chint — это «остаток не указан», а не «ноль»: во всех
+        # трёх файлах с остатками перечислено лишь то, что есть, а остальное
+        # просто не заполнено (аксима 581 из 1921, Chint 222 из 1638 — все
+        # пустые, ни одного явного нуля). Раньше None превращался в
+        # in_stock=False, и ассистент утверждал «НЕТ в наличии» про позиции,
+        # о наличии которых мы ничего не знаем.
+        if stock is not None:
+            item["stock"] = stock
+        rows.append(item)
     wb.close()
     return rows
 
@@ -234,7 +241,11 @@ def parse_supplier_file(cfg: dict) -> List[dict]:
     else:
         raise ValueError(f"unsupported format {fmt} for {cfg['key']}")
 
-    # Merge stock by article if a stock file is configured
+    # Merge stock by article if a stock file is configured. Отсутствие артикула
+    # в файле остатков — это «остаток неизвестен», а не «нет на складе»: файл
+    # ОСТАТКИ содержит только то, что у поставщика есть (838 артикулов против
+    # 20 728 строк дилерского прайса SunWell/EKF), поэтому ключ "stock" у
+    # остальных строк не появляется и адаптер запишет in_stock=NULL.
     if cfg.get("stock_file"):
         spath = resolve_file(cfg["stock_file"])
         if spath:

@@ -5,8 +5,9 @@ client + stored credentials, so no new access is needed. EKF and supplier
 adapters plug into the same `offer_service.replace_source_offers` interface.
 """
 
+import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from app.services.woocommerce_service import get_all_products
 from modules.ecommerce.service import woocommerce_service
@@ -48,26 +49,79 @@ def _category(product: dict) -> Optional[str]:
     return ", ".join(cats)[:300] if cats else None
 
 
-def _stock(product: dict) -> Optional[bool]:
-    """Наличие по данным WooCommerce — или None, если магазин его не ведёт.
+# Мета, которую сайт заполняет остатками поставщиков и показывает в карточке
+# блоком «Наличие · Удалённый склад · 2 шт. Срок поставки 1-2 дн.».
+# Формат значения: [{"warehouse": "Удалённый склад", "supplier": "PRSTH",
+# "qty": 2, "lead_time_min": 1, "lead_time_max": 2}]. Пустой список — карточка
+# пишет «По запросу», то есть на складе позиции нет.
+_REMOTE_STOCK_META = "_remote_stock_blocks"
 
-    В каталоге stalkerelectric.kz учёт остатков выключен: у всех 30 тыс.
-    товаров ``manage_stock: false`` и ``stock_quantity: null``, а
-    ``stock_status`` равен "instock" просто по умолчанию. Раньше это
-    переводилось в ``in_stock=True``, и ассистент писал клиенту «✅ В наличии»
-    про любую позицию каталога — то есть утверждал то, чего не знает
-    (MASTER WORKFLOW §5.5, §44.12: прайс не является подтверждением наличия).
-    """
-    status = product.get("stock_status")
-    if status in ("outofstock", "onbackorder"):
-        return False
-    qty = product.get("stock_quantity")
-    if product.get("manage_stock") and qty is not None:
-        return qty > 0
+
+def _remote_stock_blocks(product: dict) -> Optional[list]:
+    """Разобрать `_remote_stock_blocks`. None — меты нет / она не читается."""
+    for m in product.get("meta_data") or []:
+        if m.get("key") != _REMOTE_STOCK_META:
+            continue
+        val = m.get("value")
+        if isinstance(val, str):
+            try:
+                val = json.loads(val)
+            except (TypeError, ValueError):
+                return None
+        return val if isinstance(val, list) else None
     return None
 
 
+def _availability(product: dict) -> dict[str, Any]:
+    """Наличие и срок поставки — или «неизвестно», если магазин их не даёт.
+
+    Собственный учёт остатков в каталоге stalkerelectric.kz выключен: у всех
+    30 тыс. товаров ``manage_stock: false`` и ``stock_quantity: null``, а
+    ``stock_status`` равен "instock" просто по умолчанию — принимать это за
+    наличие нельзя (MASTER WORKFLOW §5.5, §44.12: прайс не является
+    подтверждением наличия). Единственные настоящие данные о наличии на сайте —
+    блоки остатков поставщиков в мете ``_remote_stock_blocks``: у позиций с
+    непустым блоком известны и количество, и срок поставки. У остальных карточка
+    пишет «По запросу» — это НЕ подтверждённое отсутствие, а «уточняется»,
+    поэтому возвращаем None, а не False.
+    """
+    out: dict[str, Any] = {"in_stock": None, "stock_qty": None, "lead_time_days": None}
+    blocks = _remote_stock_blocks(product)
+    if blocks:
+        qty = 0.0
+        leads = []
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            try:
+                qty += float(b.get("qty") or 0)
+            except (TypeError, ValueError):
+                pass
+            for key in ("lead_time_max", "lead_time_min"):
+                v = b.get(key)
+                if isinstance(v, (int, float)):
+                    leads.append(int(v))
+                    break
+        if qty > 0:
+            out["in_stock"] = True
+            out["stock_qty"] = qty
+            # Берём худший срок из блоков — обещать более быстрый нельзя.
+            out["lead_time_days"] = max(leads) if leads else None
+            out["extra"] = {"remote_stock": blocks}
+            return out
+    status = product.get("stock_status")
+    if status in ("outofstock", "onbackorder"):
+        out["in_stock"] = False
+        return out
+    qty_wc = product.get("stock_quantity")
+    if product.get("manage_stock") and qty_wc is not None:
+        out["in_stock"] = qty_wc > 0
+        out["stock_qty"] = qty_wc
+    return out
+
+
 def _to_offer(product: dict) -> dict:
+    avail = _availability(product)
     return {
         "source_key": product.get("id"),
         "supplier_name": SITE_SUPPLIER_NAME,
@@ -77,10 +131,11 @@ def _to_offer(product: dict) -> dict:
         "category": _category(product),
         "price": _parse_price(product),
         "currency": "KZT",
-        "in_stock": _stock(product),
-        "stock_qty": product.get("stock_quantity"),
+        "in_stock": avail["in_stock"],
+        "stock_qty": avail["stock_qty"],
+        "lead_time_days": avail["lead_time_days"],
         "url": product.get("permalink") or None,
-        "extra": None,
+        "extra": avail.get("extra"),
     }
 
 

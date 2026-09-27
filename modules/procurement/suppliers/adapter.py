@@ -22,6 +22,10 @@ def _row_to_offer(row: dict, cfg: dict, idx: int) -> dict:
     # they repeat within a file and collide across suppliers). Full re-sync per
     # supplier makes an index-based key stable enough. Article stays searchable.
     key = f"{cfg['key']}#{idx}"
+    # Остаток известен, только если парсер его реально прочитал (ключ "stock").
+    # Иначе — None: «не знаем», а не «нет». См. parser._read_xlsx.
+    stock = row.get("stock")
+    in_stock = None if stock is None else stock > 0
     return {
         "source_key": key,
         "supplier_name": cfg["name"],
@@ -31,8 +35,8 @@ def _row_to_offer(row: dict, cfg: dict, idx: int) -> dict:
         "category": row.get("category"),
         "price": row.get("price"),
         "currency": cfg.get("currency", "KZT"),
-        "in_stock": (row.get("stock") or 0) > 0 if "stock" in row else None,
-        "stock_qty": row.get("stock"),
+        "in_stock": in_stock,
+        "stock_qty": stock,
         "extra": {"markup_pct": cfg.get("markup_pct"), "vat_included": cfg.get("vat_included")},
     }
 
