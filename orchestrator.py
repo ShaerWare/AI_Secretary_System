@@ -281,9 +281,10 @@ async def startup_event():
             "kanban-sync", sync_kanban_issues, interval=15 * 60, initial_delay=60
         )
         task_registry.register("woocommerce-sync", woocommerce_daily_sync)
-        from modules.procurement.tasks import procurement_site_sync
+        from modules.procurement.tasks import procurement_site_sync, procurement_supplier_sync
 
         task_registry.register("procurement-site-sync", procurement_site_sync)
+        task_registry.register("procurement-supplier-sync", procurement_supplier_sync)
         task_registry.register("rss-sync", rss_sync_all, interval=60 * 60, initial_delay=120)
         task_registry.register(
             "bot-process-watcher", watch_bot_processes, interval=30, initial_delay=15
