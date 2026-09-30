@@ -146,3 +146,77 @@ async def test_duplicate_source_key_does_not_break_the_sync(svc):
         ],
     )
     assert written == 2, "дубль source_key должен схлопнуться, а не уронить синк"
+
+
+async def test_resync_over_existing_rows_does_not_hit_unique(svc):
+    """Апсерт, а не «удалить и вставить»: ключ с прошлого прогона не роняет синк.
+
+    Прод, ночь 29.09.2026: синк SunWell/EKF свалился на первой же строке
+    `sunwell#0`, оставшейся с предыдущего дня — 20 728 позиций крупнейшего
+    поставщика сутки стояли непересчитанными.
+    """
+    from modules.procurement.models import SOURCE_SUPPLIER
+
+    batch = [
+        {"source_key": "sunwell#0", "name": "Автомат AV-6 1P 10A", "price": 2453.0},
+        {"source_key": "sunwell#1", "name": "Автомат AV-6 1P 16A", "price": 2500.0},
+    ]
+    assert await svc.replace_source_offers(SOURCE_SUPPLIER, batch, scope_key="sunwell") == 2
+    # Тот же набор второй раз — прежний порядок падал на UNIQUE.
+    assert await svc.replace_source_offers(SOURCE_SUPPLIER, batch, scope_key="sunwell") == 2
+
+
+async def test_resync_updates_price_instead_of_duplicating(svc):
+    from modules.procurement.models import SOURCE_SUPPLIER
+
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER,
+        [{"source_key": "sunwell#0", "name": "Автомат", "price": 100.0, "in_stock": True}],
+        scope_key="sunwell",
+    )
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER,
+        [{"source_key": "sunwell#0", "name": "Автомат", "price": 250.0}],
+        scope_key="sunwell",
+    )
+    rows = await svc.search("автомат", limit=10)
+    mine = [o for o in rows if o["source_key"] == "sunwell#0"]
+    assert len(mine) == 1, "строка должна обновиться, а не продублироваться"
+    assert mine[0]["price"] == 250.0
+    assert mine[0]["in_stock"] is None, "поля, которых нет в новой строке, тоже переписываются"
+
+
+async def test_rows_missing_from_the_new_batch_are_dropped(svc):
+    """Пропала позиция у поставщика — пропала и из поиска."""
+    from modules.procurement.models import SOURCE_SUPPLIER
+
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER,
+        [
+            {"source_key": "sunwell#0", "name": "Автомат остался"},
+            {"source_key": "sunwell#1", "name": "Автомат пропал"},
+        ],
+        scope_key="sunwell",
+    )
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER,
+        [{"source_key": "sunwell#0", "name": "Автомат остался"}],
+        scope_key="sunwell",
+    )
+    names = [o["name"] for o in await svc.search("автомат", limit=10)]
+    assert "Автомат остался" in names
+    assert "Автомат пропал" not in names
+
+
+async def test_scope_key_does_not_touch_a_neighbour_supplier(svc):
+    """Прогон одного поставщика не должен вычищать чужие строки."""
+    from modules.procurement.models import SOURCE_SUPPLIER
+
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER, [{"source_key": "aksima#0", "name": "Реле Аксима"}], scope_key="aksima"
+    )
+    await svc.replace_source_offers(
+        SOURCE_SUPPLIER, [{"source_key": "sunwell#0", "name": "Реле Санвел"}], scope_key="sunwell"
+    )
+    names = [o["name"] for o in await svc.search("реле", limit=10)]
+    assert "Реле Аксима" in names and "Реле Санвел" in names
