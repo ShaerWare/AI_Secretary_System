@@ -9,10 +9,12 @@ import json
 import logging
 import math
 import re
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from db.database import AsyncSessionLocal
 from db.retry import retry_on_busy
@@ -227,6 +229,11 @@ def _expand_query_tokens(query: str) -> List[str]:
 class OfferService:
     """CRUD + search over `product_offers`."""
 
+    # Сколько строк уходит в БД одним INSERT. SQLite ограничивает число
+    # параметров в запросе (по умолчанию 32766), а у оффера 16 колонок —
+    # 500 строк это 8000 параметров, с запасом.
+    _UPSERT_CHUNK = 500
+
     @retry_on_busy()
     async def replace_source_offers(
         self,
@@ -235,65 +242,108 @@ class OfferService:
         workspace_id: int = 1,
         scope_key: Optional[str] = None,
     ) -> int:
-        """Full re-sync of one source: delete its offers, insert the fresh set.
+        """Full re-sync of one source: upsert the fresh set, drop what's left.
 
         `offers` is a list of dicts with keys matching ProductOffer fields
         (must include source_key + name). When `scope_key` is given, only rows
-        whose ``source_key`` starts with ``{scope_key}#`` are replaced — so
+        whose ``source_key`` starts with ``{scope_key}#`` are touched — so
         several suppliers can share source='supplier' without wiping each other,
         and renaming a supplier doesn't orphan its rows. Returns rows written.
+
+        **Апсертом, а не «удалить всё и вставить заново».** Прежний порядок
+        падал на `UNIQUE(source, source_key)`, если удаление почему-то не
+        закрывало вставку: прод, ночь 29.09.2026 — синк SunWell/EKF свалился на
+        первой же строке `sunwell#0`, которая осталась с предыдущего дня, и
+        20 728 позиций крупнейшего поставщика сутки стояли непересчитанными
+        (остальные пять прошли). Второго писателя в логах не нашлось, а
+        воспроизвести гонку отдельным процессом не удалось — поэтому убран сам
+        класс отказа, а не конкретный сценарий: апсерт не конфликтует ни с
+        оставшейся строкой, ни с параллельной вставкой такого же ключа.
+        Попутно исчезает окно, когда источник в поиске пуст.
+
+        Устаревшие строки удаляются по метке времени прогона, а не списком
+        ключей: `NOT IN (20 тыс. значений)` упёрся бы в лимит параметров SQLite.
         """
+        run_ts = datetime.utcnow()
+
+        # Один и тот же source_key может прийти в выборке дважды: пагинация
+        # WooCommerce (302 запроса по 100 товаров ≈ 10 минут) сдвигается, если
+        # каталог меняется на ходу, и товар попадает на две страницы. Побеждает
+        # последняя версия строки — она свежее.
+        seen: dict[str, dict] = {}
+        usable = 0
+        for o in offers:
+            if not o.get("source_key") or not o.get("name"):
+                continue
+            usable += 1
+            seen[str(o["source_key"])] = o
+        if len(seen) != usable:
+            logger.warning(
+                "procurement: source=%s принёс дубли source_key, оставлено %d уникальных",
+                source,
+                len(seen),
+            )
+
+        values = [
+            {
+                "source": source,
+                "source_key": str(o["source_key"]),
+                "supplier_name": o.get("supplier_name"),
+                "article": o.get("article"),
+                "name": o["name"][:500],
+                "brand": o.get("brand"),
+                "category": o.get("category"),
+                "price": o.get("price"),
+                "currency": o.get("currency", "KZT"),
+                "in_stock": o.get("in_stock"),
+                "stock_qty": o.get("stock_qty"),
+                "lead_time_days": o.get("lead_time_days"),
+                "url": o.get("url"),
+                "extra": json.dumps(o["extra"], ensure_ascii=False) if o.get("extra") else None,
+                "workspace_id": workspace_id,
+                "updated": run_ts,
+            }
+            for o in seen.values()
+        ]
+
         async with AsyncSessionLocal() as session:
+            for start in range(0, len(values), self._UPSERT_CHUNK):
+                chunk = values[start : start + self._UPSERT_CHUNK]
+                stmt = sqlite_insert(ProductOffer).values(chunk)
+                # Ключ мог остаться с прошлого прогона — переписываем строку
+                # целиком, иначе у неё сохранились бы старые цена и остаток.
+                await session.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=["source", "source_key"],
+                        set_={
+                            c: stmt.excluded[c]
+                            for c in chunk[0]
+                            if c not in ("source", "source_key")
+                        },
+                    )
+                )
+
+            # Чего в свежей выборке не было — то у источника пропало. Метка
+            # прогона надёжнее списка ключей: у всех записанных строк `updated`
+            # ровно `run_ts`, у остальных — раньше.
             del_stmt = sa_delete(ProductOffer).where(
                 ProductOffer.source == source,
                 ProductOffer.workspace_id == workspace_id,
+                ProductOffer.updated < run_ts,
             )
             if scope_key is not None:
                 del_stmt = del_stmt.where(ProductOffer.source_key.like(f"{scope_key}#%"))
-            await session.execute(del_stmt)
-            rows = 0
-            # Один и тот же source_key может прийти в выборке дважды: пагинация
-            # WooCommerce (302 запроса по 100 товаров ≈ 10 минут) сдвигается,
-            # если каталог меняется на ходу, и товар попадает на две страницы.
-            # Тогда весь синк падал на UNIQUE(source, source_key) и сутки
-            # оставались без обновления (прод, 25.09.2026). Побеждает последняя
-            # версия строки — она свежее.
-            seen: dict[str, dict] = {}
-            for o in offers:
-                if not o.get("source_key") or not o.get("name"):
-                    continue
-                seen[str(o["source_key"])] = o
-            if len(seen) != sum(1 for o in offers if o.get("source_key") and o.get("name")):
-                logger.warning(
-                    "procurement: source=%s принёс дубли source_key, оставлено %d уникальных",
-                    source,
-                    len(seen),
-                )
-            for o in seen.values():
-                extra = o.get("extra")
-                session.add(
-                    ProductOffer(
-                        source=source,
-                        source_key=str(o["source_key"]),
-                        supplier_name=o.get("supplier_name"),
-                        article=o.get("article"),
-                        name=o["name"][:500],
-                        brand=o.get("brand"),
-                        category=o.get("category"),
-                        price=o.get("price"),
-                        currency=o.get("currency", "KZT"),
-                        in_stock=o.get("in_stock"),
-                        stock_qty=o.get("stock_qty"),
-                        lead_time_days=o.get("lead_time_days"),
-                        url=o.get("url"),
-                        extra=json.dumps(extra, ensure_ascii=False) if extra else None,
-                        workspace_id=workspace_id,
-                    )
-                )
-                rows += 1
+            dropped = (await session.execute(del_stmt)).rowcount
+
             await session.commit()
-            logger.info("procurement: replaced %d offers for source=%s", rows, source)
-            return rows
+
+        logger.info(
+            "procurement: replaced %d offers for source=%s (убрано устаревших: %d)",
+            len(values),
+            source,
+            dropped or 0,
+        )
+        return len(values)
 
     async def count(self, source: Optional[str] = None, workspace_id: int = 1) -> int:
         async with AsyncSessionLocal() as session:
