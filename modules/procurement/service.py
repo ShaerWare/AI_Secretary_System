@@ -112,14 +112,54 @@ _STOPWORDS = {
     "квт",
     "вт",
     "ква",
+    # «ампер» словом: на «нужен АВР 630 ампер» выдача состояла из АМПЕРМЕТРОВ —
+    # «ампер» это единственный значимый (≥4 символов) токен такого запроса, он
+    # стеммится в «ампер» и попадает в «амперметр», а «авр» и «630» короткие и
+    # значимыми не считаются, поэтому сами АВР отбрасывались как шум.
+    "ампер",
+    "ампера",
+    "амперах",
+    "амперы",
 }
 
 
+# Кириллица и латиница в каталоге перемешаны: «630А 3Р» у одной позиции и
+# «630A 3P» у другой выглядят одинаково, но это разные символы. В каталоге
+# сайта 11 501 позиция с кириллической А/Р/В после цифры и 10 167 — с
+# латинской, то есть он расколот почти пополам, и запрос «АВР 630А» видел
+# только свою половину: «ввод резерва АВР NXZM-630S/3B 3P 630A» (латинская A)
+# выпадал из выдачи целиком, хотя лежал на складе в 36 штуках, — токен «630а»
+# не находился в названии, значимых совпадений оставалось ноль, и строку
+# отбрасывал фильтр случайных чисел.
+#
+# Сворачиваем визуально неотличимые кириллические буквы в латиницу ТОЛЬКО для
+# сравнения — в выдачу название идёт как есть. Обе стороны сворачиваются
+# одинаково, поэтому русские слова по-прежнему совпадают сами с собой.
+# Только визуально неотличимые пары, и в нижнем регистре: сравнение идёт по
+# `.lower()`, а «630В» → «630в» против латинского «630b». Буквы вроде б/г/з
+# здесь НЕ нужны: «б» это не «6», и такая подмена давала бы ложные совпадения
+# с цифрами. Набор покрывает то, чем пишут электротехнические номиналы:
+# A (ампер), B (вольт), P (полюс), H (НО/NO), C (кривая C), K (кА), M, T, E, O, Y, X.
+_HOMOGLYPHS = str.maketrans(
+    "аеокмнорстухв",
+    "aeokmhopctyxb",
+)
+
+
+def _fold(s: str) -> str:
+    """Свернуть кириллические омоглифы в латиницу для сравнения."""
+    return s.translate(_HOMOGLYPHS)
+
+
 def _norm(s: Optional[str]) -> str:
-    """Lowercase + strip punctuation/space, Unicode-aware (handles Cyrillic)."""
+    """Lowercase + strip punctuation/space, Unicode-aware (handles Cyrillic).
+
+    Омоглифы сворачиваются: артикул «630А-3Р» должен находиться запросом
+    «630A-3P» и наоборот.
+    """
     if not s:
         return ""
-    return _TOKEN_RE.sub("", s.lower())
+    return _fold(_TOKEN_RE.sub("", s.lower()))
 
 
 def _tokens(s: str) -> List[str]:
@@ -377,13 +417,15 @@ class OfferService:
         («модульный не подходит») — see ``query_builder.build_search_query``.
         """
         q_norm = _norm(query)
-        q_tokens = _expand_query_tokens(query)
+        # Токены сворачиваем ПОСЛЕ стоп-слов и синонимов: в `_STOPWORDS` лежат
+        # русские слова («в», «для»), и свёрнутый токен в них бы не нашёлся.
+        q_tokens = [_fold(t) for t in _expand_query_tokens(query)]
         if not q_norm and not q_tokens:
             return []
         q_stems = {_stem(t) for t in q_tokens if len(t) >= 4}
         # Терминология, от которой клиент отказался («модульный не подходит»).
         # Без этого уточняющая реплика возвращала ровно то, что отвергли.
-        excl_stems = [_stem(t) for x in (exclude or []) for t in _tokens(x) if len(t) >= 4]
+        excl_stems = [_stem(_fold(t)) for x in (exclude or []) for t in _tokens(x) if len(t) >= 4]
         # The first significant word of a request is what is being asked for;
         # everything after it is usually a spec («контактор … катушка 220В» —
         # the coil voltage of a contactor, not a coil). Rows whose name starts
@@ -416,9 +458,11 @@ class OfferService:
         for r in rows:
             art_norm = _norm(r.article)
             # include category so items with terse names (1C exports) stay findable
-            name_low = (r.name or "").lower()
+            # Сворачиваем омоглифы: «630A» латиницей и «630А» кириллицей — одно
+            # и то же для сопоставления. В выдачу название идёт как есть.
+            name_low = _fold((r.name or "").lower())
             if r.category:
-                name_low = f"{name_low} {r.category.lower()}"
+                name_low = f"{name_low} {_fold(r.category.lower())}"
             if q_norm and art_norm and art_norm == q_norm:
                 primary, misses = 0, 0
             elif len(q_norm) >= 4 and art_norm and q_norm in art_norm:
@@ -447,7 +491,7 @@ class OfferService:
             # happens to hit (it matches «катушка», «контактор» and the voltage).
             if excl_stems and any(e in name_low for e in excl_stems):
                 continue
-            name_words = _tokens(r.name or "")
+            name_words = [_fold(w) for w in _tokens(r.name or "")]
             accessory = (
                 1
                 if _is_accessory_for_query(
