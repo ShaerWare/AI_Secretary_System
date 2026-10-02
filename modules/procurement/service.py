@@ -400,6 +400,7 @@ class OfferService:
         in_stock_only: bool = False,
         workspace_id: int = 1,
         exclude: Optional[List[str]] = None,
+        with_supply: bool = True,
     ) -> List[dict]:
         """Rank real offers against a free-text position query.
 
@@ -415,6 +416,14 @@ class OfferService:
 
         ``exclude`` drops rows carrying terminology the client has ruled out
         («модульный не подходит») — see ``query_builder.build_search_query``.
+
+        ``with_supply=False`` отключает догрузку остатков из прайсов поставщиков
+        (`_attach_supply`). Клиентским каналам её давать нельзя: прайсы —
+        внутренний срез на дату файла, и он устаревает. Реальный случай
+        (02.10.2026): по блокам питания DR-*-24 сайт остатка не подтверждал,
+        а июльский прайс SunWell/EKF показывал 34 шт. — клиент получил
+        «✅ В наличии» и ответил «их же нет в наличии». Наличие и цены клиенту
+        идут ТОЛЬКО с сайта; прайсы остаются менеджеру, который видит и дату.
         """
         q_norm = _norm(query)
         # Токены сворачиваем ПОСЛЕ стоп-слов и синонимов: в `_STOPWORDS` лежат
@@ -559,7 +568,8 @@ class OfferService:
             # spam subjects with a couple of incidental short hits aren't "ready".
             d["confident"] = primary in (0, 1) or sig_matched >= 2
             out.append(d)
-        await self._attach_supply(out, workspace_id=workspace_id)
+        if with_supply:
+            await self._attach_supply(out, workspace_id=workspace_id)
         return out
 
     async def _attach_supply(self, offers: List[dict], workspace_id: int = 1) -> None:
