@@ -64,6 +64,8 @@ def test_supply_label_shows_supplier_and_stock_to_manager():
         True,
     )
     assert "SunWell / EKF" in label and "12" in label and "2026-07-24" in label
+    # «загружен», а не «от»: это дата нашего разбора, а не дата самого файла.
+    assert "загружен" in label, label
 
 
 def test_supply_label_unknown_stock_in_price_list():
@@ -220,3 +222,21 @@ async def test_scope_key_does_not_touch_a_neighbour_supplier(svc):
     )
     names = [o["name"] for o in await svc.search("реле", limit=10)]
     assert "Реле Аксима" in names and "Реле Санвел" in names
+
+
+async def test_client_channel_gets_site_stock_only(svc):
+    """Остатки из прайсов поставщиков клиенту не уходят.
+
+    Реальный случай (02.10.2026): по блокам питания DR-*-24 сайт остатка не
+    подтверждал, а июльский прайс SunWell/EKF показывал 34 шт. — клиент получил
+    «✅ В наличии» и ответил «их же нет в наличии». Прайс это внутренний срез на
+    дату файла; наличие и цены клиенту идут ТОЛЬКО с сайта.
+    """
+    site_only = await svc.search("дифференциальный автомат NXBLE", limit=5, with_supply=False)
+    assert site_only, "поиск ничего не вернул"
+    assert all("supply" not in o for o in site_only if o["source"] == "site")
+
+    # Менеджеру — по-прежнему с прайсом.
+    for_manager = await svc.search("дифференциальный автомат NXBLE", limit=5, with_supply=True)
+    site_rows = [o for o in for_manager if o["source"] == "site" and o["article"] == "819983"]
+    assert site_rows and site_rows[0]["supply"]["available"] is True
