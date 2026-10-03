@@ -224,19 +224,27 @@ async def test_scope_key_does_not_touch_a_neighbour_supplier(svc):
     assert "Реле Аксима" in names and "Реле Санвел" in names
 
 
-async def test_client_channel_gets_site_stock_only(svc):
-    """Остатки из прайсов поставщиков клиенту не уходят.
+async def test_client_also_gets_supplier_stock_but_never_the_supplier_name(svc):
+    """Остатки из прайсов идут и клиенту — директор подтвердил актуальность файлов.
 
-    Реальный случай (02.10.2026): по блокам питания DR-*-24 сайт остатка не
-    подтверждал, а июльский прайс SunWell/EKF показывал 34 шт. — клиент получил
-    «✅ В наличии» и ответил «их же нет в наличии». Прайс это внутренний срез на
-    дату файла; наличие и цены клиенту идут ТОЛЬКО с сайта.
+    Беда 02.10.2026 была не в источнике, а в формулировке: пометку «есть у
+    поставщика» модель сжимала в «✅ В наличии», и клиент отвечал «их же нет в
+    наличии». Поэтому источник включён, а склад и прайс разведены словами —
+    и имя поставщика клиенту всё равно не уходит.
     """
-    site_only = await svc.search("дифференциальный автомат NXBLE", limit=5, with_supply=False)
-    assert site_only, "поиск ничего не вернул"
-    assert all("supply" not in o for o in site_only if o["source"] == "site")
+    offers = await svc.search("дифференциальный автомат NXBLE", limit=5)
+    site = [o for o in offers if o["source"] == "site" and o["article"] == "819983"]
+    assert site and site[0]["supply"]["available"] is True
 
-    # Менеджеру — по-прежнему с прайсом.
-    for_manager = await svc.search("дифференциальный автомат NXBLE", limit=5, with_supply=True)
-    site_rows = [o for o in for_manager if o["source"] == "site" and o["article"] == "819983"]
-    assert site_rows and site_rows[0]["supply"]["available"] is True
+    label = _supply_label(site[0]["supply"], False)
+    assert "поставщика" in label
+    assert "SunWell" not in label, "имя поставщика клиенту раскрывать нельзя"
+    assert "наличии" not in label, "формулировку нельзя прочитать как наш склад"
+    assert "срок" in label
+
+
+async def test_search_can_still_skip_supplier_lookup(svc):
+    """`with_supply=False` остаётся для мест, где прайс не к месту (КП, триаж)."""
+    offers = await svc.search("дифференциальный автомат NXBLE", limit=5, with_supply=False)
+    assert offers
+    assert all("supply" not in o for o in offers if o["source"] == "site")
