@@ -8,7 +8,7 @@
 
 import pytest
 
-from modules.procurement.site_adapter import _stock
+from modules.procurement.site_adapter import _availability
 
 
 @pytest.mark.parametrize(
@@ -27,4 +27,6 @@ from modules.procurement.site_adapter import _stock
     ],
 )
 def test_stock_mapping(product, expected):
-    assert _stock(product) is expected
+    # `_stock` стал `_availability` (отдаёт ещё остаток и срок) — проверяем
+    # то же свойство на новом имени.
+    assert _availability(product)["in_stock"] is expected

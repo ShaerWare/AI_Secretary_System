@@ -39,3 +39,12 @@ def test_supplier_sync_goes_after_the_catalog():
     """Оба источника пишут в одну таблицу — расходиться по времени дешевле."""
     with _at(0, 0):
         assert _seconds_until(23, 50) > _seconds_until(23, 30)
+
+
+def test_feed_sync_sits_between_catalog_and_suppliers():
+    """Фид кладёт наличие ПОВЕРХ строк сайта, а синк каталога их перезаписывает.
+
+    Пойди фид первым — пометка жила бы десять минут до синка каталога.
+    """
+    with _at(0, 0):
+        assert _seconds_until(23, 30) < _seconds_until(23, 40) < _seconds_until(23, 50)

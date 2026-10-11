@@ -14,6 +14,7 @@ from typing import List, Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
+from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from db.database import AsyncSessionLocal
@@ -24,8 +25,14 @@ from modules.procurement.models import SOURCE_SITE, SOURCE_SUPPLIER, ProductOffe
 logger = logging.getLogger(__name__)
 
 # Ranking preference between sources when the same position appears in several.
-# Own stock first, then EKF (direct API), then generic supplier price lists.
-SOURCE_PRIORITY = {"site": 0, "ekf": 1, "supplier": 2}
+# Own catalog first, then the availability feed (own assortment, just not on the
+# site yet), then EKF (direct API), then generic supplier price lists.
+SOURCE_PRIORITY = {"site": 0, "feed": 1, "ekf": 2, "supplier": 3}
+
+# Метка в `extra` у строк каталога, наличие которых пришло из фида. По ней
+# прогон снимает пометку прошлого раза: без этого проданная позиция, выпавшая
+# из свежего фида, продолжала бы обещать склад.
+FEED_MARK = "feed_stock"
 
 _TOKEN_RE = re.compile(r"[^\w]+", re.UNICODE)
 
@@ -384,6 +391,126 @@ class OfferService:
             dropped or 0,
         )
         return len(values)
+
+    @retry_on_busy()
+    async def apply_feed_stock(
+        self,
+        items: List[dict],
+        *,
+        target_source: str = SOURCE_SITE,
+        workspace_id: int = 1,
+        as_of: Optional[str] = None,
+    ) -> dict:
+        """Наложить наличие из фида на строки каталога, сопоставив по артикулу.
+
+        Фид и каталог делят пространство артикулов (``vendorCode`` == ``sku``:
+        на замере 11.10.2026 совпало 2 293 из 2 299, цена — у всех до тенге),
+        поэтому наличие обновляется ПОВЕРХ существующей строки, а не приходит
+        отдельным оффером: иначе в окно выдачи попадали бы две почти
+        одинаковые строки на один товар.
+
+        Сопоставление точное, по индексированной колонке ``article``: шесть
+        непопавших артикулов — это позиции, которых в каталоге нет вообще, и
+        вызывающий пишет их отдельным источником. Нормализацию регистра здесь
+        не делаем намеренно — ``upper(trim(article))`` превратил бы запрос в
+        полное сканирование офферов.
+
+        Возвращает ``{updated, cleared, matched_articles}``.
+        """
+        by_article: dict[str, dict] = {}
+        for item in items:
+            article = (item.get("article") or "").strip()
+            if article:
+                by_article[article] = item
+        if not by_article:
+            return {"updated": 0, "cleared": 0, "matched_articles": set()}
+
+        updated = 0
+        cleared = 0
+        matched: set[str] = set()
+
+        async with AsyncSessionLocal() as session:
+            # 1. Снять пометки прошлого прогона. Позиция, которую раскупили и
+            # которая выпала из свежего фида, иначе навсегда осталась бы «в
+            # наличии»: §5.5 запрещает обещать склад, которого нет. Сброс в
+            # NULL — честное «не знаем»; ближайший синк каталога вернёт то, что
+            # знают пер-поставщиковые меты товара.
+            stale = await session.execute(
+                sa_select(ProductOffer.id, ProductOffer.extra).where(
+                    ProductOffer.source == target_source,
+                    ProductOffer.workspace_id == workspace_id,
+                    ProductOffer.extra.like(f'%"{FEED_MARK}"%'),
+                )
+            )
+            for row_id, extra_raw in stale.all():
+                extra = self._load_extra(extra_raw)
+                extra.pop(FEED_MARK, None)
+                await session.execute(
+                    sa_update(ProductOffer)
+                    .where(ProductOffer.id == row_id)
+                    .values(
+                        in_stock=None,
+                        stock_qty=None,
+                        lead_time_days=None,
+                        extra=json.dumps(extra, ensure_ascii=False) if extra else None,
+                    )
+                )
+                cleared += 1
+
+            # 2. Наложить свежие данные. Чанк — ниже лимита параметров SQLite.
+            articles = list(by_article)
+            for start in range(0, len(articles), self._UPSERT_CHUNK):
+                chunk = articles[start : start + self._UPSERT_CHUNK]
+                rows = await session.execute(
+                    sa_select(ProductOffer.id, ProductOffer.article, ProductOffer.extra).where(
+                        ProductOffer.source == target_source,
+                        ProductOffer.workspace_id == workspace_id,
+                        ProductOffer.article.in_(chunk),
+                    )
+                )
+                for row_id, article, extra_raw in rows.all():
+                    item = by_article.get((article or "").strip())
+                    if not item:
+                        continue
+                    extra = self._load_extra(extra_raw)
+                    extra[FEED_MARK] = {
+                        "qty": item.get("stock_qty"),
+                        "lead_time_days": item.get("lead_time_days"),
+                        "as_of": as_of,
+                    }
+                    await session.execute(
+                        sa_update(ProductOffer)
+                        .where(ProductOffer.id == row_id)
+                        .values(
+                            in_stock=True,
+                            stock_qty=item.get("stock_qty"),
+                            lead_time_days=item.get("lead_time_days"),
+                            extra=json.dumps(extra, ensure_ascii=False),
+                        )
+                    )
+                    matched.add(article)
+                    updated += 1
+
+            await session.commit()
+
+        logger.info(
+            "procurement feed overlay: обновлено %d строк source=%s, снято пометок %d",
+            updated,
+            target_source,
+            cleared,
+        )
+        return {"updated": updated, "cleared": cleared, "matched_articles": matched}
+
+    @staticmethod
+    def _load_extra(raw: Optional[str]) -> dict:
+        """`extra` хранится текстом; чужой JSON не должен ломать прогон."""
+        if not raw:
+            return {}
+        try:
+            value = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
 
     async def count(self, source: Optional[str] = None, workspace_id: int = 1) -> int:
         async with AsyncSessionLocal() as session:
