@@ -490,18 +490,25 @@ async def _inject_offer_context(
         # поставщика и закупочная цена по-прежнему только менеджеру.
         offers = await offer_service.search(search_query, limit=8, exclude=exclude)
 
-        # Supplementary meaning-based context from the catalog collection (rich
-        # descriptions) — helps vague/functional queries («чем питать насос»).
-        # Prices/stock/articles still come ONLY from the exact offers above.
+        # Supplementary meaning-based context — helps vague/functional queries
+        # («чем питать насос»). Prices/stock/articles still come ONLY from the
+        # exact offers above.
+        #
+        # Читаем ВСЕ коллекции сессии, а не только ту, что включила
+        # procurement-инъекцию: раньше брался `cat_ids[0]`, то есть каталог, и
+        # любая другая привязанная коллекция в такой сессии игнорировалась
+        # целиком. Коллекция наличия (`stalker-stock`) ровно такая — её
+        # привязывают рядом с каталогом, и без этого она была бы мёртвым
+        # грузом. Выбор «первого элемента пересечения множеств» заодно был
+        # невоспроизводим при двух каталожных коллекциях.
         semantic_ctx = ""
         try:
             from app.dependencies import get_container
 
             wiki = get_container().wiki_rag_service
-            cat_ids = list(_PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids))
-            if wiki and cat_ids:
-                ctx = await wiki.retrieve_async(
-                    search_query, top_k=3, max_chars=1200, collection_id=cat_ids[0]
+            if wiki and collection_ids:
+                ctx = await wiki.retrieve_multi_async(
+                    search_query, collection_ids, top_k=3, max_chars=1200
                 )
                 semantic_ctx = (ctx or "").strip()
         except Exception as e:
