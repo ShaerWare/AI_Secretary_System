@@ -1,8 +1,9 @@
 """Procurement domain background tasks: periodic offer syncs.
 
 Rebuilds structured `product_offers` daily — из каталога WooCommerce
-(23:30 UTC, вскоре после `woocommerce-sync`) и из файлов прайсов поставщиков
-(23:50 UTC, после каталога), чтобы единый поиск видел свежие цены и остатки.
+(23:30 UTC, вскоре после `woocommerce-sync`), из YML-фида наличия (23:40 UTC,
+поверх каталога) и из файлов прайсов поставщиков (23:50 UTC), чтобы единый
+поиск видел свежие цены, остатки и сроки.
 """
 
 import asyncio
@@ -86,4 +87,37 @@ async def procurement_supplier_sync() -> None:
             )
         except Exception as e:
             logger.warning("procurement supplier sync error: %s", e)
+            await asyncio.sleep(3600)  # on error retry in 1h
+
+
+async def procurement_feed_sync() -> None:
+    """Суточный разбор YML-фида наличия в 23:40 UTC.
+
+    Строго ПОСЛЕ синка каталога (23:30): фид не создаёт свои строки, а
+    проставляет наличие и срок поверх строк сайта, а синк каталога их
+    перезаписывает целиком. Обратный порядок означал бы, что пометка живёт
+    десять минут и исчезает.
+
+    URL в env `PROCUREMENT_FEED_URL`; не задан — задача молча спит (у
+    остальных тенантов фида нет).
+    """
+    await asyncio.sleep(210)  # warmup, и пропускаем вперёд синк каталога
+    while True:
+        wait_seconds = _seconds_until(23, 40)
+        logger.info("procurement feed sync scheduled in %.1fh", wait_seconds / 3600)
+        await asyncio.sleep(wait_seconds)
+        try:
+            from modules.procurement.feed_adapter import FEED_URL, sync_feed_offers
+
+            if not FEED_URL:
+                continue
+            stats = await sync_feed_offers()
+            logger.info(
+                "procurement feed sync: %d позиций, обновлено строк каталога %d, своих %d",
+                stats["feed_items"],
+                stats["site_rows_updated"],
+                stats["own_rows"],
+            )
+        except Exception as e:
+            logger.warning("procurement feed sync error: %s", e)
             await asyncio.sleep(3600)  # on error retry in 1h

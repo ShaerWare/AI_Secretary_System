@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 
 from auth_manager import User, require_permission
 from modules.monitoring.service import audit_service
-from modules.procurement.models import SOURCE_EKF, SOURCE_SITE, SOURCE_SUPPLIER
+from modules.procurement.models import SOURCE_EKF, SOURCE_FEED, SOURCE_SITE, SOURCE_SUPPLIER
 from modules.procurement.service import offer_service
 from modules.procurement.site_adapter import sync_site_offers
 
@@ -29,6 +29,7 @@ async def procurement_status(user: User = Depends(require_permission("sales", "v
             SOURCE_SITE: await offer_service.count(source=SOURCE_SITE),
             SOURCE_EKF: await offer_service.count(source=SOURCE_EKF),
             SOURCE_SUPPLIER: await offer_service.count(source=SOURCE_SUPPLIER),
+            SOURCE_FEED: await offer_service.count(source=SOURCE_FEED),
         },
         "total": await offer_service.count(),
     }
@@ -130,3 +131,24 @@ async def procurement_sync_suppliers(user: User = Depends(require_permission("sa
         details={"suppliers": results},
     )
     return {"suppliers": results}
+
+
+@router.post("/sync-feed")
+async def procurement_sync_feed(user: User = Depends(require_permission("sales", "edit"))):
+    """Забрать YML-фид наличия: остатки/сроки поверх каталога + RAG-коллекция.
+
+    Фид не создаёт отдельный каталог — он проставляет наличие существующим
+    строкам сайта по артикулу. Прогон вручную безопасен в любом порядке:
+    пометки прошлого раза снимаются в начале.
+    """
+    from modules.procurement.feed_adapter import sync_feed_offers
+
+    result = await sync_feed_offers()
+    await audit_service.log(
+        action="sync",
+        resource="procurement_offers",
+        resource_id=SOURCE_FEED,
+        user_id=user.username,
+        details=result,
+    )
+    return result

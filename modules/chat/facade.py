@@ -508,7 +508,10 @@ async def _inject_offer_context(
             logger.warning("catalog semantic context failed: %s", e)
 
         if not manager_ctx:
-            offers = [o for o in offers if o.get("source") == "site"]
+            # Клиенту — только собственный ассортимент: каталог сайта и позиции
+            # фида наличия (там розничная цена и наш же остаток). Строки
+            # поставщиков с дилерскими ценами клиентским каналам не показываем.
+            offers = [o for o in offers if o.get("source") in ("site", "feed")]
         if not offers:
             block = (
                 "\n\n--- ПОИСК ПО БАЗЕ ---\n"

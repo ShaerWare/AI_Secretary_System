@@ -27,6 +27,7 @@ from db.database import Base
 SOURCE_SITE = "site"  # own WooCommerce catalog (stalkerelectric.kz)
 SOURCE_EKF = "ekf"  # EKF IMS partner API
 SOURCE_SUPPLIER = "supplier"  # parsed supplier xlsx/csv price lists
+SOURCE_FEED = "feed"  # YML-фид наличия (позиции, которых нет в каталоге сайта)
 
 
 class ProductOffer(Base):
