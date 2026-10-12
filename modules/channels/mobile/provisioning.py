@@ -173,7 +173,9 @@ async def ensure_default_instances(session) -> None:
                 logger.warning("ensure_default_instances: missing collection %s", slug)
 
         prompt_text = _read_prompt(spec["prompt_file"], spec["prompt_fallback"])
-        rag_mode = "selected" if collection_ids else "all"
+        # Без коллекций — без RAG вообще. "all" подмешивал бы все коллекции
+        # платформы, включая каталог StalkerElectric, в промпт-онли ассистента.
+        rag_mode = "selected" if collection_ids else "none"
         collection_ids_json = json.dumps(collection_ids) if collection_ids else None
 
         existing = await session.get(MobileAppInstance, spec["id"])

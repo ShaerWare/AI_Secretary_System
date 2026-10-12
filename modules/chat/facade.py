@@ -44,8 +44,18 @@ _PROCUREMENT_CATALOG_COLLECTIONS = {
 }
 
 
-def _is_procurement_session(collection_ids: list[int]) -> bool:
-    """True if the session is attached to a procurement catalog collection."""
+def _is_procurement_session(collection_ids: list[int], rag_mode: str | None = None) -> bool:
+    """True if the session is EXPLICITLY attached to a procurement catalog collection.
+
+    ``rag_mode == "all"`` never counts: it expands to every enabled collection,
+    the catalog included, so any assistant without its own collections (the
+    prompt-only «Программист») was silently turned into the StalkerElectric
+    sales desk — on «напиши бота для Binance» it answered «помогаю только по
+    электротехнике, могу передать менеджеру». Procurement is opt-in by attaching
+    the catalog, not by default.
+    """
+    if rag_mode == "all":
+        return False
     return bool(collection_ids) and bool(
         _PROCUREMENT_CATALOG_COLLECTIONS.intersection(collection_ids)
     )
@@ -851,7 +861,7 @@ class ChatServiceImpl:
         params = merge_params(gen_params, persona)
 
         if not use_agentic:
-            if _is_procurement_session(coll_ids):
+            if _is_procurement_session(coll_ids, rag_mode):
                 # Procurement sessions use structured offer search (real prices/
                 # stock across site + suppliers) instead of wiki-RAG injection.
                 prompt = await _inject_offer_context(
@@ -984,7 +994,7 @@ class ChatServiceImpl:
         params = merge_params(gen_params, persona)
 
         if not use_agentic:
-            if _is_procurement_session(coll_ids):
+            if _is_procurement_session(coll_ids, rag_mode):
                 # Procurement sessions use structured offer search (real prices/
                 # stock across site + suppliers) instead of wiki-RAG injection.
                 prompt = await _inject_offer_context(
