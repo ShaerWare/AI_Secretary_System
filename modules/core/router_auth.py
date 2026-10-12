@@ -111,24 +111,24 @@ async def admin_update_profile(
 @router.post("/change-password")
 @limiter.limit(RATE_LIMIT_AUTH)
 async def admin_change_password(
-    http_request: Request,
-    request: ChangePasswordRequest,
+    request: Request,
+    body: ChangePasswordRequest,
     user: User = Depends(require_own_account_edit),
 ):
     """Change current user's password. Revokes all sessions and issues a new token."""
     # Verify old password
-    auth_result = await authenticate_user(user.username, request.old_password)
+    auth_result = await authenticate_user(user.username, body.old_password)
     if not auth_result:
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     # Update password (this also revokes all sessions via hook)
-    success = await user_service.update_password(user.id, request.new_password)
+    success = await user_service.update_password(user.id, body.new_password)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update password")
 
     # Create a fresh session for the current user (re-login)
-    ip = http_request.client.host if http_request.client else None
-    user_agent = http_request.headers.get("user-agent")
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     new_login = await create_session(
         username=user.username,
         role=user.role,
