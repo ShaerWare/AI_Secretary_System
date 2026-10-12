@@ -102,7 +102,9 @@ async function changePassword() {
   }
   passwordSaving.value = true;
   try {
-    await profileApi.changePassword(oldPassword.value, newPassword.value);
+    const resp = await profileApi.changePassword(oldPassword.value, newPassword.value);
+    // The old session is revoked server-side; keep using the reissued token
+    if (resp.access_token) await auth.setToken(resp.access_token);
     oldPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";

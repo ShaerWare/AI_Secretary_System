@@ -17,7 +17,6 @@ from auth_manager import (
     get_auth_status,
     get_current_user,
     get_user_permissions,
-    require_permission,
     revoke_session,
 )
 from modules.core.service import user_service, user_session_service
@@ -25,6 +24,17 @@ from modules.monitoring.service import audit_service
 
 
 router = APIRouter(prefix="/admin/auth", tags=["auth"])
+
+
+async def require_own_account_edit(user: User = Depends(get_current_user)) -> User:
+    """Any signed-in user may edit their own account, except the shared guest/demo one.
+
+    Gating this on ``settings:edit`` (the system-settings module, admin/owner only) left
+    ordinary users with a 403 on their own password and display name.
+    """
+    if user.role == "guest":
+        raise HTTPException(status_code=403, detail="Guest account cannot be changed")
+    return user
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -87,7 +97,7 @@ async def admin_get_profile(user: User = Depends(get_current_user)):
 @router.put("/profile")
 async def admin_update_profile(
     request: UpdateProfileRequest,
-    user: User = Depends(require_permission("settings", "edit")),
+    user: User = Depends(require_own_account_edit),
 ):
     """Update user profile (display name)."""
     result = await user_service.update_profile(user.id, display_name=request.display_name)
@@ -103,7 +113,7 @@ async def admin_update_profile(
 async def admin_change_password(
     http_request: Request,
     request: ChangePasswordRequest,
-    user: User = Depends(require_permission("settings", "edit")),
+    user: User = Depends(require_own_account_edit),
 ):
     """Change current user's password. Revokes all sessions and issues a new token."""
     # Verify old password
