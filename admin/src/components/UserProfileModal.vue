@@ -76,6 +76,9 @@ async function changePassword() {
       body: JSON.stringify({ old_password: oldPassword.value, new_password: newPassword.value })
     })
     if (resp.ok) {
+      // The old session is revoked server-side; keep using the reissued token
+      const data = await resp.json()
+      if (data.access_token) authStore.setToken(data.access_token)
       toast.success(t('profile.passwordChanged'))
       oldPassword.value = ''
       newPassword.value = ''

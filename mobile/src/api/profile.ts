@@ -22,7 +22,7 @@ export const profileApi = {
     }),
 
   changePassword: (oldPassword: string, newPassword: string) =>
-    api.post<{ status: string }>("/admin/auth/change-password", {
+    api.post<{ access_token: string }>("/admin/auth/change-password", {
       old_password: oldPassword,
       new_password: newPassword,
     }),

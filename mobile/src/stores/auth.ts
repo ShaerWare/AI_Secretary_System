@@ -94,6 +94,13 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  // Swap in a token reissued by the backend (e.g. after a password change revokes
+  // every existing session) without a full re-login.
+  async function setToken(newToken: string) {
+    token.value = newToken;
+    await Preferences.set({ key: TOKEN_KEY, value: newToken });
+  }
+
   async function logout() {
     // Unregister push token before clearing auth (needs token for API call)
     try {
@@ -135,6 +142,7 @@ export const useAuthStore = defineStore("auth", () => {
     loadToken,
     login,
     logout,
+    setToken,
     isTokenExpired,
     getAuthHeaders,
   };
