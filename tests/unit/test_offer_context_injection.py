@@ -111,3 +111,11 @@ async def test_non_procurement_session_is_untouched(wired):
 
     assert prompt == "исходный промпт"
     wired.retrieve_multi_async.assert_not_awaited()
+
+
+def test_rag_mode_all_never_enables_procurement():
+    """«all» expands to every collection, catalog included — that must not turn a
+    prompt-only assistant (Программист) into the StalkerElectric sales desk."""
+    assert facade._is_procurement_session([1, 6, 60], "all") is False
+    assert facade._is_procurement_session([6], "selected") is True
+    assert facade._is_procurement_session([1, 60], "selected") is False
