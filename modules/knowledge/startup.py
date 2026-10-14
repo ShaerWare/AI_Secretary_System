@@ -202,17 +202,62 @@ async def init_wiki_rag(container, deployment_mode: str, task_registry) -> None:
                     from app.services.embedding_provider import GeminiEmbeddingProvider
 
                     embedding_provider = GeminiEmbeddingProvider(api_key=api_key)
-                    logger.info("✅ Wiki RAG: cloud embeddings (Gemini)")
-                elif api_key and cloud_config.get("base_url"):
+                    logger.info("✅ Wiki RAG: cloud embeddings (Gemini, active LLM)")
+                elif provider_type in ("openai", "deepseek", "openrouter") and api_key:
                     from app.services.embedding_provider import OpenAIEmbeddingProvider
 
                     embedding_provider = OpenAIEmbeddingProvider(
                         api_key=api_key,
-                        base_url=cloud_config["base_url"],
+                        base_url=cloud_config.get("base_url") or "https://api.openai.com",
                     )
-                    logger.info("✅ Wiki RAG: cloud embeddings (OpenAI-compatible)")
+                    logger.info("✅ Wiki RAG: cloud embeddings (OpenAI-compatible, active LLM)")
             except Exception as cloud_err:
                 logger.debug(f"Wiki RAG: cloud embeddings not available: {cloud_err}")
+
+        # Embeddings-capable provider from DB (decoupled from active LLM).
+        # Lets chat use providers without /v1/embeddings (e.g. claude_bridge) while
+        # still getting semantic search via any enabled gemini/openai provider.
+        if not vector_search_configured and not embedding_provider:
+            try:
+                from modules.llm.service import cloud_provider_service
+
+                gemini_providers = await cloud_provider_service.get_by_type("gemini")
+                if gemini_providers:
+                    full = await cloud_provider_service.get_provider_with_key(
+                        gemini_providers[0]["id"]
+                    )
+                    if full and full.get("api_key"):
+                        from app.services.embedding_provider import GeminiEmbeddingProvider
+
+                        embedding_provider = GeminiEmbeddingProvider(api_key=full["api_key"])
+                        logger.info(
+                            "✅ Wiki RAG: cloud embeddings (Gemini from DB: %s)",
+                            gemini_providers[0]["id"],
+                        )
+
+                if not embedding_provider:
+                    for ptype in ("openai", "deepseek", "openrouter"):
+                        candidates = await cloud_provider_service.get_by_type(ptype)
+                        if not candidates:
+                            continue
+                        full = await cloud_provider_service.get_provider_with_key(
+                            candidates[0]["id"]
+                        )
+                        if full and full.get("api_key"):
+                            from app.services.embedding_provider import OpenAIEmbeddingProvider
+
+                            embedding_provider = OpenAIEmbeddingProvider(
+                                api_key=full["api_key"],
+                                base_url=full.get("base_url") or "https://api.openai.com",
+                            )
+                            logger.info(
+                                "✅ Wiki RAG: cloud embeddings (%s from DB: %s)",
+                                ptype,
+                                candidates[0]["id"],
+                            )
+                            break
+            except Exception as db_err:
+                logger.debug(f"Wiki RAG: DB-provider embeddings lookup failed: {db_err}")
 
         if embedding_provider:
             wiki_rag.set_embedding_provider(embedding_provider)
