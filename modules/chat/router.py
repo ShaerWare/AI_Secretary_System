@@ -1163,9 +1163,9 @@ async def admin_summarize_branch(
     ]
 
     try:
-        response_text = llm_service.generate_response_from_messages(messages, stream=False)
-        if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-            response_text = "".join(response_text)
+        from modules.chat.facade import _join_response
+
+        response_text = await asyncio.to_thread(_join_response, llm_service, messages)
         return {"summary": response_text}
     except Exception as e:
         logger.error(f"❌ Summarize error: {e}")

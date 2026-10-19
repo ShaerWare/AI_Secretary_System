@@ -38,6 +38,8 @@ export interface WhatsAppInstance {
   // Rate limiting
   rate_limit_count?: number | null
   rate_limit_hours?: number | null
+  // Our own product funnel (AI Secretary pitch) — only for our marketing numbers
+  sales_funnel_enabled?: boolean
   // Status (added by API)
   running?: boolean
   pid?: number

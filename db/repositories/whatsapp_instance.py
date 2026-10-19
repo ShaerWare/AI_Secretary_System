@@ -168,6 +168,8 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             # Rate limiting
             rate_limit_count=kwargs.get("rate_limit_count"),
             rate_limit_hours=kwargs.get("rate_limit_hours"),
+            # Own-product funnel: off unless explicitly asked for
+            sales_funnel_enabled=kwargs.get("sales_funnel_enabled", False),
             # Timestamps
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
@@ -216,6 +218,7 @@ class WhatsAppInstanceRepository(BaseRepository[WhatsAppInstance]):
             "rate_limit_count",
             "rate_limit_hours",
             "rag_mode",
+            "sales_funnel_enabled",
         ]
         for field in simple_fields:
             if field in kwargs:

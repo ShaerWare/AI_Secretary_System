@@ -70,6 +70,7 @@ const formData = ref<Partial<WhatsAppInstance>>({
   blocked_phones: [],
   rate_limit_count: null,
   rate_limit_hours: null,
+  sales_funnel_enabled: false,
 })
 
 // Phone input helpers
@@ -267,6 +268,7 @@ function openCreate() {
     blocked_phones: [],
     rate_limit_count: null,
     rate_limit_hours: null,
+    sales_funnel_enabled: false,
   }
   allowedPhonesText.value = ''
   blockedPhonesText.value = ''
@@ -783,6 +785,13 @@ watch(instances, (val) => {
                 <label class="block text-xs text-muted-foreground mb-1">{{ t('whatsapp.systemPrompt') }}</label>
                 <textarea v-model="formData.system_prompt" rows="3" class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm" :placeholder="t('whatsapp.systemPromptPlaceholder')" />
               </div>
+              <div class="mt-3 flex items-start gap-2">
+                <input id="wa-sales-funnel-new" v-model="formData.sales_funnel_enabled" type="checkbox" class="rounded mt-0.5" />
+                <label for="wa-sales-funnel-new" class="text-sm">
+                  {{ t('whatsapp.salesFunnel') }}
+                  <span class="block text-xs text-muted-foreground">{{ t('whatsapp.salesFunnelHint') }}</span>
+                </label>
+              </div>
             </div>
           </div>
           <div class="flex justify-end gap-2 p-4 border-t border-border">
@@ -881,6 +890,13 @@ watch(instances, (val) => {
               <div class="mt-3 flex items-center gap-2">
                 <input id="tts-enabled" v-model="formData.tts_enabled" type="checkbox" class="rounded" />
                 <label for="tts-enabled" class="text-sm">{{ t('whatsapp.ttsEnabled') }}</label>
+              </div>
+              <div class="mt-3 flex items-start gap-2">
+                <input id="wa-sales-funnel" v-model="formData.sales_funnel_enabled" type="checkbox" class="rounded mt-0.5" />
+                <label for="wa-sales-funnel" class="text-sm">
+                  {{ t('whatsapp.salesFunnel') }}
+                  <span class="block text-xs text-muted-foreground">{{ t('whatsapp.salesFunnelHint') }}</span>
+                </label>
               </div>
             </div>
             <div class="border-t border-border pt-3">

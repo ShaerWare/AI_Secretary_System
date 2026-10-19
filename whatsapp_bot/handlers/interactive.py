@@ -26,6 +26,7 @@ from ..sales.texts import (
     WELCOME_TEXT,
 )
 from ..services.whatsapp_client import get_whatsapp_client
+from ..state import sales_funnel_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -83,11 +84,26 @@ async def handle_interactive_reply(phone: str, reply: dict[str, Any]) -> None:
     """
     reply_type = reply.get("type", "")
     reply_id = ""
+    title = ""
 
     if reply_type == "button_reply":
         reply_id = reply.get("button_reply", {}).get("id", "")
+        title = reply.get("button_reply", {}).get("title", "")
     elif reply_type == "list_reply":
         reply_id = reply.get("list_reply", {}).get("id", "")
+        title = reply.get("list_reply", {}).get("title", "")
+
+    # Every interactive flow here belongs to our own product funnel (pitch,
+    # platform FAQ, TZ quiz). A client's bot never sends those menus, so a
+    # reply can only be a stale button from before the funnel was switched
+    # off — answer it as an ordinary message instead of pitching our product.
+    if not sales_funnel_enabled():
+        from .messages import handle_text_message
+
+        logger.info("Funnel disabled; treating interactive reply from %s as text", phone)
+        if title or reply_id:
+            await handle_text_message(phone, title or reply_id, "")
+        return
 
     if not reply_id:
         logger.warning("Interactive reply with no ID from %s: %s", phone, reply)
