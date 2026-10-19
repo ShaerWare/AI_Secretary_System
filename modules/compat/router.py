@@ -4,6 +4,7 @@ Provides backward-compatible API for telephony integration
 and OpenAI-compatible endpoints for OpenWebUI.
 """
 
+import asyncio
 import json
 import logging
 import threading
@@ -16,6 +17,7 @@ import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
+from starlette.concurrency import iterate_in_threadpool
 
 from app.dependencies import get_container
 from cloud_llm_service import CloudLLMService
@@ -71,6 +73,14 @@ class ChatCompletionRequest(BaseModel):
 
 
 # ============== Helper ==============
+
+
+def _complete(llm_svc, messages) -> str:
+    """Blocking non-stream LLM call; run it via asyncio.to_thread."""
+    response = llm_svc.generate_response_from_messages(messages, stream=False)
+    if hasattr(response, "__iter__") and not isinstance(response, str):
+        response = "".join(response)
+    return response
 
 
 def synthesize_with_current_voice(text: str, output_path: str, language: str = "ru"):
@@ -193,7 +203,7 @@ async def chat(request: ConversationRequest):
         raise HTTPException(status_code=503, detail="LLM service not initialized")
 
     try:
-        response = container.llm_service.generate_response(request.text)
+        response = await asyncio.to_thread(container.llm_service.generate_response, request.text)
 
         return {"response": response, "session_id": request.session_id}
 
@@ -235,7 +245,9 @@ async def process_call(audio: UploadFile = File(...)):
 
         # 3. Генерируем ответ (LLM)
         logger.info(f"🤖 LLM для {call_id}")
-        llm_response = container.llm_service.generate_response(recognized_text)
+        llm_response = await asyncio.to_thread(
+            container.llm_service.generate_response, recognized_text
+        )
         logger.info(f"💬 Ответ: {llm_response}")
 
         # Дополняем транскрипцию
@@ -433,7 +445,10 @@ async def chat_completions(request: ChatCompletionRequest):
                 logger.info(f"🎬 Streaming TTS активирован для сессии {session_id}")
 
             try:
-                for text_chunk in llm_svc.generate_response_from_messages(messages, stream=True):
+                gen = await asyncio.to_thread(
+                    llm_svc.generate_response_from_messages, messages, stream=True
+                )
+                async for text_chunk in iterate_in_threadpool(gen):
                     # Отправляем chunk клиенту
                     chunk_data = {
                         "id": chunk_id,
@@ -486,11 +501,7 @@ async def chat_completions(request: ChatCompletionRequest):
     else:
         # Non-streaming response
         try:
-            response_text = llm_svc.generate_response_from_messages(messages, stream=False)
-
-            # Consume generator if it returns one
-            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-                response_text = "".join(response_text)
+            response_text = await asyncio.to_thread(_complete, llm_svc, messages)
 
             return {
                 "id": f"chatcmpl-{int(time.time())}",

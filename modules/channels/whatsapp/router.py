@@ -61,6 +61,8 @@ class WhatsAppInstanceCreateRequest(BaseModel):
     # Rate limiting
     rate_limit_count: Optional[int] = None
     rate_limit_hours: Optional[int] = None
+    # Our own product funnel — off unless this is one of our marketing numbers
+    sales_funnel_enabled: bool = False
 
 
 class WhatsAppInstanceUpdateRequest(BaseModel):
@@ -98,6 +100,8 @@ class WhatsAppInstanceUpdateRequest(BaseModel):
     # RAG
     rag_mode: Optional[str] = None
     knowledge_collection_ids: Optional[List[int]] = None
+    # Our own product funnel
+    sales_funnel_enabled: Optional[bool] = None
 
 
 class WhatsAppShareRequest(BaseModel):

@@ -126,6 +126,13 @@ async def _resolve_session_persona(session: dict, persona_id: str | None):
     return await resolve_persona(session.get("llm_persona"))
 
 
+# Channels that belong to a client, not to our platform. The platform-agent
+# persona introduces itself as «AI-Секретарь24» and explains how to configure
+# an assistant — true for our own web/mobile chat, flatly wrong for a visitor
+# on a client's site or a customer messaging a client's WhatsApp number.
+_CLIENT_CHANNELS = {"widget", "telegram", "whatsapp"}
+
+
 def _build_prompt(
     explicit: str | None,
     session: dict,
@@ -137,11 +144,15 @@ def _build_prompt(
     The persona sits below the session's own prompt so a per-chat override
     always wins, and above ``platform-agent.md`` so attaching a persona
     actually changes the assistant.
+
+    Client channels skip the platform agent entirely: an unconfigured widget or
+    WhatsApp instance used to greet the client's own customers as our product's
+    setup assistant.
     """
     prompt = explicit or session.get("system_prompt")
     if not prompt and persona:
         prompt = persona.system_prompt
-    if not prompt:
+    if not prompt and session.get("source") not in _CLIENT_CHANNELS:
         prompt = _load_platform_agent_prompt()
     if not prompt and hasattr(llm, "get_system_prompt"):
         prompt = llm.get_system_prompt()
@@ -170,6 +181,32 @@ def _generate(llm, messages, *, stream: bool, tools=None, params=None):
     if params and _llm_accepts_params(llm):
         kwargs["params"] = params
     return llm.generate_response_from_messages(messages, **kwargs)
+
+
+_STREAM_END = object()
+
+
+async def _iterate_in_thread(iterable):
+    """Drive a blocking iterator (sync httpx stream) from worker threads.
+
+    LLM providers stream through a sync httpx client; iterating it directly in
+    an async handler parks the event loop on every socket read, so one slow
+    bridge answer froze the whole orchestrator (health, login, widgets).
+    """
+    iterator = iter(iterable)
+    while True:
+        item = await asyncio.to_thread(next, iterator, _STREAM_END)
+        if item is _STREAM_END:
+            return
+        yield item
+
+
+def _join_response(llm, messages, params=None) -> str:
+    """Non-streaming call that always returns a string (some LLMs return a generator)."""
+    response = _generate(llm, messages, stream=False, params=params)
+    if hasattr(response, "__iter__") and not isinstance(response, str):
+        response = "".join(response)
+    return response
 
 
 KNOWLEDGE_SEARCH_TOOL = {
@@ -897,7 +934,9 @@ class ChatServiceImpl:
             response_text = ""
 
             for _iteration in range(MAX_TOOL_ITERATIONS):
-                result = _generate(llm, loop_messages, stream=False, tools=tools, params=params)
+                result = await asyncio.to_thread(
+                    _generate, llm, loop_messages, stream=False, tools=tools, params=params
+                )
                 if isinstance(result, str):
                     response_text = result
                     break
@@ -912,14 +951,14 @@ class ChatServiceImpl:
                         args = json.loads(tc["function"]["arguments"])
                     except json.JSONDecodeError:
                         args = {}
-                    result_text, _ = _execute_tool_call(fn_name, args, wiki_rag, coll_ids)
+                    result_text, _ = await asyncio.to_thread(
+                        _execute_tool_call, fn_name, args, wiki_rag, coll_ids
+                    )
                     loop_messages.append(
                         {"role": "tool", "tool_call_id": tc["id"], "content": result_text}
                     )
         else:
-            response_text = _generate(llm, messages, stream=False, params=params)
-            if hasattr(response_text, "__iter__") and not isinstance(response_text, str):
-                response_text = "".join(response_text)
+            response_text = await asyncio.to_thread(_join_response, llm, messages, params)
 
         assistant_msg = await self._crud.add_message(
             session_id, "assistant", response_text, parent_id=parent_id
@@ -1042,9 +1081,10 @@ class ChatServiceImpl:
                     content_chunks: list[str] = []
                     tool_calls_result = None
 
-                    for event in _generate(
-                        llm, loop_messages, stream=True, tools=tools, params=params
-                    ):
+                    gen = await asyncio.to_thread(
+                        _generate, llm, loop_messages, stream=True, tools=tools, params=params
+                    )
+                    async for event in _iterate_in_thread(gen):
                         if isinstance(event, dict):
                             if event["type"] == "content":
                                 content_chunks.append(event["content"])
@@ -1078,7 +1118,9 @@ class ChatServiceImpl:
                         query = args.get("query", "")
                         yield StreamChunk(type="tool_start", name=fn_name, query=query)
 
-                        result_text, found = _execute_tool_call(fn_name, args, wiki_rag, coll_ids)
+                        result_text, found = await asyncio.to_thread(
+                            _execute_tool_call, fn_name, args, wiki_rag, coll_ids
+                        )
                         yield StreamChunk(type="tool_end", name=fn_name, found=found)
 
                         loop_messages.append(
@@ -1086,7 +1128,8 @@ class ChatServiceImpl:
                         )
             else:
                 # One-shot streaming
-                for chunk in _generate(llm, messages, stream=True, params=params):
+                gen = await asyncio.to_thread(_generate, llm, messages, stream=True, params=params)
+                async for chunk in _iterate_in_thread(gen):
                     full_response.append(chunk)
                     yield StreamChunk(type="chunk", content=chunk)
 

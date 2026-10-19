@@ -101,6 +101,24 @@ def test_platform_agent_sits_between_persona_and_service(monkeypatch):
     assert _build_prompt(None, {}, _persona(), _LLM()) == "persona prompt"
 
 
+def test_client_channels_never_get_the_platform_agent(monkeypatch):
+    """An unconfigured widget/bot must not greet the client's own customers
+    as the setup assistant of our platform."""
+    monkeypatch.setattr("modules.chat.facade._load_platform_agent_prompt", lambda: "platform")
+    for source in ("widget", "telegram", "whatsapp"):
+        assert _build_prompt(None, {"source": source}, None, _LLM()) == "service prompt"
+    # The platform's own surfaces still get it.
+    for source in (None, "admin", "mobile"):
+        assert _build_prompt(None, {"source": source}, None, _LLM()) == "platform"
+
+
+def test_client_channel_prompt_still_wins_over_everything(monkeypatch):
+    monkeypatch.setattr("modules.chat.facade._load_platform_agent_prompt", lambda: "platform")
+    session = {"source": "widget", "system_prompt": "Ты продавец электротехники"}
+    assert _build_prompt(None, session, None, _LLM()) == "Ты продавец электротехники"
+    assert _build_prompt(None, {"source": "widget"}, _persona(), _LLM()) == "persona prompt"
+
+
 # --- per-call params --------------------------------------------------------
 
 

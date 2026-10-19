@@ -99,6 +99,10 @@ class WhatsAppBotConfig:
     # so both lists were dead config and every sender got through.
     allowed_phones: list[str] = field(default_factory=list)
     blocked_phones: list[str] = field(default_factory=list)
+    # Our own product funnel (AI Secretary pitch, quiz, platform FAQ). It used
+    # to be hardcoded on, so every client's bot greeted *their* customers with
+    # an ad for our product. Opt-in per instance now.
+    sales_funnel_enabled: bool = False
 
     # Merged settings for convenience
     max_messages_per_session: int = 100
@@ -196,6 +200,7 @@ async def load_config_from_api(
         auto_start=instance.get("auto_start", False),
         allowed_phones=list(instance.get("allowed_phones") or []),
         blocked_phones=list(instance.get("blocked_phones") or []),
+        sales_funnel_enabled=bool(instance.get("sales_funnel_enabled", False)),
         # Previously never carried over, so every instance silently listened on
         # the dataclass default — two instances would fight for the same port.
         webhook_port=instance.get("webhook_port") or settings.webhook_port,

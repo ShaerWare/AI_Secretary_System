@@ -79,6 +79,12 @@ class WhatsAppInstance(Base):
     rate_limit_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rate_limit_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Our own product funnel (pitches AI Secretary, quiz, FAQ about the platform).
+    # Opt-in, unlike Telegram's default-on flag: it used to be hardcoded, so a
+    # client's bot answered "привет" with a pitch for our product to *their*
+    # customers. Switch it on only for our own marketing numbers.
+    sales_funnel_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     # Timestamps
     created: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated: Mapped[datetime] = mapped_column(
@@ -161,6 +167,8 @@ class WhatsAppInstance(Base):
             # Rate limiting
             "rate_limit_count": self.rate_limit_count,
             "rate_limit_hours": self.rate_limit_hours,
+            # Own-product sales funnel
+            "sales_funnel_enabled": self.sales_funnel_enabled,
             # Timestamps
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,

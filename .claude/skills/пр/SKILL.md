@@ -143,9 +143,17 @@ cd /opt/ai-secretary/admin && npm ci && npm run build
 Если build упал — починить и пересобрать.
 
 ```
-grep -l 'setupDemoInterceptor' /opt/ai-secretary/admin/dist/assets/*.js
+grep -o 'src="[^"]*index-[^"]*\.js"' /opt/ai-secretary/admin/dist/index.html
 ```
-Если нашлось — СТОП, demo interceptor leak!
+Должно быть `/admin/assets/...`. Если `/full/` или `/cloud/` — СТОП, это демо-билд.
+
+**Не проверяй демо-режим через `grep setupDemoInterceptor`**: демо-модуль
+подключается ленивым `import("./demo/index")`, поэтому его имя попадает в бандл
+ЛЮБОГО прод-билда и такой grep всегда даёт ложное срабатывание. Отличает демо
+именно base path: прод собирается с `/admin/`, демо — с `/full/` или `/cloud/`.
+Гейт в коде — `import.meta.env.VITE_DEMO_MODE === "true"`
+([admin/src/api/client.ts](admin/src/api/client.ts)); в прод-бандле рядом с
+динамическим импортом стоит `demoReady = null`.
 
 ```
 rsync -av --delete /opt/ai-secretary/admin/dist/ /var/www/admin-ai-sekretar24/

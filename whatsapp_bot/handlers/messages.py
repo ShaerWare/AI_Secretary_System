@@ -11,6 +11,7 @@ import logging
 from ..services.llm_router import get_llm_router
 from ..services.session_store import get_session_store
 from ..services.whatsapp_client import MAX_TEXT_LENGTH, get_whatsapp_client
+from ..state import sales_funnel_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -55,50 +56,56 @@ async def _process_message(phone: str, text: str, message_id: str) -> None:
     """Core logic: mark as read, call LLM, send response."""
     wa_client = get_whatsapp_client()
 
-    # Mark as read (blue checkmarks)
-    try:
-        await wa_client.mark_as_read(message_id)
-    except Exception:
-        logger.debug("Failed to mark message as read", exc_info=True)
+    # Mark as read (blue checkmarks). Synthetic calls (a stale menu tap routed
+    # here as text) carry no message id — nothing to acknowledge.
+    if message_id:
+        try:
+            await wa_client.mark_as_read(message_id)
+        except Exception:
+            logger.debug("Failed to mark message as read", exc_info=True)
 
-    # Greeting detection — send welcome with quick-reply buttons
-    _GREETINGS = {
-        "/start",
-        "/menu",
-        "start",
-        "menu",
-        "привет",
-        "здравствуйте",
-        "хай",
-        "hello",
-        "hi",
-    }
-    lower = text.lower().strip()
-    if lower in _GREETINGS:
-        from .sales.welcome import handle_welcome
+    # Our own product funnel (pitch + quiz + platform FAQ) — only for our
+    # marketing numbers. A client's assistant must answer "привет" itself,
+    # not with an ad for AI Secretary.
+    if sales_funnel_enabled():
+        # Greeting detection — send welcome with quick-reply buttons
+        _GREETINGS = {
+            "/start",
+            "/menu",
+            "start",
+            "menu",
+            "привет",
+            "здравствуйте",
+            "хай",
+            "hello",
+            "hi",
+        }
+        lower = text.lower().strip()
+        if lower in _GREETINGS:
+            from .sales.welcome import handle_welcome
 
-        await handle_welcome(phone)
-        return
+            await handle_welcome(phone)
+            return
 
-    # State-aware routing: check if user is in a free-text input state
-    from ..sales.database import get_sales_db
+        # State-aware routing: check if user is in a free-text input state
+        from ..sales.database import get_sales_db
 
-    try:
-        db = await get_sales_db()
-        state = await db.get_user_state(phone)
-        if state:
-            if state == "custom_step_1":
-                from .sales.custom import handle_custom_step_1_text
+        try:
+            db = await get_sales_db()
+            state = await db.get_user_state(phone)
+            if state:
+                if state == "custom_step_1":
+                    from .sales.custom import handle_custom_step_1_text
 
-                await handle_custom_step_1_text(phone, text)
-                return
-            elif state == "diy_gpu_custom":
-                from .sales.diy import handle_gpu_custom_text
+                    await handle_custom_step_1_text(phone, text)
+                    return
+                elif state == "diy_gpu_custom":
+                    from .sales.diy import handle_gpu_custom_text
 
-                await handle_gpu_custom_text(phone, text)
-                return
-    except Exception:
-        logger.debug("Sales DB state check failed", exc_info=True)
+                    await handle_gpu_custom_text(phone, text)
+                    return
+        except Exception:
+            logger.debug("Sales DB state check failed", exc_info=True)
 
     store = get_session_store()
     router = get_llm_router()

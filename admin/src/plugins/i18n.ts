@@ -930,6 +930,9 @@ const messages = {
       ragCollections: "Коллекции знаний",
       systemPrompt: "Системный промпт",
       systemPromptPlaceholder: "Кастомный системный промпт для этого бота...",
+      salesFunnel: "Воронка продаж AI-Секретарь24",
+      salesFunnelHint:
+        "Только для наших собственных маркетинговых номеров: приветствие с презентацией продукта, квиз и FAQ про платформу. Для бота клиента должно быть выключено.",
       rateLimit: "Ограничение частоты",
       rateLimitCount: "Макс. сообщений",
       rateLimitHours: "За период (часов)",
@@ -2422,6 +2425,9 @@ const messages = {
       ragCollections: "Knowledge collections",
       systemPrompt: "System prompt",
       systemPromptPlaceholder: "Custom system prompt for this bot...",
+      salesFunnel: "AI Secretary sales funnel",
+      salesFunnelHint:
+        "For our own marketing numbers only: product pitch greeting, quiz and platform FAQ. Keep it off on a client's bot.",
       rateLimit: "Rate Limiting",
       rateLimitCount: "Max messages",
       rateLimitHours: "Per period (hours)",
@@ -3914,6 +3920,9 @@ const messages = {
       ragCollections: "Білім жинақтары",
       systemPrompt: "Жүйелік промпт",
       systemPromptPlaceholder: "Осы бот үшін арнайы жүйелік промпт...",
+      salesFunnel: "AI-Секретарь24 сату воронкасы",
+      salesFunnelHint:
+        "Тек өз маркетингтік нөмірлеріміз үшін: өнім презентациясы, квиз және платформа туралы FAQ. Клиент боты үшін өшірулі болуы керек.",
       rateLimit: "Жиілік шектеуі",
       rateLimitCount: "Макс. хабарламалар",
       rateLimitHours: "Кезең (сағат)",
