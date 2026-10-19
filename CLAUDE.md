@@ -355,7 +355,7 @@ Code-pipeline «единый поиск позиции» для торговог
 
 **Gate-check pattern for mutations**: UPDATE/DELETE endpoints call workspace-filtered get first (e.g., `get_by_id_ws(id, workspace_id=ws_id)`); if `None` → 404. Prevents cross-workspace access. `ChatRepository` is the reference implementation.
 
-**Adding i18n translations**: Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, `kk`.
+**Adding i18n translations**: Edit `admin/src/plugins/i18n.ts` — add keys to all three message objects: `ru`, `en`, `kk`. Characters `@ { } | %` are vue-i18n syntax — write a literal `@` as `{'@'}` (`user{'@'}example.com`, `{'@'}BotFather`); a bare `@` compiles lazily at render time and crashes the whole page with `SyntaxError: 10` (INVALID_LINKED_FORMAT), so `vue-tsc`/the build will NOT catch it.
 
 **API URL patterns:**
 - `GET/POST /admin/{resource}` — List/create
