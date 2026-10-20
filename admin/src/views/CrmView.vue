@@ -21,6 +21,8 @@ import {
   BookOpen,
   Database,
   Trash2,
+  ShieldCheck,
+  Activity,
 } from 'lucide-vue-next'
 import { amocrmApi } from '@/api/amocrm'
 import type { AmoCRMSyncLogEntry, CRMDatasetStatus } from '@/api/amocrm'
@@ -28,15 +30,21 @@ import { useAuthStore } from '@/stores'
 import CrmKanban from '@/components/CrmKanban.vue'
 import CrmDeals from '@/components/CrmDeals.vue'
 import CrmInbox from '@/components/CrmInbox.vue'
+import CrmOutbound from '@/components/CrmOutbound.vue'
+import CrmMonitor from '@/components/CrmMonitor.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 
 // Tab management
-const activeTab = ref('settings')
+const activeTab = ref('outbound')
 
 const tabs = computed(() => {
+  // Approval queue + monitoring don't depend on amoCRM being connected:
+  // they watch the assistant's own channels.
   const list = [
+    { id: 'outbound', label: t('crm.tabs.outbound'), icon: ShieldCheck },
+    { id: 'monitor', label: t('crm.tabs.monitor'), icon: Activity },
     { id: 'settings', label: t('crm.tabs.settings'), icon: Settings2 },
   ]
   if (isConnected.value) {
@@ -290,6 +298,12 @@ onMounted(async () => {
 
   // Check for OAuth redirect result
   const query = route.query
+  if (typeof query.tab === 'string' && tabs.value.some((tab) => tab.id === query.tab)) {
+    activeTab.value = query.tab
+  }
+  if (query.connected === 'true' || query.error) {
+    activeTab.value = 'settings'
+  }
   if (query.connected === 'true') {
     showToast(t('crm.connectedSuccess'))
     await loadConfig()
@@ -329,12 +343,12 @@ onMounted(async () => {
     </div>
 
     <!-- Tab Bar -->
-    <div class="flex gap-1 border-b border-border">
+    <div class="flex gap-1 border-b border-border overflow-x-auto">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         :class="[
-          'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
+          'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap',
           activeTab === tab.id
             ? 'border-primary text-primary'
             : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
@@ -702,5 +716,11 @@ onMounted(async () => {
 
     <!-- Tab Content: Inbox -->
     <CrmInbox v-if="activeTab === 'inbox'" />
+
+    <!-- Tab Content: Approval queue -->
+    <CrmOutbound v-if="activeTab === 'outbound'" />
+
+    <!-- Tab Content: Monitoring -->
+    <CrmMonitor v-if="activeTab === 'monitor'" @open-queue="activeTab = 'outbound'" />
   </div>
 </template>

@@ -262,17 +262,33 @@ def _publish_whatsapp_turn(
     if not parts:
         return
 
-    from modules.channels.whatsapp.events import WhatsAppMessageSent
-
     asyncio.create_task(
-        get_container().event_bus.publish(
-            WhatsAppMessageSent(
-                session_id=session["id"],
-                lead_id=lead_id,
-                sender=parts[1],
-                user_message=user_message,
-                assistant_response=assistant_response,
-            )
+        _file_whatsapp_turn(session["id"], lead_id, parts, user_message, assistant_response)
+    )
+
+
+async def _file_whatsapp_turn(
+    session_id: str,
+    lead_id: int,
+    parts: tuple[str, str],
+    user_message: str,
+    assistant_response: str,
+) -> None:
+    from modules.channels.whatsapp.events import WhatsAppMessageSent
+    from modules.outbound.service import outbound_service
+
+    instance_id, sender = parts
+    # Held for approval: this is only a draft. The outbound queue files the turn
+    # with the text the client really received, once it is sent.
+    if await outbound_service.is_approval("whatsapp", instance_id):
+        return
+    await get_container().event_bus.publish(
+        WhatsAppMessageSent(
+            session_id=session_id,
+            lead_id=lead_id,
+            sender=sender,
+            user_message=user_message,
+            assistant_response=assistant_response,
         )
     )
 

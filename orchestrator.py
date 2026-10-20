@@ -83,6 +83,7 @@ from modules.core.router_health import router as health_router  # noqa: E402
 from modules.knowledge.router_google_drive import router as google_drive_rag_router  # noqa: E402
 from modules.knowledge.router_rss import router as rss_router  # noqa: E402
 from modules.monitoring.router_logs import router as logs_router  # noqa: E402
+from modules.outbound.router import router as outbound_router  # noqa: E402
 from modules.procurement.router import router as procurement_router  # noqa: E402
 
 
@@ -123,6 +124,7 @@ app.include_router(health_router)
 app.include_router(compat_router)
 app.include_router(logs_router)
 app.include_router(procurement_router)
+app.include_router(outbound_router)
 app.include_router(widget_public_router)
 
 # Hardware/GPU routers — skip in cloud mode
