@@ -81,6 +81,7 @@ from modules.llm.models import (
     LLMPreset,
 )
 from modules.monitoring.models import AuditLog, UsageLimits, UsageLog
+from modules.outbound.models import OutboundMessage
 from modules.procurement.models import ProductOffer
 from modules.sales.models import PaymentLog
 from modules.speech.models import TTSPreset
@@ -156,6 +157,7 @@ __all__ = [
     # ecommerce
     "WooCommerceConfig",
     # procurement
+    "OutboundMessage",
     "ProductOffer",
     # telephony
     "GSMCallLog",

@@ -9,8 +9,9 @@ import asyncio
 import logging
 
 from ..services.llm_router import get_llm_router
+from ..services.outbound import submit_reply
 from ..services.session_store import get_session_store
-from ..services.whatsapp_client import MAX_TEXT_LENGTH, get_whatsapp_client
+from ..services.whatsapp_client import get_whatsapp_client, split_text
 from ..state import sales_funnel_enabled
 
 
@@ -118,13 +119,19 @@ async def _process_message(phone: str, text: str, message_id: str) -> None:
         # The phone keys the orchestrator session, so the conversation keeps
         # its history instead of starting over on every message.
         response = await router.chat(messages=session.messages, conversation_key=phone)
+        session.append_message("assistant", response)
+
+        # Approval mode: the reply waits in the outbound queue and the client
+        # only gets the fixed acknowledgement (if any).
+        decision = await submit_reply(router, phone, text, response)
+        if decision.get("action") == "send":
+            outgoing = response
+        else:
+            outgoing = decision.get("ack_text") or ""
 
         # Split long responses into multiple messages
-        chunks = _split_text(response)
-        for chunk in chunks:
+        for chunk in split_text(outgoing) if outgoing else []:
             await wa_client.send_text(to=phone, text=chunk)
-
-        session.append_message("assistant", response)
 
     except Exception:
         logger.exception("LLM request failed for phone %s", phone)
@@ -132,40 +139,3 @@ async def _process_message(phone: str, text: str, message_id: str) -> None:
             to=phone,
             text="Произошла ошибка при обработке запроса. Попробуйте позже.",
         )
-
-
-def _split_text(text: str, max_length: int = MAX_TEXT_LENGTH) -> list[str]:
-    """Split text into chunks that fit WhatsApp's message size limit.
-
-    Tries to split on paragraph boundaries, then sentence boundaries,
-    then hard-splits at max_length.
-    """
-    if len(text) <= max_length:
-        return [text]
-
-    chunks: list[str] = []
-    remaining = text
-
-    while remaining:
-        if len(remaining) <= max_length:
-            chunks.append(remaining)
-            break
-
-        # Try to split at paragraph boundary
-        split_pos = remaining.rfind("\n\n", 0, max_length)
-        if split_pos == -1:
-            # Try sentence boundary
-            split_pos = remaining.rfind(". ", 0, max_length)
-            if split_pos != -1:
-                split_pos += 1  # include the period
-        if split_pos == -1:
-            # Try newline
-            split_pos = remaining.rfind("\n", 0, max_length)
-        if split_pos == -1:
-            # Hard split
-            split_pos = max_length
-
-        chunks.append(remaining[:split_pos].rstrip())
-        remaining = remaining[split_pos:].lstrip()
-
-    return chunks

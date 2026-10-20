@@ -300,6 +300,43 @@ class WhatsAppClient:
 _client: Any = None
 
 
+def split_text(text: str, max_length: int = MAX_TEXT_LENGTH) -> list[str]:
+    """Split text into chunks that fit WhatsApp's message size limit.
+
+    Tries to split on paragraph boundaries, then sentence boundaries,
+    then hard-splits at max_length.
+    """
+    if len(text) <= max_length:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+
+    while remaining:
+        if len(remaining) <= max_length:
+            chunks.append(remaining)
+            break
+
+        # Try to split at paragraph boundary
+        split_pos = remaining.rfind("\n\n", 0, max_length)
+        if split_pos == -1:
+            # Try sentence boundary
+            split_pos = remaining.rfind(". ", 0, max_length)
+            if split_pos != -1:
+                split_pos += 1  # include the period
+        if split_pos == -1:
+            # Try newline
+            split_pos = remaining.rfind("\n", 0, max_length)
+        if split_pos == -1:
+            # Hard split
+            split_pos = max_length
+
+        chunks.append(remaining[:split_pos].rstrip())
+        remaining = remaining[split_pos:].lstrip()
+
+    return chunks
+
+
 def get_whatsapp_client() -> Any:
     """Get or create the singleton WhatsApp client.
 

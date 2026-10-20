@@ -101,12 +101,37 @@ class TestSessionCreatedPublishing:
         bus.event_bus.publish.assert_not_awaited()
 
 
+async def _drain():
+    """Let the fire-and-forget filing task (mode lookup + publish) finish."""
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+
 class TestTurnPublishing:
+    @pytest.fixture(autouse=True)
+    def _auto_mode(self):
+        with patch(
+            "modules.outbound.service.outbound_service.is_approval",
+            AsyncMock(return_value=False),
+        ) as mocked:
+            self.is_approval = mocked
+            yield
+
+    async def test_draft_awaiting_approval_is_not_filed(self):
+        """Under approval the note is filed by the queue, with the text really sent."""
+        self.is_approval.return_value = True
+        bus = _Bus()
+        with patch("modules.chat.router.get_container", return_value=bus):
+            _publish_whatsapp_turn(_session(), 555, "есть ЧРП?", "черновик")
+            await _drain()
+
+        bus.event_bus.publish.assert_not_awaited()
+
     async def test_publishes_a_completed_turn(self):
         bus = _Bus()
         with patch("modules.chat.router.get_container", return_value=bus):
             _publish_whatsapp_turn(_session(), 555, "есть ЧРП?", "Да, подскажу модель")
-            await asyncio.sleep(0)
+            await _drain()
 
         bus.event_bus.publish.assert_awaited_once()
         event = bus.event_bus.publish.await_args.args[0]
@@ -126,7 +151,7 @@ class TestTurnPublishing:
         bus = _Bus()
         with patch("modules.chat.router.get_container", return_value=bus):
             _publish_whatsapp_turn(_session(), lead_id, "вопрос", response)
-            await asyncio.sleep(0)
+            await _drain()
 
         bus.event_bus.publish.assert_not_awaited()
 
@@ -134,6 +159,6 @@ class TestTurnPublishing:
         bus = _Bus()
         with patch("modules.chat.router.get_container", return_value=bus):
             _publish_whatsapp_turn(_session(source="admin"), 555, "вопрос", "ответ")
-            await asyncio.sleep(0)
+            await _drain()
 
         bus.event_bus.publish.assert_not_awaited()
