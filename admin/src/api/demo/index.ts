@@ -152,7 +152,9 @@ export function setupDemoInterceptor() {
 
     const result = matchDemoRoute(url, method)
     if (!result) {
-      // Fallback: return a generic success for unmatched API routes
+      // Fallback: return a generic success for unmatched API routes. Callers
+      // that read a field from it get undefined, so say which mock is missing.
+      console.warn(`[demo] no mock for ${method} ${url} — returning {status: 'ok'}`)
       await randomDelay()
       return new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,

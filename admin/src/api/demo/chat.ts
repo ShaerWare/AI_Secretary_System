@@ -108,7 +108,48 @@ function sortByPinned<T extends { pinned?: boolean; updated?: string }>(arr: T[]
   })
 }
 
+const demoAssistantPresets = [
+  {
+    slug: 'lawyer-ru',
+    name: 'Юрист РФ',
+    description: 'Российское право: Конституция, кодексы, федеральные законы.',
+    icon: 'scale',
+    system_prompt: 'Ты — юридический ассистент по праву Российской Федерации.',
+    rag_mode: 'selected',
+    collections: [{ id: 101, slug: 'ru-gk', name: 'Гражданский кодекс РФ' }],
+    knowledge_collection_ids: [101],
+    ready: true,
+  },
+  {
+    slug: 'accountant-kz',
+    name: 'Бухгалтер РК',
+    description: 'Налоговый кодекс РК 2026, учёт и отчётность.',
+    icon: 'calculator',
+    system_prompt: 'Ты — бухгалтер-консультант по законодательству Республики Казахстан.',
+    rag_mode: 'selected',
+    collections: [{ id: 102, slug: 'kz-nk', name: 'Налоговый кодекс РК' }],
+    knowledge_collection_ids: [102],
+    ready: true,
+  },
+  {
+    slug: 'marketer',
+    name: 'SEO-маркетолог',
+    description: 'Продвижение сайтов, семантика, контент.',
+    icon: 'search',
+    system_prompt: 'Ты — SEO-специалист.',
+    rag_mode: 'selected',
+    collections: [{ id: 103, slug: 'ru-sbup-seo', name: 'SEO от А до Я' }],
+    knowledge_collection_ids: [103],
+    ready: true,
+  },
+]
+
 export const chatRoutes: DemoRoute[] = [
+  {
+    method: 'GET',
+    pattern: /^\/admin\/chat\/assistant-presets$/,
+    handler: () => ({ presets: demoAssistantPresets }),
+  },
   {
     method: 'GET',
     pattern: /^\/admin\/chat\/sessions$/,

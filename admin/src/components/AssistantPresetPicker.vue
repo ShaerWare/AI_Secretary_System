@@ -18,7 +18,9 @@ async function loadPresets() {
   error.value = null
   try {
     const resp = await presetsApi.list()
-    presets.value = resp.presets
+    // The demo interceptor answers unmocked endpoints with a bare
+    // {status: 'ok'}; a missing list must not crash the chat view.
+    presets.value = Array.isArray(resp?.presets) ? resp.presets : []
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось загрузить'
   } finally {
