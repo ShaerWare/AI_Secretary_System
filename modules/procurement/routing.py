@@ -12,7 +12,7 @@ import re
 from typing import Optional
 
 
-# Supplier metadata incl. those without price files yet (Промситех, ELTECH) —
+# Supplier metadata incl. those without price files (ELTECH) —
 # routing still names them as request targets.
 SUPPLIER_META = {
     "aksima": {"name": "Аксима (AXIMA)", "type": "A", "city": "Алматы"},

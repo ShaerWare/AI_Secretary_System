@@ -638,10 +638,12 @@ async def _inject_offer_context(
                 supplier_lbl = o.get("supplier_name") or ""
                 if p.get("ok"):
                     flag = " ⚠️НУЛЕВАЯ МАРЖА→директору" if p.get("zero_margin_flag") else ""
-                    src = (
-                        f" · {supplier_lbl}: закуп {p['purchase_price']:.0f}₸ →"
-                        f" клиенту {p['client_price']:.0f}₸{flag}"
+                    purchase = (
+                        f"закуп {p['purchase_price']:.0f}₸"
+                        if p.get("purchase_price") is not None
+                        else "закуп не раскрывается"
                     )
+                    src = f" · {supplier_lbl}: {purchase} → клиенту {p['client_price']:.0f}₸{flag}"
                 else:
                     src = f" · {supplier_lbl} (закупочная)"
             parts = [o.get("name") or "", art, price, stock]

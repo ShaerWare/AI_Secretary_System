@@ -293,6 +293,9 @@ async def startup_event():
         task_registry.register("procurement-supplier-sync", procurement_supplier_sync)
         task_registry.register("procurement-feed-sync", procurement_feed_sync)
         task_registry.register("rss-sync", rss_sync_all, interval=60 * 60, initial_delay=120)
+        from modules.knowledge.drive_sources import drive_rag_daily_sync
+
+        task_registry.register("google-drive-sync", drive_rag_daily_sync)
         task_registry.register(
             "bot-process-watcher", watch_bot_processes, interval=30, initial_delay=15
         )

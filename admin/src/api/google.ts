@@ -70,8 +70,14 @@ export const googleApi = {
   driveRagProjects: () =>
     api.get<GoogleDriveProject[]>('/admin/google-drive/projects'),
 
-  createDriveRagProject: (data: { name: string; folder_id: string; folder_name?: string }) =>
+  driveResolve: (link: string) =>
+    api.get<GoogleDriveFile>(`/admin/google/drive/resolve?link=${encodeURIComponent(link)}`),
+
+  createDriveRagProject: (data: CreateDriveSource) =>
     api.post<GoogleDriveProject>('/admin/google-drive/projects', data),
+
+  updateDriveRagProject: (id: number, data: { name?: string; auto_sync?: boolean; file_ids?: string[] }) =>
+    api.patch<GoogleDriveProject>(`/admin/google-drive/projects/${id}`, data),
 
   syncDriveRagProject: (id: number) =>
     api.post<{ status: string }>(`/admin/google-drive/projects/${id}/sync`),
@@ -92,7 +98,46 @@ export interface GoogleDriveProject {
   last_synced: string | null
   file_count: number
   total_size_bytes: number
+  purpose: DriveSourcePurpose
+  file_ids: string[]
+  auto_sync: boolean
+  sync_report: DriveSyncReport | null
+  last_checked: string | null
   workspace_id: number
   created: string | null
   updated: string | null
+}
+
+export type DriveSourcePurpose = 'rag' | 'prices' | 'both'
+
+export interface CreateDriveSource {
+  name: string
+  folder_id: string
+  folder_name?: string
+  purpose: DriveSourcePurpose
+  file_ids: string[]
+  auto_sync: boolean
+}
+
+export interface DriveSupplierMatch {
+  key: string
+  name: string
+  price_file?: { pattern: string | string[]; files: string[] }
+  stock_file?: { pattern: string | string[]; files: string[] }
+}
+
+export interface DriveSyncReport {
+  missing: string[]
+  skipped: { name: string; reason: string }[]
+  prices?: {
+    suppliers: DriveSupplierMatch[]
+    unmatched: string[]
+    ambiguous?: string[]
+    installed: string[]
+    archived: string[]
+    conflicts: string[]
+    duplicates: string[]
+  }
+  rag?: { documents: number; skipped: { name: string; reason: string }[] }
+  parsed?: { supplier: string; rows?: number; offers?: number; error?: string }[]
 }

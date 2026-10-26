@@ -25,7 +25,10 @@ SUPPLIERS = [
         "header_row": 10,  # титулы в строке 11 (1-idx), данные с 12
         "cols": {"article": 0, "name": 1, "price": 5, "unit": 4},  # 5 = «Дил»
         # ОСТАТКИ file has stock only — merged into price rows by article.
-        "stock_file": "ОСТАТКИ*.xlsx",
+        # «ОСТАТКИ 15.10.xlsx». Цифра после пробела обязательна: имена сравниваются
+        # без учёта регистра, и голое «ОСТАТКИ*» ловило бы выгрузку Chint
+        # «Остатки и доступность….xlsx» и «Остатки от ….xls» Промситеха.
+        "stock_file": "ОСТАТКИ [0-9]*.xlsx",
         "stock_data_row": 1,  # row 0 is a warehouse label
         "stock_cols": {"article": 0, "name": 1, "stock": 3},
         "currency": "KZT",
@@ -37,10 +40,17 @@ SUPPLIERS = [
         "key": "aksima",
         "name": "AXIMA / Chint (Аксима)",
         "format": "xlsx",
-        "price_file": "аксима*.xlsx",
+        "price_file": ["аксима*.xlsx", "axima*.xlsx"],
         "header_row": 5,  # шапка 3–6, данные с 7 (1-idx)
-        # 0=article, 7=name, 13=дилерская цена, 14/15=остатки ВТО/Теректы
+        # Июль: 0=article, 7=name, 13=дилерская цена, 14/15=остатки ВТО/Теректы.
+        # Октябрь: всё на столбец левее + склад «Рыскулова» — поэтому по заголовкам.
         "cols": {"article": 0, "name": 7, "price": 13, "stock": 14, "stock2": 15},
+        "header_labels": {
+            "article": "артикул",
+            "name": "номенклатура",
+            "price": "дилерская",
+            "stock": "склад:",
+        },
         "currency": "KZT",
         "vat_included": True,  # цены уже с НДС
         "markup_pct": 30,  # КП = max(РРЦ Chint, закупка × 1.30)
@@ -58,6 +68,28 @@ SUPPLIERS = [
         "vat_included": True,
         "markup_pct": 0,  # цена в КП = РРЦ из файла как есть
         "purchase_discount_pct": 30,  # закупка = РРЦ × 0.70
+    },
+    {
+        "key": "promsitech",
+        "name": "Промситех",
+        "format": "xls",  # старый бинарный .xls из 1С
+        # Приходит как «Остатки от 12.10.2026.xls» — по имени поставщика не узнать
+        "price_file": ["Промситех*.xls", "Остатки от*.xls"],
+        "header_row": 5,  # шапка 3–6, данные с 7 (1-idx)
+        # Октябрь: 0=article, 4=name, 13=«Прайс-лист» (с НДС), 14=«Основной склад»
+        "cols": {"article": 0, "name": 4, "price": 13, "stock": 14},
+        "header_labels": {
+            "article": "артикул",
+            "name": "номенклатура",
+            "price": "прайс-лист",
+            "stock": "склад",
+        },
+        "require_article": True,
+        "currency": "KZT",
+        "vat_included": True,
+        "markup_pct": 0,  # Reestr лист2: цена из файла как есть, наценку НЕ добавлять
+        "purchase_discount_pct": 0,
+        "purchase_hidden": True,  # закупочная «не раскрывается» — маржу не считать
     },
     {
         "key": "xtrade",

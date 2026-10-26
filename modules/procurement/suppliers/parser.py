@@ -5,8 +5,10 @@ adapter maps these to ProductOffer. Formats: `xlsx` (openpyxl), `pdf_lines`
 (pdfplumber, 2-column "name .... price"). `xls`/complex-pdf added later.
 """
 
+import fnmatch
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import List, Optional
 
@@ -18,10 +20,94 @@ logger = logging.getLogger(__name__)
 _PRICE_TAIL_RE = re.compile(r"^(.*?)[\s ]+([\d\s .,]+)$")
 
 
-def resolve_file(pattern: str) -> Optional[str]:
-    """First file matching `pattern` under SUPPLIER_PRICES_DIR."""
-    matches = sorted(Path(SUPPLIER_PRICES_DIR).glob(pattern))
-    return str(matches[0]) if matches else None
+def _name_key(name: str) -> str:
+    return unicodedata.normalize("NFC", name).casefold().replace("_", " ")
+
+
+def patterns_of(spec: str | list[str] | None) -> list[str]:
+    """`price_file`/`stock_file` is one glob pattern or a list of alternatives."""
+    if not spec:
+        return []
+    return [spec] if isinstance(spec, str) else list(spec)
+
+
+def matches_pattern(filename: str, pattern: str | list[str]) -> bool:
+    """Регистр, Unicode-форма и «_» vs пробел не важны.
+
+    Файлы приходят с Google Диска поставщиков, где их называют как удобно:
+    «Аксима …» должна подойти под `аксима*.xlsx`, выгрузка 1С «Остатки и
+    доступность (42).xlsx» — под `Остатки_и_доступность*.xlsx`, а имя из macOS
+    разложено (NFD) — для `glob` это уже другое слово.
+    """
+    key = _name_key(filename)
+    return any(fnmatch.fnmatchcase(key, _name_key(p)) for p in patterns_of(pattern))
+
+
+def resolve_file(pattern: str | list[str]) -> Optional[str]:
+    """Newest file matching `pattern` under SUPPLIER_PRICES_DIR.
+
+    Newest by mtime, not first by name: «Диллер 01.10.xlsx» sorts before
+    «Диллер 25.10.xlsx», and a stale price list must not win. Drive-synced files
+    get Drive's modifiedTime as their mtime.
+    """
+    base = Path(SUPPLIER_PRICES_DIR)
+    if not base.is_dir():
+        return None
+    matches = [p for p in base.iterdir() if p.is_file() and matches_pattern(p.name, pattern)]
+    if not matches:
+        return None
+    return str(max(matches, key=lambda p: (p.stat().st_mtime, p.name)))
+
+
+def resolve_columns(cfg: dict, head: list) -> tuple[dict, list[int]]:
+    """Column map for this file + every stock column.
+
+    With `header_labels` the columns are found by their titles in the header
+    rows: suppliers re-export from 1С and the layout drifts — Аксима's October
+    file moved every column one to the left and added a third warehouse, so the
+    fixed map read prices from a stock column. Search starts at the row holding
+    the article title, so a «Прайс-лист на …» banner above can't be mistaken for
+    a column. Titles not found fall back to `cols`. The `stock` label collects
+    ALL matching columns (one per warehouse); they are summed.
+    """
+    cols = dict(cfg["cols"])
+    stock_cols = [cols[k] for k in ("stock", "stock2") if k in cols]
+    labels = cfg.get("header_labels")
+    if not labels:
+        return cols, stock_cols
+
+    def _text(v) -> str:
+        return str(v).strip().casefold() if v not in (None, "") else ""
+
+    start = None
+    for i, row in enumerate(head):
+        if any(_text(v).startswith(labels["article"]) for v in row):
+            start = i
+            break
+    if start is None:
+        logger.warning("supplier %s: header row not found, using fixed columns", cfg["key"])
+        return cols, stock_cols
+
+    found_stock: list[int] = []
+    for field, label in labels.items():
+        for row in head[start:]:
+            hits = [c for c, v in enumerate(row) if label in _text(v)]
+            if not hits:
+                continue
+            if field == "stock":
+                found_stock = sorted(set(found_stock) | set(hits))
+            else:
+                cols[field] = hits[0]
+                break
+    if "stock" in labels:
+        stock_cols = found_stock
+    return cols, stock_cols
+
+
+def _stock_sum(values: list) -> Optional[float]:
+    """Sum of readable stock cells; None when no warehouse states a number."""
+    nums = [n for n in (parse_number(v) for v in values) if n is not None]
+    return sum(nums) if nums else None
 
 
 def parse_number(raw) -> Optional[float]:
@@ -51,9 +137,11 @@ def _read_xlsx(path: str, cfg: dict) -> List[dict]:
     rows: List[dict] = []
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     ws = wb[wb.sheetnames[0]]
-    cols = cfg["cols"]
     header_row = cfg.get("header_row", -1)
-    for i, row in enumerate(ws.iter_rows(values_only=True)):
+    sheet = list(ws.iter_rows(values_only=True))
+    wb.close()
+    cols, stock_cols = resolve_columns(cfg, sheet[: header_row + 1])
+    for i, row in enumerate(sheet):
         if i <= header_row:
             continue
         name = row[cols["name"]] if cols["name"] < len(row) else None
@@ -66,15 +154,9 @@ def _read_xlsx(path: str, cfg: dict) -> List[dict]:
             else None
         )
         unit = row[cols["unit"]] if "unit" in cols and cols["unit"] < len(row) else None
-        # optional in-file stock (some suppliers carry stock in the price file);
-        # "stock2" sums a second warehouse column when present.
-        stock = None
-        if "stock" in cols and cols["stock"] < len(row):
-            stock = parse_number(row[cols["stock"]])
-            if "stock2" in cols and cols["stock2"] < len(row):
-                s2 = parse_number(row[cols["stock2"]])
-                if s2:
-                    stock = (stock or 0) + s2
+        # optional in-file stock (some suppliers carry stock in the price file),
+        # summed over every warehouse column
+        stock = _stock_sum([row[c] for c in stock_cols if c < len(row)])
         item = {
             "article": str(article).strip() if article else None,
             "name": str(name).strip() if name else None,
@@ -91,7 +173,6 @@ def _read_xlsx(path: str, cfg: dict) -> List[dict]:
         if stock is not None:
             item["stock"] = stock
         rows.append(item)
-    wb.close()
     return rows
 
 
@@ -148,7 +229,6 @@ def _read_xls(path: str, cfg: dict) -> List[dict]:
     """
     import xlrd
 
-    cols = cfg["cols"]
     header_row = cfg.get("header_row", -1)
     cat_col = cfg.get("category_col")
     require_article = cfg.get("require_article", False)
@@ -156,6 +236,8 @@ def _read_xls(path: str, cfg: dict) -> List[dict]:
     category: Optional[str] = None
     wb = xlrd.open_workbook(path)
     ws = wb.sheet_by_index(0)
+    head = [ws.row_values(i) for i in range(min(header_row + 1, ws.nrows))]
+    cols, stock_cols = resolve_columns(cfg, head)
     for i in range(ws.nrows):
         if i <= header_row:
             continue
@@ -178,9 +260,17 @@ def _read_xls(path: str, cfg: dict) -> List[dict]:
             continue
 
         price = parse_number(_cell(cols["price"])) if "price" in cols else None
-        rows.append(
-            {"article": article, "name": name, "price": price, "category": category, "unit": None}
-        )
+        item = {
+            "article": article,
+            "name": name,
+            "price": price,
+            "category": category,
+            "unit": None,
+        }
+        stock = _stock_sum([_cell(c) for c in stock_cols])
+        if stock is not None:  # см. _read_xlsx: пусто = «не знаем», не «ноль»
+            item["stock"] = stock
+        rows.append(item)
     return rows
 
 

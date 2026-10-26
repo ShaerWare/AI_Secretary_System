@@ -8,7 +8,7 @@ supplier config in ``suppliers/registry.py``:
 - Chint (РРЦ via Аксима): client = РРЦ (raw); purchase = РРЦ × 0.70.
 - Аксима: client = max(РРЦ from Chint file, raw × 1.30); purchase = raw.
 - Мегазаказ (USD, no VAT): purchase = $×rate×0.72; client = $×rate×1.20×1.16.
-- Промситех: no markup (client = raw). (file not provided yet)
+- Промситех: no markup (client = raw); purchase price is not disclosed.
 
 Rule 16: if purchase ≥ client (zero/negative margin) → flag for the director,
 do not auto-quote. Rule 10/18: VAT 16%; Аксима/Промситех already include it —
@@ -72,8 +72,11 @@ def compute_pricing(offer: dict, rate: Optional[float] = None, rrc: Optional[flo
     if key == "aksima" and rrc:
         client = max(rrc, client)
 
-    purchase = round(purchase, 2)
     client = round(client, 2)
+    # Промситех не раскрывает закупку: «закуп = цене клиента» означало бы
+    # нулевую маржу и флаг директору на каждой позиции.
+    hidden = bool(cfg.get("purchase_hidden"))
+    purchase = None if hidden else round(purchase, 2)
     return {
         "ok": True,
         "client_price": client,
@@ -84,7 +87,7 @@ def compute_pricing(offer: dict, rate: Optional[float] = None, rrc: Optional[flo
         "markup_pct": cfg.get("markup_pct"),
         "supplier": cfg.get("name"),
         # rule 16: zero/negative margin — don't auto-quote, show director
-        "zero_margin_flag": purchase >= client,
+        "zero_margin_flag": purchase is not None and purchase >= client,
     }
 
 

@@ -370,6 +370,18 @@ class GoogleDriveProject(Base):
     file_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     include_mime_types: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # "rag" — текст в коллекцию; "prices" — исходные файлы в SUPPLIER_PRICES_DIR
+    # для парсера прайсов поставщиков; "both" — и то, и другое.
+    purpose: Mapped[str] = mapped_column(String(20), default="rag", server_default="rag")
+    # JSON-список id выбранных файлов; пусто — вся папка рекурсивно.
+    file_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    auto_sync: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # JSON {file_id: {name, modifiedTime, local}} — с чем синхронизировались в
+    # последний раз; по нему суточная проверка понимает, менялось ли что-то.
+    files_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # JSON-отчёт последней синхронизации (какие файлы какому поставщику достались).
+    sync_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_checked: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     workspace_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workspaces.id"), nullable=False, server_default="1"
     )
@@ -396,6 +408,11 @@ class GoogleDriveProject(Base):
             "last_synced": self.last_synced.isoformat() if self.last_synced else None,
             "file_count": self.file_count,
             "total_size_bytes": self.total_size_bytes,
+            "purpose": self.purpose or "rag",
+            "file_ids": json.loads(self.file_ids) if self.file_ids else [],
+            "auto_sync": bool(self.auto_sync),
+            "sync_report": json.loads(self.sync_report) if self.sync_report else None,
+            "last_checked": self.last_checked.isoformat() if self.last_checked else None,
             "workspace_id": self.workspace_id,
             "created": self.created.isoformat() if self.created else None,
             "updated": self.updated.isoformat() if self.updated else None,
