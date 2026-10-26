@@ -74,7 +74,18 @@ async def procurement_supplier_sync() -> None:
         logger.info("procurement supplier sync scheduled in %.1fh", wait_seconds / 3600)
         await asyncio.sleep(wait_seconds)
         try:
+            from modules.knowledge.drive_sources import pull_price_sources
             from modules.procurement.suppliers.adapter import sync_all_suppliers
+
+            # Сначала свежие файлы с Google Диска (если источник подключён и там
+            # что-то поменялось), потом разбор — в одной задаче, чтобы доставка
+            # не могла прийти после парсинга.
+            try:
+                pulled = await pull_price_sources()
+                if pulled:
+                    logger.info("price files from Drive: %s", pulled)
+            except Exception as e:
+                logger.warning("price files from Drive failed, parsing what we have: %s", e)
 
             stats = await sync_all_suppliers()
             written = sum(int(s.get("offers") or 0) for s in stats)

@@ -36,6 +36,11 @@ SCOPES = [
 ]
 
 
+def _q(value: str) -> str:
+    """Escape a value for a Drive `q` string literal."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
 class GoogleOAuthService:
     def _get_config(self) -> tuple[str, str]:
         client_id = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -259,9 +264,14 @@ class GoogleOAuthService:
             raise ValueError("Google not connected")
 
         fields = "nextPageToken, files(id, name, mimeType, modifiedTime, size, iconLink)"
-        q_parts = [f"'{folder_id}' in parents", "trashed = false"]
+        # "shared" — «Доступные мне»: папка, расшаренная другим аккаунтом, не
+        # лежит ни в одной папке «Моего диска» и иначе недостижима из браузера.
+        if folder_id == "shared":
+            q_parts = ["sharedWithMe = true", "trashed = false"]
+        else:
+            q_parts = [f"'{_q(folder_id)}' in parents", "trashed = false"]
         if query:
-            q_parts.append(f"name contains '{query}'")
+            q_parts.append(f"name contains '{_q(query)}'")
         q = " and ".join(q_parts)
 
         params: dict = {
@@ -269,6 +279,8 @@ class GoogleOAuthService:
             "fields": fields,
             "pageSize": page_size,
             "orderBy": "folder,name",
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true",
         }
         if page_token:
             params["pageToken"] = page_token
@@ -305,13 +317,19 @@ class GoogleOAuthService:
             raise ValueError("Google not connected")
 
         fields = "files(id, name, mimeType, modifiedTime, size)"
-        q = f"name contains '{query}' and trashed = false"
+        q = f"name contains '{_q(query)}' and trashed = false"
 
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 "https://www.googleapis.com/drive/v3/files",
                 headers={"Authorization": f"Bearer {creds['access_token']}"},
-                params={"q": q, "fields": fields, "pageSize": page_size},
+                params={
+                    "q": q,
+                    "fields": fields,
+                    "pageSize": page_size,
+                    "supportsAllDrives": "true",
+                    "includeItemsFromAllDrives": "true",
+                },
                 timeout=15,
             )
             resp.raise_for_status()
@@ -329,6 +347,34 @@ class GoogleOAuthService:
                 }
                 for f in data.get("files", [])
             ]
+        }
+
+    async def drive_get_meta(self, user_id: int, file_id: str) -> dict:
+        """Metadata of one file or folder (e.g. resolved from a pasted link)."""
+        creds = await self.get_valid_credentials(user_id)
+        if not creds:
+            raise ValueError("Google not connected")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                params={
+                    "fields": "id, name, mimeType, modifiedTime, size",
+                    "supportsAllDrives": "true",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            f = resp.json()
+
+        return {
+            "id": f["id"],
+            "name": f["name"],
+            "mimeType": f["mimeType"],
+            "modifiedTime": f.get("modifiedTime"),
+            "size": f.get("size"),
+            "isFolder": f["mimeType"] == "application/vnd.google-apps.folder",
         }
 
     # ── Google Docs ──────────────────────────────────────────────

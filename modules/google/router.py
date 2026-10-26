@@ -2,6 +2,7 @@
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
@@ -101,6 +102,30 @@ async def drive_search(
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         logger.error(f"Drive search error: {e}")
+        raise HTTPException(status_code=502, detail="Google Drive error")
+
+
+@router.get("/drive/resolve")
+async def drive_resolve(
+    link: str = Query(..., min_length=1),
+    user: User = Depends(get_current_user),
+):
+    """Folder/file metadata from a pasted Drive link (…/folders/<id>, …/d/<id>) or id."""
+    from app.services.google_drive_sync_service import extract_drive_id
+
+    file_id = extract_drive_id(link)
+    if not file_id:
+        raise HTTPException(status_code=400, detail="Не похоже на ссылку Google Диска")
+    try:
+        return await google_oauth_service.drive_get_meta(user.id, file_id)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (403, 404):
+            raise HTTPException(
+                status_code=404,
+                detail="Нет доступа: папка не расшарена на подключённый Google-аккаунт",
+            )
         raise HTTPException(status_code=502, detail="Google Drive error")
 
 
