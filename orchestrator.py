@@ -82,6 +82,8 @@ from modules.compat.router import router as compat_router  # noqa: E402
 from modules.core.router_health import router as health_router  # noqa: E402
 from modules.knowledge.router_google_drive import router as google_drive_rag_router  # noqa: E402
 from modules.knowledge.router_rss import router as rss_router  # noqa: E402
+from modules.kp.router import router as kp_router  # noqa: E402
+from modules.kp.router import webhook_router as kp_webhook_router  # noqa: E402
 from modules.monitoring.router_logs import router as logs_router  # noqa: E402
 from modules.outbound.router import router as outbound_router  # noqa: E402
 from modules.procurement.router import router as procurement_router  # noqa: E402
@@ -125,6 +127,8 @@ app.include_router(compat_router)
 app.include_router(logs_router)
 app.include_router(procurement_router)
 app.include_router(outbound_router)
+app.include_router(kp_router)
+app.include_router(kp_webhook_router)
 app.include_router(widget_public_router)
 
 # Hardware/GPU routers — skip in cloud mode
@@ -298,6 +302,14 @@ async def startup_event():
         task_registry.register("google-drive-sync", drive_rag_daily_sync)
         task_registry.register(
             "bot-process-watcher", watch_bot_processes, interval=30, initial_delay=15
+        )
+        from modules.kp.service import kp_service
+        from modules.kp.tasks import INTERVAL as KP_TIMERS_INTERVAL
+        from modules.kp.tasks import kp_timers_tick
+
+        await kp_service.ensure_default_rules()
+        task_registry.register(
+            "kp-timers", kp_timers_tick, interval=KP_TIMERS_INTERVAL, initial_delay=90
         )
 
         await task_registry.start_all()

@@ -23,6 +23,8 @@ export interface OutboundMessage {
   decided_by: string | null;
   decided_at: string | null;
   sent_at: string | null;
+  /** Set when the message carries a КП or a КП timer reminder. */
+  kp?: { kind: "kp" | "followup"; quote_id: number; number: string | null } | null;
 }
 
 export interface OutboundList {

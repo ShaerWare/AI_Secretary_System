@@ -22,6 +22,7 @@ import {
   Database,
   Trash2,
   ShieldCheck,
+  FileText,
   Activity,
 } from 'lucide-vue-next'
 import { amocrmApi } from '@/api/amocrm'
@@ -31,6 +32,7 @@ import CrmKanban from '@/components/CrmKanban.vue'
 import CrmDeals from '@/components/CrmDeals.vue'
 import CrmInbox from '@/components/CrmInbox.vue'
 import CrmOutbound from '@/components/CrmOutbound.vue'
+import CrmKp from '@/components/CrmKp.vue'
 import CrmMonitor from '@/components/CrmMonitor.vue'
 
 const { t } = useI18n()
@@ -44,6 +46,7 @@ const tabs = computed(() => {
   // they watch the assistant's own channels.
   const list = [
     { id: 'outbound', label: t('crm.tabs.outbound'), icon: ShieldCheck },
+    { id: 'kp', label: t('crm.tabs.kp'), icon: FileText },
     { id: 'monitor', label: t('crm.tabs.monitor'), icon: Activity },
     { id: 'settings', label: t('crm.tabs.settings'), icon: Settings2 },
   ]
@@ -718,7 +721,10 @@ onMounted(async () => {
     <CrmInbox v-if="activeTab === 'inbox'" />
 
     <!-- Tab Content: Approval queue -->
-    <CrmOutbound v-if="activeTab === 'outbound'" />
+    <CrmOutbound v-if="activeTab === 'outbound'" @open-kp="activeTab = 'kp'" />
+
+    <!-- Tab Content: КП (commercial offers) -->
+    <CrmKp v-if="activeTab === 'kp'" />
 
     <!-- Tab Content: Monitoring -->
     <CrmMonitor v-if="activeTab === 'monitor'" @open-queue="activeTab = 'outbound'" />

@@ -191,6 +191,55 @@ class OutboundService:
             )
             return {"action": "queued", "id": row.id, "ack_text": ack_text, "mode": MODE_APPROVAL}
 
+    @retry_on_busy()
+    async def enqueue(
+        self,
+        channel: str,
+        instance_id: str,
+        target: str,
+        text: str,
+        session_id: Optional[str] = None,
+        client_text: Optional[str] = None,
+    ) -> int:
+        """Put a message straight into the queue, whatever the channel's mode.
+
+        For messages the assistant does not send as a reply — a КП, a timer
+        reminder — which always need a human, even on an «auto» channel.
+        """
+        now = datetime.utcnow()
+        async with AsyncSessionLocal() as session:
+            row = OutboundMessage(
+                channel=channel,
+                instance_id=instance_id,
+                target=target,
+                session_id=session_id,
+                client_text=client_text,
+                draft_text=text,
+                text=text,
+                status=STATUS_PENDING,
+                ack_sent=False,
+                created=now,
+                updated=now,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row.id
+
+    @retry_on_busy()
+    async def cancel(self, message_id: int, reason: str) -> None:
+        """Withdraw a pending message without a human decision (the КП changed)."""
+        async with AsyncSessionLocal() as session:
+            row = await session.get(OutboundMessage, message_id)
+            if not row or row.status not in (STATUS_PENDING, STATUS_FAILED):
+                return
+            row.status = STATUS_REJECTED
+            row.error = reason
+            row.decided_by = "system"
+            row.decided_at = datetime.utcnow()
+            row.updated = datetime.utcnow()
+            await session.commit()
+
     # ─── CRUD ─────────────────────────────────────────────────
 
     async def list_messages(
@@ -225,12 +274,20 @@ class OutboundService:
         for st, n in counts_rows:
             key = STATUS_FAILED if st == STATUS_SENDING else st
             counts[key] = counts.get(key, 0) + n
-        return {"messages": [r.to_dict() for r in rows], "counts": counts}
+        messages = [r.to_dict() for r in rows]
+        kp_links = await _kp_links([m["id"] for m in messages])
+        for m in messages:
+            m["kp"] = kp_links.get(m["id"])
+        return {"messages": messages, "counts": counts}
 
     async def get(self, message_id: int) -> Optional[dict[str, Any]]:
         async with AsyncSessionLocal() as session:
             row = await session.get(OutboundMessage, message_id)
-            return row.to_dict() if row else None
+            if not row:
+                return None
+            message = row.to_dict()
+        message["kp"] = (await _kp_links([message_id])).get(message_id)
+        return message
 
     @retry_on_busy()
     async def update_text(self, message_id: int, text: str) -> dict[str, Any]:
@@ -282,11 +339,31 @@ class OutboundService:
             )
 
         error: Optional[str] = None
+        is_kp = False
+        kp_link = None
         try:
-            await deliver(channel, instance_id, target, final_text)
-        except DeliveryError as e:
-            error = str(e)
-            logger.warning("Outbound #%s delivery failed: %s", message_id, error)
+            from modules.kp.service import kp_service
+
+            kp_link = await kp_service.find_by_outbound(message_id)
+        except Exception:
+            # The КП lookup must never block an ordinary reply — but a КП text
+            # with an unfilled link placeholder must never reach the client.
+            logger.exception("Outbound #%s: КП lookup failed", message_id)
+            if "{link}" in final_text:
+                error = "Не удалось проверить КП — повторите отправку"
+        if kp_link:
+            is_kp = True
+            try:
+                # The client link comes from the PIM at the moment of sending.
+                final_text = await kp_service.before_outbound_send(message_id, final_text, kp_link)
+            except Exception as e:
+                error = str(e) or type(e).__name__
+        if not error:
+            try:
+                await deliver(channel, instance_id, target, final_text)
+            except DeliveryError as e:
+                error = str(e)
+                logger.warning("Outbound #%s delivery failed: %s", message_id, error)
 
         async with AsyncSessionLocal() as session:
             row = await session.get(OutboundMessage, message_id)
@@ -301,6 +378,9 @@ class OutboundService:
                 row.status = STATUS_SENT
                 row.error = None
                 row.sent_at = datetime.utcnow()
+                if is_kp:
+                    # Record what the client really got: the text with the link.
+                    row.text = final_text
             await session.commit()
             await session.refresh(row)
             result = row.to_dict()
@@ -311,6 +391,13 @@ class OutboundService:
                 "client_text": row.client_text or "",
             }
 
+        if is_kp:
+            try:
+                from modules.kp.service import kp_service
+
+                await kp_service.after_outbound_send(message_id, decided_by, error, final_text)
+            except Exception:
+                logger.exception("Outbound #%s: КП status update failed", message_id)
         if not error:
             if final_text != snapshot["draft_text"]:
                 await self._rewrite_history(snapshot["chat_message_id"], final_text)
@@ -337,6 +424,12 @@ class OutboundService:
             result = row.to_dict()
         # The assistant must not "remember" saying something the client never saw.
         await self._rewrite_history(chat_message_id, REJECTED_PLACEHOLDER)
+        try:
+            from modules.kp.service import kp_service
+
+            await kp_service.on_outbound_reject(message_id, decided_by)
+        except Exception:
+            logger.exception("Outbound #%s: КП status update on reject failed", message_id)
         return result
 
     @retry_on_busy()
@@ -702,6 +795,17 @@ class OutboundService:
             "auto_create_lead": bool(config.get("auto_create_lead")),
             "last_sync_at": config.get("last_sync_at"),
         }
+
+
+async def _kp_links(message_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Which queue messages carry a КП (badge + link in the admin panel)."""
+    try:
+        from modules.kp.service import kp_service
+
+        return await kp_service.links_for_outbound(message_ids)
+    except Exception:
+        logger.debug("КП links lookup failed", exc_info=True)
+        return {}
 
 
 outbound_service = OutboundService()
