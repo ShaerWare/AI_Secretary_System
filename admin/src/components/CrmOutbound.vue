@@ -25,6 +25,8 @@ import { useToastStore } from "@/stores/toast";
 import { useConfirmStore } from "@/stores/confirm";
 import { useAuthStore } from "@/stores";
 
+const emit = defineEmits<{ "open-kp": [] }>();
+
 const { t } = useI18n();
 const toast = useToastStore();
 const confirmStore = useConfirmStore();
@@ -318,6 +320,18 @@ function statusClass(status: string): string {
             >
               {{ t("outbound.editedBadge") }}
             </span>
+            <button
+              v-if="m.kp"
+              class="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary hover:bg-primary/30"
+              :title="t('outbound.openKp')"
+              @click="emit('open-kp')"
+            >
+              {{
+                m.kp.kind === "kp"
+                  ? t("outbound.kpBadge", { number: m.kp.number || "" })
+                  : t("outbound.kpFollowupBadge", { number: m.kp.number || "" })
+              }}
+            </button>
             <span v-if="m.ack_sent" class="text-xs text-muted-foreground flex items-center gap-1">
               <Check class="w-3 h-3" /> {{ t("outbound.ackSent") }}
             </span>
@@ -350,6 +364,12 @@ function statusClass(status: string): string {
               >
                 {{ m.text }}
               </div>
+              <p
+                v-if="m.kp && m.status !== 'sent' && m.text.includes('{link}')"
+                class="mt-1 text-xs text-muted-foreground"
+              >
+                {{ t("outbound.kpLinkHint") }}
+              </p>
               <details v-if="m.edited" class="mt-2 text-xs text-muted-foreground">
                 <summary class="cursor-pointer">{{ t("outbound.showDraft") }}</summary>
                 <div class="mt-1 p-2 rounded bg-secondary/30 whitespace-pre-wrap">

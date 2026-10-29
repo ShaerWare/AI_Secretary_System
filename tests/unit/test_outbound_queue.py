@@ -20,6 +20,7 @@ import db.models  # noqa: F401  — registers every table so FKs resolve
 from db.database import Base
 from modules.chat.models import ChatMessage, ChatSession
 from modules.core.models import Workspace
+from modules.kp import service as kp_module
 from modules.outbound import service as outbound_module
 from modules.outbound.models import STATUS_FAILED, STATUS_REJECTED, STATUS_SENT
 from modules.outbound.sender import DeliveryError
@@ -87,6 +88,8 @@ async def env(test_engine, test_session_factory, monkeypatch):
 
     config = _Config()
     monkeypatch.setattr(outbound_module, "AsyncSessionLocal", test_session_factory)
+    # the queue asks the КП module whether a message carries a КП
+    monkeypatch.setattr(kp_module, "AsyncSessionLocal", test_session_factory)
     monkeypatch.setattr(outbound_module, "deliver", fake_deliver)
     monkeypatch.setattr(outbound_module, "config_service", config)
 

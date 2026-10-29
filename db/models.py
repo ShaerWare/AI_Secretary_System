@@ -74,6 +74,7 @@ from modules.knowledge.models import (
     RSSFeed,
     RSSFeedItem,
 )
+from modules.kp.models import KpEvent, KpQuote, KpTimerRule
 from modules.llm.models import (
     DEFAULT_LLM_PRESETS,
     PROVIDER_TYPES,
@@ -158,6 +159,9 @@ __all__ = [
     "WooCommerceConfig",
     # procurement
     "OutboundMessage",
+    "KpQuote",
+    "KpTimerRule",
+    "KpEvent",
     "ProductOffer",
     # telephony
     "GSMCallLog",

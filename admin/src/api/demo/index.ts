@@ -21,6 +21,7 @@ import { ttsFinetueRoutes } from './ttsFinetune'
 import { botSalesRoutes } from './botSales'
 import { amocrmRoutes } from './amocrm'
 import { outboundRoutes } from './outbound'
+import { kpRoutes } from './kp'
 import { whatsappRoutes, initWhatsAppData } from './whatsapp'
 import { claudeCodeRoutes } from './claudeCode'
 import { kanbanRoutes } from './kanban'
@@ -32,6 +33,7 @@ const allRoutes: DemoRoute[] = [
   ...authRoutes,
   ...amocrmRoutes,
   ...outboundRoutes,
+  ...kpRoutes,
   ...botSalesRoutes,  // Must be before telegramRoutes (more specific patterns)
   ...telegramRoutes,
   ...whatsappRoutes,

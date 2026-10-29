@@ -35,7 +35,7 @@ def build_kp(
     *,
     client_name: Optional[str] = None,
     quote_date: Optional[str] = None,
-    valid_days: int = 5,
+    valid_days: int = 3,
 ) -> dict:
     """Assemble a КП from priced line items.
 
@@ -129,7 +129,8 @@ def _render_markdown(
             f"({rate_used.get('rate_source')}){stale}._"
         )
     out.append(f"_{DELIVERY_LINE}_")
-    out.append(f"_Цены действительны {valid_days} рабочих дней._")
+    # Default matches kp_settings.default_valid_days (director, 28.10.2026: 1–3 days).
+    out.append(f"_Цены действительны {valid_days} дн. с даты КП._")
     return "\n".join(out)
 
 

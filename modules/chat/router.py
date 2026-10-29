@@ -293,6 +293,29 @@ async def _file_whatsapp_turn(
     )
 
 
+def _maybe_draft_kp(
+    session: dict, client_text: str, llm, rag_mode: str | None, collection_ids: list[int]
+) -> None:
+    """The client asked for a КП in a sales WhatsApp dialogue → the assistant drafts it.
+
+    Only a draft in the PIM: it waits for a manager on the CRM page (КП tab and
+    the approval queue) and never reaches the client by itself.
+    """
+    if session.get("source") != "whatsapp":
+        return
+    from modules.chat.facade import _is_procurement_session
+
+    if not _is_procurement_session(collection_ids or [], rag_mode):
+        return
+    from modules.kp.extract import is_kp_request
+
+    if not is_kp_request(client_text):
+        return
+    from modules.kp.service import kp_service
+
+    asyncio.create_task(kp_service.maybe_auto_draft(session, client_text, llm))
+
+
 # ============== Token Counting Helpers ==============
 
 
@@ -1006,6 +1029,7 @@ async def admin_stream_chat_message(
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
         _publish_whatsapp_turn(session, crm_lead_id, msg_request.content, "".join(full_response))
+        _maybe_draft_kp(session, msg_request.content, active_llm, rag_mode, collection_ids)
 
     return StreamingResponse(
         generate_stream(),
