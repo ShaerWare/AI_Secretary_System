@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import {
+  Brain,
   Users,
   Building2,
   Link2,
@@ -33,6 +34,7 @@ import CrmDeals from '@/components/CrmDeals.vue'
 import CrmInbox from '@/components/CrmInbox.vue'
 import CrmOutbound from '@/components/CrmOutbound.vue'
 import CrmKp from '@/components/CrmKp.vue'
+import CrmClients from '@/components/CrmClients.vue'
 import CrmMonitor from '@/components/CrmMonitor.vue'
 
 const { t } = useI18n()
@@ -47,6 +49,7 @@ const tabs = computed(() => {
   const list = [
     { id: 'outbound', label: t('crm.tabs.outbound'), icon: ShieldCheck },
     { id: 'kp', label: t('crm.tabs.kp'), icon: FileText },
+    { id: 'clients', label: t('crm.tabs.clients'), icon: Brain },
     { id: 'monitor', label: t('crm.tabs.monitor'), icon: Activity },
     { id: 'settings', label: t('crm.tabs.settings'), icon: Settings2 },
   ]
@@ -725,6 +728,9 @@ onMounted(async () => {
 
     <!-- Tab Content: КП (commercial offers) -->
     <CrmKp v-if="activeTab === 'kp'" />
+
+    <!-- Tab Content: client cards (assistant memory) -->
+    <CrmClients v-if="activeTab === 'clients'" />
 
     <!-- Tab Content: Monitoring -->
     <CrmMonitor v-if="activeTab === 'monitor'" @open-queue="activeTab = 'outbound'" />

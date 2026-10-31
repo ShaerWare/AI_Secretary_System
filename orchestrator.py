@@ -78,6 +78,7 @@ from app.routers import (  # noqa: E402
     yoomoney_webhook,
 )
 from modules.channels.widget.router_public import router as widget_public_router  # noqa: E402
+from modules.clients.router import router as clients_router  # noqa: E402
 from modules.compat.router import router as compat_router  # noqa: E402
 from modules.core.router_health import router as health_router  # noqa: E402
 from modules.knowledge.router_google_drive import router as google_drive_rag_router  # noqa: E402
@@ -128,6 +129,7 @@ app.include_router(logs_router)
 app.include_router(procurement_router)
 app.include_router(outbound_router)
 app.include_router(kp_router)
+app.include_router(clients_router)
 app.include_router(kp_webhook_router)
 app.include_router(widget_public_router)
 
@@ -310,6 +312,12 @@ async def startup_event():
         await kp_service.ensure_default_rules()
         task_registry.register(
             "kp-timers", kp_timers_tick, interval=KP_TIMERS_INTERVAL, initial_delay=90
+        )
+        from modules.clients.tasks import INTERVAL as CLIENT_CARDS_INTERVAL
+        from modules.clients.tasks import client_cards_tick
+
+        task_registry.register(
+            "client-cards", client_cards_tick, interval=CLIENT_CARDS_INTERVAL, initial_delay=150
         )
 
         await task_registry.start_all()

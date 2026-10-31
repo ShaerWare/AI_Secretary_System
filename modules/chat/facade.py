@@ -323,6 +323,24 @@ def _inject_context_files(prompt: str | None, session: dict) -> str | None:
     return f"{base}\n\n--- Прикреплённые файлы ---\n{files_text}"
 
 
+async def _inject_client_card(prompt: str | None, session: dict) -> str | None:
+    """Append what is known about this client from earlier dialogues.
+
+    Only for channel instances with client memory switched on; a lookup failure
+    never breaks the reply.
+    """
+    try:
+        from modules.clients.service import client_memory_service
+
+        block = await client_memory_service.prompt_block(session)
+    except Exception:
+        logger.exception("client card lookup failed for session %s", session.get("id"))
+        return prompt
+    if not block:
+        return prompt
+    return f"{prompt or _DEFAULT_RAG_PROMPT}\n\n{block}"
+
+
 def _execute_knowledge_search(wiki_rag, query: str, collection_ids: list[int]) -> str:
     """Execute a knowledge base search (sync)."""
     if len(collection_ids) == 1:
@@ -917,6 +935,7 @@ class ChatServiceImpl:
                 )
 
         prompt = _inject_context_files(prompt, session)
+        prompt = await _inject_client_card(prompt, session)
 
         messages = await self._crud.get_messages_for_llm(
             session_id,
@@ -1052,6 +1071,7 @@ class ChatServiceImpl:
                 )
 
         prompt = _inject_context_files(prompt, session)
+        prompt = await _inject_client_card(prompt, session)
 
         messages = await self._crud.get_messages_for_llm(
             session_id,
