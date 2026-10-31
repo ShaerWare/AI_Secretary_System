@@ -1245,6 +1245,36 @@ function approveLabel(q: KpQuote): string {
           <input v-model="settingsForm.notify_telegram" type="checkbox" :disabled="!canEdit" />
           {{ t("kp.notifyTelegram") }}
         </label>
+        <div>
+          <label class="block text-sm font-medium mb-1">{{ t("kp.notifyWhatsappNumbers") }}</label>
+          <input
+            v-model="settingsForm.notify_whatsapp_numbers"
+            class="input w-full"
+            placeholder="77011234567, 77779876543"
+            :disabled="!canEdit"
+          />
+          <p class="text-xs text-muted-foreground mt-1">{{ t("kp.notifyWhatsappNumbersHint") }}</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">{{ t("kp.notifyWhatsappInstance") }}</label>
+          <select
+            v-model="settingsForm.notify_whatsapp_instance_id"
+            class="input w-full"
+            :disabled="!canEdit"
+          >
+            <option value="">{{ t("kp.notifyWhatsappInstanceDefault") }}</option>
+            <option v-for="inst in waInstances" :key="inst.instance_id" :value="inst.instance_id">
+              {{ inst.name }}
+            </option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">
+            {{ t("kp.notifyWhatsappInstanceHint") }}
+          </p>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="settingsForm.notify_whatsapp" type="checkbox" :disabled="!canEdit" />
+          {{ t("kp.notifyWhatsapp") }}
+        </label>
         <div class="md:col-span-2">
           <label class="block text-sm font-medium mb-1">{{ t("kp.sendTemplate") }}</label>
           <textarea
