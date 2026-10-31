@@ -84,6 +84,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "followup_instance_id": "",
     "notify_telegram": True,
     "notify_chat_id": "",
+    # Manager pings mirrored to WhatsApp: recipients' numbers (comma/newline
+    # separated) and the instance that sends them (empty → followup_instance_id).
+    "notify_whatsapp": True,
+    "notify_whatsapp_numbers": "",
+    "notify_whatsapp_instance_id": "",
     "tz_offset_hours": timers.DEFAULT_TZ_OFFSET_HOURS,
 }
 
@@ -247,7 +252,7 @@ class KpService:
             raise KpError("Срок действия по умолчанию — от 1 до 365 дней")
         current["default_valid_days"] = days
         current["tz_offset_hours"] = float(current["tz_offset_hours"])
-        for flag in ("auto_draft", "import_pim_quotes", "notify_telegram"):
+        for flag in ("auto_draft", "import_pim_quotes", "notify_telegram", "notify_whatsapp"):
             current[flag] = bool(current[flag])
         await config_service.set(CONFIG_KEY, current)
         return current
@@ -1629,8 +1634,13 @@ class KpService:
         }
 
     async def _notify(self, text: str) -> None:
-        """Telegram ping to the manager/director. Best-effort, never raises."""
+        """Ping to the manager/director (Telegram + WhatsApp). Best-effort, never raises."""
         settings = await self.get_settings()
+        await self._notify_telegram(settings, text)
+        await self._notify_whatsapp(settings, text)
+
+    @staticmethod
+    async def _notify_telegram(settings: dict[str, Any], text: str) -> None:
         if not settings["notify_telegram"]:
             return
         token = os.getenv("KP_TELEGRAM_BOT_TOKEN") or os.getenv("LEAD_TELEGRAM_BOT_TOKEN", "")
@@ -1653,6 +1663,29 @@ class KpService:
                 )
         except Exception as e:
             logger.warning("KP Telegram notification failed: %s", e)
+
+    @staticmethod
+    async def _notify_whatsapp(settings: dict[str, Any], text: str) -> None:
+        """Internal ping to staff numbers — not a client message, so no approval queue."""
+        if not settings["notify_whatsapp"]:
+            return
+        instance_id = str(
+            settings["notify_whatsapp_instance_id"] or settings["followup_instance_id"] or ""
+        ).strip()
+        numbers = [
+            _normalize_target(n)
+            for n in re.split(r"[,;\n]+", str(settings["notify_whatsapp_numbers"] or ""))
+            if n.strip()
+        ]
+        if not instance_id or not numbers:
+            return
+        from modules.outbound.sender import send_whatsapp
+
+        for number in numbers:
+            try:
+                await send_whatsapp(instance_id, number, text)
+            except Exception as e:
+                logger.warning("KP WhatsApp notification to %s failed: %s", number, e)
 
     async def handle_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Push from the PIM (docs/pim-api-for-kp.md): an offer changed."""

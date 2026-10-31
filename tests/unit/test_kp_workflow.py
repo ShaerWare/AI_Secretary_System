@@ -411,3 +411,34 @@ async def test_auto_draft_only_on_kp_request(env, monkeypatch):
     assert calls == []
     await kp_service.maybe_auto_draft(session, "Пришлите КП на эти позиции", llm=None)
     assert calls == [SESSION]
+
+
+async def test_notify_mirrors_to_whatsapp_staff_numbers(monkeypatch):
+    import modules.outbound.sender as sender_module
+
+    sent: list[tuple[str, str, str]] = []
+
+    async def fake_send(instance_id, target, text):
+        sent.append((instance_id, target, text))
+        if target == "77010000002":
+            raise sender_module.DeliveryError("bridge down")
+
+    monkeypatch.setattr(sender_module, "send_whatsapp", fake_send)
+    settings = {
+        **kp_module.DEFAULT_SETTINGS,
+        "notify_telegram": False,
+        "followup_instance_id": "wa-followup",
+        "notify_whatsapp_numbers": "+7 701 000-00-01, 77010000002\n77010000003",
+    }
+    await kp_service._notify_whatsapp(settings, "🧾 КП готово")
+    # Empty instance falls back to the follow-up one; a failed number doesn't stop the rest.
+    assert sent == [
+        ("wa-followup", "77010000001", "🧾 КП готово"),
+        ("wa-followup", "77010000002", "🧾 КП готово"),
+        ("wa-followup", "77010000003", "🧾 КП готово"),
+    ]
+
+    sent.clear()
+    await kp_service._notify_whatsapp({**settings, "notify_whatsapp": False}, "x")
+    await kp_service._notify_whatsapp({**settings, "notify_whatsapp_numbers": ""}, "x")
+    assert sent == []

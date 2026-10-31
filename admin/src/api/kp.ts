@@ -110,6 +110,9 @@ export interface KpSettings {
   followup_instance_id: string;
   notify_telegram: boolean;
   notify_chat_id: string;
+  notify_whatsapp: boolean;
+  notify_whatsapp_numbers: string;
+  notify_whatsapp_instance_id: string;
   tz_offset_hours: number;
 }
 

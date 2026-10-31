@@ -17,6 +17,9 @@ const settings: KpSettings = {
   followup_instance_id: "",
   notify_telegram: true,
   notify_chat_id: "",
+  notify_whatsapp: true,
+  notify_whatsapp_numbers: "",
+  notify_whatsapp_instance_id: "",
   tz_offset_hours: 5,
 };
 
