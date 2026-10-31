@@ -69,7 +69,10 @@ for f in "$DIR"/*.md; do
   fname=$(basename "$f")
   title=$(head -1 "$f" | sed 's/^# //' | sed "s/'/''/g")
   size=$(stat -c %s "$f" 2>/dev/null || wc -c < "$f")
-  sections=$(grep -c '^## ' "$f" || echo 1)
+  # grep -c prints "0" AND exits 1 on no match, so `|| echo 1` would yield "0\n1"
+  # and break the INSERT below.
+  sections=$(grep -c '^## ' "$f" || true)
+  [ "${sections:-0}" -gt 0 ] || sections=1
   sqlite3 "$DB" "INSERT INTO knowledge_documents(filename, title, source_type, file_size_bytes, section_count, collection_id, workspace_id) VALUES('${fname}','${title}','dev-architecture',${size},${sections},${COLL_ID},1);"
   echo "  registered: ${fname} (${size}b)"
 done
