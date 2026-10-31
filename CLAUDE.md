@@ -156,6 +156,7 @@ Always run lint locally before pushing. Protected branches require PR workflow �
 | `orchestrator.py`, `ServiceContainer`, DB layer, Unit of Work, SQLITE_BUSY retry, LLM calls off the event loop | [docs/arch/backend-core.md](docs/arch/backend-core.md) | any backend change touching startup, DB writes or LLM calls |
 | Telegram and WhatsApp bots (subprocesses, Cloud API vs QR bridge, sales funnel) | [docs/arch/channels.md](docs/arch/channels.md) | bot behaviour, WhatsApp bridge |
 | Outbound approval queue, channel monitoring, КП in PIM ar-gs.ru + timers | [docs/arch/outbound-kp.md](docs/arch/outbound-kp.md) | anything sent to a client, КП |
+| Client card: what the assistant remembers about a client between dialogues (WhatsApp), `client-cards` task, CRM tab «Клиенты» | [docs/arch/client-memory.md](docs/arch/client-memory.md) | client memory, anything added to a client channel's prompt |
 | Cloud LLM providers, `claude_bridge` tools, platform-agent fallback, personas, role prompts, bridge HOME isolation, per-user Claude token tracking | [docs/arch/llm-prompts.md](docs/arch/llm-prompts.md) | prompt precedence, providers, personas, usage |
 | Wiki RAG, Vector Search, agentic RAG, Google Drive sources, RSS, dev-architecture collection, scraped legal/SEO collections | [docs/arch/knowledge-rag.md](docs/arch/knowledge-rag.md) | knowledge base, collections, Drive/RSS sync |
 | Admin panel: stack, routing, stores (toast/confirm API), API layer, demo mode, lite variant | [docs/arch/frontend-admin.md](docs/arch/frontend-admin.md) | any `admin/` change |
@@ -178,6 +179,7 @@ Interactive architecture map: [docs/architecture/architecture-map.html](docs/arc
 - **Client channels (widget/telegram/whatsapp) never get `prompts/platform-agent.md`.** → [llm-prompts](docs/arch/llm-prompts.md)
 - **Procurement never invents goods, prices or stock** — `OfferService.search()` returns `[]`; «✅ в наличии» only for confirmed stock; supplier names and purchase prices only for managers. Search changes need a service restart. → [procurement](docs/arch/procurement.md)
 - **The assistant only drafts КП; a human approves every send.** → [outbound-kp](docs/arch/outbound-kp.md)
+- **Prices and stock never come from memory** — the client card drops such lines in code (`clean_card`); prices only from the live catalog search. → [client-memory](docs/arch/client-memory.md)
 
 ## Code Patterns
 

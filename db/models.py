@@ -44,6 +44,7 @@ from modules.chat.models import (
     ResourceShare,
 )
 from modules.claude_code.models import ClaudeCodeProject, ClaudeCodeSession
+from modules.clients.models import ClientProfile
 from modules.core.models import (
     Role,
     RolePermission,
@@ -159,6 +160,7 @@ __all__ = [
     "WooCommerceConfig",
     # procurement
     "OutboundMessage",
+    "ClientProfile",
     "KpQuote",
     "KpTimerRule",
     "KpEvent",
