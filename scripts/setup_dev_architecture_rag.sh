@@ -2,10 +2,10 @@
 # Bootstrap script for the "dev-architecture" RAG collection.
 #
 # Provides the assistant with project-specific architecture context
-# (CLAUDE.md + Code-Patterns.md) so dev chat sessions get accurate
-# answers about file paths, modular layout, RBAC, EventBus, etc.
+# (CLAUDE.md + docs/arch/*.md + Code-Patterns.md) so dev chat sessions get
+# accurate answers about file paths, modular layout, RBAC, EventBus, etc.
 #
-# Idempotent: safe to re-run after CLAUDE.md or Code-Patterns.md change.
+# Idempotent: safe to re-run after CLAUDE.md, docs/arch/ or Code-Patterns.md change.
 # After running, restart orchestrator to reindex:
 #   systemctl restart ai-secretary
 #
@@ -29,6 +29,16 @@ mkdir -p "$DIR"
 # 1. Copy current CLAUDE.md into the collection dir (refresh on every run).
 cp "${REPO_ROOT}/CLAUDE.md" "${DIR}/CLAUDE.md"
 echo "Refreshed CLAUDE.md copy in ${DIR}"
+
+# CLAUDE.md is only the map; the detail lives in docs/arch/*.md. Copy them as
+# arch-*.md, dropping stale copies first so a removed/renamed topic file
+# doesn't linger in the index.
+rm -f "${DIR}"/arch-*.md
+for f in "${REPO_ROOT}"/docs/arch/*.md; do
+  [ -f "$f" ] || continue
+  cp "$f" "${DIR}/arch-$(basename "$f")"
+done
+echo "Refreshed docs/arch copies in ${DIR}"
 
 # Code-Patterns.md is committed to git directly in $DIR — no copy needed.
 if [ ! -f "${DIR}/Code-Patterns.md" ]; then

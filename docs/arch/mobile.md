@@ -1,0 +1,39 @@
+# Mobile app
+
+> Part of the project map in [CLAUDE.md](../../CLAUDE.md). Split out of CLAUDE.md verbatim on 2026-10-31; update it in the same PR as the code it describes.
+
+## Mobile App (`mobile/`)
+
+**Stack**: Vue 3 + TypeScript, Vite, Pinia, Vue Router, Capacitor (Android), TailwindCSS 4. Path alias `@` → `mobile/src/`.
+
+**Purpose**: Standalone Android chat app connecting to `https://ai-sekretar24.ru` (hardcoded). Role-based experience: admins get full chat controls, non-admins see only shared chats.
+
+**Screens**: LoginView (auth only, no server URL), ChatListView (admin: session list + FAB + delete; non-admin: Claude-like welcome + shared chat cards), ChatView (streaming chat + TTS + role-based controls), SettingsView (account + logout).
+
+**Theme**: Night-eyes (warm brown/amber/gold), hardcoded — no theme switching. Background `#1a1308`, text `#d9c9a8`, primary amber-600, cards stone-800.
+
+**Role-based access**:
+- **Admin** (`role=admin`): full chat controls — LLM provider selector, RAG collection multi-select, system prompt editing, export (copy/md/json), branching, context files, all message actions (edit, regenerate, summarize, delete branch), session creation/deletion. Admin-only controls live in admin panel only (not mobile).
+- **Non-admin**: shared chats (`is_shared_with_me` filter), Claude-like welcome, basic message actions (TTS + copy), branching, context files, web search toggle. No LLM/RAG selectors, no export, no session deletion.
+
+**Mobile Instances**: Admin creates `MobileAppInstance` (LLM backend, persona, system prompt, TTS, RAG) in admin panel (`/mobile-app` view). Users are assigned to instances via `ResourceShare`. On login, mobile app fetches `GET /admin/mobile/my-config` to get assigned instance config. Chat sessions use `source="mobile"` + `mobile_instance_id` for per-instance LLM/prompt routing.
+
+**Default-assistant provisioning** (`modules/channels/mobile/provisioning.py`): every user gets a default set of assistants automatically at registration — no manual share step. `ASSISTANT_CATALOG` defines 6 `MobileAppInstance`s with a `scope`: country-agnostic (`marketer` → SEO collection `ru-sbup-seo`; `programmer` → prompt-only PHP/Laravel `programmer-ru.md`, stack editable per user) shared with everyone, plus country-specific (`lawyer-ru`+`accountant-ru` for `scope="ru"`, `lawyer-kz`+`accountant-kz` for `scope="kz"`). A user's country comes from `User.country` (`"ru"` default / `"kz"`, migration `0026_add_user_country`; `stalker`+`stalkerelectric` seeded to `kz`). `ensure_default_instances(session)` idempotently upserts the 6 instances from `prompts/*.md` (resolving collection slugs→ids, skipping absent ones); `provision_default_assistants(session, user_id, country)` idempotently adds `ResourceShare` (view) rows for `marketer`+`programmer`+the country pair. Hooked into `WorkspaceService.accept_invite` (invite registration) and `scripts/manage_users.py create` (CLI, best-effort — never blocks user creation). An assistant with no collections gets `rag_mode="none"`, never `"all"`: "all" expands to every enabled collection — the StalkerElectric catalog included — which switched on the procurement offer injection and made the prompt-only «Программист» answer off-topic requests as an electrical-goods sales desk. `_is_procurement_session()` in `modules/chat/facade.py` likewise ignores `rag_mode="all"` (procurement is opt-in by attaching the catalog explicitly); existing instances + their private sessions are fixed by `scripts/migrate_prompt_only_assistants_rag.py` (`--dry-run`). Provisioning is **additive** (never revokes — a country change dropping the other country's pair is a separate concern). Backfill for pre-existing users: `scripts/seed_legal_assistants.py` (ensures instances + shares per-user by country; idempotent, `--dry-run`). Prompts: `lawyer-ru.md`/`lawyer-kz.md`/`accountant-ru.md`/`accountant-kz.md` cite article+code and refuse crime/tax-evasion; `lawyer-ru.md`'s advertised catalog is deliberately trimmed to the 11 collections actually attached (do not re-add laws that aren't scraped, or the assistant hallucinates having them).
+
+**Private per-user assistant sessions**: Assigned assistants (Юрист/Бухгалтер/…) give each user their OWN writable `ChatSession` (`owner_id=user`, `source="mobile"`, `source_id=instance_id`) that inherits the instance's prompt + RAG — the config is shared, the dialogue is private. This replaces the old "share one conversation read-only with everyone" model, which surfaced as a **"Только для чтения"** dead-end for non-admins (the frontend gates input on `is_shared_with_me && share_permission==='read'`, regardless of the user's actual `chat` permission). Find-or-create endpoint: `GET /admin/mobile/instances/{id}/my-session` (`chat:view` only, creates server-side so view-tier users still land in a writable session — but sending still needs `chat:edit`, i.e. operator/user/web roles, since `POST /sessions/{id}/stream` requires it). `ChatRepository.find_user_instance_session()` does the lookup. Both admin (`ChatView.vue` assistant switcher) and mobile (`ChatListView.vue`/`ChatView.vue`) open/create the private session instead of a read share. Migration `scripts/migrate_assistant_private_sessions.py` pre-creates the private sessions and drops the old cross-user `ChatSessionShare` rows on `source="mobile"` sessions (idempotent, `--dry-run` supported).
+
+**API layer** (`mobile/src/api/`): `client.ts` (base fetch + `upload` for multipart FormData), `chat.ts` (sessions/streaming/branches/`uploadImage`), `admin.ts` (admin-only APIs, used only by admin panel).
+
+**File upload in chat**: Same backend as admin (`POST /admin/chat/sessions/{id}/upload-image`). `ChatInput.vue` has paperclip button between input and send. Files uploaded → `image_ids` passed to `streamMessage` → backend injects extracted text (OCR/PDF/DOCX/XLSX) into LLM context. Accepts: JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX, TXT, CSV, MD, JSON, XML, HTML, YAML. Max 300MB (`MAX_FILE_SIZE` in [modules/chat/image_service.py](../../modules/chat/image_service.py); on prod nginx `client_max_body_size` must be ≥300M — set to 350M). Upload processing (PIL thumbnail, pdfplumber/OCR/text extraction, disk I/O) runs in a worker thread via `asyncio.to_thread` (`_process_upload`) so a large/complex document can't freeze the orchestrator's event loop. Serving uploads (`GET /admin/chat/sessions/{id}/images/{file}`) accepts auth via the `Authorization` header OR a `?token=` query param, since `<img src>` / `<a download>` requests can't send a header (`auth_manager.resolve_user_from_token` validates the query-param JWT identically to the header path).
+
+**Per-session named system prompts** (`ChatSessionPrompt` model, table `chat_session_prompts`): each chat session can hold multiple named prompts; exactly one is active. Endpoints `GET/POST /admin/chat/sessions/{id}/prompts`, `PATCH /admin/chat/sessions/{id}/prompts/{pid}`, `POST /admin/chat/sessions/{id}/prompts/{pid}/activate`, `DELETE …/{pid}`. The active prompt's content is mirrored into `ChatSession.system_prompt`, so the existing streaming pipeline picks it up unchanged — switching prompt swaps the assistant's role while preserving conversation history. Creating the first prompt while the session already has a `system_prompt` preserves it as the initial content. Deleting the active prompt promotes the most recent remaining one.
+
+**Key differences from admin panel**:
+- Hardcoded server URL (`https://ai-sekretar24.ru`), no user configuration
+- JWT stored in native Preferences (not localStorage)
+- No demo mode, no full RBAC UI — role-based chat experience
+- ~77KB gzipped (vs ~2MB admin)
+
+**Build**: `cd mobile && npm run build && npx cap sync android`. APK via Android Studio: `npx cap open android` → Build → Build APK.
+
+**No lint/format/test** — mobile app has only `dev`, `build`, `preview` scripts. Type checking happens during `npm run build` via `vue-tsc -b`.
