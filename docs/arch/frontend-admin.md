@@ -12,7 +12,7 @@
 
 **API layer** (`admin/src/api/`): `client.ts` provides `api.get/post/put/delete/upload` + `createSSE()` (auto-injects JWT). Domain files build on it. All re-exported from `api/index.ts`.
 
-**Demo mode**: `VITE_DEMO_MODE=true` monkey-patches `window.fetch` to intercept API calls with mock data from 23 domain files in `admin/src/api/demo/`.
+**Demo mode** (`admin/src/api/client.ts`): a patched `window.fetch` answers API calls with mock data from the domain files in `admin/src/api/demo/`. Two ways in: at build time `VITE_DEMO_MODE=true` (`npm run build -- --mode demo` / `demo-web`, `.env.demo*`) — on from page load; and at **runtime** `activateDemoMode()` — logging in as admin/admin (`stores/auth.ts:login` — that pair **always** goes to the offline demo, on any build, without calling the backend; a real admin account needs another password) or a stored demo token. The runtime path is why the demo module is a lazy `import("./demo/index")` that is present in every production bundle — tell builds apart by the base path, not by grep (see [deployment](deployment.md)).
 
 **Product variant** (`VITE_PRODUCT_VARIANT` env var, defaults to `full`): Set to `lite` to ship a stripped admin panel. Lite variant whitelists `/chat`, `/llm`, `/wiki`, `/finetune` (collections CRUD), `/widget`, `/telegram`, `/whatsapp`, `/mobile-app`, `/settings`, `/users`, `/about`, `/login`, `/invite/*` — everything else is blocked by the router guard and hidden from nav. Scripts: `npm run dev:lite` and `npm run build:lite`. Central helper: `admin/src/config/productVariant.ts` (`IS_LITE`, `isPathAllowed()`).
 

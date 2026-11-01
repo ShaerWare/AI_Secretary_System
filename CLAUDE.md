@@ -32,11 +32,11 @@ cd admin && npm run dev     # Dev server (:5173), proxies /admin + /v1 + /health
 DEV_MODE=1 ./start_gpu.sh   # Backend proxies to Vite dev server
 ```
 
-Default login: admin / admin. Guest demo: demo / demo (read-only).
+Default backend login: admin / admin — but in the admin panel that exact pair **always** opens the offline demo (`stores/auth.ts`, never reaches the backend), so the real admin needs a different password (`scripts/manage_users.py set-password`). See [frontend-admin](docs/arch/frontend-admin.md). Guest demo: demo / demo (read-only).
 
 **No frontend tests** — `npm test` is not configured. Type checking happens during `npm run build` via `vue-tsc -b`.
 
-**Deploy gotcha**: Vite deletes and recreates `admin/dist/` (new inode), breaking Docker bind mounts. Always `docker compose restart` after `npm run build`.
+**Deploy gotcha (Docker)**: Vite deletes and recreates `admin/dist/` (new inode), breaking Docker bind mounts. Always `docker compose restart` after `npm run build`. Production (systemd) is different — see [deployment](docs/arch/deployment.md).
 
 ### Mobile App
 
@@ -272,7 +272,7 @@ Check in this order — **infrastructure first**, application logic last:
 
 This project is developed from two machines:
 - **local** — dev workstation with GPU (RTX 3060), full stack
-- **server** — Beget VPS (`root@155.212.231.7`), systemd service, cloud LLM only
+- **server** — production VPS (`root@178.208.81.231`; the old `155.212.231.7` is down), systemd service, cloud LLM only
 
 Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`## Machine Role` section). **Check your machine role before git operations.**
 
