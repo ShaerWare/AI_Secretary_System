@@ -26,3 +26,10 @@ async def kp_timers_tick() -> None:
     stats = await kp_service.run_timers()
     if stats["expired"] or stats["fired"]:
         logger.info("KP timers: %s, sync: %s", stats, sync)
+
+
+async def kp_telegram_tick() -> None:
+    """Buttons under the КП cards: one long poll of the notification bot."""
+    from modules.kp.messenger import telegram_poll_tick
+
+    await telegram_poll_tick()

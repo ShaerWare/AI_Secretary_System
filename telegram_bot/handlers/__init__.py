@@ -15,6 +15,7 @@ from ..state import get_action_buttons
 from .callbacks import router as callbacks_router
 from .commands import router as commands_router
 from .files import router as files_router
+from .kp import router as kp_router
 from .messages import router as messages_router
 from .news import router as news_router
 from .sales import get_sales_router
@@ -90,6 +91,8 @@ def _make_simple_start_router() -> Router:
 def get_main_router(skip_sales: bool = False) -> Router:
     """Create and configure the main router with all sub-routers."""
     main_router = Router()
+    # КП buttons/replies from the managers' chat — before the funnel's FSM text input
+    main_router.include_router(kp_router)
     if skip_sales:
         # Simple /start handler, no sales funnel
         main_router.include_router(_make_simple_start_router())

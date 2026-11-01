@@ -27,6 +27,7 @@ KP_REQUEST_RE = re.compile(
 MAX_TURNS = 12
 MAX_CHARS_PER_TURN = 1500
 MAX_ITEMS = 50
+MAX_SUMMARY_CHARS = 600
 
 _SYSTEM = """Ты извлекаешь из переписки с клиентом позиции для коммерческого предложения
 (электротехника, Казахстан).
@@ -34,7 +35,8 @@ _SYSTEM = """Ты извлекаешь из переписки с клиенто
 Верни СТРОГО JSON без markdown и пояснений:
 {"customer": {"name": "", "contact": "", "bin": "", "email": ""},
  "items": [{"query": "<товар как его назвал клиент: тип, номинал, серия, артикул>", "qty": 1}],
- "request_number": ""}
+ "request_number": "",
+ "summary": ""}
 
 Правила:
 - items — только то, что КЛИЕНТ хочет получить в КП. Позиции, которые клиент
@@ -45,6 +47,9 @@ _SYSTEM = """Ты извлекаешь из переписки с клиенто
 - customer.name — организация клиента (ТОО/ИП), если он её назвал; иначе пусто.
   bin — БИН/ИИН, если назван. Ничего не выдумывай.
 - request_number — номер заявки клиента, если назван.
+- summary — 1–2 предложения для менеджера: что клиенту нужно и для чего
+  (объект, задача, сроки, если он их назвал). Без цен и без того, что
+  предлагал ассистент. Ничего не выдумывай.
 - Только JSON."""
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -123,6 +128,7 @@ async def extract_request(llm, messages: list[dict]) -> Optional[dict]:
             k: str(customer.get(k) or "").strip() for k in ("name", "contact", "bin", "email")
         },
         "request_number": str(data.get("request_number") or "").strip(),
+        "summary": str(data.get("summary") or "").strip()[:MAX_SUMMARY_CHARS],
     }
 
 

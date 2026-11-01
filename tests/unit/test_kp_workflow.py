@@ -24,6 +24,7 @@ import db.models  # noqa: F401  — registers every table so FKs resolve
 from db.database import Base
 from modules.chat.models import ChatMessage, ChatSession
 from modules.core.models import Workspace
+from modules.kp import messenger
 from modules.kp import service as kp_module
 from modules.kp.models import (
     ACTION_CLIENT_MESSAGE,
@@ -166,12 +167,20 @@ async def env(test_engine, test_session_factory, monkeypatch):
     monkeypatch.setattr(kp_module, "pim_client", pim)
     monkeypatch.setattr(kp_module, "is_configured", lambda: True)
 
-    async def no_notify(text):
-        return None
+    notified: list[tuple] = []
 
-    monkeypatch.setattr(kp_service, "_notify", no_notify)
+    async def record_notify(text, quote=None):
+        notified.append((text, quote))
+
+    monkeypatch.setattr(kp_service, "_notify", record_notify)
     await kp_service.ensure_default_rules()
-    return {"pim": pim, "sent": sent, "factory": test_session_factory, "monkeypatch": monkeypatch}
+    return {
+        "pim": pim,
+        "sent": sent,
+        "notified": notified,
+        "factory": test_session_factory,
+        "monkeypatch": monkeypatch,
+    }
 
 
 ITEMS = [
@@ -442,3 +451,189 @@ async def test_notify_mirrors_to_whatsapp_staff_numbers(monkeypatch):
     await kp_service._notify_whatsapp({**settings, "notify_whatsapp": False}, "x")
     await kp_service._notify_whatsapp({**settings, "notify_whatsapp_numbers": ""}, "x")
     assert sent == []
+
+
+# ─── КП in the managers' messengers (modules/kp/messenger.py) ──────────
+
+STAFF = "77712288488"
+
+
+def _staff_settings(env):
+    env["monkeypatch"].setattr(
+        kp_module.config_service, "store", {"kp_settings": {"notify_whatsapp_numbers": STAFF}}
+    )
+
+
+async def test_draft_card_tells_request_matches_and_gaps(env):
+    quote = await _draft(
+        summary="Ввод в частный дом, монтаж на следующей неделе",
+        flags=["«АВР 630А» × 1: точного совпадения в каталоге нет — подобрать вручную"],
+        items=[{**ITEMS[0], "query": "кабель кг 70"}],
+    )
+    card, attached = env["notified"][-1]
+    assert attached["id"] == quote["id"]
+    assert "Что просит клиент:\nВвод в частный дом" in card
+    assert "Кабель КГ-хл 1х70 (арт. 02008001) — 30 × 9 483 = 284 490 ₸" in card
+    assert "по запросу «кабель кг 70»" in card
+    assert "⚠ Не вошло в КП:\n• «АВР 630А»" in card
+    # the client text is shown with a readable link marker, not the placeholder
+    assert messenger.LINK_LABEL in card and "{link}" not in card
+
+
+def test_parse_command():
+    assert messenger.parse_command("ок 18") == ("approve", "18", "")
+    assert messenger.parse_command("ОК КП-0018") == ("approve", "0018", "")
+    assert messenger.parse_command("отправить") == ("approve", None, "")
+    assert messenger.parse_command("отмена 18") == ("reject", "18", "")
+    assert messenger.parse_command("текст 18: Добрый день!\n{link}") == (
+        "edit",
+        "18",
+        "Добрый день!\n{link}",
+    )
+    assert messenger.parse_command("кп") == ("list", None, "")
+    # ordinary words are not commands
+    assert messenger.parse_command("нет") is None
+    assert messenger.parse_command("ок, а что с доставкой?") is None
+
+
+async def test_client_number_is_not_staff(env):
+    _staff_settings(env)
+    assert await messenger.handle_staff_whatsapp(PHONE, PHONE, "ок 18") == {"handled": False}
+
+
+async def test_staff_approves_from_whatsapp(env):
+    _staff_settings(env)
+    quote = await _draft()
+    ref = messenger.quote_ref(quote)
+
+    result = await messenger.handle_staff_whatsapp(STAFF, STAFF, f"ок {ref}")
+    assert result["handled"] and result["reply"].startswith("✅")
+    after = await kp_service.get_quote(quote["id"])
+    assert after["status"] == STATUS_SENT
+    assert after["decided_by"] == f"whatsapp:+{STAFF}"
+    assert len(env["sent"]) == 1 and LINK in env["sent"][0][3]
+
+    again = await messenger.handle_staff_whatsapp(STAFF, STAFF, f"ок {ref}")
+    assert "нет" in again["reply"] and len(env["sent"]) == 1
+
+
+async def test_staff_edits_then_approves_from_whatsapp(env):
+    _staff_settings(env)
+    quote = await _draft()
+    ref = messenger.quote_ref(quote)
+
+    edited = await messenger.handle_staff_whatsapp(
+        STAFF, None, f"текст {ref}: Азамат, ваше КП: {messenger.LINK_LABEL}"
+    )
+    assert edited["reply"].startswith("✏️") and f"«ок {ref}»" in edited["reply"]
+    assert env["sent"] == []  # editing never sends by itself
+
+    await messenger.handle_staff_whatsapp(STAFF, None, "ок")  # the only pending one
+    assert env["sent"][0][3] == f"Азамат, ваше КП: {LINK}"
+
+
+async def test_staff_rejects_and_chatter_is_not_passed_to_assistant(env):
+    _staff_settings(env)
+    quote = await _draft()
+
+    hello = await messenger.handle_staff_whatsapp(STAFF, STAFF, "Привет, что там по заказам?")
+    assert hello["handled"] and quote["number"] in hello["reply"]
+
+    result = await messenger.handle_staff_whatsapp(STAFF, STAFF, "отмена")
+    assert result["reply"].startswith("❌")
+    assert (await kp_service.get_quote(quote["id"]))["status"] == "rejected"
+    assert env["sent"] == []
+
+
+async def test_telegram_buttons_act_only_from_the_notification_chat(env, monkeypatch):
+    quote = await _draft()
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_call(token, method, payload, timeout=15):
+        calls.append((method, payload))
+        return {"message_id": 999}
+
+    monkeypatch.setattr(messenger, "telegram_call", fake_call)
+
+    def press(chat_id, action):
+        return {
+            "callback_query": {
+                "id": "cb1",
+                "from": {"username": "director"},
+                "data": f"kp:{action}:{quote['id']}",
+                "message": {"message_id": 5, "chat": {"id": chat_id}},
+            }
+        }
+
+    await messenger.handle_telegram_update(press(-100, "approve"), "T", "-200")
+    assert calls == [] and env["sent"] == []
+
+    await messenger.handle_telegram_update(press(-200, "edit"), "T", "-200")
+    prompt = calls[-1][1]["text"]
+    assert f"КП #{quote['id']}" in prompt
+
+    reply = {
+        "message": {
+            "message_id": 6,
+            "chat": {"id": -200},
+            "from": {"username": "director"},
+            "text": "Новый текст",
+            "reply_to_message": {"text": prompt},
+        }
+    }
+    await messenger.handle_telegram_update(reply, "T", "-200")
+    card = [p for m, p in calls if m == "sendMessage" and "reply_markup" in p][-1]
+    assert "Новый текст" in card["text"]
+    assert card["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith("kp:approve")
+
+    await messenger.handle_telegram_update(press(-200, "approve"), "T", "-200")
+    assert env["sent"][0][3] == f"Новый текст\n{LINK}"
+    after = await kp_service.get_quote(quote["id"])
+    assert after["decided_by"] == "telegram:@director"
+    assert ("editMessageReplyMarkup", {"chat_id": "-200", "message_id": 5}) in calls
+
+
+async def test_telegram_update_not_ours_falls_through(env, monkeypatch):
+    calls: list = []
+
+    async def fake_call(token, method, payload, timeout=15):
+        calls.append(method)
+        return {}
+
+    monkeypatch.setattr(messenger, "telegram_call", fake_call)
+    chatter = {"message": {"message_id": 1, "chat": {"id": -200}, "text": "Добрый день"}}
+    other_chat = {"message": {"message_id": 1, "chat": {"id": 42}, "text": "ок 18"}}
+    # a client's «ок» in the sales bot must reach the assistant, not vanish
+    assert await messenger.handle_telegram_update(chatter, "T", "-200") is False
+    assert await messenger.handle_telegram_update(other_chat, "T", "-200") is False
+    assert calls == []
+
+
+async def test_poller_leaves_a_token_its_bot_process_polls(env, monkeypatch):
+    import db.database
+    from modules.channels.telegram.models import BotInstance
+
+    monkeypatch.setattr(db.database, "AsyncSessionLocal", env["factory"])
+    async with env["factory"]() as s:
+        s.add(BotInstance(id="tg-main", name="main", bot_token="123:abc", enabled=True))
+        await s.commit()
+    assert await messenger.token_runs_as_bot("123:abc") is True
+    assert await messenger.token_runs_as_bot("999:dedicated") is False
+
+
+async def test_bot_endpoints_refuse_panel_users():
+    HTTPException = pytest.importorskip("fastapi").HTTPException
+
+    from auth_manager import User
+    from modules.kp import router as kp_router
+
+    panel_admin = User(id=1, username="admin", role="admin")
+    with pytest.raises(HTTPException) as e:
+        await kp_router.kp_staff_message(
+            kp_router.StaffMessageRequest(sender=STAFF, text="ок 18"), user=panel_admin
+        )
+    assert e.value.status_code == 403
+    with pytest.raises(HTTPException):
+        await kp_router.kp_telegram_update(
+            kp_router.TelegramUpdateRequest(update={}), user=panel_admin
+        )

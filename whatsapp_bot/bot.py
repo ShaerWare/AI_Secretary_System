@@ -22,7 +22,8 @@ from .config import (
 from .handlers.interactive import handle_interactive_reply
 from .handlers.messages import handle_text_message
 from .services import access, choices
-from .services.whatsapp_client import get_whatsapp_client
+from .services.staff import staff_reply
+from .services.whatsapp_client import get_whatsapp_client, split_text
 from .state import get_bot_config, set_bot_config
 
 
@@ -203,6 +204,17 @@ async def health() -> dict:
     }
 
 
+async def _handled_as_staff(address: str, real_phone: str | None, text: str) -> bool:
+    """A manager's command (КП approval etc.) is answered here, not by the assistant."""
+    reply = await staff_reply(address, real_phone, text)
+    if reply is None:
+        return False
+    client = get_whatsapp_client()
+    for chunk in split_text(reply) if reply else []:
+        await client.send_text(to=address, text=chunk)
+    return True
+
+
 async def _dispatch_message(message: dict[str, Any]) -> None:
     """Route an incoming message to the appropriate handler."""
     msg_type = message.get("type", "")
@@ -216,7 +228,7 @@ async def _dispatch_message(message: dict[str, Any]) -> None:
 
     if msg_type == "text":
         text = message.get("text", {}).get("body", "")
-        if text:
+        if text and not await _handled_as_staff(phone, None, text):
             await handle_text_message(phone, text, message_id)
 
     elif msg_type == "interactive":
@@ -276,6 +288,8 @@ async def _dispatch_bridge_message(message: dict[str, Any]) -> None:
     )
 
     if msg_type == "text":
+        if await _handled_as_staff(phone, real_phone, text):
+            return
         # A linked phone can't render buttons, so menus are sent as numbered
         # text — map "2" back to the reply_id the funnel expects.
         resolved = choices.resolve(phone, text)
