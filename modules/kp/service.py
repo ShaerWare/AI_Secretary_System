@@ -1681,6 +1681,8 @@ class KpService:
             return
         if quote:
             text = f"{text}\n\n{messenger.whatsapp_actions(quote)}"
+            # the menu digits a manager sends back are about the latest card
+            await messenger.remember_menu(numbers, quote["id"])
         from modules.outbound.sender import send_whatsapp
 
         for number in numbers:

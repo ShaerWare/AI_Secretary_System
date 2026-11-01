@@ -496,6 +496,8 @@ def test_parse_command():
         "Добрый день!\n{link}",
     )
     assert messenger.parse_command("кп") == ("list", None, "")
+    assert messenger.parse_command("18") == ("show", "18", "")
+    assert messenger.parse_command("КП 18") == ("show", "18", "")
     # ordinary words are not commands
     assert messenger.parse_command("нет") is None
     assert messenger.parse_command("ок, а что с доставкой?") is None
@@ -530,11 +532,56 @@ async def test_staff_edits_then_approves_from_whatsapp(env):
     edited = await messenger.handle_staff_whatsapp(
         STAFF, None, f"текст {ref}: Азамат, ваше КП: {messenger.LINK_LABEL}"
     )
-    assert edited["reply"].startswith("✏️") and f"«ок {ref}»" in edited["reply"]
+    assert edited["reply"].startswith("✏️") and "1 — ✅ отправить клиенту" in edited["reply"]
     assert env["sent"] == []  # editing never sends by itself
 
     await messenger.handle_staff_whatsapp(STAFF, None, "ок")  # the only pending one
     assert env["sent"][0][3] == f"Азамат, ваше КП: {LINK}"
+
+
+async def test_staff_answers_the_card_menu_with_digits(env, monkeypatch):
+    import modules.outbound.sender as sender_module
+
+    _staff_settings(env)
+    quote = await _draft()
+    pings: list[str] = []
+
+    async def fake_send(instance_id, target, text):
+        pings.append(text)
+
+    monkeypatch.setattr(sender_module, "send_whatsapp", fake_send)
+    settings = {**await kp_service.get_settings(), "followup_instance_id": INSTANCE}
+    await kp_service._notify_whatsapp(settings, messenger.render_card(quote), quote)
+    assert "Пришлите цифру:\n1 — ✅ отправить клиенту" in pings[0]
+    assert "ок " not in pings[0]
+
+    async def say(text):
+        return (await messenger.handle_staff_whatsapp(STAFF, STAFF, text))["reply"]
+
+    assert (await say("2")).startswith("✏️ Пришлите новый текст")
+    edited = await say(f"Азамат, добрый день! {messenger.LINK_LABEL}")
+    assert edited.startswith("✏️ Текст заменён") and "Пришлите цифру" in edited
+    assert env["sent"] == []  # a new text alone never sends
+    assert (await say("1")).startswith("✅")
+    assert env["sent"][0][3] == f"Азамат, добрый день! {LINK}"
+    # the card is done — a stray digit doesn't act on anything
+    assert "среди ждущих подтверждения нет" in await say("3")
+    assert (await kp_service.get_quote(quote["id"]))["status"] == STATUS_SENT
+
+
+async def test_staff_opens_a_card_by_number_and_cancels(env):
+    _staff_settings(env)
+    first = await _draft()
+    second = await _draft()
+
+    listing = await messenger.handle_staff_whatsapp(STAFF, STAFF, "кп")
+    assert first["number"] in listing["reply"] and second["number"] in listing["reply"]
+    ref = messenger.quote_ref(first)
+    card = await messenger.handle_staff_whatsapp(STAFF, STAFF, ref)
+    assert card["reply"].startswith(f"🧾 {first['number']}")
+    assert (await messenger.handle_staff_whatsapp(STAFF, STAFF, "3"))["reply"].startswith("❌")
+    assert (await kp_service.get_quote(first["id"]))["status"] == "rejected"
+    assert (await kp_service.get_quote(second["id"]))["status"] == STATUS_PENDING
 
 
 async def test_staff_rejects_and_chatter_is_not_passed_to_assistant(env):

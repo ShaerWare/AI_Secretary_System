@@ -10,8 +10,11 @@ will get — and lets the manager act on it without opening the admin panel:
   presses and forwards them (``telegram_bot/handlers/kp.py`` →
   ``POST /admin/kp/telegram-update``); a dedicated token is long-polled by the
   ``kp-telegram`` task instead.
-- WhatsApp: text commands from the staff numbers in ``kp_settings`` —
-  «ок 18», «текст 18: …», «отмена 18». The WhatsApp bot hands every incoming
+- WhatsApp: a linked phone can't show buttons, so the card ends with a
+  numbered menu — «1» send, «2» new text (the next message becomes it), «3»
+  cancel. Digits act on the last card shown to that staff number
+  (``system_config.kp_staff_menu``); «18» or «кп 18» brings up another КП. The
+  terse «ок 18», «текст 18: …», «отмена 18» work too. The WhatsApp bot hands every incoming
   text to :func:`handle_staff_whatsapp` first; a staff number never reaches
   the assistant, so the director is not answered as a client.
 
@@ -49,6 +52,11 @@ _EDIT_RE = re.compile(
     rf"^\s*(?:текст|измен\w*|✏️?){_REF}\s*[:—-]?\s*(.+)$", re.IGNORECASE | re.DOTALL
 )
 _LIST_RE = re.compile(r"^\s*(?:кп|kp|список|помощь|help|\?)\s*$", re.IGNORECASE)
+_SHOW_RE = re.compile(r"^\s*(?:кп|kp)?[\s№#-]*(\d+)\s*[.!]*\s*$", re.IGNORECASE)
+# The WhatsApp menu under a card: which quote the digits are about, per staff number.
+MENU_KEY = "kp_staff_menu"
+MENU_APPROVE, MENU_EDIT, MENU_REJECT = "1", "2", "3"
+KEEP_TEXT = "0"
 # The «Изменить текст» prompt names the quote so the reply can be routed back.
 _PROMPT_TAG_RE = re.compile(r"КП #(\d+)")
 
@@ -156,13 +164,36 @@ def render_card(quote: dict) -> str:
 
 
 def whatsapp_actions(quote: dict) -> str:
-    ref = quote_ref(quote)
     return (
-        "Ответьте на это сообщение:\n"
-        f"• «ок {ref}» — отправить\n"
-        f"• «текст {ref}: новый текст» — заменить текст клиенту\n"
-        f"• «отмена {ref}» — не отправлять"
+        f"Что сделать с {quote.get('number') or 'КП'}? Пришлите цифру:\n"
+        f"{MENU_APPROVE} — ✅ отправить клиенту\n"
+        f"{MENU_EDIT} — ✏️ изменить текст клиенту\n"
+        f"{MENU_REJECT} — ❌ не отправлять"
     )
+
+
+async def remember_menu(numbers: list[str], quote_id: int, await_text: bool = False) -> None:
+    """The digits these staff numbers send next are about this quote."""
+    from modules.kp.service import config_service
+
+    menu = await config_service.get(MENU_KEY, None) or {}
+    for number in numbers:
+        menu[number] = {"quote_id": quote_id, "await_text": await_text}
+    await config_service.set(MENU_KEY, menu)
+
+
+async def _menu_entry(number: str) -> dict:
+    from modules.kp.service import config_service
+
+    return (await config_service.get(MENU_KEY, None) or {}).get(number) or {}
+
+
+async def _forget_menu(number: str) -> None:
+    from modules.kp.service import config_service
+
+    menu = await config_service.get(MENU_KEY, None) or {}
+    if menu.pop(number, None) is not None:
+        await config_service.set(MENU_KEY, menu)
 
 
 def telegram_keyboard(quote: dict) -> dict:
@@ -205,9 +236,12 @@ def telegram_target(settings: dict) -> tuple[str, str]:
 
 
 def parse_command(text: str) -> Optional[tuple[str, Optional[str], str]]:
-    """(action, ref, body) for «ок 18» / «отмена 18» / «текст 18: …» / «кп»."""
+    """(action, ref, body) for «ок 18» / «отмена 18» / «текст 18: …» / «кп» / «18»."""
     if _LIST_RE.match(text or ""):
         return "list", None, ""
+    m = _SHOW_RE.match(text or "")
+    if m:
+        return "show", m.group(1), ""
     for action, regex in (("approve", _APPROVE_RE), ("reject", _REJECT_RE)):
         m = regex.match(text or "")
         if m:
@@ -305,42 +339,86 @@ async def handle_staff_whatsapp(sender: str, phone: Optional[str], text: str) ->
 
     settings = await kp_service.get_settings()
     staff = set(staff_numbers(settings))
-    who = {_normalize_target(sender), _normalize_target(phone)} - {""}
-    if not staff or not (who & staff):
+    matched = sorted({_normalize_target(sender), _normalize_target(phone)} & staff)
+    if not matched:
         return {"handled": False}
     user = f"whatsapp:+{_normalize_target(phone) or _normalize_target(sender)}"
+    reply = await _staff_reply(matched[0], user, (text or "").strip())
+    logger.info("KP via WhatsApp by %s: %s", user, reply.splitlines()[0])
+    return {"handled": True, "reply": reply}
 
+
+async def _staff_reply(number: str, user: str, text: str) -> str:
+    from modules.kp.service import kp_service
+
+    entry = await _menu_entry(number)
+    quote_id = entry.get("quote_id")
     command = parse_command(text)
-    if not command:
-        quotes = await _open_quotes()
-        head = (
-            "Этот номер служебный — сообщения с него ассистенту не передаются.\n"
-            "Команды: «ок 18», «текст 18: …», «отмена 18», «кп» — список."
-        )
-        if quotes:
-            return {"handled": True, "reply": f"{head}\n\nЖдут подтверждения:\n{list_text(quotes)}"}
-        return {"handled": True, "reply": f"{head}\n\nЧерновиков КП, ждущих подтверждения, нет."}
 
+    # «2» was chosen — this message is the new client text (a command still works).
+    if quote_id and entry.get("await_text") and (not command or command[0] == "show"):
+        if text == KEEP_TEXT:
+            quote = await kp_service.get_quote(quote_id)
+            return "Текст оставлен прежним.\n\n" + await _card_with_menu(number, quote)
+        updated, reply = await edit(quote_id, text, user)
+        if not updated:
+            await _forget_menu(number)
+            return reply
+        return f"{reply}\n\n" + await _card_with_menu(number, updated)
+
+    if quote_id and text in (MENU_APPROVE, MENU_EDIT, MENU_REJECT):
+        quote = await kp_service.get_quote(quote_id)
+        if not is_actionable(quote):
+            await _forget_menu(number)
+            return f"{quote.get('number') or 'КП'} уже обработано.\n\n" + await _pending_list()
+        if text == MENU_EDIT:
+            await remember_menu([number], quote_id, await_text=True)
+            return (
+                "✏️ Пришлите новый текст для клиента одним сообщением. "
+                f"Ссылку обозначьте {LINK_LABEL} — или я добавлю её в конце.\n\n"
+                f"Сейчас:\n{client_text(quote)}\n\n«{KEEP_TEXT}» — оставить как есть."
+            )
+        await _forget_menu(number)
+        if text == MENU_APPROVE:
+            return await approve(quote_id, user)
+        return await reject(quote_id, user)
+
+    if not command:
+        return (
+            "Этот номер служебный — сообщения с него ассистенту не передаются.\n\n"
+            + await _pending_list()
+        )
     action, ref, body = command
     if action == "list":
-        quotes = await _open_quotes()
-        if not quotes:
-            return {"handled": True, "reply": "Черновиков КП, ждущих подтверждения, нет."}
-        return {"handled": True, "reply": "Ждут подтверждения:\n" + list_text(quotes)}
-
+        return await _pending_list()
     quote, error = await resolve(ref)
     if not quote:
-        return {"handled": True, "reply": error}
-    if action == "approve":
-        reply = await approve(quote["id"], user)
-    elif action == "reject":
-        reply = await reject(quote["id"], user)
-    else:
-        updated, reply = await edit(quote["id"], body, user)
-        if updated:
-            reply += f"\n\n{render_card(updated)}\n\n{whatsapp_actions(updated)}"
-    logger.info("KP %s via WhatsApp by %s: %s", action, user, reply.splitlines()[0])
-    return {"handled": True, "reply": reply}
+        return error
+    if action == "show":
+        return await _card_with_menu(number, quote)
+    if action in ("approve", "reject"):
+        await _forget_menu(number)
+        return await (approve if action == "approve" else reject)(quote["id"], user)
+    updated, reply = await edit(quote["id"], body, user)
+    if updated:
+        reply += "\n\n" + await _card_with_menu(number, updated)
+    return reply
+
+
+async def _card_with_menu(number: str, quote: dict) -> str:
+    await remember_menu([number], quote["id"])
+    return f"{render_card(quote)}\n\n{whatsapp_actions(quote)}"
+
+
+async def _pending_list() -> str:
+    quotes = await _open_quotes()
+    if not quotes:
+        return "Черновиков КП, ждущих подтверждения, нет."
+    return (
+        "Ждут подтверждения:\n"
+        + list_text(quotes)
+        + f"\n\nЧтобы открыть КП, пришлите его номер — например, «{quote_ref(quotes[0])}»."
+    )
 
 
 # ─── Telegram ─────────────────────────────────────────────────
@@ -465,6 +543,9 @@ async def handle_telegram_update(update: dict, token: str, chat_id: str) -> bool
     quote, error = await resolve(ref)
     if not quote:
         await telegram_send(token, chat_id, error, reply_to=message.get("message_id"))
+        return True
+    if action == "show":
+        await telegram_send(token, chat_id, render_card(quote), telegram_keyboard(quote))
         return True
     if action == "approve":
         reply = await approve(quote["id"], user)
