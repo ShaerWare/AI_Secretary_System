@@ -112,8 +112,8 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
 .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; }
 .logo__mark { width: 32px; height: 32px; filter: drop-shadow(0 4px 10px rgba(194, 112, 16, .35)); }
 .logo__accent { color: var(--accent-2); }
-.nav { display: flex; gap: 28px; margin-left: 12px; }
-.nav a { color: var(--muted); font-weight: 500; font-size: 15px; transition: color .2s; }
+.nav { display: flex; gap: 22px; margin-left: 12px; }
+.nav a { color: var(--muted); font-weight: 500; font-size: 15px; white-space: nowrap; transition: color .2s; }
 .nav a:hover { color: var(--text); }
 .header__actions { display: flex; gap: 10px; margin-left: auto; align-items: center; }
 
@@ -337,6 +337,20 @@ h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
 }
 .msg--in { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .msg--out { align-self: flex-end; background: var(--grad); color: #1a1205; font-weight: 500; border-bottom-right-radius: 4px; }
+
+/* ---------- КП из переписки (киллерфича) ---------- */
+.kp { background: var(--bg); }
+.kp__points { list-style: none; padding: 0; margin: 22px 0 28px; display: grid; gap: 12px; color: var(--muted); font-size: 15px; }
+.kp__points strong { color: var(--text); }
+.kp-card { max-width: 100%; line-height: 1.55; font-size: 13.5px; }
+.kp-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.kp-buttons span {
+  flex: 1 1 auto; text-align: center;
+  padding: 8px 10px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  font-size: 13px; font-weight: 600;
+}
+.kp-buttons span:first-child { background: var(--grad); color: #1a1205; border-color: transparent; }
 
 /* ---------- Тарифы ---------- */
 .billing-toggle {

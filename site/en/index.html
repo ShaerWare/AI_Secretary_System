@@ -98,6 +98,7 @@
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
+      { "@type": "Question", "name": "Can the assistant prepare commercial offers (quotes)?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — it is our killer feature. A client asks for a quote in WhatsApp, the assistant matches the items against your catalog with prices and drafts the offer. The manager gets a ready card in Telegram (Send / Edit text / Cancel buttons) or in WhatsApp (short commands). Nothing reaches the client without human approval, and goods and prices are never invented — only what is in your catalog." } },
       { "@type": "Question", "name": "How is this different from a regular chatbot?", "acceptedAnswer": { "@type": "Answer", "text": "Regular bots run rigid scenario trees. Sekretar24 is real AI powered by Claude (Anthropic): it understands free text, remembers conversation context and answers from your knowledge base, not from a script." } },
       { "@type": "Question", "name": "Which AI does Sekretar24 use?", "acceptedAnswer": { "@type": "Answer", "text": "By default it runs on Claude by Anthropic — the smartest and most steerable model on the market. On request you can plug in any other AI: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (dozens of models in one API), or local Qwen/Llama/DeepSeek via vLLM on your own server." } },
       { "@type": "Question", "name": "What happens to the AI after the trial?", "acceptedAnswer": { "@type": "Answer", "text": "The 14-day trial runs on Claude — the market flagship. After the trial you choose: stay on Claude with the Business+ plan, or switch for free to OpenRouter's powerful models (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B etc.). The chain is configured from strongest to weakest — if a model hits a limit, the assistant automatically falls back to the next one. Free models cover most business tasks." } },
@@ -130,6 +131,7 @@
       </a>
 
       <nav class="nav" id="nav">
+        <a href="#kp">⭐ Quotes</a>
         <a href="#features">Features</a>
         <a href="#roles">Roles</a>
         <a href="#mobile">📱 Android</a>
@@ -215,6 +217,45 @@
       </div>
     </section>
 
+    <!-- ============ КП ИЗ ПЕРЕПИСКИ (киллерфича) ============ -->
+    <section class="section demo kp" id="kp">
+      <div class="container demo__inner">
+        <div class="demo__text">
+          <p class="eyebrow">⭐ Killer feature</p>
+          <h2 class="section__title section__title--left">A quote in a minute — approve it right in Telegram or WhatsApp</h2>
+          <p class="section__lead section__lead--left">A client writes “send me a quote” — the assistant finds the items in your catalog, totals them and drafts the commercial offer. You get a ready card: tap “✅ Send” and the client receives the quote link. Your messenger becomes the admin panel — no need to open the CRM.</p>
+          <ul class="kp__points">
+            <li>🧾 <strong>Catalog only</strong> — goods, prices and stock are never invented; anything missing from the catalog is shown to you, not to the client</li>
+            <li>✋ <strong>Nothing goes out without your OK</strong> — send, edit the text or cancel — one tap</li>
+            <li>💬 <strong>Telegram and WhatsApp</strong> — buttons in Telegram, short commands in WhatsApp, the same actions in the admin panel</li>
+            <li>⏰ <strong>Deals don’t go cold</strong> — reminders when a draft isn’t approved, the client hasn’t opened the quote, opened it and went silent, or it’s about to expire</li>
+          </ul>
+          <a href="#start" class="btn btn--primary btn--lg">Try it on your catalog</a>
+        </div>
+        <div class="chat-mock" aria-hidden="true">
+          <div class="chat-mock__head"><span class="dot"></span> Telegram · quote notifications</div>
+          <div class="chat-mock__body">
+            <div class="msg msg--in kp-card">
+              <strong>🧾 Quote #0018 — draft, awaiting approval</strong><br />
+              Client: Alfa-Stroy LLP<br />
+              Total: 87,600 ₸ · valid until Nov 4<br />
+              <br />
+              <strong>What the client asked for:</strong><br />
+              16A breakers for a panel — 12 pcs, 3×2.5 cable — 100 m<br />
+              <br />
+              <strong>What the assistant matched:</strong><br />
+              1. Breaker 1P 16A C — 12 × 1,550 = 18,600 ₸<br />
+              2. Cable VVGng-LS 3×2.5 — 100 × 690 = 69,000 ₸<br />
+              <br />
+              ⚠ Not included: “RCD 30 mA” — not in the catalog
+            </div>
+            <div class="kp-buttons"><span>✅ Send</span><span>✏️ Edit text</span><span>❌ Cancel</span></div>
+            <div class="msg msg--in">✅ Quote #0018 sent to the client (WhatsApp)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section roles" id="roles">
       <div class="container">
         <p class="eyebrow">AI Employees</p>
@@ -274,6 +315,7 @@
             <div class="vs-row"><span>Knowledge base</span><span>preset answers</span><span class="vs-row__us">your documents (RAG)</span></div>
             <div class="vs-row"><span>Channels</span><span>usually one</span><span class="vs-row__us">Telegram, WhatsApp, web, phone</span></div>
             <div class="vs-row"><span>Voice</span><span>none</span><span class="vs-row__us">speech rec + synth + clone</span></div>
+            <div class="vs-row"><span>Commercial offer</span><span>manager builds it by hand</span><span class="vs-row__us">drafted for you, approved in Telegram/WhatsApp</span></div>
             <div class="vs-row"><span>Self-hosted</span><span>no</span><span class="vs-row__us">yes, MIT, GitHub</span></div>
           </div>
         </div>
@@ -503,6 +545,7 @@
         <p class="eyebrow">Questions</p>
         <h2 class="section__title">Frequently asked questions</h2>
         <div class="faq__list">
+          <details class="faq-item"><summary>Can the assistant prepare commercial offers (quotes)?</summary><p>Yes — it is our killer feature. A client asks for a quote in WhatsApp, the assistant matches the items against your catalog with prices and drafts the offer. The manager gets a ready card in Telegram (Send / Edit text / Cancel buttons) or in WhatsApp (short commands). Nothing reaches the client without human approval, and goods and prices are never invented — only what is in your catalog.</p></details>
           <details class="faq-item"><summary>How is this different from a regular chatbot?</summary><p>Regular bots run rigid scenario trees. Sekretar24 is real AI powered by <strong>Claude (Anthropic)</strong>: it understands free text, remembers conversation context and answers from your knowledge base, not from a script.</p></details>
           <details class="faq-item"><summary>Which AI does Sekretar24 use?</summary><p>By default — <strong>Claude by Anthropic</strong>, the smartest and most steerable model on the market. On request we plug in any other: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (dozens of models in one API) or local Qwen/Llama/DeepSeek via vLLM on your own server.</p></details>
           <details class="faq-item"><summary>What happens to the AI after the trial?</summary><p>The trial runs on Claude. After — two options: stay on Claude with Business+, or switch for free to OpenRouter's powerful models (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B). The chain is configured from strongest to weakest: if the top model hits a limit, the assistant automatically takes the next one. For most tasks free models are more than enough.</p></details>
