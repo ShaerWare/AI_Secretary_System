@@ -478,6 +478,11 @@ async def test_draft_card_tells_request_matches_and_gaps(env):
     assert "⚠ Не вошло в КП:\n• «АВР 630А»" in card
     # the client text is shown with a readable link marker, not the placeholder
     assert messenger.LINK_LABEL in card and "{link}" not in card
+    # the draft opens in the PIM — over https, the PIM hands out http links
+    pim = f"https://ar-gs.ru/commercial-offers/edit/{quote['pim_id']}"
+    assert f"Открыть в ПИМ: {pim}" in card
+    buttons = [b for row in messenger.telegram_keyboard(quote)["inline_keyboard"] for b in row]
+    assert {"text": "📄 Открыть в ПИМ", "url": pim} in buttons
 
 
 def test_parse_command():
