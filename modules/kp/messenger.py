@@ -84,6 +84,12 @@ def _summary(quote: dict) -> str:
     return ""
 
 
+def pim_url(quote: dict) -> str:
+    """The draft's page in the PIM, where the manager can open and edit it."""
+    url = (quote.get("edit_url") or "").strip()
+    return "https://" + url[len("http://") :] if url.startswith("http://") else url
+
+
 def _delivery_line(quote: dict) -> str:
     delivery = quote.get("delivery")
     if delivery == "whatsapp":
@@ -111,6 +117,8 @@ def render_card(quote: dict) -> str:
         + (f" · действует до {valid}" if valid else ""),
         f"Отправка: {_delivery_line(quote)}",
     ]
+    if pim_url(quote):
+        lines.append(f"Открыть в ПИМ: {pim_url(quote)}")
     summary = _summary(quote)
     if summary:
         lines += ["", "Что просит клиент:", summary]
@@ -159,7 +167,7 @@ def whatsapp_actions(quote: dict) -> str:
 
 def telegram_keyboard(quote: dict) -> dict:
     qid = quote["id"]
-    return {
+    keyboard = {
         "inline_keyboard": [
             [
                 {"text": "✅ Отправить", "callback_data": f"kp:approve:{qid}"},
@@ -168,6 +176,9 @@ def telegram_keyboard(quote: dict) -> dict:
             [{"text": "❌ Отменить", "callback_data": f"kp:reject:{qid}"}],
         ]
     }
+    if pim_url(quote):
+        keyboard["inline_keyboard"].append([{"text": "📄 Открыть в ПИМ", "url": pim_url(quote)}])
+    return keyboard
 
 
 # ─── Recipients ───────────────────────────────────────────────
