@@ -12,18 +12,16 @@ Rules this module enforces:
 """
 
 import logging
-import os
 import re
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-import httpx
 from sqlalchemy import func, select
 
 from db.database import AsyncSessionLocal
 from db.retry import retry_on_busy
 from modules.core.service import config_service
-from modules.kp import timers
+from modules.kp import messenger, timers
 from modules.kp.models import (
     ACTION_CLIENT_MESSAGE,
     ACTION_MARK_LOST,
@@ -390,6 +388,8 @@ class KpService:
                     "delivery": str(it.get("delivery") or "").strip(),
                 }
             )
+            if str(it.get("query") or "").strip():
+                clean[-1]["query"] = str(it["query"]).strip()
         if not clean:
             raise KpError("В КП нет ни одной позиции")
         if len(clean) > 200:
@@ -501,13 +501,12 @@ class KpService:
             EVENT_INFO,
             f"Черновик {offer.get('number') or ''} создан в PIM ({created_by}), ждёт подтверждения",
         )
+        summary = str(data.get("summary") or "").strip()
+        if summary:
+            await self._event(quote_id, EVENT_INFO, messenger.SUMMARY_PREFIX + summary)
         result = await self.get_quote(quote_id)
         if origin == ORIGIN_ASSISTANT:
-            await self._notify(
-                f"🧾 Ассистент подготовил КП {result['number']} для «{customer['name']}» "
-                f"на {_fmt_money(result['total'])} {result['currency'] or ''}. "
-                "Нужно подтверждение на странице CRM → КП."
-            )
+            await self._notify(messenger.render_card(result), quote=result)
         logger.info("KP #%s (%s) drafted by %s", quote_id, result["number"], created_by)
         return result
 
@@ -554,6 +553,7 @@ class KpService:
                 "target": target,
                 "session_id": session_id,
                 "request_number": request["request_number"],
+                "summary": request.get("summary") or "",
             },
             created_by=created_by,
             origin=origin,
@@ -1107,7 +1107,7 @@ class KpService:
         if offer.get("created_at"):
             row.pim_created_at = _parse_ts(offer["created_at"])
         if offer.get("items"):
-            row.items = [
+            items = [
                 {
                     "sku": (it.get("sku") or "").strip(),
                     "name": it.get("name") or "",
@@ -1117,6 +1117,13 @@ class KpService:
                 }
                 for it in offer["items"]
             ]
+            # The PIM keeps our order but not the client's wording of each position.
+            previous = row.items or []
+            if len(previous) == len(items):
+                for new, old in zip(items, previous, strict=True):
+                    if old.get("query"):
+                        new["query"] = old["query"]
+            row.items = items
         customer = offer.get("customer")
         if isinstance(customer, dict) and customer.get("name"):
             merged = dict(row.customer or {})
@@ -1387,7 +1394,7 @@ class KpService:
             return True
 
         await self._event(quote["id"], EVENT_NOTIFY, text, rule["id"], key)
-        await self._notify(f"⏱ {text}")
+        await self._notify(f"⏱ {text}", quote=quote)
         return True
 
     async def _has_pending_client_message(self, quote: dict, now: datetime) -> bool:
@@ -1633,52 +1640,47 @@ class KpService:
             "hours": hours,
         }
 
-    async def _notify(self, text: str) -> None:
-        """Ping to the manager/director (Telegram + WhatsApp). Best-effort, never raises."""
+    async def _notify(self, text: str, quote: Optional[dict] = None) -> None:
+        """Ping to the manager/director (Telegram + WhatsApp). Best-effort, never raises.
+
+        With a *quote* still waiting for approval the ping carries its actions:
+        buttons in Telegram, reply commands in WhatsApp (see ``messenger``).
+        """
         settings = await self.get_settings()
-        await self._notify_telegram(settings, text)
-        await self._notify_whatsapp(settings, text)
+        actionable = quote if quote and messenger.is_actionable(quote) else None
+        await self._notify_telegram(settings, text, actionable)
+        await self._notify_whatsapp(settings, text, actionable)
 
     @staticmethod
-    async def _notify_telegram(settings: dict[str, Any], text: str) -> None:
+    async def _notify_telegram(
+        settings: dict[str, Any], text: str, quote: Optional[dict] = None
+    ) -> None:
         if not settings["notify_telegram"]:
             return
-        token = os.getenv("KP_TELEGRAM_BOT_TOKEN") or os.getenv("LEAD_TELEGRAM_BOT_TOKEN", "")
-        chat_id = (
-            str(settings["notify_chat_id"] or "").strip()
-            or os.getenv("KP_TELEGRAM_CHAT_ID", "")
-            or os.getenv("LEAD_TELEGRAM_CHAT_ID", "")
-        )
-        if not token.strip() or not chat_id.strip():
+        token, chat_id = messenger.telegram_target(settings)
+        if not token or not chat_id:
             return
+        keyboard = messenger.telegram_keyboard(quote) if quote else None
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                await client.post(
-                    f"https://api.telegram.org/bot{token.strip()}/sendMessage",
-                    json={
-                        "chat_id": chat_id.strip(),
-                        "text": text,
-                        "disable_web_page_preview": True,
-                    },
-                )
+            await messenger.telegram_send(token, chat_id, text, keyboard)
         except Exception as e:
             logger.warning("KP Telegram notification failed: %s", e)
 
     @staticmethod
-    async def _notify_whatsapp(settings: dict[str, Any], text: str) -> None:
+    async def _notify_whatsapp(
+        settings: dict[str, Any], text: str, quote: Optional[dict] = None
+    ) -> None:
         """Internal ping to staff numbers — not a client message, so no approval queue."""
         if not settings["notify_whatsapp"]:
             return
         instance_id = str(
             settings["notify_whatsapp_instance_id"] or settings["followup_instance_id"] or ""
         ).strip()
-        numbers = [
-            _normalize_target(n)
-            for n in re.split(r"[,;\n]+", str(settings["notify_whatsapp_numbers"] or ""))
-            if n.strip()
-        ]
+        numbers = messenger.staff_numbers(settings)
         if not instance_id or not numbers:
             return
+        if quote:
+            text = f"{text}\n\n{messenger.whatsapp_actions(quote)}"
         from modules.outbound.sender import send_whatsapp
 
         for number in numbers:

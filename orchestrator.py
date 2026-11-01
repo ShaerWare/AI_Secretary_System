@@ -313,6 +313,10 @@ async def startup_event():
         task_registry.register(
             "kp-timers", kp_timers_tick, interval=KP_TIMERS_INTERVAL, initial_delay=90
         )
+        from modules.kp.tasks import kp_telegram_tick
+
+        # Long poll inside each run; the 1 s interval only spaces the polls.
+        task_registry.register("kp-telegram", kp_telegram_tick, interval=1, initial_delay=30)
         from modules.clients.tasks import INTERVAL as CLIENT_CARDS_INTERVAL
         from modules.clients.tasks import client_cards_tick
 

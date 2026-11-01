@@ -20,6 +20,10 @@ from modules.monitoring.service import audit_service
 
 logger = logging.getLogger(__name__)
 
+# Usernames of the internal sessions issued to bot subprocesses
+# (multi_bot_manager.py, whatsapp_manager.py).
+INTERNAL_BOT_USERS = ("__internal_bot__", "__internal_wa_bot__")
+
 router = APIRouter(prefix="/admin/kp", tags=["kp"])
 webhook_router = APIRouter(prefix="/webhooks", tags=["kp"])
 
@@ -323,6 +327,50 @@ async def kp_event_ack(event_id: int, user: User = Depends(require_permission("s
         return {"event": await kp_service.ack_event(event_id, user.username)}
     except KpError as e:
         raise _http(e) from e
+
+
+# ─── Staff commands from the WhatsApp bot (modules/kp/messenger.py) ───
+
+
+class StaffMessageRequest(BaseModel):
+    sender: str
+    phone: Optional[str] = None
+    text: str
+
+
+@router.post("/staff-message")
+async def kp_staff_message(
+    request: StaffMessageRequest, user: User = Depends(require_permission("chat", "edit"))
+):
+    """The WhatsApp bot asks: is this a manager's command? Answers ``handled`` + reply.
+
+    Only bot processes may call it — the sender's number is their word, and an
+    approval must not be forgeable by any panel user typing a staff number.
+    """
+    if user.username not in INTERNAL_BOT_USERS:
+        raise HTTPException(status_code=403, detail="Только для процессов ботов")
+    from modules.kp.messenger import handle_staff_whatsapp
+
+    return await handle_staff_whatsapp(request.sender, request.phone, request.text)
+
+
+class TelegramUpdateRequest(BaseModel):
+    update: dict[str, Any]
+
+
+@router.post("/telegram-update")
+async def kp_telegram_update(
+    request: TelegramUpdateRequest, user: User = Depends(require_permission("chat", "edit"))
+):
+    """A Telegram bot process forwards a КП button press / reply it received."""
+    if user.username not in INTERNAL_BOT_USERS:
+        raise HTTPException(status_code=403, detail="Только для процессов ботов")
+    from modules.kp.messenger import handle_telegram_update, telegram_target
+
+    token, chat_id = telegram_target(await kp_service.get_settings())
+    if not token or not chat_id:
+        return {"handled": False}
+    return {"handled": await handle_telegram_update(request.update, token, chat_id)}
 
 
 # ─── PIM webhook (docs/pim-api-for-kp.md) ─────────────────────
