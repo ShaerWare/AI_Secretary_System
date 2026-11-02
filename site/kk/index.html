@@ -99,6 +99,7 @@
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
+      { "@type": "Question", "name": "Көмекші коммерциялық ұсыныс дайындай ала ма?", "acceptedAnswer": { "@type": "Answer", "text": "Иә, бұл біздің басты мүмкіндігіміз. Клиент WhatsApp-та КҰ сұрайды — көмекші каталогыңыздан бағасымен позицияларды таңдап, жоба жасайды. Менеджерге Telegram-да (Жіберу / Мәтінді өзгерту / Болдырмау батырмалары) немесе WhatsApp-та (қысқа командалар) дайын карточка келеді. Адам бекітпейінше КҰ клиентке кетпейді, тауарлар мен бағалар ешқашан ойдан шығарылмайды — тек каталогтағылар." } },
       { "@type": "Question", "name": "Бұл әдеттегі чат-боттан несімен ерекшеленеді?", "acceptedAnswer": { "@type": "Answer", "text": "Әдеттегі бот қатаң сценарий-ағаш бойынша жұмыс істейді. Хатшы24 — Claude (Anthropic) негізіндегі нағыз AI: еркін тілді түсінеді, диалог мәнмәтінін есте сақтайды және сіздің білім қорыңыз бойынша жауап береді." } },
       { "@type": "Question", "name": "Хатшы24 қандай AI қолданады?", "acceptedAnswer": { "@type": "Answer", "text": "Әдепкі бойынша — Anthropic компаниясының Claude моделі, нарықтағы ең ақылды әрі үйренгіш модель. Сұраныс бойынша кез келген AI: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (бір API-да ондаған модель) немесе өз серверіңізде vLLM арқылы Qwen/Llama/DeepSeek жергілікті модельдері." } },
       { "@type": "Question", "name": "Триалдан кейін AI қалай жұмыс істейді?", "acceptedAnswer": { "@type": "Answer", "text": "Триалда Claude жұмыс істейді. Триалдан кейін екі нұсқа: Бизнес+ тарифімен Claude-та қалу немесе тегін OpenRouter қуатты модельдеріне (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B) ауысу. Тізбек қуаттыдан әлсіздеуге қарай: бірінші модель шектеуге тіреліп қалса, көмекші автоматты түрде келесісіне көшеді. Жұмыс үзілмейді." } },
@@ -131,6 +132,7 @@
       </a>
 
       <nav class="nav" id="nav">
+        <a href="#kp">⭐ КҰ</a>
         <a href="#features">Мүмкіндіктер</a>
         <a href="#roles">Рөлдер</a>
         <a href="#mobile">📱 Android</a>
@@ -216,6 +218,45 @@
       </div>
     </section>
 
+    <!-- ============ КП ИЗ ПЕРЕПИСКИ (киллерфича) ============ -->
+    <section class="section demo kp" id="kp">
+      <div class="container demo__inner">
+        <div class="demo__text">
+          <p class="eyebrow">⭐ Басты мүмкіндік</p>
+          <h2 class="section__title section__title--left">Коммерциялық ұсыныс бір минутта — Telegram немесе WhatsApp-та бекітесіз</h2>
+          <p class="section__lead section__lead--left">Клиент «КҰ жіберіңізші» деп жазады — көмекші каталогыңыздан позицияларды өзі табады, соманы есептейді және жоба жасайды. Сізге дайын карточка келеді: «✅ Жіберу» батырмасын бастыңыз — клиент КҰ сілтемесін алды. Мессенджер админка сияқты жұмыс істейді, CRM ашудың қажеті жоқ.</p>
+          <ul class="kp__points">
+            <li>🧾 <strong>Тек каталогтан</strong> — тауарлар, бағалар мен қалдықтар ойдан шығарылмайды; каталогта жоғын көмекші клиентке емес, сізге көрсетеді</li>
+            <li>✋ <strong>Сіздің «ок»-сыз ештеңе кетпейді</strong> — жіберу, мәтінді түзету немесе болдырмау — бір батырмамен</li>
+            <li>💬 <strong>Telegram және WhatsApp</strong> — Telegram-да батырмалар, WhatsApp-та қысқа командалар, бәрі админ-панельде де бар</li>
+            <li>⏰ <strong>Мәміле суымайды</strong> — жоба бекітілмесе, клиент КҰ-ны ашпаса, ашып үндемесе немесе мерзімі бітіп келе жатса — еске саламыз</li>
+          </ul>
+          <a href="#start" class="btn btn--primary btn--lg">Өз каталогыңызда байқап көру</a>
+        </div>
+        <div class="chat-mock" aria-hidden="true">
+          <div class="chat-mock__head"><span class="dot"></span> Telegram · КҰ хабарламалары</div>
+          <div class="chat-mock__body">
+            <div class="msg msg--in kp-card">
+              <strong>🧾 КҰ-0018 — жоба, бекітуді күтуде</strong><br />
+              Клиент: «Альфа-Строй» ЖШС<br />
+              Сома: 87 600 ₸ · 04.11 дейін<br />
+              <br />
+              <strong>Клиент не сұрайды:</strong><br />
+              Щитке 16А автоматтар — 12 дана, 3×2,5 кабель — 100 м<br />
+              <br />
+              <strong>Көмекші не таңдады:</strong><br />
+              1. Автомат 1P 16А C — 12 × 1 550 = 18 600 ₸<br />
+              2. ВВГнг-LS 3×2,5 кабелі — 100 × 690 = 69 000 ₸<br />
+              <br />
+              ⚠ КҰ-ға кірмеді: «УЗО 30 мА» — каталогта жоқ
+            </div>
+            <div class="kp-buttons"><span>✅ Жіберу</span><span>✏️ Мәтінді өзгерту</span><span>❌ Болдырмау</span></div>
+            <div class="msg msg--in">✅ КҰ-0018 клиентке жіберілді (WhatsApp)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section roles" id="roles">
       <div class="container">
         <p class="eyebrow">AI-қызметкерлер</p>
@@ -275,6 +316,7 @@
             <div class="vs-row"><span>Білім қоры</span><span>дайын жауаптар</span><span class="vs-row__us">сіздің құжаттар (RAG)</span></div>
             <div class="vs-row"><span>Арналар</span><span>әдетте бір</span><span class="vs-row__us">Telegram, WhatsApp, сайт, телефон</span></div>
             <div class="vs-row"><span>Дауыс</span><span>жоқ</span><span class="vs-row__us">тану + синтез + клон</span></div>
+            <div class="vs-row"><span>Коммерциялық ұсыныс</span><span>менеджер қолмен жинайды</span><span class="vs-row__us">өзі жинайды, сіз Telegram/WhatsApp-та бекітесіз</span></div>
             <div class="vs-row"><span>Self-hosted</span><span>жоқ</span><span class="vs-row__us">бар, MIT, GitHub</span></div>
           </div>
         </div>
@@ -504,6 +546,7 @@
         <p class="eyebrow">Сұрақтар</p>
         <h2 class="section__title">Жиі сұрақтар</h2>
         <div class="faq__list">
+          <details class="faq-item"><summary>Көмекші коммерциялық ұсыныс дайындай ала ма?</summary><p>Иә, бұл біздің басты мүмкіндігіміз. Клиент WhatsApp-та КҰ сұрайды — көмекші каталогыңыздан бағасымен позицияларды таңдап, жоба жасайды. Менеджерге Telegram-да (Жіберу / Мәтінді өзгерту / Болдырмау батырмалары) немесе WhatsApp-та (қысқа командалар) дайын карточка келеді. Адам бекітпейінше КҰ клиентке кетпейді, тауарлар мен бағалар ешқашан ойдан шығарылмайды — тек каталогтағылар.</p></details>
           <details class="faq-item"><summary>Бұл әдеттегі чат-боттан несімен ерекшеленеді?</summary><p>Әдеттегі бот қатаң сценарий-ағаш бойынша жұмыс істейді. Хатшы24 — <strong>Anthropic-тің Claude</strong> моделі негізіндегі нағыз AI: еркін тілді түсінеді, мәнмәтінді есте сақтайды және сіздің білім қорыңыз бойынша жауап береді.</p></details>
           <details class="faq-item"><summary>Хатшы24 қандай AI қолданады?</summary><p>Әдепкі бойынша — <strong>Anthropic-тің Claude</strong>, нарықтағы ең ақылды әрі үйренгіш модель. Сұраныс бойынша кез келген AI: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (бір API-да ондаған модель) немесе сіздің серверде vLLM арқылы Qwen/Llama/DeepSeek жергілікті модельдері.</p></details>
           <details class="faq-item"><summary>Триалдан кейін AI қалай жұмыс істейді?</summary><p>Триалда Claude істейді. Триалдан кейін — екі нұсқа: Бизнес+ жазылымымен Claude-та қалу немесе тегін OpenRouter қуатты модельдеріне (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B) ауысу. Тізбек қуаттыдан әлсіздеуге қарай: бірінші модель шектеуге тіреліп қалса — көмекші келесісін өзі алады. Көп тапсырмаға тегін модельдер артық та жетеді.</p></details>

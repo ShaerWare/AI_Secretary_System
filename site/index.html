@@ -124,6 +124,7 @@
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
+      { "@type": "Question", "name": "Умеет ли ассистент готовить коммерческие предложения?", "acceptedAnswer": { "@type": "Answer", "text": "Да, это наша киллерфича. Клиент просит КП в WhatsApp — ассистент сам подбирает позиции по вашему каталогу с ценами и собирает черновик. Менеджеру приходит готовая карточка в Telegram (кнопки «Отправить», «Изменить текст», «Отменить») или в WhatsApp (команды «ок 18», «отмена 18»). Без подтверждения человека КП клиенту не уходит, а товары и цены никогда не выдумываются — только то, что есть в каталоге." } },
       { "@type": "Question", "name": "Чем это отличается от обычного чат-бота?", "acceptedAnswer": { "@type": "Answer", "text": "Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ на базе Claude (Anthropic): понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту." } },
       { "@type": "Question", "name": "Какой ИИ использует Секретарь24?", "acceptedAnswer": { "@type": "Answer", "text": "По умолчанию работает на Claude от Anthropic — это самая умная и обучаемая модель на рынке. По запросу можно подключить любой другой ИИ: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (агрегатор с десятками моделей) или локальные модели Qwen/Llama/DeepSeek через vLLM на собственном сервере." } },
       { "@type": "Question", "name": "Что будет с ИИ после триала?", "acceptedAnswer": { "@type": "Answer", "text": "На бесплатном триале работает Claude — флагман рынка. После триала вы выбираете: продолжить на Claude по подписке Бизнес+, или бесплатно переключиться на мощные модели OpenRouter (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B и др.). Цепочка настроена от мощных к слабым — если первая модель недоступна, ассистент автоматически переходит к следующей. Для большинства бизнес-задач бесплатных моделей хватает." } },
@@ -157,6 +158,7 @@
       </a>
 
       <nav class="nav" id="nav">
+        <a href="#kp">⭐ КП</a>
         <a href="#features">Возможности</a>
         <a href="#roles">Роли</a>
         <a href="#mobile">📱 Android</a>
@@ -244,6 +246,45 @@
       </div>
     </section>
 
+    <!-- ============ КП ИЗ ПЕРЕПИСКИ (киллерфича) ============ -->
+    <section class="section demo kp" id="kp">
+      <div class="container demo__inner">
+        <div class="demo__text">
+          <p class="eyebrow">⭐ Киллерфича</p>
+          <h2 class="section__title section__title--left">КП за минуту — утверждаете прямо в Telegram или WhatsApp</h2>
+          <p class="section__lead section__lead--left">Клиент пишет «пришлите КП» — ассистент сам находит позиции в вашем каталоге, считает сумму и собирает черновик. Вам приходит готовая карточка: нажали «✅ Отправить» — клиент получил ссылку на КП. Мессенджер работает как админка, CRM открывать не нужно.</p>
+          <ul class="kp__points">
+            <li>🧾 <strong>Только из каталога</strong> — товары, цены и наличие не выдумываются; чего нет в каталоге — ассистент покажет вам, а не клиенту</li>
+            <li>✋ <strong>Без вашего «ок» ничего не уходит</strong> — отправить, поправить текст или отменить — одной кнопкой</li>
+            <li>💬 <strong>Telegram и WhatsApp</strong> — кнопки в Telegram, короткие команды «ок 18», «отмена 18» в WhatsApp, всё то же — в админ-панели</li>
+            <li>⏰ <strong>Сделка не остывает</strong> — напомним, если черновик не утверждён, клиент не открыл КП, открыл и молчит или срок истекает</li>
+          </ul>
+          <a href="#start" class="btn btn--primary btn--lg">Попробовать на своём каталоге</a>
+        </div>
+        <div class="chat-mock" aria-hidden="true">
+          <div class="chat-mock__head"><span class="dot"></span> Telegram · уведомления по КП</div>
+          <div class="chat-mock__body">
+            <div class="msg msg--in kp-card">
+              <strong>🧾 КП-0018 — черновик, ждёт подтверждения</strong><br />
+              Клиент: ООО «Альфа-Строй»<br />
+              Сумма: 12 500 ₽ · действует до 04.11<br />
+              <br />
+              <strong>Что просит клиент:</strong><br />
+              Автоматы 16А на щит — 12 шт., кабель 3×2,5 — 100 м<br />
+              <br />
+              <strong>Что подобрал ассистент:</strong><br />
+              1. Автомат 1P 16А C — 12 × 250 = 3 000 ₽<br />
+              2. Кабель ВВГнг-LS 3×2,5 — 100 × 95 = 9 500 ₽<br />
+              <br />
+              ⚠ Не вошло в КП: «УЗО 30 мА» — нет в каталоге
+            </div>
+            <div class="kp-buttons"><span>✅ Отправить</span><span>✏️ Изменить текст</span><span>❌ Отменить</span></div>
+            <div class="msg msg--in">✅ КП-0018 отправлено клиенту (WhatsApp)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ РОЛИ ============ -->
     <section class="section roles" id="roles">
       <div class="container">
@@ -307,6 +348,7 @@
             <div class="vs-row"><span>База знаний</span><span>заданные ответы</span><span class="vs-row__us">ваши документы (RAG)</span></div>
             <div class="vs-row"><span>Каналы</span><span>обычно один</span><span class="vs-row__us">Telegram, WhatsApp, сайт, телефон</span></div>
             <div class="vs-row"><span>Голос</span><span>нет</span><span class="vs-row__us">распознавание + синтез + клон</span></div>
+            <div class="vs-row"><span>Коммерческое предложение</span><span>менеджер собирает вручную</span><span class="vs-row__us">собирает сам, вы утверждаете в Telegram/WhatsApp</span></div>
             <div class="vs-row"><span>Self-hosted</span><span>нет</span><span class="vs-row__us">да, MIT, GitHub</span></div>
           </div>
         </div>
@@ -542,6 +584,7 @@
         <p class="eyebrow">Вопросы</p>
         <h2 class="section__title">Частые вопросы</h2>
         <div class="faq__list">
+          <details class="faq-item"><summary>Умеет ли ассистент готовить коммерческие предложения?</summary><p>Да, это наша киллерфича. Клиент просит КП в WhatsApp — ассистент сам подбирает позиции по вашему каталогу с ценами и собирает черновик. Менеджеру приходит готовая карточка в Telegram (кнопки «Отправить», «Изменить текст», «Отменить») или в WhatsApp (команды «ок 18», «отмена 18»). Без подтверждения человека КП клиенту не уходит, а товары и цены никогда не выдумываются — только то, что есть в каталоге.</p></details>
           <details class="faq-item"><summary>Чем это отличается от обычного чат-бота?</summary><p>Обычный бот работает по жёсткому сценарию-дереву. Секретарь24 — это настоящий ИИ на базе <strong>Claude от Anthropic</strong>: понимает свободную речь, помнит контекст диалога и отвечает по вашей базе знаний, а не по скрипту.</p></details>
           <details class="faq-item"><summary>Какой ИИ использует Секретарь24?</summary><p>По умолчанию — <strong>Claude от Anthropic</strong>, самая умная и обучаемая модель на рынке. По запросу подключаем любой другой: OpenAI GPT-4, Google Gemini, Moonshot Kimi, DeepSeek, OpenRouter (десятки моделей в одном API) или локальные модели Qwen/Llama/DeepSeek через vLLM на вашем сервере.</p></details>
           <details class="faq-item"><summary>Что будет с ИИ после триала?</summary><p>На триале работает Claude. После — два варианта: продолжить на Claude по подписке Бизнес+, или бесплатно переключиться на мощные модели OpenRouter (DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B). Цепочка настроена от мощных к слабым: если первая модель упёрлась в лимит — ассистент автоматически берёт следующую. Для большинства задач бесплатных моделей более чем достаточно.</p></details>
