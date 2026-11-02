@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Source of docs/assets/social-preview.png (1280×640, GitHub → Settings → Social preview).
+     Re-render: chrome --headless=new --window-size=1280,640 --screenshot=social-preview.png social-preview.html -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    background: radial-gradient(circle at 85% 20%, #1e3a5f 0, #0e1621 55%);
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #fff; display: flex; align-items: center; padding: 0 72px; box-sizing: border-box; gap: 56px;
+  }
+  .left { flex: 1; }
+  .kicker { color: #6ab3f3; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
+  h1 { font-size: 64px; margin: 14px 0 18px; line-height: 1.05; }
+  .tag { font-size: 30px; line-height: 1.3; color: #dbe4ec; }
+  .tag b { color: #fff; }
+  .chips { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chips span { background: #22364a; border-radius: 999px; padding: 8px 16px; font-size: 19px; color: #c5d0da; }
+  .card { width: 430px; background: #182533; border-radius: 18px; padding: 26px; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
+  .card h2 { font-size: 22px; margin: 0 0 12px; }
+  .card p { margin: 6px 0; font-size: 17px; color: #e9edef; }
+  .card .muted { color: #7f91a4; font-size: 14px; }
+  .card .warn { color: #e5a54b; font-weight: 600; margin-top: 14px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+  .btns div { background: #2b5278; border-radius: 9px; padding: 11px; text-align: center; font-size: 16px; }
+  .btns div:first-child { font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="kicker">Open source · self-hosted</div>
+    <h1>AI Secretary System</h1>
+    <div class="tag"><b>AI sales assistant</b> that drafts quotes from WhatsApp chats — managers approve them <b>in one tap in Telegram</b>.</div>
+    <div class="chips">
+      <span>never invents prices</span><span>branching web chat</span><span>local LLM + voice cloning</span><span>Telegram · WhatsApp · phone</span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>КП-0018 — ждёт подтверждения</h2>
+    <p>1. Автомат 1P 16А C — 12 × 1 550 ₸</p>
+    <p class="muted">по запросу «автоматы 16А»</p>
+    <p>2. Кабель ВВГнг-LS 3×2,5 — 100 × 690 ₸</p>
+    <p class="muted">по запросу «кабель 3 на 2,5»</p>
+    <p class="warn">Не вошло: «УЗО 30 мА»</p>
+    <div class="btns"><div>✓ Отправить</div><div>Изменить</div><div>Отменить</div><div>Открыть</div></div>
+  </div>
+</body>
+</html>

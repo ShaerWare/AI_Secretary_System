@@ -129,7 +129,7 @@ curl -X POST http://localhost:8002/admin/stt/transcribe \
 2. **Добавьте облачный LLM** - Admin → LLM → Cloud Providers
 3. **Настройте виджет** - Admin → Widget → включите и скопируйте код
 4. **Настройте Telegram бота** - Admin → Telegram → добавьте токен
-5. **Прочитайте [README.md](./README.md)** - полная документация
+5. **Прочитайте [README.ru.md](./README.ru.md)** — обзор, [docs/REFERENCE.ru.md](./docs/REFERENCE.ru.md) — полный справочник
 
 ## Troubleshooting
 
