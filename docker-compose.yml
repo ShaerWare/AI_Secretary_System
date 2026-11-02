@@ -76,6 +76,7 @@ services:
       - ./wiki-pages:/app/wiki-pages:ro
       - ./docs:/app/docs:ro
       - ./README.md:/app/README.md:ro
+      - ./README.ru.md:/app/README.ru.md:ro
       - ./admin/dist:/app/admin/dist:ro
     environment:
       # Docker mode detection

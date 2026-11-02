@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="560" viewBox="0 0 880 560" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0e1621"/>
+      <stop offset="1" stop-color="#17212b"/>
+    </linearGradient>
+  </defs>
+  <rect width="880" height="560" rx="18" fill="url(#bg)"/>
+
+  <!-- left: client in WhatsApp -->
+  <text x="32" y="44" fill="#8b9bab" font-size="13" letter-spacing="1">WHATSAPP · КЛИЕНТ</text>
+  <rect x="32" y="62" width="300" height="74" rx="12" fill="#1f2c34"/>
+  <text x="48" y="90" fill="#e9edef" font-size="15">Пришлите КП: автоматы 16А</text>
+  <text x="48" y="112" fill="#e9edef" font-size="15">12 шт и кабель ВВГнг 3×2,5 — 100 м</text>
+  <text x="290" y="128" fill="#8696a0" font-size="11">10:42</text>
+
+  <rect x="32" y="152" width="300" height="52" rx="12" fill="#005c4b"/>
+  <text x="48" y="182" fill="#e9edef" font-size="15">Готовлю КП, пришлю ссылку.</text>
+  <text x="290" y="196" fill="#8696a0" font-size="11">10:42</text>
+
+  <path d="M182 232 v40" stroke="#3a4a5a" stroke-width="2" stroke-dasharray="4 5"/>
+  <text x="32" y="300" fill="#8b9bab" font-size="13">ассистент:</text>
+  <text x="32" y="322" fill="#c5d0da" font-size="14">• вытащил позиции из переписки</text>
+  <text x="32" y="344" fill="#c5d0da" font-size="14">• нашёл их в живом каталоге</text>
+  <text x="32" y="366" fill="#c5d0da" font-size="14">• сомнительное — только менеджеру</text>
+  <text x="32" y="388" fill="#c5d0da" font-size="14">• цены не выдумывает (правило в коде)</text>
+
+  <path d="M346 300 h36" stroke="#5288c1" stroke-width="2.5"/>
+  <path d="M378 293 l10 7 l-10 7 z" fill="#5288c1"/>
+
+  <!-- right: manager in Telegram -->
+  <text x="404" y="44" fill="#8b9bab" font-size="13" letter-spacing="1">TELEGRAM · МЕНЕДЖЕР</text>
+  <rect x="404" y="62" width="444" height="408" rx="14" fill="#182533"/>
+  <text x="424" y="94" fill="#ffffff" font-size="17" font-weight="600">КП-0018 — черновик, ждёт подтверждения</text>
+  <text x="424" y="122" fill="#c5d0da" font-size="14">Клиент: ТОО «Альфа-Строй»</text>
+  <text x="424" y="144" fill="#c5d0da" font-size="14">Сумма: 87 600 ₸ · действует до 04.11</text>
+
+  <text x="424" y="180" fill="#6ab3f3" font-size="14" font-weight="600">Что подобрал ассистент</text>
+  <text x="424" y="204" fill="#e9edef" font-size="14">1. Автомат 1P 16А C — 12 × 1 550 = 18 600 ₸</text>
+  <text x="440" y="222" fill="#7f91a4" font-size="12">по запросу «автоматы 16А»</text>
+  <text x="424" y="246" fill="#e9edef" font-size="14">2. Кабель ВВГнг-LS 3×2,5 — 100 × 690 = 69 000 ₸</text>
+  <text x="440" y="264" fill="#7f91a4" font-size="12">по запросу «кабель 3 на 2,5»</text>
+
+  <text x="424" y="298" fill="#e5a54b" font-size="14" font-weight="600">Не вошло в КП</text>
+  <text x="424" y="320" fill="#e9edef" font-size="14">• «УЗО 30 мА» — точного совпадения нет</text>
+
+  <rect x="420" y="348" width="204" height="40" rx="8" fill="#2b5278"/>
+  <text x="522" y="373" fill="#ffffff" font-size="14" text-anchor="middle" font-weight="600">✓ Отправить</text>
+  <rect x="632" y="348" width="200" height="40" rx="8" fill="#2b5278"/>
+  <text x="732" y="373" fill="#ffffff" font-size="14" text-anchor="middle">Изменить текст</text>
+  <rect x="420" y="396" width="204" height="40" rx="8" fill="#2b5278"/>
+  <text x="522" y="421" fill="#ffffff" font-size="14" text-anchor="middle">Отменить</text>
+  <rect x="632" y="396" width="200" height="40" rx="8" fill="#2b5278"/>
+  <text x="732" y="421" fill="#ffffff" font-size="14" text-anchor="middle">Открыть в PIM</text>
+  <text x="826" y="458" fill="#6d7f8f" font-size="11" text-anchor="end">10:43</text>
+
+  <text x="32" y="512" fill="#ffffff" font-size="18" font-weight="600">Клиент попросил КП — через минуту у менеджера готовый черновик.</text>
+  <text x="32" y="538" fill="#8b9bab" font-size="14">Одна кнопка — и КП уходит клиенту. Ни одна отправка без человека. Данные в примере условные.</text>
+</svg>
