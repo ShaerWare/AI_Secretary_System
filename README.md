@@ -1,10 +1,6 @@
 <div align="center">
 
-# AI Secretary System
-
-**Open-source, self-hosted AI sales assistant and secretary.**<br>
-It drafts commercial offers straight from WhatsApp chats — managers approve them in one tap in Telegram.<br>
-It never invents prices: that rule lives in code, not in a prompt.
+<img src="docs/assets/hero.en.svg" alt="AI Secretary System — open-source, self-hosted AI sales assistant that drafts offers from chats and never invents prices" width="100%">
 
 [![CI](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,7 +11,7 @@ It never invents prices: that rule lives in code, not in a prompt.
 
 [**Live demo**](https://ai-sekretar24.ru/) · [Quick start](#quick-start) · [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) · [Telegram assistant](https://t.me/ai_sekretar24bot) · [Android APK](https://github.com/ShaerWare/AI_Secretary_System/releases/latest) · [**Русский**](README.ru.md)
 
-<img src="docs/assets/kp-card.svg" alt="A client asks for an offer in WhatsApp; the manager gets a ready draft in Telegram with Send / Edit / Cancel buttons" width="100%">
+<img src="docs/assets/kp-flow.en.svg" alt="A client asks for an offer in WhatsApp; the manager gets a ready draft in Telegram with Send / Edit / Cancel buttons" width="100%">
 
 <sub>The product UI speaks Russian, English and Kazakh. Example data is made up.</sub>
 
@@ -39,6 +35,8 @@ AI Secretary does the boring part and leaves the decision with a person. Everyth
 → [How it works](docs/arch/outbound-kp.md) · [User guide](https://github.com/ShaerWare/AI_Secretary_System/wiki/KP)
 
 ### 2. An assistant that cannot lie about prices
+<img src="docs/assets/honest-search.en.svg" alt="Client request → live catalog search → confident matches go into the offer, the rest to the manager; never a made-up price" width="100%">
+
 - Product search returns an empty list when nothing matches, so the model has no gap to fill with a made-up item or price.
 - «In stock» is shown only for confirmed stock. Supplier names and purchase prices are visible to managers only.
 - **Client memory** carries a client card across dialogues (who they are, what they asked for, what they got), and code strips every price and stock line out of it.
@@ -47,7 +45,7 @@ AI Secretary does the boring part and leaves the decision with a person. Everyth
 → [Procurement & search](docs/arch/procurement.md) · [Client memory](docs/arch/client-memory.md)
 
 ### 3. A power-user web chat
-<img src="docs/assets/chat-branches.svg" alt="Web chat with per-session prompt, context files, model and RAG switch, and a branch tree panel" width="100%">
+<img src="docs/assets/chat-branches.en.svg" alt="Web chat with per-session prompt, context files, model and RAG switch, and a branch tree panel" width="100%">
 
 <sub>Schematic of the chat screen.</sub>
 
@@ -61,6 +59,8 @@ AI Secretary does the boring part and leaves the decision with a person. Everyth
 → [Chat guide](https://github.com/ShaerWare/AI_Secretary_System/wiki/Chat)
 
 ### 4. Runs fully offline
+<img src="docs/assets/offline-stack.en.svg" alt="Fully offline stack on one RTX 3060: vLLM, XTTS voice cloning, Vosk/Whisper, LoRA, RAG, SQLite" width="100%">
+
 - **Local LLM** via vLLM (Qwen2.5-7B, Llama-3.1-8B, DeepSeek) on a single RTX 3060 12 GB.
 - **Voice cloning** with XTTS v2 and OpenVoice, fast CPU voices with Piper, speech-to-text with Vosk (streaming) and Whisper.
 - **LoRA fine-tuning** on an exported Telegram chat, with hot-swappable adapters.
@@ -74,6 +74,8 @@ AI Secretary does the boring part and leaves the decision with a person. Everyth
 → [LLM & prompts](docs/arch/llm-prompts.md)
 
 ### 6. Every channel from one panel
+<img src="docs/assets/channels.en.svg" alt="Telegram, WhatsApp, widget, phone and Android feed one assistant; managers, admin panel, amoCRM and payments on the other side" width="100%">
+
 - **Telegram and WhatsApp bots**, as many instances as you need, each with its own model, prompt and voice. WhatsApp runs via the Meta Cloud API or a **self-hosted QR-linked bridge**.
 - **Website chat widgets**, several per installation.
 - **A real phone line.** A SIM7600 GSM modem lets the assistant answer calls and SMS.

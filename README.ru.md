@@ -1,10 +1,6 @@
 <div align="center">
 
-# AI Secretary System · Секретарь24
-
-**Self-hosted ИИ-секретарь и менеджер продаж с открытым кодом.**<br>
-Сам собирает коммерческое предложение из переписки в WhatsApp, а менеджер утверждает его одной кнопкой в Telegram.<br>
-Не выдумывает цены: это правило зашито в код, а не в промпт.
+<img src="docs/assets/hero.ru.svg" alt="AI Secretary System — ИИ-секретарь и менеджер продаж с открытым кодом: собирает КП из переписки и не выдумывает цены" width="100%">
 
 [![CI](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaerWare/AI_Secretary_System/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,7 +11,7 @@
 
 [**Демо**](https://ai-sekretar24.ru/) · [Быстрый старт](#быстрый-старт) · [Wiki](https://github.com/ShaerWare/AI_Secretary_System/wiki) · [Ассистент в Telegram](https://t.me/ai_sekretar24bot) · [Android APK](https://github.com/ShaerWare/AI_Secretary_System/releases/latest) · [**English**](README.md)
 
-<img src="docs/assets/kp-card.svg" alt="Клиент просит КП в WhatsApp, менеджер получает готовый черновик в Telegram с кнопками «Отправить / Изменить / Отменить»" width="100%">
+<img src="docs/assets/kp-flow.ru.svg" alt="Клиент просит КП в WhatsApp, менеджер получает готовый черновик в Telegram с кнопками «Отправить / Изменить / Отменить»" width="100%">
 
 </div>
 
@@ -37,6 +33,8 @@ AI Secretary делает рутину сам, а решение оставля�
 → [Как устроено](docs/arch/outbound-kp.md) · [Руководство](https://github.com/ShaerWare/AI_Secretary_System/wiki/KP)
 
 ### 2. Ассистент, который не врёт про цены
+<img src="docs/assets/honest-search.ru.svg" alt="Запрос клиента → поиск по живому каталогу → уверенное в КП, остальное менеджеру; выдуманных цен не бывает" width="100%">
+
 - Поиск по каталогу возвращает пустой список, если ничего не нашлось, поэтому модели нечем «додумать» товар или цену.
 - «В наличии» пишется только при подтверждённом остатке. Поставщики и закупочные цены видны только менеджерам.
 - **Память о клиенте** между диалогами: кто он, что спрашивал, что получил. Строки с ценами и остатками код из неё вырезает.
@@ -45,7 +43,7 @@ AI Secretary делает рутину сам, а решение оставля�
 → [Поиск и закупки](docs/arch/procurement.md) · [Память о клиенте](docs/arch/client-memory.md)
 
 ### 3. Мегаудобный веб-чат
-<img src="docs/assets/chat-branches.svg" alt="Веб-чат: промпт сессии, файлы контекста, выбор модели и RAG, панель дерева веток" width="100%">
+<img src="docs/assets/chat-branches.ru.svg" alt="Веб-чат: промпт сессии, файлы контекста, выбор модели и RAG, панель дерева веток" width="100%">
 
 <sub>Схема экрана чата.</sub>
 
@@ -59,6 +57,8 @@ AI Secretary делает рутину сам, а решение оставля�
 → [Руководство по чату](https://github.com/ShaerWare/AI_Secretary_System/wiki/Chat)
 
 ### 4. Работает полностью офлайн
+<img src="docs/assets/offline-stack.ru.svg" alt="Офлайн-стек на одной RTX 3060: vLLM, клон голоса XTTS, Vosk/Whisper, LoRA, RAG, SQLite" width="100%">
+
 - **Локальная LLM** через vLLM (Qwen2.5-7B, Llama-3.1-8B, DeepSeek) на одной RTX 3060 12 ГБ.
 - **Клонирование голоса** на XTTS v2 и OpenVoice, быстрые голоса Piper на CPU, распознавание речи на Vosk (стриминг) и Whisper.
 - **LoRA-дообучение** на экспорте Telegram-чата, адаптеры меняются без перезапуска.
@@ -72,6 +72,8 @@ AI Secretary делает рутину сам, а решение оставля�
 → [LLM и промпты](docs/arch/llm-prompts.md)
 
 ### 6. Все каналы из одной панели
+<img src="docs/assets/channels.ru.svg" alt="Telegram, WhatsApp, виджет, телефон и Android ведут к одному ассистенту; с другой стороны менеджер, админка, amoCRM и оплата" width="100%">
+
 - **Боты Telegram и WhatsApp**, сколько угодно экземпляров, у каждого своя модель, промпт и голос. WhatsApp работает через Meta Cloud API или **свой QR-мост**.
 - **Чат-виджеты для сайтов**, несколько на одну установку.
 - **Настоящая телефонная линия.** GSM-модем SIM7600 позволяет ассистенту отвечать на звонки и SMS.

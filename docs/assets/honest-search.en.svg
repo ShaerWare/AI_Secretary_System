@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="440" viewBox="0 0 880 440" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+
+<rect width="880" height="440" rx="18" fill="#0f172a"/>
+<text x="32" y="46" fill="#ffffff" font-size="17" font-weight="600">Prices and stock come only from the catalog. Enforced in code, not in a prompt.</text>
+
+<rect x="32" y="76" width="220" height="130" rx="12" fill="#1e293b"/>
+<text x="48" y="102" fill="#93c5fd" font-size="14" font-weight="600">Client request</text>
+<text x="48" y="128" fill="#c5d0da" font-size="14">• 16A breakers — 12 pcs</text><text x="48" y="152" fill="#c5d0da" font-size="14">• cable 3×2.5 — 100 m</text><text x="48" y="176" fill="#c5d0da" font-size="14">• RCD 30 mA</text>
+
+<path d="M252 141 h40" stroke="#475569" stroke-width="2.5"/><path d="M288 134 l10 7 l-10 7 z" fill="#475569"/>
+<rect x="302" y="96" width="250" height="90" rx="12" fill="#1e3a5f" stroke="#3b82f6"/>
+<g transform="translate(322 122)"><circle cx="10" cy="10" r="9" stroke="#93c5fd" stroke-width="2.5" fill="none"/>
+  <path d="M17 17 l8 8" stroke="#93c5fd" stroke-width="3" stroke-linecap="round"/></g>
+<text x="360" y="136" fill="#ffffff" font-size="15" font-weight="600">Live catalog search</text>
+<text x="360" y="158" fill="#93c5fd" font-size="12">no match → empty list</text>
+
+<path d="M552 126 C 580 126 575 98 602 98" stroke="#22c55e" stroke-width="2.5" fill="none"/>
+<path d="M552 156 C 580 156 575 196 602 196" stroke="#f59e0b" stroke-width="2.5" fill="none"/>
+<rect x="602" y="70" width="246" height="56" rx="12" fill="#052e16" stroke="#22c55e"/>
+<text x="620" y="94" fill="#86efac" font-size="14" font-weight="600">✓ Confident match with a price</text>
+<text x="620" y="114" fill="#bbf7d0" font-size="12">→ into the offer, catalog price</text>
+<rect x="602" y="168" width="246" height="56" rx="12" fill="#451a03" stroke="#f59e0b"/>
+<text x="620" y="192" fill="#fcd34d" font-size="14" font-weight="600">⚠ No exact match</text>
+<text x="620" y="212" fill="#fde68a" font-size="12">→ «⚠ Left out»: manager only</text>
+
+<rect x="32" y="250" width="470" height="164" rx="12" fill="#111c30"/>
+<g transform="translate(52 276)">
+  <rect width="150" height="108" rx="10" fill="#182533"/>
+  <rect x="12" y="14" width="96" height="7" rx="3.5" fill="#6ab3f3"/>
+  <rect x="12" y="32" width="126" height="5" rx="2.5" fill="#3a5068"/>
+  <rect x="12" y="44" width="110" height="5" rx="2.5" fill="#3a5068"/>
+  <rect x="12" y="60" width="80" height="5" rx="2.5" fill="#f59e0b"/>
+  <rect x="12" y="80" width="60" height="16" rx="4" fill="#2b5278"/>
+  <rect x="78" y="80" width="60" height="16" rx="4" fill="#2b5278"/>
+</g>
+
+<text x="222" y="300" fill="#22c55e" font-size="30" font-weight="700">✓</text>
+<text x="258" y="296" fill="#ffffff" font-size="15" font-weight="600">КП-0018</text>
+<text x="258" y="318" fill="#c5d0da" font-size="13">a person taps «Send»</text>
+<text x="258" y="340" fill="#c5d0da" font-size="13">a double tap won't send twice</text>
+<text x="258" y="362" fill="#c5d0da" font-size="13">timers nudge if the client goes quiet</text>
+
+<rect x="518" y="250" width="330" height="164" rx="12" fill="#1c0a0a" stroke="#7f1d1d"/>
+<text x="536" y="278" fill="#fca5a5" font-size="14" font-weight="700">Never</text>
+<g transform="translate(0 0)"><circle cx="545" cy="305" r="9" fill="#7f1d1d"/><path d="M541 301 l8 8 M549 301 l-8 8" stroke="#fecaca" stroke-width="2"/><text x="564" y="310" fill="#fca5a5" font-size="13">a «similar item» with a made-up price</text></g><g transform="translate(0 30)"><circle cx="545" cy="305" r="9" fill="#7f1d1d"/><path d="M541 301 l8 8 M549 301 l-8 8" stroke="#fecaca" stroke-width="2"/><text x="564" y="310" fill="#fca5a5" font-size="13">«in stock» without stock</text></g><g transform="translate(0 60)"><circle cx="545" cy="305" r="9" fill="#7f1d1d"/><path d="M541 301 l8 8 M549 301 l-8 8" stroke="#fecaca" stroke-width="2"/><text x="564" y="310" fill="#fca5a5" font-size="13">prices from client memory</text></g><g transform="translate(0 90)"><circle cx="545" cy="305" r="9" fill="#7f1d1d"/><path d="M541 301 l8 8 M549 301 l-8 8" stroke="#fecaca" stroke-width="2"/><text x="564" y="310" fill="#fca5a5" font-size="13">a send without a human</text></g>
+
+</svg>
