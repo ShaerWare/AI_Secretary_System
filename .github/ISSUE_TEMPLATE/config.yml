@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & ideas / Вопросы и идеи
+    url: https://github.com/ShaerWare/AI_Secretary_System/discussions
+    about: How-to questions, show-and-tell, ideas — in Discussions. / Вопросы «как сделать», идеи, ваши кейсы.
+  - name: Project assistant in Telegram / Ассистент проекта в Telegram
+    url: https://t.me/ai_sekretar24bot
+    about: Quick answers about setup and features. / Быстрые ответы по установке и возможностям.
+  - name: Security vulnerability / Уязвимость
+    url: https://github.com/ShaerWare/AI_Secretary_System/security/advisories/new
+    about: Report privately, not in a public issue. / Сообщите приватно, не в публичном issue.

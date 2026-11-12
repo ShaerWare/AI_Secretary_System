@@ -1715,7 +1715,7 @@ class FinetuneManager:
         Генерирует Q&A пары из Markdown документации проекта.
 
         Источники:
-        - README.md, CLAUDE.md, QUICKSTART.md
+        - README.ru.md, docs/REFERENCE.ru.md, QUICKSTART.md
         - wiki-pages/*.md
         - examples.md, CHEATSHEET.md
         """
@@ -1723,7 +1723,8 @@ class FinetuneManager:
 
         # Список основных документов
         main_docs = [
-            "README.md",
+            "README.ru.md",
+            "docs/REFERENCE.ru.md",
             "QUICKSTART.md",
             "CHEATSHEET.md",
             "examples.md",

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="540" viewBox="0 0 880 540" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif"><style>@keyframes c1{0%,1%{opacity:0;transform:translateY(8px)}4%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.c1{opacity:0;animation:c1 14s infinite}@keyframes ty{0%,7%{opacity:0;transform:translateY(8px)}10%,40%{opacity:1;transform:none}43%,100%{opacity:0}}.ty{opacity:0;animation:ty 14s infinite}@keyframes card{0%,39%{opacity:0;transform:translateY(8px)}42%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.card{opacity:0;animation:card 14s infinite}@keyframes s0{0%,11%{opacity:0;transform:translateY(8px)}14%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.s0{opacity:0;animation:s0 14s infinite}@keyframes s1{0%,18%{opacity:0;transform:translateY(8px)}21%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.s1{opacity:0;animation:s1 14s infinite}@keyframes s2{0%,25%{opacity:0;transform:translateY(8px)}28%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.s2{opacity:0;animation:s2 14s infinite}@keyframes s3{0%,32%{opacity:0;transform:translateY(8px)}35%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.s3{opacity:0;animation:s3 14s infinite}@keyframes press{0%,59%{opacity:0;transform:translateY(8px)}62%,70%{opacity:1;transform:none}73%,100%{opacity:0}}.press{opacity:0;animation:press 14s infinite}@keyframes sent{0%,69%{opacity:0;transform:translateY(8px)}72%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.sent{opacity:0;animation:sent 14s infinite}@keyframes c2{0%,73%{opacity:0;transform:translateY(8px)}76%,93%{opacity:1;transform:none}96%,100%{opacity:0}}.c2{opacity:0;animation:c2 14s infinite}@keyframes btn{0%,60%{fill:#2b5278}63%,72%{fill:#3f8bd6}76%,100%{fill:#2b5278}}.btn{animation:btn 14s infinite}@keyframes dot{0%,100%{opacity:.25}50%{opacity:1}}.d1{animation:dot 1s infinite}.d2{animation:dot 1s .2s infinite}.d3{animation:dot 1s .4s infinite}.c1,.c2,.card,.s0,.s1,.s2,.s3,.sent{transform-box:fill-box}</style>
+
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#0e1621"/><stop offset="1" stop-color="#17212b"/></linearGradient></defs>
+<rect width="880" height="540" rx="18" fill="url(#bg)"/>
+<text x="32" y="44" fill="#8b9bab" font-size="13" letter-spacing="1">WHATSAPP · CLIENT</text>
+<g class="c1">
+  <rect x="32" y="62" width="310" height="74" rx="12" fill="#1f2c34"/>
+  <text x="48" y="90" fill="#e9edef" font-size="15">Пришлите КП: автоматы 16А 12 шт,</text>
+  <text x="48" y="112" fill="#e9edef" font-size="15">кабель ВВГнг 3×2,5 — 100 м и УЗО</text>
+  <text x="300" y="128" fill="#8696a0" font-size="11">10:42</text>
+</g>
+<g class="ty">
+  <text x="32" y="176" fill="#8b9bab" font-size="13">assistant</text>
+  <circle class="d1" cx="118" cy="172" r="4" fill="#6ab3f3"/>
+  <circle class="d2" cx="132" cy="172" r="4" fill="#6ab3f3"/>
+  <circle class="d3" cx="146" cy="172" r="4" fill="#6ab3f3"/>
+</g>
+<g class="s0"><circle cx="44" cy="214" r="8" fill="#22c55e"/><path d="M40 214 l3 3 l5 -6" stroke="#0e1621" stroke-width="2" fill="none"/><text x="60" y="219" fill="#c5d0da" font-size="14">extracted items from the chat</text></g><g class="s1"><circle cx="44" cy="242" r="8" fill="#22c55e"/><path d="M40 242 l3 3 l5 -6" stroke="#0e1621" stroke-width="2" fill="none"/><text x="60" y="247" fill="#c5d0da" font-size="14">found each one in the live catalog</text></g><g class="s2"><circle cx="44" cy="270" r="8" fill="#22c55e"/><path d="M40 270 l3 3 l5 -6" stroke="#0e1621" stroke-width="2" fill="none"/><text x="60" y="275" fill="#c5d0da" font-size="14">doubtful lines go to the manager only</text></g><g class="s3"><circle cx="44" cy="298" r="8" fill="#22c55e"/><path d="M40 298 l3 3 l5 -6" stroke="#0e1621" stroke-width="2" fill="none"/><text x="60" y="303" fill="#c5d0da" font-size="14">built a draft offer</text></g>
+<g class="c2">
+  <rect x="32" y="360" width="310" height="74" rx="12" fill="#005c4b"/>
+  <text x="48" y="388" fill="#e9edef" font-size="15">Здравствуйте! Подготовили КП:</text>
+  <text x="48" y="410" fill="#53bdeb" font-size="15">ar-gs.ru/kp/0018</text>
+  <text x="286" y="426" fill="#53bdeb" font-size="11">10:44 ✓✓</text>
+</g>
+
+<text x="404" y="44" fill="#8b9bab" font-size="13" letter-spacing="1">TELEGRAM · MANAGER</text>
+<rect x="404" y="62" width="444" height="404" rx="14" fill="#141e29" stroke="#1f2d3b" stroke-dasharray="6 6"/>
+<g class="card">
+  <rect x="404" y="62" width="444" height="404" rx="14" fill="#182533"/>
+  <text x="424" y="94" fill="#ffffff" font-size="17" font-weight="600">КП-0018 — черновик, ждёт подтверждения</text>
+  <text x="424" y="122" fill="#c5d0da" font-size="14">Клиент: ТОО «Альфа-Строй» · 87 600 ₸</text>
+  <text x="424" y="158" fill="#6ab3f3" font-size="14" font-weight="600">Что подобрал ассистент</text>
+  <text x="424" y="182" fill="#e9edef" font-size="14">1. Автомат 1P 16А C — 12 × 1 550 = 18 600 ₸</text>
+  <text x="440" y="200" fill="#7f91a4" font-size="12">по запросу «автоматы 16А»</text>
+  <text x="424" y="224" fill="#e9edef" font-size="14">2. Кабель ВВГнг-LS 3×2,5 — 100 × 690 = 69 000 ₸</text>
+  <text x="440" y="242" fill="#7f91a4" font-size="12">по запросу «кабель 3 на 2,5»</text>
+  <text x="424" y="276" fill="#e5a54b" font-size="14" font-weight="600">⚠ Не вошло в КП</text>
+  <text x="424" y="298" fill="#e9edef" font-size="14">• «УЗО» — точного совпадения нет</text>
+  <rect class="btn" x="420" y="330" width="204" height="40" rx="8" fill="#2b5278"/>
+  <text x="522" y="355" fill="#ffffff" font-size="14" font-weight="600" text-anchor="middle">✓ Отправить</text>
+  <rect x="632" y="330" width="200" height="40" rx="8" fill="#2b5278"/>
+  <text x="732" y="355" fill="#ffffff" font-size="14" text-anchor="middle">Изменить текст</text>
+  <rect x="420" y="378" width="204" height="40" rx="8" fill="#2b5278"/>
+  <text x="522" y="403" fill="#ffffff" font-size="14" text-anchor="middle">Отменить</text>
+  <rect x="632" y="378" width="200" height="40" rx="8" fill="#2b5278"/>
+  <text x="732" y="403" fill="#ffffff" font-size="14" text-anchor="middle">Открыть в PIM</text>
+  <g class="press"><circle cx="560" cy="352" r="18" fill="#ffffff" fill-opacity=".18"/>
+    <path d="M556 344 l0 22 l6 -6 l4 9 l4 -2 l-4 -9 l8 0 z" fill="#ffffff" stroke="#0e1621" stroke-width="1.2"/></g>
+  <g class="sent"><rect x="424" y="430" width="224" height="26" rx="13" fill="#14532d"/>
+    <text x="536" y="448" fill="#bbf7d0" font-size="13" text-anchor="middle">✓ Offer sent to the client</text></g>
+</g>
+<path d="M352 256 h38" stroke="#5288c1" stroke-width="2.5"/><path d="M386 249 l10 7 l-10 7 z" fill="#5288c1"/>
+<text x="32" y="520" fill="#8b9bab" font-size="14">A client asks for a quote — a minute later the manager has a draft; one tap and the client has it.</text>
+
+</svg>

@@ -1,0 +1,66 @@
+name: Bug report / Ошибка
+description: Something doesn't work as documented / Что-то работает не так, как описано
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! English or Russian are both fine. / Спасибо! Можно по-русски или по-английски.
+        Security issue? Don't file it here — see SECURITY.md. / Уязвимость? Не публикуйте её здесь — см. SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / Что произошло
+      description: What did you do, what did you expect, what did you get instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Как воспроизвести
+      placeholder: |
+        1. Open Admin → Chat
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Раздел
+      options:
+        - Admin panel / Админ-панель
+        - Web chat / Веб-чат
+        - КП / commercial offers
+        - Telegram bot
+        - WhatsApp bot
+        - Website widget / Виджет
+        - LLM / providers / Claude Code bridge
+        - Voice (TTS / STT)
+        - Knowledge base / RAG
+        - Mobile app
+        - Install / Docker / deploy
+        - Other / Другое
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Deployment / Режим запуска
+      options:
+        - Docker (GPU)
+        - Docker (CPU)
+        - Docker (full, with vLLM)
+        - Local scripts (start_gpu.sh / start_cpu.sh)
+        - systemd / production
+        - Live demo (ai-sekretar24.ru)
+  - type: input
+    id: version
+    attributes:
+      label: Commit or release / Коммит или релиз
+      placeholder: git rev-parse --short HEAD
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Логи
+      description: Relevant output of `docker compose logs orchestrator` or the browser console. Remove tokens and personal data.
+      render: text
