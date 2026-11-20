@@ -4,12 +4,12 @@
 
 ## Server Deployment (Production)
 
-Server: `root@178.208.81.231` (Ubuntu 24.04, `DEPLOYMENT_MODE=cloud`, systemd service `ai-secretary`, not Docker Compose). RAM 7,8 GB without swap — run anything heavy under `systemd-run -p MemoryMax=…` or the OOM killer takes the orchestrator. The old server `155.212.231.7` is down.
+Server: `root@91.188.238.39` (Iron Hosting, Prague; Ubuntu 24.04, `DEPLOYMENT_MODE=cloud`, systemd service `ai-secretary`, not Docker Compose). RAM 7,8 GB without swap — run anything heavy under `systemd-run -p MemoryMax=…` or the OOM killer takes the orchestrator. Previous IPs `178.208.78.209` (renumbered 2026-11-21 — that IP was filtered by ТСПУ for visitors from Russia), `178.208.81.231` and `155.212.231.7` are gone.
 
 ```bash
-ssh root@178.208.81.231 "bash /opt/ai-secretary/deploy.sh"
+ssh root@91.188.238.39 "bash /opt/ai-secretary/deploy.sh"
 # then apply pending migrations by hand:
-ssh root@178.208.81.231 "cd /opt/ai-secretary && venv/bin/alembic upgrade head"
+ssh root@91.188.238.39 "cd /opt/ai-secretary && venv/bin/alembic upgrade head"
 ```
 
 `deploy.sh` (in the repo root, safe to re-run, flock-guarded, log in `/var/log/ai-secretary-deploy.log`): `git fetch` + `reset --hard origin/main` (warns about discarded local edits) → `pip install` of `requirements.txt` (cloud mode filters out TTS/whisper/vosk) and `services/bridge/requirements.txt` → admin build under `systemd-run MemoryMax=2500M` with `VITE_DEMO_MODE=` forced empty → checks `index.html` references `/admin/assets/` → `rsync` to `/var/www/admin-ai-sekretar24/` + service-worker cache bump → `systemctl restart ai-secretary` → waits for `/health` up to 300 s (RAG collections take ~2.5 min to load). Any failure before the restart aborts it, so the running version stays up. `DEPLOY_SKIP_ADMIN=1` for backend-only changes. **Do not** set `APPLY_CLOUD_PATCHES=1` / run `apply_patches.py` — it writes `VITE_BASE_PATH=/` and breaks the panel at `/admin/`.
@@ -19,6 +19,8 @@ ssh root@178.208.81.231 "cd /opt/ai-secretary && venv/bin/alembic upgrade head"
 **Production vs demo build.** Do **not** check with `grep setupDemoInterceptor`: `admin/src/api/client.ts` can switch demo mode on at runtime (`activateDemoMode()`, e.g. an admin/admin login, see [frontend-admin](frontend-admin.md)) through a lazy `import("./demo/index")`, so that name is in **every** bundle. The reliable marker is the base path in `dist/index.html`: production references `/admin/assets/…`, demo builds `/full/` or `/cloud/`. A demo build in the production folder shows up as a white login screen; recovery — build again without `VITE_DEMO_MODE` (or copy back `/var/www/admin-ai-sekretar24`) and restart.
 
 The old server also had GitHub-push auto-deploy (`ai-secretary-webhook.service`); it was not verified on the new one — deploy by hand.
+
+**Orchestrator bind address**: prod `.env` sets `ORCHESTRATOR_HOST=127.0.0.1` — nginx proxies to `127.0.0.1:8002`, and nothing else may reach the port (uvicorn runs with `forwarded_allow_ips="*"`, so a public port lets anyone spoof `X-Forwarded-For`). Docker keeps the default `0.0.0.0`. Do not run a VPN (Xray/AmneziaWG) on the same public IP as the sites: the previous IP got flagged by ТСПУ and stopped working from Russia.
 
 **Local-only files** (not in git): `.env`, `docker-compose.override.yml`, modified `Dockerfile`
 

@@ -229,6 +229,7 @@ LLM_BACKEND=vllm                    # "vllm" or "cloud:{provider_id}" (legacy "g
 VLLM_API_URL=http://localhost:11434 # Auto-normalized: trailing /v1 stripped
 DEPLOYMENT_MODE=full                # "full", "cloud", or "local"
 ORCHESTRATOR_PORT=8002
+ORCHESTRATOR_HOST=0.0.0.0            # Bind address; prod behind nginx MUST use 127.0.0.1 (Docker needs 0.0.0.0)
 ADMIN_JWT_SECRET=...                # Auto-generated if empty
 REDIS_URL=redis://localhost:6379/0  # Optional, graceful fallback
 DEV_MODE=1                          # Backend proxies to Vite dev server (:5173)
@@ -256,7 +257,7 @@ KP_TELEGRAM_CHAT_ID=
 
 ## Deployment
 
-Production: `ssh root@178.208.81.231 "bash /opt/ai-secretary/deploy.sh"`, then apply pending migrations by hand. Nginx serves the admin panel from `/var/www/admin-ai-sekretar24/`, not from `admin/dist/`. Full procedure, checklist and demo sites: [docs/arch/deployment.md](docs/arch/deployment.md).
+Production: `ssh root@91.188.238.39 "bash /opt/ai-secretary/deploy.sh"`, then apply pending migrations by hand. Nginx serves the admin panel from `/var/www/admin-ai-sekretar24/`, not from `admin/dist/`. Full procedure, checklist and demo sites: [docs/arch/deployment.md](docs/arch/deployment.md).
 
 ## Debugging Principles
 
@@ -272,7 +273,7 @@ Check in this order — **infrastructure first**, application logic last:
 
 This project is developed from two machines:
 - **local** — dev workstation with GPU (RTX 3060), full stack
-- **server** — production VPS (`root@178.208.81.231`; the old `155.212.231.7` is down), systemd service, cloud LLM only
+- **server** — production VPS (`root@91.188.238.39`; previous IPs `178.208.78.209`, `178.208.81.231`, `155.212.231.7` are gone), systemd service, cloud LLM only
 
 Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`## Machine Role` section). **Check your machine role before git operations.**
 

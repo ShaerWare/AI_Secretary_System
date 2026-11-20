@@ -393,10 +393,13 @@ if __name__ == "__main__":
 
     load_dotenv()
     port = int(os.getenv("ORCHESTRATOR_PORT", 8002))
-    logger.info(f"🎯 Запуск Orchestrator на порту {port}")
+    # 0.0.0.0 нужен в Docker; на проде за nginx — 127.0.0.1, иначе порт торчит наружу
+    # в обход nginx (а forwarded_allow_ips="*" позволяет подделать X-Forwarded-For).
+    host = os.getenv("ORCHESTRATOR_HOST", "0.0.0.0")
+    logger.info(f"🎯 Запуск Orchestrator на {host}:{port}")
     uvicorn.run(
         "orchestrator:app",
-        host="0.0.0.0",
+        host=host,
         port=port,
         reload=False,
         log_level="info",
