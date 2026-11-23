@@ -1,0 +1,55 @@
+name: Mirror spin-offs
+
+# Публикует самостоятельные части монорепо в отдельные публичные репозитории
+# (read-only зеркала). Источник правды — этот репо: правки и PR только здесь.
+# Каждому зеркалу — свой deploy-ключ с правом записи (секрет MIRROR_KEY_*).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/bridge/**'
+      - 'services/whatsapp-bridge/**'
+      - 'web-widget/**'
+      - '.github/workflows/mirror.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - prefix: services/bridge
+            repo: cli-openai-bridge
+            key: MIRROR_KEY_CLI_OPENAI_BRIDGE
+          - prefix: services/whatsapp-bridge
+            repo: whatsapp-qr-bridge
+            key: MIRROR_KEY_WHATSAPP_QR_BRIDGE
+          - prefix: web-widget
+            repo: ai-chat-widget
+            key: MIRROR_KEY_AI_CHAT_WIDGET
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Split ${{ matrix.prefix }} and push to ${{ matrix.repo }}
+        env:
+          DEPLOY_KEY: ${{ secrets[matrix.key] }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::secret ${{ matrix.key }} is not set"; exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git subtree split --prefix="${{ matrix.prefix }}" -b mirror
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes" \
+            git push "git@github.com:ShaerWare/${{ matrix.repo }}.git" mirror:main

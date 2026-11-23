@@ -1,18 +1,26 @@
+<img src="assets/banner.svg" alt="CLI-OpenAI Bridge — Claude Code, Gemini CLI and Shell-GPT as an OpenAI-compatible API" width="100%">
+
 # CLI-OpenAI Bridge
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com)
+[![Part of AI Secretary System](https://img.shields.io/badge/part_of-AI_Secretary_System-4f46e5)](https://github.com/ShaerWare/AI_Secretary_System)
 
 > **Transform CLI AI tools into a unified OpenAI-compatible API**
 
 A versatile bridge that exposes CLI versions of AI models (Claude Code, Gemini CLI, Shell-GPT) as OpenAI-compatible REST API services. Use your favorite AI coding assistants through any OpenAI-compatible client.
+
+It powers the Claude Code backend of [AI Secretary System](https://github.com/ShaerWare/AI_Secretary_System), an open-source self-hosted AI sales assistant, and works just as well on its own.
+
+> **Mirror notice.** This repository is an automatic, read-only mirror of [`services/bridge`](https://github.com/ShaerWare/AI_Secretary_System/tree/main/services/bridge) in AI Secretary System. Stars are welcome here; please open issues and pull requests [in the main repository](https://github.com/ShaerWare/AI_Secretary_System/issues).
 
 ---
 
 ## Table of Contents
 
 - [Use Cases](#use-cases)
+- [Responsible Use](#responsible-use)
 - [Features](#features)
 - [Supported Providers](#supported-providers)
 - [Quick Start](#quick-start)
@@ -33,9 +41,15 @@ A versatile bridge that exposes CLI versions of AI models (Claude Code, Gemini C
 |----------|-------------|
 | **Aider / Cursor / Continue** | Use Claude Code or Gemini CLI as backend for coding assistants |
 | **Custom Applications** | Build apps using OpenAI SDK that work with any CLI provider |
-| **Cost Optimization** | Leverage CLI subscription pricing instead of API costs |
+| **Reuse a CLI you already have** | Point your own tools at the CLI you are already signed in to — see [Responsible Use](#responsible-use) |
 | **Unified Interface** | Single API for multiple AI providers |
 | **Self-Hosted** | Run your own AI API server with full control |
+
+---
+
+## Responsible Use
+
+The bridge runs the official CLIs exactly as you would in a terminal, under whatever account they are signed in to. Each provider's terms apply to that account: personal subscriptions are generally meant for the subscriber's own use. Serving other people or running a product on top of it is a job for API keys (Claude Code and Gemini CLI both accept them; see `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` in their docs). Set `BRIDGE_API_KEY` and never expose the bridge to the internet without it.
 
 ---
 
@@ -82,14 +96,14 @@ A versatile bridge that exposes CLI versions of AI models (Claude Code, Gemini C
 - Python 3.10+
 - At least one CLI tool installed and authenticated:
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) - `npm install -g @anthropic-ai/claude-code`
-  - [Gemini CLI](https://github.com/google-gemini/gemini-cli) - `npm install -g @anthropic-ai/gemini-cli`
+  - [Gemini CLI](https://github.com/google-gemini/gemini-cli) - `npm install -g @google/gemini-cli`
   - [Shell-GPT](https://github.com/TheR1D/shell_gpt) - `pip install shell-gpt`
 
 ### Installation
 
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/cli-openai-bridge.git
+git clone https://github.com/ShaerWare/cli-openai-bridge.git
 cd cli-openai-bridge
 python3 -m venv .venv
 source .venv/bin/activate
@@ -121,6 +135,8 @@ curl http://localhost:8000/v1/chat/completions \
 
 ## Docker Deployment
 
+The image ships Python, Claude Code and Gemini CLI (Shell-GPT is optional, see the `Dockerfile`).
+
 ```bash
 # Build
 docker build -t cli-openai-bridge .
@@ -131,20 +147,16 @@ docker run -d \
   -p 8000:8000 \
   -v ~/.cli-openai-bridge:/root/.cli-openai-bridge \
   -e BRIDGE_API_KEY=your-secret-key \
+  -e CLAUDE_CODE_OAUTH_TOKEN=... \
   cli-openai-bridge
 ```
 
-**Note:** CLI tools must be authenticated inside the container:
+**Authenticating the CLIs inside the container**, pick one per tool:
 
-```bash
-docker exec -it cli-openai-bridge bash
-claude auth login
-gemini auth login
-```
+- Claude Code: pass a long-lived token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`, or an API key as `ANTHROPIC_API_KEY`, or log in interactively: `docker exec -it cli-openai-bridge claude`.
+- Gemini CLI: pass `GEMINI_API_KEY`, or run `docker exec -it cli-openai-bridge gemini` once and follow the login prompt.
 
-### Manual Deployment
-
-For servers without git, see the [rsync/scp deployment guide](#manual-deployment-without-git).
+To keep an interactive login across restarts, also mount `~/.claude` (and `~/.gemini`) into `/root`.
 
 ---
 

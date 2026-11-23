@@ -117,6 +117,16 @@ Open <http://localhost:8002/admin> and sign in as `owner`.
 
 The [interactive architecture map](docs/architecture/architecture-map.html) and the [architecture docs](docs/arch/) cover the rest.
 
+## Spin-off projects
+
+Parts of the system that run on their own are published as separate repositories. They are read-only mirrors, synced from this repo on every merge, so issues and PRs go here.
+
+| Project | What it is | Source here |
+|---|---|---|
+| [**cli-openai-bridge**](https://github.com/ShaerWare/cli-openai-bridge) | Claude Code, Gemini CLI and Shell-GPT as an OpenAI-compatible API | [`services/bridge`](services/bridge) |
+| [**whatsapp-qr-bridge**](https://github.com/ShaerWare/whatsapp-qr-bridge) | Self-hosted WhatsApp provider: a phone linked by QR → REST + signed webhooks | [`services/whatsapp-bridge`](services/whatsapp-bridge) |
+| [**ai-chat-widget**](https://github.com/ShaerWare/ai-chat-widget) | Embeddable AI chat for any website, one script tag | [`web-widget`](web-widget) |
+
 ## Documentation
 
 | | |

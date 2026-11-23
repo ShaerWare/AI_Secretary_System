@@ -1,11 +1,11 @@
 /**
- * AI Secretary Chat Widget
- * Replaces Replain with your own AI assistant (Марина/Анна)
+ * AI Secretary Chat Widget — https://github.com/ShaerWare/AI_Secretary_System
+ * Embeddable chat for any website, backed by your own AI Secretary instance.
  *
  * Usage:
  * <script>
  *   window.aiChatSettings = {
- *     apiUrl: 'https://your-ngrok-url.ngrok.io',
+ *     apiUrl: 'https://your-ai-secretary.example.com',
  *     title: 'AI Ассистент',
  *     greeting: 'Здравствуйте! Чем могу помочь?',
  *     placeholder: 'Введите сообщение...',
@@ -21,7 +21,7 @@
   const defaultSettings = {
     apiUrl: '',
     title: 'AI Ассистент',
-    greeting: 'Здравствуйте! Компания Шаервэй Ди-Иджитал, чем могу помочь?',
+    greeting: 'Здравствуйте! Чем могу помочь?',
     placeholder: 'Введите сообщение...',
     primaryColor: '#c2410c',
     placeholderColor: '',
