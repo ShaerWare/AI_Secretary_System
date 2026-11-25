@@ -580,7 +580,95 @@ def channels(t) -> str:
     return svg(880, 430, body, style)
 
 
+# ---------------------------------------------------------------- spin-off repo banners
+
+ROOT = OUT.parent.parent
+
+SPINOFFS = {
+    "services/bridge": {
+        "title": "CLI-OpenAI Bridge",
+        "tag": ["Your Claude Code, Gemini CLI and Shell-GPT", "as an OpenAI-compatible API."],
+        "chips": ["/v1/chat/completions", "streaming", "sessions", "Docker"],
+        "accent": "#d97757",
+        "flow": [
+            ("Any OpenAI client", "SDK · OpenWebUI · Aider"),
+            ("Bridge", ":8000"),
+            ("CLI tools", "claude · gemini · sgpt"),
+        ],
+    },
+    "services/whatsapp-bridge": {
+        "title": "WhatsApp QR Bridge",
+        "tag": ["Link a regular phone by QR and get", "a REST + signed-webhook API. Self-hosted."],
+        "chips": ["Baileys", "no Chromium", "HMAC webhooks", "Docker"],
+        "accent": "#25D366",
+        "flow": [
+            ("Phone", "linked by QR / code"),
+            ("Bridge", ":8005"),
+            ("Your bot", "webhook + REST"),
+        ],
+    },
+    "web-widget": {
+        "title": "AI Chat Widget",
+        "tag": [
+            "One script tag puts an AI assistant",
+            "on any website. Streaming, sessions, leads.",
+        ],
+        "chips": ["vanilla JS", "no build step", "multi-instance", "amoCRM leads"],
+        "accent": "#6366f1",
+        "flow": [
+            ("Your website", "<script> tag"),
+            ("Widget", "~900 lines JS"),
+            ("AI Secretary", "LLM · RAG · CRM"),
+        ],
+    },
+}
+
+
+def spinoff_banner(s) -> str:
+    a = s["accent"]
+    chips, x = [], 40
+    for c in s["chips"]:
+        w = int(len(c) * 7.1) + 24
+        chips.append(
+            f'<rect x="{x}" y="178" width="{w}" height="28" rx="14" fill="{a}" fill-opacity=".16"/>'
+            + text(x + w / 2, 197, c, 12.5, "#e5e7eb", anchor="middle")
+        )
+        x += w + 7
+    boxes = []
+    for i, (h, sub) in enumerate(s["flow"]):
+        y = 26 + i * 62
+        mid = i == 1
+        boxes.append(
+            f'<rect x="604" y="{y}" width="244" height="48" rx="11" '
+            f'fill="{a if mid else "#111827"}" fill-opacity="{".9" if mid else "1"}" '
+            f'stroke="{a}" stroke-opacity=".7"/>'
+            + text(620, y + 21, h, 14, "#ffffff", "700" if mid else "600")
+            + text(620, y + 38, sub, 11.5, "#f3f4f6" if mid else "#9ca3af")
+        )
+        if i < 2:
+            boxes.append(
+                f'<path class="flow" d="M726 {y + 48} V{y + 62}" stroke="{a}" stroke-width="2.5"/>'
+            )
+    body = f"""
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#151b2e"/></linearGradient></defs>
+<rect width="880" height="232" rx="18" fill="url(#g)"/>
+<rect x="0" y="0" width="6" height="232" rx="3" fill="{a}"/>
+{text(40, 50, "PART OF AI SECRETARY SYSTEM · MIT", 12, a, spacing="2")}
+{text(40, 100, s["title"], 40, "#ffffff", "700")}
+{text(40, 134, s["tag"][0], 16, "#d1d5db")}
+{text(40, 156, s["tag"][1], 16, "#d1d5db")}
+{"".join(chips)}
+{"".join(boxes)}
+"""
+    style = ".flow{stroke-dasharray:4 4;animation:f 1s linear infinite}@keyframes f{to{stroke-dashoffset:-16}}"
+    return svg(880, 232, body, style)
+
+
 def main() -> None:
+    for d, s in SPINOFFS.items():
+        (ROOT / d / "assets" / "banner.svg").write_text(spinoff_banner(s), encoding="utf-8")
+        print(f"{d}/assets/banner.svg")
     builders = {
         "hero": hero,
         "kp-flow": kp_flow,

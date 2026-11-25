@@ -282,6 +282,7 @@ Each machine identifies itself via `~/.claude/projects/.../memory/MEMORY.md` (`#
 2. **Branch prefixes**: `local/*` (dev machine), `server/*` (server), or `feat/`/`fix/`/`docs/` with machine suffix
 3. **Always `git pull` before starting work**
 4. **Do not amend or force-push commits made by the other instance**
+5. **Public mirrors are read-only** — `services/bridge`, `services/whatsapp-bridge`, `web-widget` are pushed to `ShaerWare/cli-openai-bridge`, `whatsapp-qr-bridge`, `ai-chat-widget` by `.github/workflows/mirror.yml` (subtree split, deploy keys `MIRROR_KEY_*`) on every merge. Edit them only here; a commit made in a mirror breaks the sync. Their READMEs and history are public — no secrets, prod hosts or client data in those folders
 
 ### File Ownership
 

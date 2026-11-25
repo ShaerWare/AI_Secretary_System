@@ -115,6 +115,16 @@ docker exec ai-secretary python scripts/manage_users.py create owner 'надёж
 
 Подробнее: [интерактивная карта архитектуры](docs/architecture/architecture-map.html) и [документация по архитектуре](docs/arch/).
 
+## Дочерние проекты
+
+Части системы, которые работают сами по себе, опубликованы отдельными репозиториями. Это зеркала только для чтения: они синхронизируются отсюда при каждом мёрже, поэтому issues и PR — сюда.
+
+| Проект | Что это | Исходники здесь |
+|---|---|---|
+| [**cli-openai-bridge**](https://github.com/ShaerWare/cli-openai-bridge) | Claude Code, Gemini CLI и Shell-GPT как OpenAI-совместимый API | [`services/bridge`](services/bridge) |
+| [**whatsapp-qr-bridge**](https://github.com/ShaerWare/whatsapp-qr-bridge) | Свой WhatsApp-провайдер: телефон по QR → REST и подписанные вебхуки | [`services/whatsapp-bridge`](services/whatsapp-bridge) |
+| [**ai-chat-widget**](https://github.com/ShaerWare/ai-chat-widget) | Встраиваемый ИИ-чат для любого сайта одним тегом script | [`web-widget`](web-widget) |
+
 ## Документация
 
 | | |

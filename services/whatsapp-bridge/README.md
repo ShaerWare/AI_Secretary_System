@@ -1,49 +1,53 @@
-# WhatsApp Bridge — self-hosted provider
+<img src="assets/banner.svg" alt="WhatsApp QR Bridge — link a regular phone by QR and get a REST + signed-webhook API" width="100%">
+
+# WhatsApp QR Bridge
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node 20+](https://img.shields.io/badge/node-20+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Baileys](https://img.shields.io/badge/built_on-Baileys-25D366)](https://github.com/WhiskeySockets/Baileys)
+[![Part of AI Secretary System](https://img.shields.io/badge/part_of-AI_Secretary_System-4f46e5)](https://github.com/ShaerWare/AI_Secretary_System)
 
 Links a regular phone (WhatsApp or WhatsApp Business app) over the multi-device
-protocol via QR and exposes it as a small REST + webhook API. This is the role
-Wazzup / Green API / Radist play, except it runs on our own host — no third-party
-contract and no message content leaving the server.
+protocol via QR or a pairing code and exposes it as a small REST + webhook API.
+This is the role Wazzup / Green API / Radist play, except it runs on your own
+host: no third-party contract and no message content leaving the server.
 
 Built on [Baileys](https://github.com/WhiskeySockets/Baileys) (WebSocket, no
-Chromium, no Puppeteer).
+Chromium, no Puppeteer). It is the WhatsApp transport of
+[AI Secretary System](https://github.com/ShaerWare/AI_Secretary_System), an
+open-source self-hosted AI sales assistant, and works with any bot that can
+receive a webhook.
+
+> **Mirror notice.** This repository is an automatic, read-only mirror of
+> [`services/whatsapp-bridge`](https://github.com/ShaerWare/AI_Secretary_System/tree/main/services/whatsapp-bridge)
+> in AI Secretary System. Stars are welcome here; please open issues and pull
+> requests [in the main repository](https://github.com/ShaerWare/AI_Secretary_System/issues).
 
 ```
-phone ──QR──► whatsapp-bridge (:8005) ──webhook──► whatsapp_bot (:8003)
-                    ▲                                     │
-                    └────────── REST: send / read ─────────┘
+phone ──QR──► whatsapp-bridge (:8005) ──signed webhook──► your bot
+                    ▲                                        │
+                    └─────────── REST: send / read ──────────┘
 ```
 
 ## Run
 
 ```bash
-cd services/whatsapp-bridge
 npm install
 WHATSAPP_BRIDGE_TOKEN=$(openssl rand -hex 24) npm start
-```
-
-Put the same token in the project's `.env` so the orchestrator and the bot can
-talk to the bridge:
-
-```bash
-WHATSAPP_PROVIDER=bridge              # only needed for standalone bot mode
-WHATSAPP_BRIDGE_URL=http://127.0.0.1:8005
-WHATSAPP_BRIDGE_TOKEN=<same token>
-WHATSAPP_BRIDGE_CALLBACK_HOST=127.0.0.1   # where the bridge reaches the bot
 ```
 
 Docker:
 
 ```bash
-docker build -t ai-secretary-whatsapp-bridge services/whatsapp-bridge
+docker build -t whatsapp-qr-bridge .
 docker run -d --name wa-bridge -p 8005:8005 \
   -e WHATSAPP_BRIDGE_TOKEN=<token> \
   -v wa-bridge-data:/data \
-  ai-secretary-whatsapp-bridge
+  whatsapp-qr-bridge
 ```
 
-The `/data` volume holds linked-device credentials — **without it every restart
-demands a fresh QR scan**.
+The `/data` volume holds linked-device credentials. **Without it every restart
+demands a fresh QR scan.**
 
 ### Environment
 
@@ -57,13 +61,30 @@ demands a fresh QR scan**.
 
 ## Linking a phone
 
-In the admin panel: WhatsApp → instance with `provider = bridge` → **Подключить
-телефон** → scan the QR from *Settings → Linked devices*. Credentials persist,
-so the bot re-attaches silently after a restart.
+**Standalone**, over the API:
 
-The whole flow is also reachable over the orchestrator API:
-`POST /admin/whatsapp/instances/{id}/bridge/start`, `GET …/bridge/status`,
-`POST …/bridge/stop`, `POST …/bridge/logout`.
+```bash
+T=<token>
+# open a session that will deliver messages to your webhook
+curl -X POST localhost:8005/sessions/support/start -H "X-Bridge-Token: $T" \
+  -H 'Content-Type: application/json' -d '{"webhook_url": "http://127.0.0.1:9000/wa"}'
+# poll the state: while it is "qr", the response carries a QR data-URL
+curl localhost:8005/sessions/support -H "X-Bridge-Token: $T"
+```
+
+Scan the QR from *WhatsApp → Settings → Linked devices*. No camera at hand?
+Start with `{"webhook_url": "...", "pairing_phone": "79001234567"}` instead:
+the state becomes `pairing` with an 8-character `pairing_code` to type on that
+phone. Credentials persist, so the session re-attaches silently after a restart.
+
+**Inside AI Secretary System**: admin panel → WhatsApp → instance with
+`provider = bridge` → «Подключить телефон». Set the same token in its `.env`:
+
+```bash
+WHATSAPP_BRIDGE_URL=http://127.0.0.1:8005
+WHATSAPP_BRIDGE_TOKEN=<same token>
+WHATSAPP_BRIDGE_CALLBACK_HOST=127.0.0.1   # where the bridge reaches the bot
+```
 
 ## API
 
@@ -74,8 +95,8 @@ Bearer`). One session id == one WhatsApp instance id.
 |---|---|---|
 | `GET` | `/health` | Liveness + all session states. |
 | `GET` | `/sessions` | List sessions. |
-| `POST` | `/sessions/:id/start` | Open the socket. Body: `{webhook_url}`. |
-| `GET` | `/sessions/:id` | State: `idle`/`starting`/`qr`/`connected`/`disconnected`/`logged_out` (+ `qr` data-URL while pairing). |
+| `POST` | `/sessions/:id/start` | Open the socket. Body: `{webhook_url, force, pairing_phone}`; `force` drops revoked credentials, `pairing_phone` links by code instead of QR. |
+| `GET` | `/sessions/:id` | State: `idle`/`starting`/`qr`/`pairing`/`connected`/`disconnected`/`logged_out` (+ `qr` data-URL while pairing). |
 | `POST` | `/sessions/:id/stop` | Close the socket, keep credentials. |
 | `POST` | `/sessions/:id/logout` | Unlink the phone and wipe credentials. |
 | `POST` | `/sessions/:id/messages` | Send. Body: `{to, type, text \| url, caption, filename, mimetype, voice}`. |
@@ -111,9 +132,9 @@ backoff; a dead consumer never takes the WhatsApp socket down.
 ## Limits worth knowing
 
 * **No interactive buttons or list pickers.** They are a Cloud API feature; a
-  linked phone can't render them. The Python side emulates them as a numbered
-  text menu (`whatsapp_bot/services/choices.py`) and maps the reply back to the
-  original `reply_id`, so existing funnels keep working.
+  linked phone can't render them. AI Secretary's bot emulates them as a numbered
+  text menu and maps the reply back to the original `reply_id`, so existing
+  funnels keep working.
 * **No message templates** and no 24-hour window — a linked phone just sends
   messages. `send_template` degrades to plain text.
 * **Unofficial protocol.** This is the same mechanism every QR-based provider
@@ -122,5 +143,10 @@ backoff; a dead consumer never takes the WhatsApp socket down.
 * **One phone, one session.** Opening WhatsApp Web elsewhere with the same
   account can replace this connection — the bridge detects that and stays down
   rather than fighting for the slot.
-* **Group chats are ignored** by the bot to avoid pulling the assistant into
-  every group the phone belongs to.
+* **Group chats** arrive with `chat_type` set, so your bot can skip them. AI
+  Secretary's bot ignores groups to avoid pulling the assistant into every
+  group the phone belongs to.
+
+## License
+
+[MIT](LICENSE)
